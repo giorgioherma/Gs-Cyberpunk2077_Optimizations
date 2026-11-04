@@ -1,0 +1,46 @@
+name: Build unified optimizer shell
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test core read-only contracts
+        run: dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj --configuration Release
+      - name: Build Windows shell
+        run: dotnet publish src/GTotalOptimizer.App/GTotalOptimizer.App.csproj --configuration Release --runtime win-x64 --self-contained true --output publish -p:PublishSingleFile=false -p:PublishTrimmed=false
+      - name: Verify self-contained shell and no foreign binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('publish/G-Total-Optimizer.exe','publish/GTotalOptimizer.Core.dll','publish/coreclr.dll')) {
+            if (!(Test-Path $path -PathType Leaf)) { throw "Missing packaged file: $path" }
+          }
+          if (Test-Path publish/components) { throw 'Unverified profiler component was packaged.' }
+          if (Test-Path publish/CapFrameX.exe) { throw 'Unverified CapFrameX was packaged.' }
+          $files = Get-ChildItem publish -Recurse -File
+          if (($files | Where-Object { $_.Name -ieq 'coreclr.dll' }).Count -ne 1) {
+            throw 'Expected exactly one bundled .NET runtime in this shell.'
+          }
+          Write-Host "Verified .NET 10 self-contained read-only shell; no external profiler binaries."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: G-Total-Optimizer-Shell-win-x64
+          path: publish/
+          if-no-files-found: error

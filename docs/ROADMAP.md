@@ -12,12 +12,14 @@
 
 ## Milestone 1 — minimal, real application shell
 
-- [ ] Create one Windows desktop project and CI; prefer existing .NET 8 ecosystem, but choose the lightest stable UI implementation.
-- [ ] Implement **Page 1 and Page 2 only**, with the original labels/buttons and accessibility-friendly status language. One selected game root, persist path in application workspace.
-- [ ] Read-only verify game, CET, RED4ext, REDscript, 0-Engine, GRSP and G-REdruntime presence/capabilities from current installation; show explicit absence/unsupported without game mutations.
-- [ ] Discover current standalone CET/GRSP/Resolver binary locations (or validated packaged copies) and invoke `--status` with correct domain-specific JSON parsing and actionable errors.
-- [ ] Implement a small test harness for process invocation, path quoting, failed status and offline/missing component cases.
+- [x] Create one .NET 10 WinForms desktop project and initial Windows CI (source committed; CI/Windows runtime verification tracked in LATEST-WORK).
+- [x] Implement the **first read-only Page 1/Page 2 shell** and original action labels; no Page 2 unlock without real capture evidence. Current game root persists under the user's LocalAppData.
+- [~] Read-only detect game, CET source, RED4ext directory, REDscript source, 0-Engine and G-REdruntime source **as unverified presence**; full native/API health proof and compatibility still pending.
+- [~] Implement optional standalone CET/GRSP known-path `--status` adapters and separate JSON parsing; no backend binaries bundled or status-ready claim until verified.
+- [~] Add core test harness for source paths, missing backends and domain-specific JSON error handling; real Windows process invocation and package staging still pending.
 - **Acceptance:** app runs and accurately displays status with both, either or neither profiler. No pretend "Install succeeded", generated ZIP, or measured report.
+
+[Shared .NET 10 Desktop Runtime packaging contract](technical/SHARED-NET-RUNTIME.md): single private runtime for final integrated managers and CapFrameX is **not yet validated**.
 
 ## Milestone 2 — verified packaging, reversible profiler install and capture
 

@@ -21,8 +21,8 @@ Build an **all-in-one, user-oriented app** bundling verified current CET Profile
 - New repo was empty, then initialized with a README. This milestone is **documentation-first** on `main`.
 - The October 16 source design was found in CET's `dev/native-static-anchors-experimental` branch; it was missing from CET's current handoff branch. Source: [original document](https://github.com/giorgioherma/G-CET_Runtime_Profiler/blob/dev/native-static-anchors-experimental/docs/product/UNIFIED-TWO-PAGE-WORKFLOW.md), original Git blob `f4925759fc612311b72432b329708b84b9dd279e`. Preserve as original design, do not fold later changes into it silently.
 - CET current development branch: `dev/resolver-profiler-handoff`; GRSP current dev branch: same name in GRSP; G-REDruntime: `main`. **These are *other repositories*.**
-- No unified desktop app project or new REDscript generic generator is implemented yet. CLI contracts have been reviewed from source; no new all-component game run, CI package, or combined profiler restore test is claimed.
-- **Next task only after documentation approval:** implement an uncomplicated first app shell with one game-root selector, read-only health checks/launching from existing standalone CLI adapters, no game mutation or fake capture results. See roadmap.
+- A **first read-only .NET 10 WinForms two-page app shell** and core CLI status adapters are authored, pending CI verification; no new REDscript generic generator exists. No all-component game run, combined profiler restore, or final one-runtime packaging is claimed.
+- **Next task:** verify and repair Windows app CI, exercise read-only status against real current CET/GRSP packages, then design safe multi-component session lifecycle. Do not expose enabled install/capture/ZIP actions before tests. [Private .NET 10 runtime contract](../technical/SHARED-NET-RUNTIME.md).
 
 ## Strict boundaries and proof
 

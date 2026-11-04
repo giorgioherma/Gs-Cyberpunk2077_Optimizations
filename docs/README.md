@@ -8,6 +8,7 @@
 | Current user decisions and old/new reconciliation | [Current decisions](product/CURRENT-DECISIONS.md) |
 | System boundaries, ownership and state machine | [Architecture](technical/ARCHITECTURE.md) |
 | Verified-from-source standalone CLI and capture APIs | [Component contracts](technical/COMPONENT-CONTRACTS.md) |
+| Shared runtime and CapFrameX compatibility | [One private .NET 10 Desktop runtime — validation contract](technical/SHARED-NET-RUNTIME.md) |
 | Development execution order | [Roadmap](ROADMAP.md) |
 | Progress, failures, actual evidence | [Latest work](LATEST-WORK.md) |
 | Agent-specific initial context | [Handoff CORE](HANDOFF/CORE.md) |
