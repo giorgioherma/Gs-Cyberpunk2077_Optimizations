@@ -102,3 +102,13 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Added a shared size contract with tests for both modes at the reference client height, including a minimum workflow-area threshold. Set minimum window size to prevent accidental clipping instead of making Page 1 scroll. User must visually verify on Windows at their chosen DPI.
 - **No backend changes, no profiler binaries, no installation/generation enabled.**
 - **CI VERIFIED:** [Windows CI #41921303918](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41921303918), source SHA `405aa2831eb34f70269210d22bdf4ccf3e1b9964`. **56/56 read-only and layout contracts passed**, .NET 10 win-x64 self-contained publish passed, Windows file version **1.1.0.0** verified, artifact **13367296627**. Windows runtime UI visual/interactive check and gameplay remain unverified.
+
+
+## 2026-11-05 — CET-sized path controls; MO2 arbitrary-folder and REDscript ownership fixes
+
+- User's screenshot exposed a malformed/oversized game path row and requested CET's exact compact 26px input + 92x30 Browse outline, white normal instructions/checks and green only the 5–10-minute combat sequence. Changed the browse control to a normal flat WinForms button with absolute size/position rather than nesting it in a clipping row.
+- Normal and MO2 tabs remain mutually exclusive inside the first box, and Page 1 remains non-scrollable. MO2 view now has its **own game-root input** synchronized with the Normal view plus separate **MO2 instance input and active profile dropdown**. These are source selectors; no copies of mods are required.
+- Added structural REDscript owner grouping for the header count (not a raw .reds file count). Normal source identifies top-level script folders and standalone .reds sources; MO2 counts effective winning package owners/physical sources. **Estimated count**, not semantically authoritative mod inventory.
+- For MO2 instances in arbitrary locations, separate INI-configured Mods/Profiles/Overwrite storage on arbitrary directories and a game root with zero directly installed mods, added explicit read-only regression tests. A physical game executable is still needed for launching/profiling; plugin VFS runtime and RootBuilder behavior remain unverified and unsafe for generation.
+- Preserved F11 key inspection without yellow unavailable warnings in the visible capture instructions. The UI calls absent payloads **F11 (preset)**, never a verified checkmark. Standalone CET and GRSP source versions unchanged.
+- No new profiler binaries, no gameplay installation/restore or optimizer ZIP enabled. CI pending; log the exact run once it completes.

@@ -39,6 +39,17 @@ try
     Require(probe.Checks.Any(c => c.Name == "G-REDruntime source" && c.State == CheckState.Unverified),
         "redscript source presence not equated to runtime compatibility");
 
+
+    // REDscript owner counts must not pretend every .reds file is a separate mod.
+    Require(RedscriptModCounter.CountPhysical(root) == 1,
+        "one framework top-level REDscript folder groups its nested .reds files");
+    var extraRed = Path.Combine(root, "r6", "scripts", "AnotherOwner", "some_code.reds");
+    Directory.CreateDirectory(Path.GetDirectoryName(extraRed)!);
+    File.WriteAllText(extraRed, "mod");
+    File.WriteAllText(Path.Combine(root, "r6", "scripts", "standalone.reds"), "root mod");
+    Require(RedscriptModCounter.CountPhysical(root) == 3,
+        "REDscript count groups top-level folders and standalone files, not raw .reds count");
+
     Require(BackendResponse.Interpret(BackendKind.Grsp, "{\"ok\":true,\"result\":{}}", 0).Responded,
         "GRSP success schema");
     Require(!BackendResponse.Interpret(BackendKind.Grsp, "{\"ok\":true}", 0).Responded,
@@ -222,6 +233,55 @@ try
         "[Settings]\nbase_directory=%UNKNOWN_VARIABLE%\nprofiles_directory=%BASE_DIR%/profiles\n");
     Require(!Mo2SourceInspector.Discover(mo2InstanceDir).Recognized,
         "unresolved MO2 path variables fail closed, never map to a wrong physical directory");
+
+
+    // MO2 can live anywhere, with Mods/Profiles/Overwrite on unrelated drives
+    // or in arbitrary folders, and the physical game can have NO mods installed.
+    var emptyPhysicalGame = Path.Combine(root, "another unrelated game folder");
+    Directory.CreateDirectory(Path.Combine(emptyPhysicalGame, "bin", "x64"));
+    File.WriteAllText(Path.Combine(emptyPhysicalGame, "bin", "x64", "Cyberpunk2077.exe"), "");
+    var mo2Only = Mo2SourceInspector.Resolve(emptyPhysicalGame, mo2, "Active");
+    Require(mo2Only.Ready && mo2Only.CetOwners == 1 && !mo2Only.HasZeroEngine,
+        "MO2 detects enabled CET mods even when physical game has zero scripts/mods");
+    var mo2Framework = Path.Combine(mo2Mods, "High", "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "0-Engine", "init.lua");
+    Directory.CreateDirectory(Path.GetDirectoryName(mo2Framework)!);
+    File.WriteAllText(mo2Framework, "MO2 engine");
+    var mo2OnlyWithEngine = Mo2SourceInspector.Resolve(emptyPhysicalGame, mo2, "Active");
+    Require(mo2OnlyWithEngine.HasZeroEngine && mo2OnlyWithEngine.CetOwners == 2,
+        "MO2-only 0-Engine source is detected without default physical installation");
+    Require(RedscriptModCounter.CountEffective(mo2OnlyWithEngine) == 1,
+        "MO2 effective REDscript owner count groups files by winning enabled package");
+
+    // Absolute arbitrary instance storage paths, not assumed within the game root
+    // or inside the MO2 executable directory.
+    var arbitraryStorage = Path.Combine(root, "Completely random location");
+    var arbitraryMods = Path.Combine(arbitraryStorage, "any mods folder");
+    var arbitraryProfiles = Path.Combine(arbitraryStorage, "profiles elsewhere");
+    var arbitraryOverwrite = Path.Combine(arbitraryStorage, "write anywhere");
+    Directory.CreateDirectory(arbitraryMods);
+    Directory.CreateDirectory(arbitraryProfiles);
+    Directory.CreateDirectory(arbitraryOverwrite);
+    Directory.CreateDirectory(Path.Combine(arbitraryProfiles, "Random Profile"));
+    File.WriteAllText(Path.Combine(arbitraryProfiles, "Random Profile", "modlist.txt"),
+        "+Enabled Elsewhere\n");
+    var arbitraryMod = Path.Combine(arbitraryMods, "Enabled Elsewhere", "r6", "scripts", "random.reds");
+    Directory.CreateDirectory(Path.GetDirectoryName(arbitraryMod)!);
+    File.WriteAllText(arbitraryMod, "external");
+    File.WriteAllText(Path.Combine(mo2InstanceDir, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + arbitraryStorage.Replace('\\','/') +
+        "\nmod_directory=" + arbitraryMods.Replace('\\','/') +
+        "\nprofiles_directory=" + arbitraryProfiles.Replace('\\','/') +
+        "\noverwrite_directory=" + arbitraryOverwrite.Replace('\\','/') + "\n");
+    var anyLocation = Mo2SourceInspector.Discover(mo2InstanceDir);
+    Require(anyLocation.Recognized && anyLocation.ModsDirectory == arbitraryMods &&
+        anyLocation.ProfilesDirectory == arbitraryProfiles &&
+        anyLocation.OverwriteDirectory == arbitraryOverwrite,
+        "MO2 honors configured absolute arbitrary Mods/Profiles/Overwrite directories");
+    var anywhere = Mo2SourceInspector.Resolve(emptyPhysicalGame, anyLocation, "Random Profile");
+    Require(anywhere.Ready && anywhere.RedscriptFiles == 1 &&
+        RedscriptModCounter.CountEffective(anywhere) == 1,
+        "MO2 source scan works without a direct installation from arbitrary paths");
 
     var unmanaged = Mo2SourceInspector.Discover(Path.Combine(root, "nonexistent-MO2"));
     Require(!unmanaged.Recognized, "missing MO2 instance is refused");

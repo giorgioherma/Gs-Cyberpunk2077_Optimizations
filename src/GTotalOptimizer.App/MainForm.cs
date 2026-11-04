@@ -22,6 +22,7 @@ internal sealed class MainForm : Form
     private readonly Panel pageTwo = new() { Dock = DockStyle.Fill };
     private readonly TextBox sourcePath = Entry();
     private readonly TextBox mo2Directory = Entry();
+    private readonly TextBox mo2GameRoot = Entry();
     private readonly ComboBox mo2Profile = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelAlt,
@@ -87,7 +88,17 @@ internal sealed class MainForm : Form
         Controls.Add(pageOne);
         pageTwo.Visible = false;
 
-        sourcePath.TextChanged += async (_, _) => await RefreshSourceAsync();
+        sourcePath.TextChanged += async (_, _) =>
+        {
+            if (!string.Equals(mo2GameRoot.Text, sourcePath.Text, StringComparison.Ordinal))
+                mo2GameRoot.Text = sourcePath.Text;
+            await RefreshSourceAsync();
+        };
+        mo2GameRoot.TextChanged += (_, _) =>
+        {
+            if (!string.Equals(sourcePath.Text, mo2GameRoot.Text, StringComparison.Ordinal))
+                sourcePath.Text = mo2GameRoot.Text;
+        };
         mo2Directory.TextChanged += async (_, _) =>
         {
             RefreshProfiles();
@@ -172,74 +183,56 @@ internal sealed class MainForm : Form
         }
         sourceSection.Controls.Add(tabs);
 
-        normalPanel.SetBounds(14, 56, 880, 30);
-        var pathRow = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
-            Margin = Padding.Empty
-        };
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
-        sourcePath.AutoSize = false;
-        sourcePath.Font = new Font("Consolas", 9f);
-        sourcePath.Dock = DockStyle.Fill;
-        sourcePath.Margin = new Padding(0, 1, 8, 1);
-        pathRow.Controls.Add(sourcePath, 0, 0);
-        var browse = Action("Browse...");
-        browse.Dock = DockStyle.Fill;
-        browse.Margin = Padding.Empty;
+        // Mirror the CET profiler: explicit 26px textbox and 92x30 Browse button.
+        // No nested TableLayoutPanel/row border that can clip the Browse control.
+        normalPanel.SetBounds(14, 56, 880, 32);
+        var browse = BrowseAction();
+        ConfigureCetPathRow(normalPanel, sourcePath, browse, 0);
         browse.Click += (_, _) => ChooseSource();
-        pathRow.Controls.Add(browse, 1, 0);
-        normalPanel.Controls.Add(pathRow);
         sourceSection.Controls.Add(normalPanel);
 
-        // MO2 instance/profile occupy their own complete view, as in the reference.
-        mo2Panel.SetBounds(14, 55, 880, 85);
+        // MO2's instance, mods, profiles and overwrite may be on entirely unrelated
+        // drives/folders. The game executable location is separate and required.
+        mo2Panel.SetBounds(14, 55, 880, 117);
+        var mo2GameBrowse = BrowseAction();
+        ConfigureCetPathRow(mo2Panel, mo2GameRoot, mo2GameBrowse, 0);
+        mo2GameBrowse.Click += (_, _) => ChooseSource();
+
         var instanceLabel = Readout();
-        instanceLabel.Text = "MO2 Instance Folder";
+        instanceLabel.Text = "MO2 Instance Folder (any location)";
         instanceLabel.ForeColor = Muted;
         instanceLabel.Font = new Font("Segoe UI", 8.5f);
-        instanceLabel.SetBounds(0, 0, 850, 16);
+        instanceLabel.SetBounds(0, 30, 850, 14);
         mo2Panel.Controls.Add(instanceLabel);
 
-        var mo2PathRow = new TableLayoutPanel
-        {
-            Location = new Point(0, 17), Size = new Size(880, 27),
-            ColumnCount = 2, RowCount = 1, Margin = Padding.Empty
-        };
-        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
-        mo2Directory.AutoSize = false;
-        mo2Directory.Font = new Font("Consolas", 9f);
-        mo2Directory.Dock = DockStyle.Fill;
-        mo2Directory.Margin = new Padding(0, 1, 8, 1);
-        mo2PathRow.Controls.Add(mo2Directory, 0, 0);
-        var browseMo2 = Action("Browse...");
-        browseMo2.Dock = DockStyle.Fill;
-        browseMo2.Margin = Padding.Empty;
+        var browseMo2 = BrowseAction();
+        ConfigureCetPathRow(mo2Panel, mo2Directory, browseMo2, 44);
         browseMo2.Click += (_, _) =>
         {
             using var picker = new FolderBrowserDialog
             {
-                Description = "Select the MO2 instance containing ModOrganizer.ini",
+                Description = "Select any MO2 instance folder containing ModOrganizer.ini",
                 UseDescriptionForTitle = true,
                 SelectedPath = Directory.Exists(mo2Directory.Text)
                     ? mo2Directory.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             };
             if (picker.ShowDialog(this) == DialogResult.OK) mo2Directory.Text = picker.SelectedPath;
         };
-        mo2PathRow.Controls.Add(browseMo2, 1, 0);
-        mo2Panel.Controls.Add(mo2PathRow);
 
         var profileLabel = Readout();
         profileLabel.Text = "MO2 Profile";
         profileLabel.ForeColor = Muted;
         profileLabel.Font = new Font("Segoe UI", 8.5f);
-        profileLabel.SetBounds(0, 46, 850, 15);
+        profileLabel.SetBounds(0, 76, 850, 14);
         mo2Panel.Controls.Add(profileLabel);
-        mo2Profile.SetBounds(0, 62, 880, 23);
+        mo2Profile.SetBounds(0, 92, 880, 24);
         mo2Profile.Dock = DockStyle.None;
         mo2Panel.Controls.Add(mo2Profile);
+        mo2Panel.Resize += (_, _) =>
+        {
+            mo2Profile.Width = Math.Max(200, mo2Panel.ClientSize.Width);
+            instanceLabel.Width = profileLabel.Width = mo2Panel.ClientSize.Width;
+        };
         sourceSection.Controls.Add(mo2Panel);
 
         sourceStatus.Font = new Font("Segoe UI", 8.8f);
@@ -258,7 +251,6 @@ internal sealed class MainForm : Form
         {
             var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
             tabs.Width = normalPanel.Width = mo2Panel.Width = width;
-            mo2PathRow.Width = mo2Profile.Width = instanceLabel.Width = profileLabel.Width = width;
             sourceStatus.Width = width;
             zeroEngineCheck.Width = Math.Min(520, width);
             zeroEngineLink.Width = Math.Max(190, width - zeroEngineLink.Left);
@@ -272,56 +264,57 @@ internal sealed class MainForm : Form
 
         var top = Readout();
         top.Text = "Start Cyberpunk 2077 and load the world. Press F11 to START; press F11 again to STOP.";
-        top.ForeColor = Amber;
+        top.ForeColor = TextColor;
         top.Font = new Font("Segoe UI Semibold", 9.7f, FontStyle.Bold);
-        top.SetBounds(15, 24, 890, 23);
+        top.SetBounds(15, 23, 890, 23);
         guide.Controls.Add(top);
 
-        cetKey.SetBounds(16, 52, 285, 22);
-        redKey.SetBounds(307, 52, 285, 22);
-        capKey.SetBounds(598, 52, 290, 22);
+        cetKey.SetBounds(16, 47, 285, 22);
+        redKey.SetBounds(307, 47, 285, 22);
+        capKey.SetBounds(598, 47, 290, 22);
         foreach (var key in new[] { cetKey, redKey, capKey })
         {
             key.Font = new Font("Segoe UI Semibold", 9.3f, FontStyle.Bold);
+            key.ForeColor = TextColor;
             guide.Controls.Add(key);
         }
 
         var conflicts = Readout();
         conflicts.Text = "Temporarily unbind other mods or game controls using F11 (CET and Settings).";
-        conflicts.ForeColor = Amber;
+        conflicts.ForeColor = TextColor;
         conflicts.Font = new Font("Segoe UI", 9.2f);
-        conflicts.SetBounds(15, 79, 890, 21);
+        conflicts.SetBounds(15, 70, 890, 21);
         guide.Controls.Add(conflicts);
 
         var headline = Readout();
         headline.Text = "RECORD 5–10 MINUTES IN THE CITY";
         headline.ForeColor = Green;
         headline.Font = new Font("Segoe UI Semibold", 14f, FontStyle.Bold);
-        headline.SetBounds(15, 107, 890, 29);
+        headline.SetBounds(15, 95, 890, 29);
         guide.Controls.Add(headline);
 
         var phases = Readout();
         phases.Text = "IDLE   •   MOVEMENT   •   DRIVING   •   HEAVY COMBAT";
         phases.ForeColor = Green;
         phases.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
-        phases.SetBounds(15, 139, 890, 25);
+        phases.SetBounds(15, 123, 890, 25);
         guide.Controls.Add(phases);
 
         var avoid = Readout();
         avoid.Text = "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS";
-        avoid.ForeColor = Green;
+        avoid.ForeColor = TextColor;
         avoid.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-        avoid.SetBounds(15, 165, 890, 22);
+        avoid.SetBounds(15, 147, 890, 22);
         guide.Controls.Add(avoid);
 
         var detail = Readout();
-        detail.ForeColor = Amber;
+        detail.ForeColor = TextColor;
         detail.Font = new Font("Segoe UI", 9f);
         detail.Text =
             "Stay in-world. Use an old save or Phantom Liberty start; fight police for heavy combat.\r\n" +
             "If you die, stop with F11 before loading. Captures under five minutes also work.\r\n" +
             "Close the game, return here and use COLLECT RESULTS / RESTORE.";
-        detail.SetBounds(15, 188, 890, 48);
+        detail.SetBounds(15, 169, 890, 48);
         guide.Controls.Add(detail);
         guide.Resize += (_, _) =>
         {
@@ -402,7 +395,7 @@ internal sealed class MainForm : Form
             tab.FlatAppearance.BorderColor = selected ? Cyan : Border;
         }
 
-        var y = mo2 ? 142 : 91;
+        var y = mo2 ? 173 : 91;
         sourceStatus.SetBounds(14, y, 880, 20);
         zeroEngineCheck.SetBounds(14, y + 22, 520, 20);
         scriptsCheck.SetBounds(14, y + 43, 210, 20);
@@ -432,10 +425,7 @@ internal sealed class MainForm : Form
     private void UpdateWorkflowVisuals()
     {
         // The current build contains no verified combined session. Never manufacture readiness.
-        var staged = ComponentBundleVerifier.Inspect(packageRoot);
-        profilerReady.Text = staged.Ready
-            ? "COMPONENTS STAGED — CAPTURE / RESTORE NOT YET VERIFIED"
-            : "PROFILER IS NOT READY!";
+        profilerReady.Text = "PROFILER NOT INSTALLED";
         profilerReady.ForeColor = Amber;
         stepOne.Text = "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
         stepTwo.Text = "2. START CYBERPUNK — record synchronized F11 gameplay after both profilers are ready.";
@@ -622,6 +612,41 @@ internal sealed class MainForm : Form
         AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
     };
 
+    private static Button BrowseAction()
+    {
+        var button = new Button
+        {
+            Text = "Browse...", FlatStyle = FlatStyle.Flat, BackColor = PanelAlt,
+            ForeColor = TextColor, Font = new Font("Segoe UI", 9f),
+            UseVisualStyleBackColor = false,
+            TabStop = true
+        };
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = Border;
+        return button;
+    }
+
+    private static void ConfigureCetPathRow(Panel panel, TextBox field, Button browse, int top)
+    {
+        field.AutoSize = false;
+        field.Dock = DockStyle.None;
+        field.Margin = Padding.Empty;
+        field.Font = new Font("Consolas", 9f);
+        field.Height = 26;
+        browse.Dock = DockStyle.None;
+        browse.Margin = Padding.Empty;
+
+        void Arrange()
+        {
+            var width = panel.ClientSize.Width;
+            field.SetBounds(0, top + 2, Math.Max(180, width - 103), 26);
+            browse.SetBounds(Math.Max(185, width - 92), top, 92, 30);
+        }
+        panel.Controls.AddRange([field, browse]);
+        panel.Resize += (_, _) => Arrange();
+        Arrange();
+    }
+
     private static Button Action(string text) => new NeonButton
     {
         Text = text, BackColor = PanelAlt, ForeColor = Cyan,
@@ -649,6 +674,14 @@ internal sealed class MainForm : Form
         var cancellation = scanCancellation = new CancellationTokenSource();
         var selected = sourcePath.Text;
         var current = GameInspector.Inspect(selected);
+        if (current.SourceKind == SourceKind.LiveCetMods &&
+            !string.IsNullOrWhiteSpace(current.GameRoot) &&
+            !string.Equals(current.GameRoot, selected, StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep only the canonical game root visible in the source field.
+            sourcePath.Text = current.GameRoot;
+            return;
+        }
         inspection = current;
         captureAndRestoreVerified = false;
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
@@ -671,12 +704,18 @@ internal sealed class MainForm : Form
             if (cancellation.IsCancellationRequested || IsDisposed) return;
         }
         mo2Stack = stack;
-        sourceStatus.Text = mo2Mode.Checked
-            ? stack?.Detail ?? (current.IsValidGame ? "Select an MO2 instance and active profile."
-                : "Select the Cyberpunk game folder once in the Normal tab.")
-            : current.Summary;
-        sourceStatus.ForeColor = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true)
-            ? Green : Amber;
+        var countReady = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true);
+        var redscriptCount = mo2Mode.Checked
+            ? RedscriptModCounter.CountEffective(stack)
+            : RedscriptModCounter.CountPhysical(current.GameRoot);
+        sourceStatus.Text = countReady
+            ? $"Game found. {(mo2Mode.Checked ? stack!.CetOwners : current.CetModCount)} CET mods and {redscriptCount} REDscript mods."
+            : string.IsNullOrWhiteSpace(selected)
+                ? "Select the Cyberpunk 2077 Game root - /Cyberpunk2077"
+                : mo2Mode.Checked && current.IsValidGame
+                    ? "Select a valid MO2 instance and active profile."
+                    : "Select the Cyberpunk 2077 Game root - /Cyberpunk2077";
+        sourceStatus.ForeColor = TextColor;
 
         var zeroEnginePresent = mo2Mode.Checked
             ? stack?.Ready == true && stack.HasZeroEngine
@@ -702,8 +741,15 @@ internal sealed class MainForm : Form
         var labels = new[] { cetKey, redKey, capKey };
         for (var i = 0; i < keys.Count; i++)
         {
-            labels[i].Text = $"{keys[i].Owner}: {keys[i].Value} {(keys[i].Confirmed ? "✓" : "⚠")}";
-            labels[i].ForeColor = keys[i].Confirmed ? Green : Amber;
+            // F11 is the intended bundled preset, not proof the payload is staged.
+            // Do not show an installation warning in the capture instructions.
+            var actual = keys[i].Value;
+            var key = actual.Equals("CUSTOM", StringComparison.OrdinalIgnoreCase)
+                ? "CUSTOM (set F11)"
+                : actual.Equals("F11", StringComparison.OrdinalIgnoreCase) && keys[i].Confirmed
+                    ? "F11 ✓" : "F11 (preset)";
+            labels[i].Text = $"{keys[i].Owner}: {key}";
+            labels[i].ForeColor = TextColor;
             labels[i].AccessibleDescription = keys[i].Detail;
         }
 
@@ -728,7 +774,7 @@ internal sealed class MainForm : Form
     private static void ApplyCheck(Label label, string path, bool present)
     {
         label.Text = $"{path}  {(present ? "✓" : "✕  NOT FOUND")}";
-        label.ForeColor = present ? TextColor : Amber;
+        label.ForeColor = TextColor;
         label.Font = new Font("Segoe UI Semibold", 9.5f);
     }
 

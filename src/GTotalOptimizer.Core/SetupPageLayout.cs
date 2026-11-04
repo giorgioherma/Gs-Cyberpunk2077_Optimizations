@@ -11,9 +11,9 @@ public static class SetupPageLayout
     public const int HeaderHeight = 76;
     public const int ActionsHeight = 56;
     public const int StatusHeight = 42;
-    public const int NormalSourceHeight = 176;
-    public const int Mo2SourceHeight = 214;
-    public const int InstructionsHeight = 242;
+    public const int NormalSourceHeight = 166;
+    public const int Mo2SourceHeight = 241;
+    public const int InstructionsHeight = 220;
     public const int MinimumWorkflowHeight = 132;
 
     public static int AvailableContentHeight(int clientHeight) =>
