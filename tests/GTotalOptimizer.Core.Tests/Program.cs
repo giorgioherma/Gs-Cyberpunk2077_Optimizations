@@ -46,6 +46,50 @@ try
     Require(!BackendResponse.Interpret(BackendKind.Cet, "{\"ok\":\"false\"}", 0).Responded,
         "nonboolean success rejected");
 
+
+    // The selected source must be the actual physical game tree or an explicit source-only folder.
+    var modsRoot = Path.Combine(root, "bin", "x64", "plugins", "cyber_engine_tweaks", "mods");
+    var live = GameInspector.Inspect(modsRoot);
+    Require(live.IsValidGame && live.SourceKind == SourceKind.LiveCetMods, "live CET mods path resolves matching physical game root");
+    Require(live.CetModCount == 1, "only immediate mod folders with init.lua count as installed CET owners");
+    var noInit = Path.Combine(modsRoot, "orphan");
+    Directory.CreateDirectory(noInit);
+    Require(GameInspector.CountCetMods(modsRoot) == 1, "directory without init.lua is not installed mod");
+
+    var separate = Path.Combine(root, "MO2", "active-mods");
+    var externalMod = Path.Combine(separate, "authorMod");
+    Directory.CreateDirectory(externalMod);
+    File.WriteAllText(Path.Combine(externalMod, "init.lua"), "");
+    var external = GameInspector.Inspect(separate);
+    Require(external.SourceKind == SourceKind.ExternalCetMods && !external.IsValidGame,
+        "external CET mod source is NOT proof of effective MO2 game or profiler installation");
+    Require(external.CetModCount == 1 && !external.HasVerifiedPhysicalSource,
+        "external mod folder is inspectable but not deployable without proven effective source");
+
+    var cetBindings = Path.Combine(root, "bin", "x64", "plugins", "cyber_engine_tweaks", "bindings.json");
+    Require(!CaptureKeyInspector.InspectCet(root, true).Confirmed, "missing CET binding is pending, never falsely green");
+    File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":34339947158700032}}");
+    Require(CaptureKeyInspector.InspectCet(root, true).Confirmed, "CET F11 numeric binding recognized");
+    File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":123}}");
+    var custom = CaptureKeyInspector.InspectCet(root, true);
+    Require(custom.Value == "CUSTOM" && !custom.Confirmed, "existing custom CET key is preserved, not claimed synchronized");
+    File.WriteAllText(cetBindings, "{malformed");
+    Require(!CaptureKeyInspector.InspectCet(root, true).Confirmed, "corrupt CET binding never claims F11");
+    Require(!CaptureKeyInspector.InspectCet(root, false).Confirmed, "absent CET backend never claims synchronization");
+
+    var cap = Path.Combine(root, "CapFrameX");
+    Directory.CreateDirectory(cap);
+    var capExe = Path.Combine(cap, "CapFrameX.exe");
+    File.WriteAllText(capExe, "");
+    File.WriteAllText(Path.Combine(cap, "portable.json"), "{\"paths\":{\"config\":\"Portable/Configuration\"}}");
+    var capSettingsDir = Path.Combine(cap, "Portable", "Configuration");
+    Directory.CreateDirectory(capSettingsDir);
+    File.WriteAllText(Path.Combine(capSettingsDir, "AppSettings.json"), "{\"CaptureHotKey\":\"F11\"}");
+    Require(CaptureKeyInspector.InspectCapFrameX(capExe).Confirmed, "CapFrameX portable F11 checked read-only");
+    File.WriteAllText(Path.Combine(capSettingsDir, "AppSettings.json"), "{\"CaptureHotKey\":\"F9\"}");
+    Require(!CaptureKeyInspector.InspectCapFrameX(capExe).Confirmed, "CapFrameX conflicting key must not be overwritten");
+    Require(!CaptureKeyInspector.InspectCapFrameX(null).Confirmed, "optional missing CapFrameX not falsely green");
+
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
         "standalone adapter layout predictable");

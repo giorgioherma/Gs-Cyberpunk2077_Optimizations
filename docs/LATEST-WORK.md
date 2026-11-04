@@ -29,3 +29,13 @@
 **Active blockers before implementation claims:** actual current standalone component artifacts and API schema under installed builds must be checked against source; CapFrameX packaging licensing/provenance and cross-profiler session synchronization have not been validated. MO2 effective mod discovery is unsupported until a separate proven provider exists.
 
 When implementation starts, append exact commits, build jobs, test output and gameplay evidence to this file; preserve separate completion labels for implementation, CI/source, compilation and gameplay.
+
+
+## 2026-11-04 — CET-style two-page redesign implementation (CI pending at commit)
+
+- User authorized replacing the original light shell with CET v1.3.4 colors and an updated **two-page / no-tab** workflow: Source + Capture → Analytics & Pass Generation. Page 1 displays one root-or-CET-mods chooser, instructions and live key evidence; Page 2 uses separate CET and REDscript scrollable text reports and explicitly requested **Analyze / Generate / Open Results** buttons.
+- Added exact physical root recognition and immediate \`init.lua\` CET owner-count detection. Direct canonical CET mods paths resolve the same game exe; external/MO2 source roots are **source-only**, never a claim of resolved VFS, game executable, profiler readiness or deployable generation.
+- Added non-destructive CET F11 / custom-key inspection, REDscript F11 availability hint and CapFrameX \`portable.json\`/AppSettings \`CaptureHotKey\` inspection; mismatch/absence is not green or silently edited.
+- Added contract tests for direct/external CET source, missing init.lua, F11/custom/corrupt bindings, CapFrameX F11/custom/missing. Kept real install/collect/restore, page-2 unlock and generation safely gated: no verified component provenance, current-session evidence or REDscript compiler integration yet. This milestone **does not** claim those actions work, nor a real UI launch.
+- Original October 16 workflow remains preserved verbatim. New current-decision delta authorizes visible Page 2 Analyze and distinct Page 1 collect/restore steps.
+- **CI evidence:** pending; must append actual run ID, conclusion, test count and artifact before calling this verified.
