@@ -1,6 +1,6 @@
-# G's Cyberpunk 2077 Total Optimization Generator
+# G's Cyberpunk 2077 Total Optimization Generator — v1.1.0
 
-**Status: initial .NET 10 read-only Windows application shell built and CI verified; CET/GRSP component integration, REDscript optimizer, capture/restore and all-in-one packaging are not yet implemented.**
+**Version 1.1.0 (development shell).** The .NET 10 Windows shell is CI-built. CET/GRSP installation, REDscript generation, capture/restore and full all-in-one packaging remain unimplemented; this is **not a stable functional release**.
 
 One user-oriented Windows application for **CET/Lua profiling, REDscript profiling, optional CapFrameX frame measurements, unified analysis, and a single game-installable optimization ZIP**. The project's currently tested game target is Cyberpunk 2077 **2.31**. Do not use the game version or third-party mod versions as rigid source-hash admission criteria.
 

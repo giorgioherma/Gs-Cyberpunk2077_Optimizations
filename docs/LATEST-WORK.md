@@ -54,3 +54,11 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - **Still unimplemented:** verified CET/GRSP staged artifacts and all payload hashes; actual install/partial rollback; game launch/current-session capture recognition; linked CapFrameX F11 preset writing; reliable collection/recovery; REDscript compilation; combined ZIP. No new gameplay outcome is claimed.
 
 - **CI VERIFIED:** [Windows CI #41899996796](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41899996796), code commit \`6423056de3493a4dbe0f9886290633462d99a83f\`. **37/37 read-only/JSON/provenance contracts PASS**, self-contained .NET 10 Windows publish PASS, packaged exactly one private .NET runtime and no unverified profiler binaries; Windows artifact **13357816626**. GUI launch, real profiler lifecycle, live capture, CapFrameX launch, REDscript compilation and in-game results remain **NOT TESTED**.
+
+## 2026-11-04 — unified app v1.1.0 version assignment
+
+- Explicit user request: identify the **unified application** as version **1.1.0**, without altering CET or GRSP standalone version numbers.
+- Central `Directory.Build.props` sets managed `Version/VersionPrefix` to `1.1.0`, `FileVersion/AssemblyVersion` to `1.1.0.0`, and a predictable informational version. WinForms title reads assembly product version.
+- Windows build checks the executable's file version, stamps `publish/VERSION.txt`, and uploads a `G-Total-Optimizer-v1.1.0-Shell-win-x64` artifact.
+- **No release tag** and no production-ready claim: the actual install/capture/restore/REDscript generator remains gated pending integration tests and verified components.
+- CI: pending on this commit; record exact run/job/artifact results after execution.

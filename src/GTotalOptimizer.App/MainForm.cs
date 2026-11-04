@@ -48,7 +48,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "G's Cyberpunk 2077 Total Optimization Generator";
+        Text = $"G's Cyberpunk 2077 Total Optimization Generator — v{Application.ProductVersion}";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(920, 670);
         ClientSize = new Size(1010, 790);
