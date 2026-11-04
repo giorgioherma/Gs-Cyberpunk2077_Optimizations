@@ -58,19 +58,19 @@ public static class Mo2FolderSources
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
             {
                 all.Add(new(input, ModSourceParts.None, 0, 0, false, "Invalid folder path."));
-                continue;
+                break;
             }
 
             if (!unique.Add(full))
             {
                 all.Add(new(full, ModSourceParts.None, 0, 0, false, "Duplicate source folder; already inspected."));
-                continue;
+                break;
             }
 
             if (!Directory.Exists(full))
             {
                 all.Add(new(full, ModSourceParts.None, 0, 0, false, "Folder not found."));
-                continue;
+                break;
             }
 
             // Stage each folder's inventory until the full walk succeeds. No partial

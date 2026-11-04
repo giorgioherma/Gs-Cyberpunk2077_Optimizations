@@ -379,7 +379,8 @@ try
 
     var sameFolderTwice = Mo2FolderSources.Inspect([asiOnly, asiOnly, redsOnly, red4extOnly]);
     Require(!sameFolderTwice.Complete && sameFolderTwice.UsedFolders == 1 &&
-        sameFolderTwice.Folders[1].Detail.Contains("Duplicate"),
+        sameFolderTwice.Folders[1].Detail.Contains("Duplicate") &&
+        sameFolderTwice.VisibleFolders == 2,
         "duplicate physical source never falsely satisfies a missing component");
 
     var noFiles = Path.Combine(mo2Sources, "empty no mods");
