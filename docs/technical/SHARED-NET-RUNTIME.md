@@ -7,7 +7,7 @@
 - CET Profiler manager: `net8.0-windows`, WinForms, currently self-contained; CET Resolver: `net8.0-windows`, currently self-contained. The native CET ASI/LuaJIT profiler does not use .NET.
 - GRSP manager: `net8.0-windows`, currently self-contained. The native Rust/RED4ext profiler does not use .NET.
 - CapFrameX v1.9.1.2 Beta: vendor requires **.NET 10 Desktop Runtime (x64)**, including for portable builds. CapFrameX v1.8.x requires .NET 9; do **not** downgrade to a much older version just to avoid a managed retarget. The native Visual C++ redistributable is separate.
-- New unified app: `net10.0-windows`, WinForms. Initial standalone shell is **self-contained**, shipping exactly one runtime for itself.
+- New unified app: `net10.0-windows`, WinForms. Initial standalone shell is **self-contained**, shipping exactly one runtime for itself. **Proof:** [Windows CI #41859261728](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41859261728) successfully packaged a single `coreclr.dll` in the shell while excluding unverified profiler/CapFrameX binaries. This does not yet prove CapFrameX or .NET 8 standalone manager execution through that same runtime.
 
 ## Required path to final one-runtime distribution
 
@@ -20,7 +20,7 @@
 
 ## Initial shell scope
 
-Only the **new unified WinForms executable** is compiled and packaged, self-contained `net10.0-windows`. CET and GRSP existing binaries are not bundled into the shell artifact; status adapters can read them if explicitly placed under known `components/cet` and `components/grsp` paths. Install/capture/generate buttons stay disabled until their real lifecycle, source and recovery contracts have been implemented and tested.
+Only the **new unified WinForms executable** is compiled and packaged, self-contained `net10.0-windows` (CI passed on 2026-11-04). CET and GRSP existing binaries are not bundled into the shell artifact; status adapters can read them if explicitly placed under known `components/cet` and `components/grsp` paths. Install/capture/generate buttons stay disabled until their real lifecycle, source and recovery contracts have been implemented and tested.
 
 ### Potential separate runtimes during development
 

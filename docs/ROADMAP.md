@@ -12,11 +12,11 @@
 
 ## Milestone 1 — minimal, real application shell
 
-- [x] Create one .NET 10 WinForms desktop project and initial Windows CI (source committed; CI/Windows runtime verification tracked in LATEST-WORK).
+- [x] Create one .NET 10 WinForms desktop project and initial Windows CI (**successful**; see LATEST-WORK for exact run and artifact).
 - [x] Implement the **first read-only Page 1/Page 2 shell** and original action labels; no Page 2 unlock without real capture evidence. Current game root persists under the user's LocalAppData.
 - [~] Read-only detect game, CET source, RED4ext directory, REDscript source, 0-Engine and G-REdruntime source **as unverified presence**; full native/API health proof and compatibility still pending.
 - [~] Implement optional standalone CET/GRSP known-path `--status` adapters and separate JSON parsing; no backend binaries bundled or status-ready claim until verified.
-- [~] Add core test harness for source paths, missing backends and domain-specific JSON error handling; real Windows process invocation and package staging still pending.
+- [x] Add/CI-run 14 offline core contracts for source paths, missing backends and domain-specific JSON error handling; real Windows process invocation, interactive GUI launch and verified component staging still pending.
 - **Acceptance:** app runs and accurately displays status with both, either or neither profiler. No pretend "Install succeeded", generated ZIP, or measured report.
 
 [Shared .NET 10 Desktop Runtime packaging contract](technical/SHARED-NET-RUNTIME.md): single private runtime for final integrated managers and CapFrameX is **not yet validated**.

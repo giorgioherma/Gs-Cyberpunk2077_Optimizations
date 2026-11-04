@@ -12,7 +12,7 @@ Read, in order:
 5. `docs/technical/ARCHITECTURE.md` and `docs/technical/COMPONENT-CONTRACTS.md`.
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current user instruction as of 2026-11-04:** document the design and agent continuation fully **before starting app implementation**. Design/document migration is not evidence of running code. Do not mark any UI/backend feature implemented without testing it.
+**Progress update 2026-11-04:** documentation was completed first, then user authorized proceeding. A source-only read-only .NET 10 Windows shell was CI-built. Read [docs/LATEST-WORK.md](docs/LATEST-WORK.md) for verified CI and unresolved runtime/component tests. Never mark complete integration or gameplay validation from a shell build.
 
 ## Non-negotiable ownership
 
