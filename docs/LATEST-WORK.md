@@ -47,8 +47,10 @@ When implementation starts, append exact commits, build jobs, test output and ga
 
 - **CI VERIFIED:** [Windows CI #41899293106](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41899293106), commit \`9ef29b7a5d957b9c0490e706b62bf2b4dd36fabf\`. .NET 10 publish and 27 core contracts passed, all shell package checks green.
 
-### CLI command / component provenance foundation (CI pending)
+### CLI command / component provenance foundation (CI VERIFIED)
 - Added bounded standalone process invocation with explicit CET versus GRSP JSON result parsing, collected archive path requirements and failure preservation. Does not itself install anything.
 - Added SHA-256 exact executable checks against a future per-component source commit / CI run / artifact manifest. Manifest missing or drifted => blocking status. This is an **admission prerequisite**, not proof of all native payloads or a complete transactional combined install.
 - Regression tests verify CET/GRSP collect schema, failure/restore refusal, missing bundle and executable tamper rejection.
 - **Still unimplemented:** verified CET/GRSP staged artifacts and all payload hashes; actual install/partial rollback; game launch/current-session capture recognition; linked CapFrameX F11 preset writing; reliable collection/recovery; REDscript compilation; combined ZIP. No new gameplay outcome is claimed.
+
+- **CI VERIFIED:** [Windows CI #41899996796](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41899996796), code commit \`6423056de3493a4dbe0f9886290633462d99a83f\`. **37/37 read-only/JSON/provenance contracts PASS**, self-contained .NET 10 Windows publish PASS, packaged exactly one private .NET runtime and no unverified profiler binaries; Windows artifact **13357816626**. GUI launch, real profiler lifecycle, live capture, CapFrameX launch, REDscript compilation and in-game results remain **NOT TESTED**.
