@@ -47,3 +47,12 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - The capture instructions specify 5+ minutes as **guidance**, stress idle, movement, driving, heavy combat; avoid menus, map, inventory, CET UI and missions, remain in-world. After STOP, **close game, collect verified current evidence and restore both profiler layers before Continue**.
 - The combined ZIP is named \`G-Cyberpunk2077-{timestamp}_Optimization_Pass.zip\`. Display a Vortex-winning overlay instruction. Owner exclusions must be **dependency-aware**: removing one owner's files is not guaranteed safe if remaining generated owners depend on its scheduler/runtime or cross-owner glue. Required 0-Engine/G-REdruntime files remain only when corresponding accepted optimizations require them.
 - CapFrameX is an optional frame-time companion, **not a game profiler installed into red4ext/CET**; new app can launch its approved portable deployment once provenance/private .NET compatibility is proven, otherwise link the existing copy.
+
+
+## 2026-11-04 — CET-style Page 1 source picker and capture instructions
+
+- **Game folder / Cyberpunk 2077** is the ordinary mandatory picker; inside that same box Normal/MO2 toggles source mode. MO2 mode adds instance directory and profile selection and inspects the enabled physical mod files from its configured locations. It does not require copying the MO2 stack.
+- Show source presence for **0-Engine, r6/scripts, red4ext/plugins** across known physical and selected MO2 sources, with a direct public link if 0-Engine is missing. A source-path existence check is **not** proof of 0-Engine runtime compatibility.
+- The large capture instruction panel uses cyan heading, yellow operational instructions and green 5–10-minute gameplay stress emphasis; F11 checks must reflect real provenance. Shorter completed captures are permissible; do not reject solely by duration. Avoid menus/UI and loading screens. The capture collection/restore remains evidence-gated.
+- Display readable disabled workflow buttons and an enabled pink Continue button only after verified current-session capture archive **and both owner restores**. No premature enablement.
+- **CapFrameX:** explicitly bundled, no ordinary path selector; only exact verified upstream artifact, runtime/rights and reversible config checks authorize packaging. Current development shell has no CapFrameX binary and reports that honestly.
