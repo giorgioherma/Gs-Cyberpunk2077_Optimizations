@@ -52,7 +52,7 @@ public static class Mo2SourceInspector
             return new(true, $"MO2 paths found; {choices.Length} profile(s). Select the actual launched profile.",
                 mods, profiles, overwrite, choices);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
         {
             return Failed("Cannot read MO2 paths: " + ex.Message);
         }
@@ -218,6 +218,7 @@ public static class Mo2SourceInspector
         value = value.Replace("%BASE_DIR%", baseDir, StringComparison.OrdinalIgnoreCase)
                      .Replace("%INSTANCE_DIR%", instance, StringComparison.OrdinalIgnoreCase);
         value = Environment.ExpandEnvironmentVariables(value);
+        if (value.Contains('%')) throw new InvalidDataException("Unresolved MO2 path variable for " + key);
         return Path.GetFullPath(Path.IsPathRooted(value) ? value : Path.Combine(baseDir, value));
     }
 

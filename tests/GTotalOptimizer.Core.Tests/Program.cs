@@ -204,6 +204,17 @@ try
     Require(selectedStack.Warnings.Any(w => w.Contains("RootBuilder")),
         "MO2 candidate inventory never claims proven runtime VFS/RootBuilder compatibility");
 
+    var overwriteRoot = Path.Combine(mo2Base, "overwrite", "r6", "scripts");
+    Directory.CreateDirectory(overwriteRoot);
+    File.WriteAllText(Path.Combine(overwriteRoot, "shared.reds"), "MO2 overwrite");
+    var withOverwrite = Mo2SourceInspector.Resolve(root, mo2, "Active");
+    Require(withOverwrite.Winner("r6/scripts/shared.reds") == Path.Combine(overwriteRoot, "shared.reds"),
+        "MO2 Overwrite wins over all enabled package files");
+    File.WriteAllText(Path.Combine(mo2InstanceDir, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=%UNKNOWN_VARIABLE%\nprofiles_directory=%BASE_DIR%/profiles\n");
+    Require(!Mo2SourceInspector.Discover(mo2InstanceDir).Recognized,
+        "unresolved MO2 path variables fail closed, never map to a wrong physical directory");
+
     var unmanaged = Mo2SourceInspector.Discover(Path.Combine(root, "nonexistent-MO2"));
     Require(!unmanaged.Recognized, "missing MO2 instance is refused");
 
