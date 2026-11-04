@@ -84,3 +84,10 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Per-user decision CapFrameX will be bundled: removed manual executable-path UI, fixed inspection location components/capframex/CapFrameX.exe. Vendor licensing, binary provenance, .NET 10 runtime tests and preset deployment still pending.
 - Added MO2 mixed-source, priority, profile, disabled-mod and refusal tests. Combined profiler lifecycle remains gated.
 - CI result pending; record run and artifact before claiming verified.
+
+
+### 2026-11-04 — final CET/MO2 Page 1 CI verification
+- SUCCESS: https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41918316512; source commit 6abb960f98bc2b8d4e8079e5c31d1b020e311e2a.
+- 52/52 core read-only/MO2 contracts passed; .NET 10 Windows publish passed; v1.1.0.0 metadata and single private runtime verified; artifact 13365971513.
+- Previous failed runs 41917561978, 41917813927, 41917984334 exposed WinForms CheckState ambiguity and WFO1000 property-serialization issues. Fixed at source, latest CI green.
+- Actual GUI display and gameplay untested; verified MO2 live USVFS/RootBuilder, cross-component profiling lifecycle, CapFrameX vendor packaging and combined optimization output remain pending.
