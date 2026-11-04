@@ -649,7 +649,7 @@ internal sealed class MainForm : Form
 // Draw disabled labels explicitly: standard WinForms renders them black on dark backgrounds.
 internal sealed class NeonButton : Button
 {
-    public bool IsAccent { get; set; }
+    internal bool IsAccent { get; set; }
     private bool hovered;
     public NeonButton()
     {
