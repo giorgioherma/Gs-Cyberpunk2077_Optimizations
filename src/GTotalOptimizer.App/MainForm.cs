@@ -21,13 +21,15 @@ internal sealed class MainForm : Form
     private readonly Panel pageOne = new() { Dock = DockStyle.Fill };
     private readonly Panel pageTwo = new() { Dock = DockStyle.Fill };
     private readonly TextBox sourcePath = Entry();
-    private readonly TextBox mo2Directory = Entry();
-    private readonly TextBox mo2GameRoot = Entry();
-    private readonly ComboBox mo2Profile = new()
-    {
-        DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelAlt,
-        ForeColor = TextColor, FlatStyle = FlatStyle.Flat, Dock = DockStyle.Fill
-    };
+    private readonly TextBox[] mo2SourceFields = [Entry(), Entry(), Entry(), Entry()];
+    private readonly Panel[] mo2SourceRows = [new(), new(), new(), new()];
+    private readonly CheckBox[] mo2ComponentChecks =
+    [
+        SourceCheck("CET ASI"), SourceCheck("CET mods"),
+        SourceCheck("r6/scripts"), SourceCheck("red4ext/plugins")
+    ];
+    private ModSourceCoverage? mo2Coverage;
+    private bool loadingMo2Sources;
     private readonly RadioButton normalMode = ModeChoice("NORMAL", true);
     private readonly RadioButton mo2Mode = ModeChoice("MO2", false);
     private readonly Panel normalPanel = new();
@@ -47,9 +49,6 @@ internal sealed class MainForm : Form
     private readonly Label stepTwo = Readout();
     private readonly Label stepThree = Readout();
     private GroupBox? sourceSection;
-    private Mo2Instance mo2Instance = Mo2SourceInspector.Discover(null);
-    private Mo2Stack? mo2Stack;
-    private bool settingProfiles;
     private readonly Label sourceStatus = Readout();
     private readonly Label cetKey = Readout();
     private readonly Label redKey = Readout();
@@ -88,30 +87,16 @@ internal sealed class MainForm : Form
         Controls.Add(pageOne);
         pageTwo.Visible = false;
 
-        sourcePath.TextChanged += async (_, _) =>
+        sourcePath.TextChanged += async (_, _) => await RefreshSourceAsync();
+        for (var i = 0; i < mo2SourceFields.Length; i++)
         {
-            if (!string.Equals(mo2GameRoot.Text, sourcePath.Text, StringComparison.Ordinal))
-                mo2GameRoot.Text = sourcePath.Text;
-            await RefreshSourceAsync();
-        };
-        mo2GameRoot.TextChanged += (_, _) =>
-        {
-            if (!string.Equals(sourcePath.Text, mo2GameRoot.Text, StringComparison.Ordinal))
-                sourcePath.Text = mo2GameRoot.Text;
-        };
-        mo2Directory.TextChanged += async (_, _) =>
-        {
-            RefreshProfiles();
-            await RefreshSourceAsync();
-        };
-        mo2Profile.SelectedIndexChanged += async (_, _) =>
-        {
-            if (!settingProfiles)
+            mo2SourceFields[i].TextChanged += async (_, _) =>
             {
-                UserSettings.WriteMo2Profile(mo2Profile.SelectedItem?.ToString() ?? "");
+                if (loadingMo2Sources) return;
+                UserSettings.WriteMo2Sources(mo2SourceFields.Select(field => field.Text).ToArray());
                 await RefreshSourceAsync();
-            }
-        };
+            };
+        }
         normalMode.CheckedChanged += async (_, _) =>
         {
             if (!normalMode.Checked) return;
@@ -146,9 +131,15 @@ internal sealed class MainForm : Form
 
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
-        mo2Directory.Text = UserSettings.ReadMo2Directory();
+        loadingMo2Sources = true;
+        try
+        {
+            var savedSources = UserSettings.ReadMo2Sources();
+            for (var i = 0; i < mo2SourceFields.Length && i < savedSources.Length; i++)
+                mo2SourceFields[i].Text = savedSources[i];
+        }
+        finally { loadingMo2Sources = false; }
         sourcePath.Text = UserSettings.ReadGameRoot();
-        RefreshProfiles();
         SetSourceMode();
         Shown += async (_, _) => await RefreshSourceAsync();
     }
@@ -191,49 +182,46 @@ internal sealed class MainForm : Form
         browse.Click += (_, _) => ChooseSource();
         sourceSection.Controls.Add(normalPanel);
 
-        // MO2's instance, mods, profiles and overwrite may be on entirely unrelated
-        // drives/folders. The game executable location is separate and required.
-        mo2Panel.SetBounds(14, 55, 880, 117);
-        var mo2GameBrowse = BrowseAction();
-        ConfigureCetPathRow(mo2Panel, mo2GameRoot, mo2GameBrowse, 0);
-        mo2GameBrowse.Click += (_, _) => ChooseSource();
-
-        var instanceLabel = Readout();
-        instanceLabel.Text = "MO2 Instance Folder (any location)";
-        instanceLabel.ForeColor = Muted;
-        instanceLabel.Font = new Font("Segoe UI", 8.5f);
-        instanceLabel.SetBounds(0, 30, 850, 14);
-        mo2Panel.Controls.Add(instanceLabel);
-
-        var browseMo2 = BrowseAction();
-        ConfigureCetPathRow(mo2Panel, mo2Directory, browseMo2, 44);
-        browseMo2.Click += (_, _) =>
+        // MO2 source discovery is content-based: any one folder may contain all
+        // four targets, or the user can supply two, three, or four unrelated folders.
+        // Only reveal another selector while a component is missing.
+        mo2Panel.SetBounds(14, 55, 880, 116);
+        for (var i = 0; i < mo2SourceFields.Length; i++)
         {
-            using var picker = new FolderBrowserDialog
+            var slot = i;
+            var row = mo2SourceRows[i];
+            row.SetBounds(0, i * 29, 880, 29);
+            row.Visible = i == 0;
+            var browseMo2 = BrowseAction();
+            ConfigureCetPathRow(row, mo2SourceFields[i], browseMo2, 0);
+            browseMo2.Click += (_, _) =>
             {
-                Description = "Select any MO2 instance folder containing ModOrganizer.ini",
-                UseDescriptionForTitle = true,
-                SelectedPath = Directory.Exists(mo2Directory.Text)
-                    ? mo2Directory.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+                using var picker = new FolderBrowserDialog
+                {
+                    Description = "Select a folder containing CET ASI, CET mods, REDscript or RED4ext files",
+                    UseDescriptionForTitle = true,
+                    SelectedPath = Directory.Exists(mo2SourceFields[slot].Text)
+                        ? mo2SourceFields[slot].Text
+                        : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+                };
+                if (picker.ShowDialog(this) == DialogResult.OK)
+                    mo2SourceFields[slot].Text = picker.SelectedPath;
             };
-            if (picker.ShowDialog(this) == DialogResult.OK) mo2Directory.Text = picker.SelectedPath;
-        };
-
-        var profileLabel = Readout();
-        profileLabel.Text = "MO2 Profile";
-        profileLabel.ForeColor = Muted;
-        profileLabel.Font = new Font("Segoe UI", 8.5f);
-        profileLabel.SetBounds(0, 76, 850, 14);
-        mo2Panel.Controls.Add(profileLabel);
-        mo2Profile.SetBounds(0, 92, 880, 24);
-        mo2Profile.Dock = DockStyle.None;
-        mo2Panel.Controls.Add(mo2Profile);
+            mo2Panel.Controls.Add(row);
+        }
         mo2Panel.Resize += (_, _) =>
         {
-            mo2Profile.Width = Math.Max(200, mo2Panel.ClientSize.Width);
-            instanceLabel.Width = profileLabel.Width = mo2Panel.ClientSize.Width;
+            foreach (var row in mo2SourceRows)
+                row.Width = Math.Max(350, mo2Panel.ClientSize.Width);
         };
         sourceSection.Controls.Add(mo2Panel);
+
+        foreach (var check in mo2ComponentChecks)
+        {
+            check.ForeColor = TextColor;
+            check.Font = new Font("Segoe UI", 9f);
+            sourceSection.Controls.Add(check);
+        }
 
         sourceStatus.Font = new Font("Segoe UI", 8.8f);
         sourceStatus.AutoEllipsis = true;
@@ -252,6 +240,11 @@ internal sealed class MainForm : Form
             var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
             tabs.Width = normalPanel.Width = mo2Panel.Width = width;
             sourceStatus.Width = width;
+            for (var i = 0; i < mo2ComponentChecks.Length; i++)
+            {
+                mo2ComponentChecks[i].Left = 14 + (width * i / 4);
+                mo2ComponentChecks[i].Width = width / 4 - 3;
+            }
             zeroEngineCheck.Width = Math.Min(520, width);
             zeroEngineLink.Width = Math.Max(190, width - zeroEngineLink.Left);
             red4extCheck.Width = Math.Max(180, width - red4extCheck.Left);
@@ -386,7 +379,6 @@ internal sealed class MainForm : Form
         setupContent.RowStyles[0].Height = mo2
             ? SetupPageLayout.Mo2SourceHeight : SetupPageLayout.NormalSourceHeight;
 
-        // Keep the mode selector visually segmented across the whole upper panel.
         foreach (var tab in new[] { normalMode, mo2Mode })
         {
             var selected = tab.Checked;
@@ -394,33 +386,42 @@ internal sealed class MainForm : Form
             tab.ForeColor = selected ? Cyan : Muted;
             tab.FlatAppearance.BorderColor = selected ? Cyan : Border;
         }
+        foreach (var check in mo2ComponentChecks) check.Visible = mo2;
+        foreach (var check in new Control[] { zeroEngineCheck, scriptsCheck, red4extCheck })
+            check.Visible = !mo2;
 
-        var y = mo2 ? 173 : 91;
-        sourceStatus.SetBounds(14, y, 880, 20);
-        zeroEngineCheck.SetBounds(14, y + 22, 520, 20);
-        scriptsCheck.SetBounds(14, y + 43, 210, 20);
-        red4extCheck.SetBounds(240, y + 43, 220, 20);
-        zeroEngineLink.SetBounds(535, y + 22, 335, 20);
-    }
-
-    private void RefreshProfiles()
-    {
-        mo2Instance = Mo2SourceInspector.Discover(mo2Directory.Text);
-        settingProfiles = true;
-        try
+        if (mo2)
         {
-            var preferred = mo2Profile.SelectedItem?.ToString() ?? UserSettings.ReadMo2Profile();
-            mo2Profile.Items.Clear();
-            foreach (var name in mo2Instance.Profiles) mo2Profile.Items.Add(name);
-            var selected = mo2Instance.Profiles.FirstOrDefault(p =>
-                p.Equals(preferred, StringComparison.OrdinalIgnoreCase));
-            if (selected is not null) mo2Profile.SelectedItem = selected;
-            else if (mo2Instance.Profiles.Count == 1) mo2Profile.SelectedIndex = 0;
-            else mo2Profile.SelectedIndex = -1;
-            UserSettings.WriteMo2Directory(mo2Directory.Text);
+            for (var i = 0; i < mo2ComponentChecks.Length; i++)
+                mo2ComponentChecks[i].SetBounds(14 + (i * 220), 175, 216, 20);
+            sourceStatus.SetBounds(14, 199, 880, 19);
+            zeroEngineLink.SetBounds(14, 218, 550, 18);
+            RefreshMo2Rows();
         }
-        finally { settingProfiles = false; }
+        else
+        {
+            sourceStatus.SetBounds(14, 91, 880, 20);
+            zeroEngineCheck.SetBounds(14, 113, 520, 20);
+            scriptsCheck.SetBounds(14, 134, 210, 20);
+            red4extCheck.SetBounds(240, 134, 220, 20);
+            zeroEngineLink.SetBounds(530, 113, 340, 20);
+        }
     }
+
+    private void RefreshMo2Rows()
+    {
+        var count = mo2Coverage?.VisibleFolders ?? 1;
+        for (var i = 0; i < mo2SourceRows.Length; i++)
+            mo2SourceRows[i].Visible = i < count;
+    }
+
+    private static CheckBox SourceCheck(string title) => new()
+    {
+        Text = title, AutoCheck = false, Checked = false, TabStop = false,
+        AutoSize = false, FlatStyle = FlatStyle.Flat,
+        BackColor = Color.Transparent, ForeColor = TextColor,
+        Cursor = Cursors.Default
+    };
 
     private void UpdateWorkflowVisuals()
     {
@@ -672,77 +673,99 @@ internal sealed class MainForm : Form
         scanCancellation?.Cancel();
         scanCancellation?.Dispose();
         var cancellation = scanCancellation = new CancellationTokenSource();
-        var selected = sourcePath.Text;
-        var current = GameInspector.Inspect(selected);
-        if (current.SourceKind == SourceKind.LiveCetMods &&
+        var current = GameInspector.Inspect(sourcePath.Text);
+        if (!mo2Mode.Checked && current.SourceKind == SourceKind.LiveCetMods &&
             !string.IsNullOrWhiteSpace(current.GameRoot) &&
-            !string.Equals(current.GameRoot, selected, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(current.GameRoot, sourcePath.Text, StringComparison.OrdinalIgnoreCase))
         {
-            // Keep only the canonical game root visible in the source field.
             sourcePath.Text = current.GameRoot;
             return;
         }
+
         inspection = current;
         captureAndRestoreVerified = false;
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
         UpdateWorkflowVisuals();
-        UserSettings.WriteGameRoot(selected);
+        UserSettings.WriteGameRoot(sourcePath.Text);
 
-        Mo2Stack? stack = null;
-        if (mo2Mode.Checked && current.IsValidGame && mo2Instance.Recognized &&
-            mo2Profile.SelectedItem is string profile)
+        ModSourceCoverage? coverage = null;
+        if (mo2Mode.Checked)
         {
-            // Filesystem enumeration is potentially large. Never block the WinForms UI thread.
-            var snapshot = mo2Instance;
+            var inputs = mo2SourceFields.Select(x => (string?)x.Text).ToArray();
             try
             {
-                stack = await Task.Run(() => Mo2SourceInspector.Resolve(current.GameRoot, snapshot, profile, cancellation.Token),
-                    cancellation.Token);
+                coverage = await Task.Run(
+                    () => Mo2FolderSources.Inspect(inputs, cancellation.Token), cancellation.Token);
             }
             catch (OperationCanceledException) { return; }
             if (cancellation.IsCancellationRequested || IsDisposed) return;
         }
-        mo2Stack = stack;
-        var countReady = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true);
+        mo2Coverage = coverage;
+        RefreshMo2Rows();
+
         var redscriptCount = mo2Mode.Checked
-            ? RedscriptModCounter.CountEffective(stack)
+            ? coverage?.RedscriptOwners ?? 0
             : RedscriptModCounter.CountPhysical(current.GameRoot);
-        sourceStatus.Text = countReady
-            ? $"Game found. {(mo2Mode.Checked ? stack!.CetOwners : current.CetModCount)} CET mods and {redscriptCount} REDscript mods."
-            : string.IsNullOrWhiteSpace(selected)
-                ? "Select the Cyberpunk 2077 Game root - /Cyberpunk2077"
-                : mo2Mode.Checked && current.IsValidGame
-                    ? "Select a valid MO2 instance and active profile."
-                    : "Select the Cyberpunk 2077 Game root - /Cyberpunk2077";
+        if (mo2Mode.Checked)
+        {
+            if (coverage is null || coverage.UsedFolders == 0)
+                sourceStatus.Text = "Select a folder containing the MO2 mod files (any location).";
+            else
+            {
+                var ready = new[]
+                {
+                    ModSourceParts.CetAsi, ModSourceParts.CetMods,
+                    ModSourceParts.Redscript, ModSourceParts.Red4ext
+                }.Count(part => coverage.Has(part));
+                sourceStatus.Text = $"{coverage.UsedFolders} source folder(s) · {ready}/4 found · " +
+                    $"{coverage.CetOwners} CET mods · {redscriptCount} REDscript sources";
+            }
+            var types = new[]
+            {
+                ModSourceParts.CetAsi, ModSourceParts.CetMods,
+                ModSourceParts.Redscript, ModSourceParts.Red4ext
+            };
+            for (var i = 0; i < types.Length; i++)
+                mo2ComponentChecks[i].Checked = coverage?.Has(types[i]) == true;
+        }
+        else
+        {
+            sourceStatus.Text = current.IsValidGame
+                ? $"Game found. {current.CetModCount} CET mods and {redscriptCount} REDscript mods."
+                : "Select the Cyberpunk 2077 Game root - /Cyberpunk2077";
+        }
         sourceStatus.ForeColor = TextColor;
 
-        var zeroEnginePresent = mo2Mode.Checked
-            ? stack?.Ready == true && stack.HasZeroEngine
-            : current.Checks.Any(c => c.Name == "0-Engine source" && c.State != GTotalOptimizer.Core.CheckState.Missing);
-        var hasScripts = mo2Mode.Checked
-            ? stack?.Ready == true && stack.HasRedscript
-            : current.Checks.Any(c => c.Name == "REDscript source folder" && c.State != GTotalOptimizer.Core.CheckState.Missing);
-        var hasRed4ext = mo2Mode.Checked
-            ? stack?.Ready == true && stack.Red4extFiles > 0
-            : current.Checks.Any(c => c.Name == "RED4ext plugin folder" && c.State != GTotalOptimizer.Core.CheckState.Missing);
-        ApplyCheck(zeroEngineCheck, "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", zeroEnginePresent);
-        ApplyCheck(scriptsCheck, "r6/scripts", hasScripts);
-        ApplyCheck(red4extCheck, "red4ext/plugins", hasRed4ext);
-        zeroEngineLink.Visible = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true) &&
-                                 !zeroEnginePresent;
+        if (!mo2Mode.Checked)
+        {
+            var zeroEnginePresent = current.Checks.Any(c => c.Name == "0-Engine source" &&
+                c.State != GTotalOptimizer.Core.CheckState.Missing);
+            var hasScripts = current.Checks.Any(c => c.Name == "REDscript source folder" &&
+                c.State != GTotalOptimizer.Core.CheckState.Missing);
+            var hasRed4ext = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
+                c.State != GTotalOptimizer.Core.CheckState.Missing);
+            ApplyCheck(zeroEngineCheck, "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", zeroEnginePresent);
+            ApplyCheck(scriptsCheck, "r6/scripts", hasScripts);
+            ApplyCheck(red4extCheck, "red4ext/plugins", hasRed4ext);
+            zeroEngineLink.Visible = current.IsValidGame && !zeroEnginePresent;
+        }
+        else
+        {
+            // CET mods present is not sufficient to infer 0-Engine. Preserve its
+            // separate dependency warning without creating a fifth source slot.
+            zeroEngineLink.Visible = coverage?.Has(ModSourceParts.CetMods) == true &&
+                coverage.HasZeroEngine == false;
+        }
 
         var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
         var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);
-        // CapFrameX is a planned bundled component; never demand a user executable path.
         var bundledCap = Path.Combine(packageRoot, "components", "capframex", "CapFrameX.exe");
         var keys = CaptureKeyInspector.Inspect(current.GameRoot,
             File.Exists(cetExe), File.Exists(redExe), bundledCap);
         var labels = new[] { cetKey, redKey, capKey };
         for (var i = 0; i < keys.Count; i++)
         {
-            // F11 is the intended bundled preset, not proof the payload is staged.
-            // Do not show an installation warning in the capture instructions.
             var actual = keys[i].Value;
             var key = actual.Equals("CUSTOM", StringComparison.OrdinalIgnoreCase)
                 ? "CUSTOM (set F11)"
@@ -754,10 +777,14 @@ internal sealed class MainForm : Form
         }
 
         pageOneStatus.Text = mo2Mode.Checked
-            ? stack?.Ready == true ? "MO2 loose-file sources indexed; game launch/VFS and native restore remain unverified."
-                : "MO2 profile not resolved. No game files were changed."
+            ? coverage?.Complete == true
+                ? current.IsValidGame
+                    ? "All four component sources found. MO2 active-profile/runtime overlay still unverified."
+                    : "All four component sources found. Game root needed for future profiler installation."
+                : "MO2 physical sources only; select folders until all four checkboxes are checked."
             : current.IsValidGame ? "Game detected. Profiler installation and restore are not yet integrated."
                 : "Select a valid Cyberpunk 2077 game folder.";
+
         if (!current.IsValidGame || cancellation.IsCancellationRequested) return;
         try
         {
@@ -765,8 +792,8 @@ internal sealed class MainForm : Form
                 backend.ReadAsync(cetExe, current.GameRoot!, BackendKind.Cet, cancellation.Token),
                 backend.ReadAsync(redExe, current.GameRoot!, BackendKind.Grsp, cancellation.Token));
             if (cancellation.IsCancellationRequested || IsDisposed) return;
-            pageOneStatus.Text += "  " + string.Join(" | ", statuses.Select(s =>
-                $"{s.Kind}: {(s.Responded ? "status available" : "not staged")}"));
+            pageOneStatus.Text += "  " + string.Join(" | ", statuses.Select(status =>
+                $"{status.Kind}: {(status.Responded ? "status available" : "not staged")}"));
         }
         catch (OperationCanceledException) { }
     }
@@ -831,6 +858,8 @@ internal static class UserSettings
     private sealed class Settings
     {
         public string GameRoot { get; set; } = "";
+        public string[] Mo2SourceFolders { get; set; } = [];
+        // Old settings remain readable to preserve upgrade compatibility.
         public string Mo2Directory { get; set; } = "";
         public string Mo2Profile { get; set; } = "";
     }
@@ -848,11 +877,15 @@ internal static class UserSettings
     }
 
     internal static string ReadGameRoot() => Read().GameRoot;
-    internal static string ReadMo2Directory() => Read().Mo2Directory;
-    internal static string ReadMo2Profile() => Read().Mo2Profile;
-    internal static void WriteGameRoot(string value) { var s = Read(); s.GameRoot = value; Write(s); }
-    internal static void WriteMo2Directory(string value) { var s = Read(); s.Mo2Directory = value; Write(s); }
-    internal static void WriteMo2Profile(string value) { var s = Read(); s.Mo2Profile = value; Write(s); }
+    internal static string[] ReadMo2Sources() => Read().Mo2SourceFolders ?? [];
+    internal static void WriteGameRoot(string value)
+    {
+        var s = Read(); s.GameRoot = value; Write(s);
+    }
+    internal static void WriteMo2Sources(string[] values)
+    {
+        var s = Read(); s.Mo2SourceFolders = values.Take(Mo2FolderSources.MaximumFolders).ToArray(); Write(s);
+    }
 
     private static void Write(Settings settings)
     {
@@ -863,6 +896,6 @@ internal static class UserSettings
             File.WriteAllText(temp, JsonSerializer.Serialize(settings));
             File.Move(temp, SettingsFile, overwrite: true);
         }
-        catch { /* Preferences must never affect game files. */ }
+        catch { /* Settings must never affect live game sources. */ }
     }
 }

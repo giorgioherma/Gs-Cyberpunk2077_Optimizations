@@ -112,3 +112,11 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - For MO2 instances in arbitrary locations, separate INI-configured Mods/Profiles/Overwrite storage on arbitrary directories and a game root with zero directly installed mods, added explicit read-only regression tests. A physical game executable is still needed for launching/profiling; plugin VFS runtime and RootBuilder behavior remain unverified and unsafe for generation.
 - Preserved F11 key inspection without yellow unavailable warnings in the visible capture instructions. The UI calls absent payloads **F11 (preset)**, never a verified checkmark. Standalone CET and GRSP source versions unchanged.
 - No new profiler binaries, no gameplay installation/restore or optimizer ZIP enabled. CI pending; log the exact run once it completes.
+
+
+## 2026-11-05 — progressive MO2 file-source selectors (CI pending)
+- User requested that MO2 not require conventional instance/profile layout: **select one through four arbitrary physical folders**; the app recognizes CET ASI, CET mods/init.lua, r6/scripts .reds, RED4ext plugin DLLs by files and ticks four read-only checkboxes.
+- UI now shows slot 1 by default, reveals slot 2/3/4 only until all four components are covered, and hides surplus slots when one/two/three folders suffice. Existing Normal game-root setup remains separate. Each selected folder can cover multiple types.
+- Read-only, bounded depth/file-count walking skips symlinks/reparse points and hidden MO2 entries, refuses unreadable/oversized inventories rather than reporting a false complete source. Deduplicates identical physical mod and REDscript files across overlapping folder paths. Tested one/two/three/four-folder cases, duplicates and missing sources.
+- **Limitation:** Presence in arbitrary physical folder does not prove MO2 active-profile priority, USVFS, RootBuilder, archive injection or deployment. No direct path from this heuristic inventory to CET Resolver/generation. Profilers still require actual game root to be proven; install and Continue remain gated.
+- **CI pending:** record final Windows tests, compilation and artifact evidence after the build.

@@ -286,6 +286,110 @@ try
     var unmanaged = Mo2SourceInspector.Discover(Path.Combine(root, "nonexistent-MO2"));
     Require(!unmanaged.Recognized, "missing MO2 instance is refused");
 
+
+    // Flexible MO2 content-first sources: each folder may contain one, several,
+    // or all four components. Do not require a game-root or MO2 instance here.
+    var mo2Sources = Path.Combine(root, "arbitrary source locations");
+    var asiOnly = Path.Combine(mo2Sources, "anywhere one");
+    var cetOnly = Path.Combine(mo2Sources, "another folder");
+    var redsOnly = Path.Combine(mo2Sources, "third disk candidate");
+    var red4extOnly = Path.Combine(mo2Sources, "fourth folder");
+
+    var asiFile = Path.Combine(asiOnly, "bin", "x64", "plugins", "cyber_engine_tweaks.asi");
+    var luaInit = Path.Combine(cetOnly, "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "0-Engine", "init.lua");
+    var redFile = Path.Combine(redsOnly, "r6", "scripts", "Mods", "runtime.reds");
+    var pluginDll = Path.Combine(red4extOnly, "red4ext", "plugins", "SomePlugin", "SomePlugin.dll");
+    foreach (var file in new[] { asiFile, luaInit, redFile, pluginDll })
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "fixture");
+    }
+
+    var emptySources = Mo2FolderSources.Inspect(["", "", "", ""]);
+    Require(emptySources.VisibleFolders == 1 && !emptySources.Complete,
+        "MO2 initially shows only one empty folder, with four unchecked components");
+
+    var fourSources = Mo2FolderSources.Inspect([asiOnly, cetOnly, redsOnly, red4extOnly]);
+    Require(fourSources.Complete && fourSources.VisibleFolders == 4 &&
+        fourSources.UsedFolders == 4 && fourSources.HasZeroEngine,
+        "four unrelated physical folders reveal all four rows and recognize all four file types");
+    Require(fourSources.CetOwners == 1 && fourSources.RedscriptOwners == 1,
+        "CET owner requires init.lua and REDscript owner is not the raw file count");
+    Require(fourSources.Has(ModSourceParts.CetAsi) && fourSources.Has(ModSourceParts.CetMods) &&
+        fourSources.Has(ModSourceParts.Redscript) && fourSources.Has(ModSourceParts.Red4ext),
+        "four MO2 checkboxes are derived from file content, not folder names");
+
+    var incomplete = Mo2FolderSources.Inspect([asiOnly, cetOnly, "", ""]);
+    Require(!incomplete.Complete && incomplete.VisibleFolders == 3 &&
+        incomplete.Has(ModSourceParts.CetAsi) && incomplete.Has(ModSourceParts.CetMods) &&
+        !incomplete.Has(ModSourceParts.Redscript),
+        "third slot appears when two folders do not contain all four components");
+
+    var twoFolderFirst = Path.Combine(mo2Sources, "random combined A");
+    var twoFolderSecond = Path.Combine(mo2Sources, "random combined B");
+    var twoAsi = Path.Combine(twoFolderFirst, "other", "CET.asi");
+    var twoInit = Path.Combine(twoFolderFirst, "mods", "SomeMod", "init.lua");
+    var twoReds = Path.Combine(twoFolderSecond, "r6", "scripts", "MyScript", "main.reds");
+    var twoDll = Path.Combine(twoFolderSecond, "red4ext", "plugins", "MyPlugin.dll");
+    foreach (var file in new[] { twoAsi, twoInit, twoReds, twoDll })
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "fixture");
+    }
+    var pair = Mo2FolderSources.Inspect([twoFolderFirst, twoFolderSecond, redsOnly, red4extOnly]);
+    Require(pair.Complete && pair.VisibleFolders == 2 && pair.UsedFolders == 2,
+        "two physical folders cover all four components and hide rows three and four");
+
+    var threeFirst = Path.Combine(mo2Sources, "three 1");
+    var threeSecond = Path.Combine(mo2Sources, "three 2");
+    var threeThird = Path.Combine(mo2Sources, "three 3");
+    foreach (var (folder, relative) in new[]
+    {
+        (threeFirst, "cyber_engine_tweaks.asi"),
+        (threeSecond, "mods/One/init.lua"),
+        (threeSecond, "r6/scripts/C/main.reds"),
+        (threeThird, "red4ext/plugins/My.dll")
+    })
+    {
+        var file = Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "fixture");
+    }
+    var triple = Mo2FolderSources.Inspect([threeFirst, threeSecond, threeThird, red4extOnly]);
+    Require(triple.Complete && triple.VisibleFolders == 3 && triple.UsedFolders == 3,
+        "three source folders automatically hide the fourth chooser");
+
+    var allAtOnce = Path.Combine(mo2Sources, "one random folder");
+    foreach (var original in new[] { asiFile, luaInit, redFile, pluginDll })
+    {
+        var relative = original.StartsWith(asiOnly) ? Path.GetRelativePath(asiOnly, original)
+            : original.StartsWith(cetOnly) ? Path.GetRelativePath(cetOnly, original)
+            : original.StartsWith(redsOnly) ? Path.GetRelativePath(redsOnly, original)
+            : Path.GetRelativePath(red4extOnly, original);
+        var copy = Path.Combine(allAtOnce, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+        File.Copy(original, copy);
+    }
+    var single = Mo2FolderSources.Inspect([allAtOnce, asiOnly, cetOnly, redsOnly]);
+    Require(single.Complete && single.VisibleFolders == 1 && single.UsedFolders == 1,
+        "one folder containing all four recognized components hides the other three rows");
+    Require(single.CetOwners == 1 && single.RedscriptOwners == 1,
+        "one-folder source inventory counts the CET and REDscript owners");
+
+    var sameFolderTwice = Mo2FolderSources.Inspect([asiOnly, asiOnly, redsOnly, red4extOnly]);
+    Require(!sameFolderTwice.Complete && sameFolderTwice.UsedFolders == 1 &&
+        sameFolderTwice.Folders[1].Detail.Contains("Duplicate"),
+        "duplicate physical source never falsely satisfies a missing component");
+
+    var noFiles = Path.Combine(mo2Sources, "empty no mods");
+    Directory.CreateDirectory(noFiles);
+    var noContent = Mo2FolderSources.Inspect([noFiles, "", "", ""]);
+    Require(!noContent.Complete && noContent.VisibleFolders == 2,
+        "a folder is not accepted as a component merely because it exists");
+    Require(!Mo2FolderSources.Inspect([Path.Combine(mo2Sources, "not found"), "", "", ""]).Complete,
+        "missing directory does not create a false checked component");
+
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
         "standalone adapter layout predictable");
