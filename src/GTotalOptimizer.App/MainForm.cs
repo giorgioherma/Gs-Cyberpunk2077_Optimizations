@@ -21,6 +21,7 @@ internal sealed class MainForm : Form
     private readonly Panel pageOne = new() { Dock = DockStyle.Fill };
     private readonly Panel pageTwo = new() { Dock = DockStyle.Fill };
     private readonly TextBox sourcePath = Entry();
+    private readonly TextBox capFrameXField = Entry();
     private readonly Label sourceStatus = Readout();
     private readonly Label detectedMods = Readout();
     private readonly Label cetKey = Readout();
@@ -62,6 +63,12 @@ internal sealed class MainForm : Form
         pageTwo.Visible = false;
 
         sourcePath.TextChanged += async (_, _) => await RefreshSourceAsync();
+        capFrameXField.TextChanged += async (_, _) =>
+        {
+            capFrameXPath = capFrameXField.Text.Trim();
+            UserSettings.WriteCapFrameXExecutable(capFrameXPath);
+            await RefreshSourceAsync();
+        };
         install.Click += (_, _) => ExplainPending("Profiler installation requires exact, independently verified CET and GRSP packages and transactional rollback tests. No game file has been changed.");
         launch.Click += (_, _) => ExplainPending("Game launch and synchronized capture are gated until profiler installation and F11 status are verified.");
         collect.Click += (_, _) => ExplainPending("Collection and restoration require a completed current-session capture and both component-owned restore contracts.");
@@ -82,6 +89,10 @@ internal sealed class MainForm : Form
 
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
+        var existingCapFrameX = UserSettings.ReadCapFrameXExecutable();
+        var bundledCapFrameX = Path.Combine(packageRoot, "components", "capframex", "CapFrameX.exe");
+        capFrameXField.Text = !string.IsNullOrWhiteSpace(existingCapFrameX)
+            ? existingCapFrameX : File.Exists(bundledCapFrameX) ? bundledCapFrameX : "";
         sourcePath.Text = UserSettings.ReadGameRoot();
         Shown += async (_, _) => await RefreshSourceAsync();
     }
@@ -122,12 +133,39 @@ internal sealed class MainForm : Form
         guidance.Resize += (_, _) => instructions.Width = guidance.ClientSize.Width - 30;
         content.Controls.Add(guidance);
 
-        var bindings = Section("Shared capture key — live checks", 115);
+        var bindings = Section("Shared capture key — live checks", 158);
         cetKey.SetBounds(15, 29, 900, 23);
         redKey.SetBounds(15, 53, 900, 23);
         capKey.SetBounds(15, 77, 900, 23);
         bindings.Controls.AddRange([cetKey, redKey, capKey]);
-        bindings.Resize += (_, _) => cetKey.Width = redKey.Width = capKey.Width = bindings.ClientSize.Width - 30;
+        var capRow = new TableLayoutPanel { Location = new Point(15, 110), Size = new Size(900, 33), ColumnCount = 3 };
+        capRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
+        capRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        capRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        var capLabel = Readout();
+        capLabel.Text = "CapFrameX:";
+        capLabel.Dock = DockStyle.Fill;
+        capRow.Controls.Add(capLabel, 0, 0);
+        capRow.Controls.Add(capFrameXField, 1, 0);
+        var capBrowse = Action("Browse...");
+        capBrowse.Dock = DockStyle.Fill;
+        capBrowse.Click += (_, _) =>
+        {
+            using var picker = new OpenFileDialog
+            {
+                Filter = "CapFrameX executable (CapFrameX.exe)|CapFrameX.exe|Executables (*.exe)|*.exe",
+                Title = "Link your optional CapFrameX installation",
+                CheckFileExists = true
+            };
+            if (picker.ShowDialog(this) == DialogResult.OK) capFrameXField.Text = picker.FileName;
+        };
+        capRow.Controls.Add(capBrowse, 2, 0);
+        bindings.Controls.Add(capRow);
+        bindings.Resize += (_, _) =>
+        {
+            cetKey.Width = redKey.Width = capKey.Width = bindings.ClientSize.Width - 30;
+            capRow.Width = bindings.ClientSize.Width - 30;
+        };
         content.Controls.Add(bindings);
 
         // A key mismatch is never displayed as a green check. F11 stays user-owned.
@@ -355,31 +393,50 @@ internal sealed class MainForm : Form
 
 internal static class UserSettings
 {
-    private sealed class Settings { public string GameRoot { get; set; } = ""; }
+    private sealed class Settings
+    {
+        public string GameRoot { get; set; } = "";
+        public string CapFrameXExecutable { get; set; } = "";
+    }
 
     private static string SettingsFile => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "G-Total-Optimizer", "settings.json");
 
-    internal static string ReadGameRoot()
+    private static Settings Read()
     {
-        try
-        {
-            if (!File.Exists(SettingsFile)) return "";
-            return JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsFile))?.GameRoot ?? "";
-        }
-        catch { return ""; }
+        try { return File.Exists(SettingsFile)
+            ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsFile)) ?? new Settings()
+            : new Settings(); }
+        catch { return new Settings(); }
     }
 
+    internal static string ReadGameRoot() => Read().GameRoot;
+    internal static string ReadCapFrameXExecutable() => Read().CapFrameXExecutable;
+
     internal static void WriteGameRoot(string path)
+    {
+        var settings = Read();
+        settings.GameRoot = path;
+        Write(settings);
+    }
+
+    internal static void WriteCapFrameXExecutable(string path)
+    {
+        var settings = Read();
+        settings.CapFrameXExecutable = path;
+        Write(settings);
+    }
+
+    private static void Write(Settings settings)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!);
             var temp = SettingsFile + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(new Settings { GameRoot = path }));
+            File.WriteAllText(temp, JsonSerializer.Serialize(settings));
             File.Move(temp, SettingsFile, overwrite: true);
         }
-        catch { /* No filesystem mutation required for read-only inspection. */ }
+        catch { /* Settings failure must not alter game data. */ }
     }
 }

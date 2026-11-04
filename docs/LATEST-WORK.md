@@ -38,4 +38,9 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Added non-destructive CET F11 / custom-key inspection, REDscript F11 availability hint and CapFrameX \`portable.json\`/AppSettings \`CaptureHotKey\` inspection; mismatch/absence is not green or silently edited.
 - Added contract tests for direct/external CET source, missing init.lua, F11/custom/corrupt bindings, CapFrameX F11/custom/missing. Kept real install/collect/restore, page-2 unlock and generation safely gated: no verified component provenance, current-session evidence or REDscript compiler integration yet. This milestone **does not** claim those actions work, nor a real UI launch.
 - Original October 16 workflow remains preserved verbatim. New current-decision delta authorizes visible Page 2 Analyze and distinct Page 1 collect/restore steps.
-- **CI evidence:** pending; must append actual run ID, conclusion, test count and artifact before calling this verified.
+- **CI VERIFIED:** [Windows CI #41898838784](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41898838784), source `76a226bc67136dbfa626fed3372c53705d9937dd`, **27/27 offline read-only contracts passed**, .NET 10 win-x64 shell built and verified one bundled coreclr, **artifact 13356603686**. No interactive GUI smoke, cross-component installation, capture, restoration or gameplay validation.
+
+
+### Follow-up — optional CapFrameX linking (CI pending)
+- Added a browsable, persisted CapFrameX executable path on Page 1, with bundled-known-path fallback and reinspection of actual portable capture key.
+- Does not ship a third-party binary, install CapFrameX, alter its configuration or claim the F11 key is confirmed when its actual JSON differs.
