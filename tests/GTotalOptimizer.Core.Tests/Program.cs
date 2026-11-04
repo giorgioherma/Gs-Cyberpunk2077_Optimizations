@@ -90,6 +90,56 @@ try
     Require(!CaptureKeyInspector.InspectCapFrameX(capExe).Confirmed, "CapFrameX conflicting key must not be overwritten");
     Require(!CaptureKeyInspector.InspectCapFrameX(null).Confirmed, "optional missing CapFrameX not falsely green");
 
+
+    Require(ComponentCommandParser.Parse(BackendKind.Cet, "collect", 0,
+            "{\"ok\":true,\"destination\":\"C:/capture\"}", "").ArchivePath == "C:/capture",
+        "CET collect reads its own destination field");
+    Require(ComponentCommandParser.Parse(BackendKind.Grsp, "collect", 0,
+            "{\"ok\":true,\"result\":{\"path\":\"C:/red\"}}", "").ArchivePath == "C:/red",
+        "GRSP collect reads wrapped path");
+    Require(!ComponentCommandParser.Parse(BackendKind.Grsp, "collect", 0,
+            "{\"ok\":true,\"result\":{}}", "").Ok,
+        "missing GRSP archive cannot unlock the next page");
+    Require(!ComponentCommandParser.Parse(BackendKind.Cet, "collect", 0,
+            "{\"ok\":true}", "").Ok,
+        "missing CET archive cannot unlock the next page");
+    Require(!ComponentCommandParser.Parse(BackendKind.Cet, "install", 1,
+            "", "{\"ok\":false,\"error\":\"foreign profiler already installed\"}").Ok,
+        "native owner installation failures propagate");
+    Require(!ComponentCommandParser.Parse(BackendKind.Cet, "restore", 0,
+            "invalid", "").Ok,
+        "malformed restore reply is not accepted as recovery");
+    Require(!ComponentCommandParser.Parse(BackendKind.Grsp, "restore", 0,
+            "{\"ok\":true}", "").Ok,
+        "missing GRSP result wrapper cannot claim restore complete");
+    Require(!ComponentBundleVerifier.Inspect(root).Ready,
+        "install is blocked when no CI component provenance manifest is staged");
+
+    var bundleDir = Path.Combine(root, "staged");
+    var cetBundleExe = BackendLocator.Executable(bundleDir, BackendKind.Cet);
+    var redBundleExe = BackendLocator.Executable(bundleDir, BackendKind.Grsp);
+    Directory.CreateDirectory(Path.GetDirectoryName(cetBundleExe)!);
+    Directory.CreateDirectory(Path.GetDirectoryName(redBundleExe)!);
+    File.WriteAllText(cetBundleExe, "CET fixture");
+    File.WriteAllText(redBundleExe, "GRSP fixture");
+    static string Hash(string file) => Convert.ToHexString(
+        System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
+    var items = new[]
+    {
+        new { id = "cet", executable = "components/cet/G-CET-Runtime-Profiler.exe",
+            sha256 = Hash(cetBundleExe), sourceCommit = new string('a', 40), ciRun = 1, artifactId = 1 },
+        new { id = "grsp", executable = "components/grsp/G-REDscript-Profiler.exe",
+            sha256 = Hash(redBundleExe), sourceCommit = new string('b', 40), ciRun = 2, artifactId = 2 }
+    };
+    var manifestPath = Path.Combine(bundleDir, "components", "manifest.json");
+    File.WriteAllText(manifestPath, System.Text.Json.JsonSerializer.Serialize(
+        new { schemaVersion = 1, components = items }));
+    Require(ComponentBundleVerifier.Inspect(bundleDir).Ready,
+        "complete SHA-matched source/CI-staged component manifest passes read-only identity gate");
+    File.AppendAllText(cetBundleExe, "tamper");
+    Require(!ComponentBundleVerifier.Inspect(bundleDir).Ready,
+        "component drift disables installer");
+
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
         "standalone adapter layout predictable");

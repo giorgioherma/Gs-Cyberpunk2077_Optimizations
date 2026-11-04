@@ -41,6 +41,14 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - **CI VERIFIED:** [Windows CI #41898838784](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41898838784), source `76a226bc67136dbfa626fed3372c53705d9937dd`, **27/27 offline read-only contracts passed**, .NET 10 win-x64 shell built and verified one bundled coreclr, **artifact 13356603686**. No interactive GUI smoke, cross-component installation, capture, restoration or gameplay validation.
 
 
-### Follow-up — optional CapFrameX linking (CI pending)
+### Follow-up — optional CapFrameX linking (CI VERIFIED)
 - Added a browsable, persisted CapFrameX executable path on Page 1, with bundled-known-path fallback and reinspection of actual portable capture key.
 - Does not ship a third-party binary, install CapFrameX, alter its configuration or claim the F11 key is confirmed when its actual JSON differs.
+
+- **CI VERIFIED:** [Windows CI #41899293106](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41899293106), commit \`9ef29b7a5d957b9c0490e706b62bf2b4dd36fabf\`. .NET 10 publish and 27 core contracts passed, all shell package checks green.
+
+### CLI command / component provenance foundation (CI pending)
+- Added bounded standalone process invocation with explicit CET versus GRSP JSON result parsing, collected archive path requirements and failure preservation. Does not itself install anything.
+- Added SHA-256 exact executable checks against a future per-component source commit / CI run / artifact manifest. Manifest missing or drifted => blocking status. This is an **admission prerequisite**, not proof of all native payloads or a complete transactional combined install.
+- Regression tests verify CET/GRSP collect schema, failure/restore refusal, missing bundle and executable tamper rejection.
+- **Still unimplemented:** verified CET/GRSP staged artifacts and all payload hashes; actual install/partial rollback; game launch/current-session capture recognition; linked CapFrameX F11 preset writing; reliable collection/recovery; REDscript compilation; combined ZIP. No new gameplay outcome is claimed.
