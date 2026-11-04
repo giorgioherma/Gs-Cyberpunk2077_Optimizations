@@ -72,7 +72,7 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - **MO2 limitations:** source projection does NOT verify loaded runtime virtual tree, plugin priorities, RootBuilder's virtual game-root files, all separator/root layouts, or full mixed physical/MO2 winner rules. The app keeps destructive install and pass generation gated until these are proven. Any unclear profile/directory fails closed; missing sources are not presumed installed. Profile chooser offers local instance profiles, while configured external profiles can still resolve from MO2 settings.
 - Added tests for relocated MO2 dirs, enabled/disabled mods, winning mod, overwrite, missing instance and invalid variable path. Physical game root remains required for profiling.
 - The workflow's **v1.1.0 version stays unchanged**; this is a source revision, not a standalone CET or GRSP version bump.
-- **CI:** pending verification of this commit.
+- **CI VERIFIED:** [Windows CI #41917381621](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41917381621) source commit `ae979cf08f56e158cc340a4ebcd3459eef764df5`. **43/43 read-only core/CLI/MO2 tests passed**, .NET 10 Windows publish passed, v1.1.0 executable metadata verified, one private runtime verified, artifact **`G-Total-Optimizer-v1.1.0-Shell-win-x64` ID 13364529091**. One known nonblocking CS0649 warning for unassigned future-results-folder field. No GUI runtime smoke test or gameplay acceptance; no native profiler or CapFrameX binaries bundled.
 
 
 ## 2026-11-04 — Page 1 UI revision and read-only MO2 source provider (CI pending)
