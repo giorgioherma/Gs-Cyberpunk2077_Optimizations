@@ -21,24 +21,34 @@ internal sealed class MainForm : Form
     private readonly Panel pageOne = new() { Dock = DockStyle.Fill };
     private readonly Panel pageTwo = new() { Dock = DockStyle.Fill };
     private readonly TextBox sourcePath = Entry();
-    private readonly TextBox mo2Instance = Entry();
-    private readonly ComboBox mo2Profile = new() { DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelAlt, ForeColor = TextColor, FlatStyle = FlatStyle.Flat };
-    private readonly RadioButton normalMode = new() { Text = "Normal", Checked = true, AutoSize = true, ForeColor = Cyan };
-    private readonly RadioButton mo2Mode = new() { Text = "MO2", AutoSize = true, ForeColor = Cyan };
+    private readonly TextBox mo2Directory = Entry();
+    private readonly ComboBox mo2Profile = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList, BackColor = PanelAlt,
+        ForeColor = TextColor, FlatStyle = FlatStyle.Flat, Dock = DockStyle.Fill
+    };
+    private readonly RadioButton normalMode = ModeChoice("NORMAL", true);
+    private readonly RadioButton mo2Mode = ModeChoice("MO2", false);
+    private readonly Panel mo2Panel = new() { Visible = false };
+    private readonly Label mo2Hint = Readout();
     private readonly Label zeroEngineCheck = Readout();
-    private readonly LinkLabel zeroEngineDownload = new();
-    private readonly Label redscriptCheck = Readout();
+    private readonly Label scriptsCheck = Readout();
     private readonly Label red4extCheck = Readout();
-    private readonly Label instructionStart = Readout();
-    private readonly Label instructionMain = Readout();
-    private readonly Label instructionAvoid = Readout();
-    private readonly Label instructionEnd = Readout();
-    private readonly Label workflowReadiness = Readout();
-    private Mo2Inspection? mo2Inspection;
-    private readonly Panel mo2Fields = new() { BackColor = PanelBg };
-
+    private readonly LinkLabel zeroEngineLink = new()
+    {
+        Text = "0-Engine must be installed!  Open Nexus Mods",
+        LinkColor = Cyan, ActiveLinkColor = Magenta, VisitedLinkColor = Cyan,
+        AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
+    };
+    private readonly Label profilerReady = Readout();
+    private readonly Label stepOne = Readout();
+    private readonly Label stepTwo = Readout();
+    private readonly Label stepThree = Readout();
+    private GroupBox? sourceSection;
+    private Mo2Instance mo2Instance = Mo2SourceInspector.Discover(null);
+    private Mo2Stack? mo2Stack;
+    private bool settingProfiles;
     private readonly Label sourceStatus = Readout();
-
     private readonly Label cetKey = Readout();
     private readonly Label redKey = Readout();
     private readonly Label capKey = Readout();
@@ -57,7 +67,6 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? scanCancellation;
     private GameInspection inspection = GameInspector.Inspect(null);
     private string? resultsFolder;
-
     private bool captureAndRestoreVerified;
     private readonly string packageRoot = AppContext.BaseDirectory;
 
@@ -78,19 +87,23 @@ internal sealed class MainForm : Form
         pageTwo.Visible = false;
 
         sourcePath.TextChanged += async (_, _) => await RefreshSourceAsync();
-
-        mo2Instance.TextChanged += (_, _) => { LoadMo2Profiles(); _ = RefreshSourceAsync(); };
-        mo2Profile.SelectedIndexChanged += async (_, _) => await RefreshSourceAsync();
-        normalMode.CheckedChanged += async (_, _) =>
+        mo2Directory.TextChanged += async (_, _) =>
         {
-            mo2Fields.Visible = mo2Mode.Checked;
+            RefreshProfiles();
             await RefreshSourceAsync();
         };
-        mo2Mode.CheckedChanged += async (_, _) =>
+        mo2Profile.SelectedIndexChanged += async (_, _) =>
         {
-            mo2Fields.Visible = mo2Mode.Checked;
-            await RefreshSourceAsync();
+            if (!settingProfiles)
+            {
+                UserSettings.WriteMo2Profile(mo2Profile.SelectedItem?.ToString() ?? "");
+                await RefreshSourceAsync();
+            }
         };
+        normalMode.CheckedChanged += async (_, _) => { SetSourceMode(); await RefreshSourceAsync(); };
+        mo2Mode.CheckedChanged += async (_, _) => { SetSourceMode(); await RefreshSourceAsync(); };
+        zeroEngineLink.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(
+            "https://www.nexusmods.com/cyberpunk2077/mods/27967") { UseShellExecute = true });
         install.Click += (_, _) => ExplainPending("Profiler installation requires exact, independently verified CET and GRSP packages and transactional rollback tests. No game file has been changed.");
         launch.Click += (_, _) => ExplainPending("Game launch and synchronized capture are gated until profiler installation and F11 status are verified.");
         collect.Click += (_, _) => ExplainPending("Collection and restoration require a completed current-session capture and both component-owned restore contracts.");
@@ -111,153 +124,189 @@ internal sealed class MainForm : Form
 
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
-
-        mo2Instance.Text = UserSettings.ReadMo2Instance();
+        mo2Directory.Text = UserSettings.ReadMo2Directory();
         sourcePath.Text = UserSettings.ReadGameRoot();
-        LoadMo2Profiles();
+        RefreshProfiles();
+        SetSourceMode();
         Shown += async (_, _) => await RefreshSourceAsync();
     }
 
     private void BuildProfilerPage()
     {
-        var grid = PageLayout(pageOne, "SETUP", "Install profilers, record gameplay, collect results and restore your installation.");
+        var grid = PageLayout(pageOne, "SETUP",
+            "Install the profilers, record your capture, then collect results and restore the original game files.");
         var content = (FlowLayoutPanel)grid.GetControlFromPosition(0, 1)!;
 
-        var source = Section("Cyberpunk 2077 — game folder", 270);
-        var tabRow = new FlowLayoutPanel { Location = new Point(15, 25), Size = new Size(860, 29), BackColor = PanelBg };
-        tabRow.Controls.Add(normalMode);
-        tabRow.Controls.Add(mo2Mode);
-        source.Controls.Add(tabRow);
+        sourceSection = Section("Game folder /Cyberpunk2077", 245);
+        sourceSection.Controls.AddRange([normalMode, mo2Mode]);
+        normalMode.SetBounds(17, 29, 108, 27);
+        mo2Mode.SetBounds(133, 29, 85, 27);
 
         var pathRow = new TableLayoutPanel
         {
-            Location = new Point(15, 62), Size = new Size(900, 43), ColumnCount = 2,
-            Margin = new Padding(0), Padding = Padding.Empty
+            Location = new Point(15, 62), Size = new Size(890, 38),
+            ColumnCount = 2, RowCount = 1, Margin = Padding.Empty
         };
         pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-        sourcePath.Font = new Font("Consolas", 11f);
+        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 113));
         sourcePath.AutoSize = false;
-        sourcePath.Height = 35;
-        sourcePath.Margin = new Padding(0, 4, 6, 3);
+        sourcePath.Height = 37;
+        sourcePath.Font = new Font("Consolas", 11f);
+        sourcePath.Margin = new Padding(0, 1, 9, 1);
+        sourcePath.Dock = DockStyle.Fill;
         pathRow.Controls.Add(sourcePath, 0, 0);
         var browse = Action("BROWSE...");
+        browse.Dock = DockStyle.Fill;
         browse.Margin = Padding.Empty;
         browse.Click += (_, _) => ChooseSource();
-        browse.Dock = DockStyle.Fill;
         pathRow.Controls.Add(browse, 1, 0);
-        source.Controls.Add(pathRow);
+        sourceSection.Controls.Add(pathRow);
 
-        mo2Fields.SetBounds(15, 112, 900, 43);
-        var moRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
-        moRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115));
-        moRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        moRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
-        moRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        var moLabel = Readout(); moLabel.Text = "MO2 INSTANCE"; moLabel.Dock = DockStyle.Fill;
-        moRow.Controls.Add(moLabel, 0, 0);
-        mo2Instance.Dock = DockStyle.Fill;
-        moRow.Controls.Add(mo2Instance, 1, 0);
-        var moBrowse = Action("Browse...");
-        moBrowse.Dock = DockStyle.Fill;
-        moBrowse.Click += (_, _) => ChooseMo2();
-        moRow.Controls.Add(moBrowse, 2, 0);
-        mo2Profile.Dock = DockStyle.Fill;
-        moRow.Controls.Add(mo2Profile, 3, 0);
-        mo2Fields.Controls.Add(moRow);
-        mo2Fields.Visible = false;
-        source.Controls.Add(mo2Fields);
-
-        sourceStatus.SetBounds(15, 160, 900, 26);
-        source.Controls.Add(sourceStatus);
-        zeroEngineCheck.SetBounds(15, 188, 650, 23);
-        zeroEngineDownload.Text = "0-Engine must be installed!  (Nexus Mods)";
-        zeroEngineDownload.LinkColor = Amber;
-        zeroEngineDownload.ActiveLinkColor = Cyan;
-        zeroEngineDownload.VisitedLinkColor = Amber;
-        zeroEngineDownload.Font = new Font("Segoe UI Semibold", 9f);
-        zeroEngineDownload.SetBounds(655, 188, 260, 23);
-        zeroEngineDownload.Visible = false;
-        zeroEngineDownload.LinkClicked += (_, _) =>
-            Process.Start(new ProcessStartInfo("https://www.nexusmods.com/cyberpunk2077/mods/27967")
-                { UseShellExecute = true });
-        source.Controls.Add(zeroEngineDownload);
-        redscriptCheck.SetBounds(15, 211, 900, 23);
-        red4extCheck.SetBounds(15, 234, 900, 23);
-        source.Controls.AddRange([zeroEngineCheck, redscriptCheck, red4extCheck]);
-
-        source.Resize += (_, _) =>
+        mo2Panel.SetBounds(15, 106, 890, 108);
+        var mo2PathRow = new TableLayoutPanel
         {
-            var width = Math.Max(300, source.ClientSize.Width - 30);
-            pathRow.Width = width;
-            mo2Fields.Width = width;
-            sourceStatus.Width = width;
-            zeroEngineCheck.Width = Math.Max(250, width - 280);
-            zeroEngineDownload.Left = zeroEngineCheck.Right + 7;
-            redscriptCheck.Width = red4extCheck.Width = width;
+            Location = new Point(0, 0), Size = new Size(890, 36),
+            ColumnCount = 3, RowCount = 1
         };
-        content.Controls.Add(source);
-
-        var guidance = Section("INSTRUCTIONS", 347);
-        instructionStart.Font = new Font("Segoe UI Semibold", 10.5f);
-        instructionStart.ForeColor = Amber;
-        instructionStart.Text =
-            "Install the profilers. Start Cyberpunk 2077 and load into the world.\r\n" +
-            "Press F11 to START recording. Press F11 again to STOP.";
-        instructionStart.SetBounds(15, 27, 900, 47);
-        guidance.Controls.Add(instructionStart);
-
-        cetKey.SetBounds(15, 79, 900, 22);
-        redKey.SetBounds(15, 102, 900, 22);
-        capKey.SetBounds(15, 125, 900, 22);
-        guidance.Controls.AddRange([cetKey, redKey, capKey]);
-
-        var caution = Readout();
-        caution.Font = new Font("Segoe UI", 9f);
-        caution.ForeColor = Amber;
-        caution.Text = "Temporarily unbind any other mod or game control using F11 in CET and Settings.";
-        caution.SetBounds(15, 150, 900, 22);
-        guidance.Controls.Add(caution);
-
-        instructionMain.SetBounds(15, 183, 900, 29);
-        instructionMain.Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold);
-        instructionMain.ForeColor = Green;
-        instructionMain.Text = "RECORD 5–10 MINUTES IN THE CITY";
-        guidance.Controls.Add(instructionMain);
-
-        instructionAvoid.SetBounds(15, 214, 900, 59);
-        instructionAvoid.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
-        instructionAvoid.ForeColor = Green;
-        instructionAvoid.Text =
-            "IDLE   •   MOVEMENT   •   DRIVING   •   HARD COMBAT\r\n" +
-            "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS.";
-        guidance.Controls.Add(instructionAvoid);
-
-        instructionEnd.SetBounds(15, 275, 900, 61);
-        instructionEnd.Font = new Font("Segoe UI", 9.5f);
-        instructionEnd.ForeColor = Amber;
-        instructionEnd.Text =
-            "Stay in open-world play. Use an existing save or skip ahead on a new game; fight police for combat stress.\r\n" +
-            "If you die, stop the capture promptly to avoid the loading screen. Under 5 minutes is usable.\r\n" +
-            "Close the game, return here and choose COLLECT RESULTS / RESTORE.";
-        guidance.Controls.Add(instructionEnd);
-        guidance.Resize += (_, _) =>
+        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 113));
+        var instanceLabel = Readout();
+        instanceLabel.Text = "MO2 instance:";
+        instanceLabel.ForeColor = TextColor;
+        instanceLabel.Dock = DockStyle.Fill;
+        mo2PathRow.Controls.Add(instanceLabel, 0, 0);
+        mo2Directory.AutoSize = false;
+        mo2Directory.Height = 34;
+        mo2Directory.Dock = DockStyle.Fill;
+        mo2Directory.Margin = new Padding(0, 1, 9, 1);
+        mo2PathRow.Controls.Add(mo2Directory, 1, 0);
+        var browseMo2 = Action("BROWSE...");
+        browseMo2.Margin = Padding.Empty;
+        browseMo2.Dock = DockStyle.Fill;
+        browseMo2.Click += (_, _) =>
         {
-            var width = guidance.ClientSize.Width - 30;
-            foreach (Control control in guidance.Controls) control.Width = width;
+            using var picker = new FolderBrowserDialog
+            {
+                Description = "Select the MO2 instance folder containing ModOrganizer.ini",
+                UseDescriptionForTitle = true,
+                SelectedPath = Directory.Exists(mo2Directory.Text)
+                    ? mo2Directory.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            };
+            if (picker.ShowDialog(this) == DialogResult.OK) mo2Directory.Text = picker.SelectedPath;
         };
-        content.Controls.Add(guidance);
+        mo2PathRow.Controls.Add(browseMo2, 2, 0);
+        mo2Panel.Controls.Add(mo2PathRow);
+        var profileRow = new TableLayoutPanel
+        {
+            Location = new Point(0, 41), Size = new Size(890, 29),
+            ColumnCount = 2, RowCount = 1
+        };
+        profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var profileLabel = Readout();
+        profileLabel.Text = "Active profile:";
+        profileLabel.Dock = DockStyle.Fill;
+        profileRow.Controls.Add(profileLabel, 0, 0);
+        mo2Profile.Margin = Padding.Empty;
+        profileRow.Controls.Add(mo2Profile, 1, 0);
+        mo2Panel.Controls.Add(profileRow);
+        mo2Hint.SetBounds(0, 76, 890, 30);
+        mo2Hint.ForeColor = Amber;
+        mo2Panel.Controls.Add(mo2Hint);
+        sourceSection.Controls.Add(mo2Panel);
 
-        var readiness = Section("PROFILER STATUS / NEXT STEP", 102);
-        workflowReadiness.SetBounds(15, 26, 900, 62);
-        workflowReadiness.Font = new Font("Segoe UI Semibold", 10f);
-        workflowReadiness.ForeColor = Amber;
-        workflowReadiness.Text =
-            "PROFILER IS NOT READY.\r\n" +
-            "1. Install profilers   2. Run game and capture   3. Collect results / restore";
-        readiness.Controls.Add(workflowReadiness);
-        readiness.Resize += (_, _) => workflowReadiness.Width = readiness.ClientSize.Width - 30;
-        content.Controls.Add(readiness);
+        sourceStatus.ForeColor = Amber;
+        sourceSection.Controls.Add(sourceStatus);
+        zeroEngineCheck.ForeColor = TextColor;
+        scriptsCheck.ForeColor = TextColor;
+        red4extCheck.ForeColor = TextColor;
+        sourceSection.Controls.AddRange([zeroEngineCheck, scriptsCheck, red4extCheck, zeroEngineLink]);
+        sourceSection.Resize += (_, _) =>
+        {
+            var width = Math.Max(320, sourceSection.ClientSize.Width - 30);
+            pathRow.Width = mo2Panel.Width = width;
+            mo2PathRow.Width = profileRow.Width = mo2Hint.Width = width;
+            foreach (var item in new Control[] { sourceStatus, zeroEngineCheck, scriptsCheck, red4extCheck, zeroEngineLink })
+                item.Width = width;
+        };
+        content.Controls.Add(sourceSection);
+
+        var guide = Section("INSTRUCTIONS", 331);
+        var top = Readout();
+        top.Text = "START the game and load the world. Press F11 to START, then F11 again to STOP.";
+        top.ForeColor = Amber;
+        top.Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold);
+        top.SetBounds(15, 30, 895, 32);
+        guide.Controls.Add(top);
+
+        cetKey.SetBounds(18, 69, 292, 28);
+        redKey.SetBounds(321, 69, 292, 28);
+        capKey.SetBounds(627, 69, 292, 28);
+        foreach (var label in new[] { cetKey, redKey, capKey })
+        {
+            label.Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold);
+            guide.Controls.Add(label);
+        }
+        var conflicts = Readout();
+        conflicts.Text = "Temporarily unbind any OTHER mod using F11 in CET and game settings.";
+        conflicts.ForeColor = Amber;
+        conflicts.SetBounds(15, 103, 905, 25);
+        guide.Controls.Add(conflicts);
+
+        var headline = Readout();
+        headline.Text = "RECORD 5–10 MINUTES IN THE CITY";
+        headline.ForeColor = Green;
+        headline.Font = new Font("Segoe UI Semibold", 16f, FontStyle.Bold);
+        headline.SetBounds(15, 139, 900, 34);
+        guide.Controls.Add(headline);
+        var phases = Readout();
+        phases.Text = "IDLE   →   MOVEMENT   →   DRIVING   →   HEAVY COMBAT";
+        phases.ForeColor = Green;
+        phases.Font = new Font("Segoe UI Semibold", 12f, FontStyle.Bold);
+        phases.SetBounds(15, 178, 900, 26);
+        guide.Controls.Add(phases);
+        var avoid = Readout();
+        avoid.Text = "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS";
+        avoid.ForeColor = Green;
+        avoid.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
+        avoid.SetBounds(15, 209, 900, 28);
+        guide.Controls.Add(avoid);
+
+        var detail = Readout();
+        detail.ForeColor = Amber;
+        detail.Text =
+            "Stay in open, in-world gameplay. Use an older save or a Phantom Liberty quick start.\r\n" +
+            "For heavy combat, provoke police. If you die, STOP with F11 promptly before loading.\r\n" +
+            "Shorter captures can work, but 5–10 minutes is preferred. Close the game when finished.\r\n" +
+            "Return here and use COLLECT RESULTS / RESTORE before continuing.";
+        detail.Font = new Font("Segoe UI", 10f);
+        detail.SetBounds(15, 247, 900, 75);
+        guide.Controls.Add(detail);
+        guide.Resize += (_, _) =>
+        {
+            foreach (Control item in new Control[] { top, conflicts, headline, phases, avoid, detail })
+                item.Width = Math.Max(300, guide.ClientSize.Width - 30);
+            var column = Math.Max(170, (guide.ClientSize.Width - 36) / 3);
+            cetKey.Width = redKey.Width = capKey.Width = column;
+            redKey.Left = 18 + column;
+            capKey.Left = 18 + 2 * column;
+        };
+        content.Controls.Add(guide);
+
+        var steps = Section("Profiler status — install → capture → restore", 190);
+        profilerReady.Text = "PROFILER IS NOT READY!";
+        profilerReady.ForeColor = Amber;
+        profilerReady.Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold);
+        profilerReady.SetBounds(17, 31, 890, 30);
+        steps.Controls.Add(profilerReady);
+        stepOne.SetBounds(18, 72, 895, 27);
+        stepTwo.SetBounds(18, 106, 895, 27);
+        stepThree.SetBounds(18, 140, 895, 27);
+        steps.Controls.AddRange([stepOne, stepTwo, stepThree]);
+        steps.Resize += (_, _) => profilerReady.Width = stepOne.Width = stepTwo.Width = stepThree.Width = steps.ClientSize.Width - 34;
+        content.Controls.Add(steps);
+        UpdateWorkflowVisuals();
 
         var footer = (TableLayoutPanel)grid.GetControlFromPosition(0, 2)!;
         footer.ColumnCount = 3;
@@ -275,12 +324,72 @@ internal sealed class MainForm : Form
         status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         status.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 165));
         pageOneStatus.Dock = DockStyle.Fill;
-        pageOneStatus.Text = "Installation and restoration controls remain gated pending component verification.";
+        pageOneStatus.Text = "Profiler binaries and restore integration not yet verified.";
         status.Controls.Add(pageOneStatus, 0, 0);
         next.Dock = DockStyle.Fill;
-        next.ForeColor = Magenta;
+        if (next is NeonButton nextButton) nextButton.IsAccent = true;
         status.Controls.Add(next, 1, 0);
     }
+
+    private void SetSourceMode()
+    {
+        if (sourceSection is null) return;
+        var mo2 = mo2Mode.Checked;
+        mo2Panel.Visible = mo2;
+        sourceSection.Height = mo2 ? 363 : 245;
+        var y = mo2 ? 219 : 109;
+        sourceStatus.SetBounds(15, y, 890, 24);
+        zeroEngineCheck.SetBounds(15, y + 26, 890, 22);
+        scriptsCheck.SetBounds(15, y + 51, 890, 22);
+        red4extCheck.SetBounds(15, y + 76, 890, 22);
+        zeroEngineLink.SetBounds(15, y + 100, 890, 23);
+    }
+
+    private void RefreshProfiles()
+    {
+        mo2Instance = Mo2SourceInspector.Discover(mo2Directory.Text);
+        settingProfiles = true;
+        try
+        {
+            var preferred = mo2Profile.SelectedItem?.ToString() ?? UserSettings.ReadMo2Profile();
+            mo2Profile.Items.Clear();
+            foreach (var name in mo2Instance.Profiles) mo2Profile.Items.Add(name);
+            var selected = mo2Instance.Profiles.FirstOrDefault(p =>
+                p.Equals(preferred, StringComparison.OrdinalIgnoreCase));
+            if (selected is not null) mo2Profile.SelectedItem = selected;
+            else if (mo2Instance.Profiles.Count == 1) mo2Profile.SelectedIndex = 0;
+            else mo2Profile.SelectedIndex = -1;
+            mo2Hint.Text = mo2Instance.Detail;
+            mo2Hint.ForeColor = mo2Instance.Recognized ? Green : Amber;
+            UserSettings.WriteMo2Directory(mo2Directory.Text);
+        }
+        finally { settingProfiles = false; }
+    }
+
+    private void UpdateWorkflowVisuals()
+    {
+        // The current build contains no verified combined session. Never manufacture readiness.
+        var staged = ComponentBundleVerifier.Inspect(packageRoot);
+        profilerReady.Text = staged.Ready
+            ? "COMPONENTS STAGED — CAPTURE / RESTORE NOT YET VERIFIED"
+            : "PROFILER IS NOT READY!";
+        profilerReady.ForeColor = Amber;
+        stepOne.Text = "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
+        stepTwo.Text = "2. START CYBERPUNK — record synchronized F11 gameplay after both profilers are ready.";
+        stepThree.Text = "3. COLLECT RESULTS / RESTORE — close game, archive evidence and restore original files.";
+        stepOne.ForeColor = Cyan;
+        stepTwo.ForeColor = stepThree.ForeColor = Color.FromArgb(104, 118, 126);
+        next.Enabled = captureAndRestoreVerified;
+    }
+
+    private static RadioButton ModeChoice(string label, bool selected) => new()
+    {
+        Text = label, Checked = selected, Appearance = Appearance.Button,
+        FlatStyle = FlatStyle.Flat, ForeColor = Cyan, BackColor = PanelAlt,
+        Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold),
+        TextAlign = ContentAlignment.MiddleCenter,
+        Cursor = Cursors.Hand
+    };
 
     private void BuildResultsPage()
     {
@@ -408,78 +517,18 @@ internal sealed class MainForm : Form
         AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
     };
 
-    private static Button Action(string text) => new DarkActionButton
+    private static Button Action(string text) => new NeonButton
     {
         Text = text, BackColor = PanelAlt, ForeColor = Cyan,
         Font = new Font("Segoe UI Semibold", 9f),
         Margin = new Padding(5, 3, 5, 3), Height = 42
     };
 
-    private sealed class DarkActionButton : Button
-    {
-        public DarkActionButton()
-        {
-            FlatStyle = FlatStyle.Flat;
-            FlatAppearance.BorderSize = 1;
-            FlatAppearance.BorderColor = Border;
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            using var background = new SolidBrush(Enabled ? PanelAlt : Color.FromArgb(18, 25, 31));
-            e.Graphics.FillRectangle(background, ClientRectangle);
-            using var outline = new Pen(Enabled ? Cyan : Color.FromArgb(49, 61, 68));
-            e.Graphics.DrawRectangle(outline, 0, 0, Math.Max(0, Width - 1), Math.Max(0, Height - 1));
-            var color = Enabled
-                ? (Text.Contains("CONTINUE", StringComparison.OrdinalIgnoreCase) ? Magenta : Cyan)
-                : Color.FromArgb(104, 118, 126);
-            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, color,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
-                TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-        }
-    }
-
-    private void LoadMo2Profiles()
-    {
-        var previous = mo2Profile.SelectedItem?.ToString();
-        mo2Profile.Items.Clear();
-        mo2Profile.Items.Add("(auto from MO2 config)");
-        try
-        {
-            // This is a convenience list; the inspector independently reads relocated profile paths.
-            var standardProfiles = Path.Combine(mo2Instance.Text.Trim(), "profiles");
-            if (Directory.Exists(standardProfiles))
-                foreach (var folder in Directory.EnumerateDirectories(standardProfiles))
-                    if (File.Exists(Path.Combine(folder, "modlist.txt")))
-                        mo2Profile.Items.Add(Path.GetFileName(folder));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
-        var index = previous is null ? -1 : mo2Profile.Items.IndexOf(previous);
-        mo2Profile.SelectedIndex = index >= 0 ? index : 0;
-    }
-
-    private void ChooseMo2()
-    {
-        using var dialog = new FolderBrowserDialog
-        {
-            Description = "Select MO2 instance containing ModOrganizer.ini",
-            UseDescriptionForTitle = true,
-            SelectedPath = Directory.Exists(mo2Instance.Text)
-                ? mo2Instance.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-        };
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            mo2Instance.Text = dialog.SelectedPath;
-            LoadMo2Profiles();
-        }
-    }
-
     private void ChooseSource()
     {
         using var dialog = new FolderBrowserDialog
         {
-            Description = "Select your Cyberpunk 2077 game folder",
+            Description = "Select the Cyberpunk 2077 GAME FOLDER (the folder containing bin\\x64)",
             UseDescriptionForTitle = true,
             SelectedPath = Directory.Exists(sourcePath.Text)
                 ? sourcePath.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
@@ -493,97 +542,97 @@ internal sealed class MainForm : Form
         scanCancellation?.Cancel();
         scanCancellation?.Dispose();
         var cancellation = scanCancellation = new CancellationTokenSource();
-
-        inspection = GameInspector.Inspect(sourcePath.Text);
-        mo2Inspection = mo2Mode.Checked
-            ? Mo2SourceInspector.Inspect(mo2Instance.Text,
-                mo2Profile.SelectedIndex > 0 ? mo2Profile.SelectedItem?.ToString() : null,
-                inspection.GameRoot)
-            : null;
-
+        var selected = sourcePath.Text;
+        var current = GameInspector.Inspect(selected);
+        inspection = current;
         captureAndRestoreVerified = false;
-        next.Enabled = false;
-        install.Enabled = launch.Enabled = collect.Enabled = false;
+        install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
+        UpdateWorkflowVisuals();
+        UserSettings.WriteGameRoot(selected);
 
-        var projection = mo2Inspection;
-        var mo2Good = mo2Mode.Checked && projection?.Valid == true;
+        Mo2Stack? stack = null;
+        if (mo2Mode.Checked && current.IsValidGame && mo2Instance.Recognized &&
+            mo2Profile.SelectedItem is string profile)
+        {
+            // Filesystem enumeration is potentially large. Never block the WinForms UI thread.
+            var snapshot = mo2Instance;
+            try
+            {
+                stack = await Task.Run(() => Mo2SourceInspector.Resolve(current.GameRoot, snapshot, profile, cancellation.Token),
+                    cancellation.Token);
+            }
+            catch (OperationCanceledException) { return; }
+            if (cancellation.IsCancellationRequested || IsDisposed) return;
+        }
+        mo2Stack = stack;
         sourceStatus.Text = mo2Mode.Checked
-            ? (projection?.Detail ?? "Select a MO2 instance.")
-            : inspection.Summary;
-        sourceStatus.ForeColor = mo2Mode.Checked
-            ? (mo2Good ? TextColor : Amber)
-            : (inspection.IsValidGame ? Green : Amber);
+            ? stack?.Detail ?? (current.IsValidGame ? "Select an MO2 instance and active profile."
+                : "Choose a valid game folder first.")
+            : current.Summary;
+        sourceStatus.ForeColor = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true)
+            ? Green : Amber;
 
-        var physicalRoot = inspection.GameRoot;
-        var directMods = inspection.CetModsRoot;
-        var zeroFromGame = directMods is not null &&
-            File.Exists(Path.Combine(directMods, "0-Engine", "init.lua"));
-        var zeroFromMo2 = mo2Good && projection!.HasZeroEngine;
-        SetCheck(zeroEngineCheck,
-            "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine",
-            zeroFromGame || zeroFromMo2,
-            "NOT FOUND");
-        zeroEngineDownload.Visible = !(zeroFromGame || zeroFromMo2);
+        var zeroEnginePresent = mo2Mode.Checked
+            ? stack?.Ready == true && stack.HasZeroEngine
+            : current.Checks.Any(c => c.Name == "0-Engine source" && c.State != CheckState.Missing);
+        var hasScripts = mo2Mode.Checked
+            ? stack?.Ready == true && stack.HasRedscript
+            : current.Checks.Any(c => c.Name == "REDscript source folder" && c.State != CheckState.Missing);
+        var hasRed4ext = mo2Mode.Checked
+            ? stack?.Ready == true && stack.Red4extFiles > 0
+            : current.Checks.Any(c => c.Name == "RED4ext plugin folder" && c.State != CheckState.Missing);
+        ApplyCheck(zeroEngineCheck, "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", zeroEnginePresent);
+        ApplyCheck(scriptsCheck, "r6/scripts", hasScripts);
+        ApplyCheck(red4extCheck, "red4ext/plugins", hasRed4ext);
+        zeroEngineLink.Visible = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true) &&
+                                 !zeroEnginePresent;
 
-        var redFromGame = physicalRoot is not null &&
-            Directory.Exists(Path.Combine(physicalRoot, "r6", "scripts"));
-        var redFromMo2 = mo2Good && projection!.HasRedscript;
-        SetCheck(redscriptCheck, "r6/scripts", redFromGame || redFromMo2,
-            "REDscript source not detected.");
-
-        var extFromGame = physicalRoot is not null &&
-            Directory.Exists(Path.Combine(physicalRoot, "red4ext", "plugins"));
-        var extFromMo2 = mo2Good && projection!.HasRed4ext;
-        SetCheck(red4extCheck, "red4ext/plugins", extFromGame || extFromMo2,
-            "RED4ext plugin folder not detected.");
-
-        pageOneStatus.Text = mo2Mode.Checked
-            ? "MO2 physical source projection only. Active game VFS/RootBuilder not yet verified; generation disabled."
-            : "Verified component packaging and capture/restore integration pending.";
-
-        workflowReadiness.Text =
-            "PROFILER IS NOT READY.\r\n" +
-            "1. INSTALL PROFILERS    →    2. RUN GAME / CAPTURE    →    3. COLLECT / RESTORE";
-        workflowReadiness.ForeColor = Amber;
-
-        UserSettings.WriteGameRoot(sourcePath.Text);
-        UserSettings.WriteMo2Instance(mo2Instance.Text);
+        if (mo2Mode.Checked)
+        {
+            mo2Hint.Text = stack?.Ready == true
+                ? $"Profile {stack.Profile}: {stack.CetOwners} CET mods, {stack.RedscriptFiles} REDscript files; {stack.ShadowedFiles} loose-file conflicts. MO2 runtime not verified."
+                : mo2Instance.Detail;
+            mo2Hint.ForeColor = stack?.Ready == true ? Green : Amber;
+        }
 
         var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
         var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);
-        // Bundled CapFrameX is intentional. No external executable picker.
-        var bundledCapFrameX = Path.Combine(packageRoot, "components", "capframex", "CapFrameX.exe");
-        var keys = CaptureKeyInspector.Inspect(inspection.GameRoot,
-            File.Exists(cetExe), File.Exists(redExe), bundledCapFrameX);
+        // CapFrameX is a planned bundled component; never demand a user executable path.
+        var bundledCap = Path.Combine(packageRoot, "components", "capframex", "CapFrameX.exe");
+        var keys = CaptureKeyInspector.Inspect(current.GameRoot,
+            File.Exists(cetExe), File.Exists(redExe), bundledCap);
         var labels = new[] { cetKey, redKey, capKey };
         for (var i = 0; i < keys.Count; i++)
         {
-            var state = keys[i];
-            labels[i].Text = $"{state.Owner,-11}   {state.Value} {(state.Confirmed ? "✓" : "⚠")} — {state.Detail}";
-            labels[i].ForeColor = state.Confirmed ? Green : Amber;
+            labels[i].Text = $"{keys[i].Owner}: {keys[i].Value} {(keys[i].Confirmed ? "✓" : "⚠")}";
+            labels[i].ForeColor = keys[i].Confirmed ? Green : Amber;
+            labels[i].AccessibleDescription = keys[i].Detail;
         }
 
-        if (!inspection.IsValidGame || cancellation.IsCancellationRequested) return;
+        pageOneStatus.Text = mo2Mode.Checked
+            ? stack?.Ready == true ? "MO2 loose-file sources indexed; game launch/VFS and native restore remain unverified."
+                : "MO2 profile not resolved. No game files were changed."
+            : current.IsValidGame ? "Game detected. Profiler installation and restore are not yet integrated."
+                : "Select a valid Cyberpunk 2077 game folder.";
+        if (!current.IsValidGame || cancellation.IsCancellationRequested) return;
         try
         {
             var statuses = await Task.WhenAll(
-                backend.ReadAsync(cetExe, inspection.GameRoot!, BackendKind.Cet, cancellation.Token),
-                backend.ReadAsync(redExe, inspection.GameRoot!, BackendKind.Grsp, cancellation.Token));
+                backend.ReadAsync(cetExe, current.GameRoot!, BackendKind.Cet, cancellation.Token),
+                backend.ReadAsync(redExe, current.GameRoot!, BackendKind.Grsp, cancellation.Token));
             if (cancellation.IsCancellationRequested || IsDisposed) return;
-            pageOneStatus.Text = string.Join(" | ",
-                statuses.Select(x => $"{x.Name}: {(x.Responded ? "status OK" : "not staged")}"));
-            if (mo2Mode.Checked) pageOneStatus.Text += " | MO2 VFS unresolved";
+            pageOneStatus.Text += "  " + string.Join(" | ", statuses.Select(s =>
+                $"{s.Kind}: {(s.Responded ? "status available" : "not staged")}"));
         }
         catch (OperationCanceledException) { }
     }
 
-    private static void SetCheck(Label label, string path, bool found, string absentText)
+    private static void ApplyCheck(Label label, string path, bool present)
     {
-        label.Text = found
-            ? $"{path}   ✓  FOUND"
-            : $"{path}   ⚠  {absentText}";
-        label.ForeColor = found ? TextColor : Amber;
+        label.Text = $"{path}  {(present ? "✓" : "✕  NOT FOUND")}";
+        label.ForeColor = present ? TextColor : Amber;
+        label.Font = new Font("Segoe UI Semibold", 9.5f);
     }
 
     private void ExplainPending(string message) =>
@@ -597,12 +646,50 @@ internal sealed class MainForm : Form
     }
 }
 
+// Draw disabled labels explicitly: standard WinForms renders them black on dark backgrounds.
+internal sealed class NeonButton : Button
+{
+    public bool IsAccent { get; set; }
+    private bool hovered;
+    public NeonButton()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer, true);
+        Cursor = Cursors.Hand;
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+    }
+    protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
+    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hovered = true; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hovered = false; Invalidate(); }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var bg = Enabled
+            ? hovered ? Color.FromArgb(20, 42, 52) : Color.FromArgb(11, 18, 25)
+            : Color.FromArgb(18, 25, 31);
+        var line = Enabled
+            ? (IsAccent ? Color.FromArgb(255, 63, 215) : Color.FromArgb(54, 244, 244))
+            : Color.FromArgb(49, 61, 68);
+        var fg = Enabled ? (IsAccent ? Color.FromArgb(255, 63, 215)
+                                      : Color.FromArgb(54, 244, 244))
+                         : Color.FromArgb(104, 118, 126);
+        using var fill = new SolidBrush(bg);
+        using var border = new Pen(line, 1f);
+        e.Graphics.FillRectangle(fill, ClientRectangle);
+        e.Graphics.DrawRectangle(border, 0, 0, Math.Max(0, Width - 1), Math.Max(0, Height - 1));
+        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, fg,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+            TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+    }
+}
+
 internal static class UserSettings
 {
     private sealed class Settings
     {
         public string GameRoot { get; set; } = "";
-        public string Mo2Instance { get; set; } = "";
+        public string Mo2Directory { get; set; } = "";
+        public string Mo2Profile { get; set; } = "";
     }
 
     private static string SettingsFile => Path.Combine(
@@ -611,29 +698,19 @@ internal static class UserSettings
 
     private static Settings Read()
     {
-        try
-        {
-            return File.Exists(SettingsFile)
-                ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsFile)) ?? new Settings()
-                : new Settings();
-        }
+        try { return File.Exists(SettingsFile)
+            ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsFile)) ?? new Settings()
+            : new Settings(); }
         catch { return new Settings(); }
     }
 
     internal static string ReadGameRoot() => Read().GameRoot;
-    internal static string ReadMo2Instance() => Read().Mo2Instance;
-    internal static void WriteGameRoot(string path)
-    {
-        var settings = Read();
-        settings.GameRoot = path;
-        Write(settings);
-    }
-    internal static void WriteMo2Instance(string path)
-    {
-        var settings = Read();
-        settings.Mo2Instance = path;
-        Write(settings);
-    }
+    internal static string ReadMo2Directory() => Read().Mo2Directory;
+    internal static string ReadMo2Profile() => Read().Mo2Profile;
+    internal static void WriteGameRoot(string value) { var s = Read(); s.GameRoot = value; Write(s); }
+    internal static void WriteMo2Directory(string value) { var s = Read(); s.Mo2Directory = value; Write(s); }
+    internal static void WriteMo2Profile(string value) { var s = Read(); s.Mo2Profile = value; Write(s); }
+
     private static void Write(Settings settings)
     {
         try
@@ -643,6 +720,6 @@ internal static class UserSettings
             File.WriteAllText(temp, JsonSerializer.Serialize(settings));
             File.Move(temp, SettingsFile, overwrite: true);
         }
-        catch { /* No writes to the game or MO2 source tree. */ }
+        catch { /* Preferences must never affect game files. */ }
     }
 }

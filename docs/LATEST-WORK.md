@@ -73,3 +73,14 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Added tests for relocated MO2 dirs, enabled/disabled mods, winning mod, overwrite, missing instance and invalid variable path. Physical game root remains required for profiling.
 - The workflow's **v1.1.0 version stays unchanged**; this is a source revision, not a standalone CET or GRSP version bump.
 - **CI:** pending verification of this commit.
+
+
+## 2026-11-04 — Page 1 UI revision and read-only MO2 source provider (CI pending)
+- Correct CET visual defects from v1.1.0 screenshot: taller Game folder field, full Browse border, gray disabled text, cyan status and magenta enabled Continue.
+- Normal/MO2 selector inside Game folder box; in MO2 mode choose its instance and active profile explicitly.
+- New read-only MO2 source inventory: ModOrganizer.ini Settings paths including %BASE_DIR%; profile modlist.txt (+ enabled/- disabled); highest-priority loose-file winner; physical game fallback; MO2 Overwrite; CET init.lua counts, r6/scripts and red4ext/plugins discovery.
+- Does not copy mods or alter sources. Not yet runtime USVFS/RootBuilder/archives/exceptions verified; not yet wired to CET Resolver source-provider contract or ZIP generation.
+- Larger colored gameplay instructions: CET/GRSP/CapFrameX F11 status, collisions warning, 5–10 minute city stress, avoid UI/menus and stop on death before loading.
+- Per-user decision CapFrameX will be bundled: removed manual executable-path UI, fixed inspection location components/capframex/CapFrameX.exe. Vendor licensing, binary provenance, .NET 10 runtime tests and preset deployment still pending.
+- Added MO2 mixed-source, priority, profile, disabled-mod and refusal tests. Combined profiler lifecycle remains gated.
+- CI result pending; record run and artifact before claiming verified.

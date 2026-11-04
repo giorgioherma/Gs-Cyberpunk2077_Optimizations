@@ -56,3 +56,11 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - The large capture instruction panel uses cyan heading, yellow operational instructions and green 5–10-minute gameplay stress emphasis; F11 checks must reflect real provenance. Shorter completed captures are permissible; do not reject solely by duration. Avoid menus/UI and loading screens. The capture collection/restore remains evidence-gated.
 - Display readable disabled workflow buttons and an enabled pink Continue button only after verified current-session capture archive **and both owner restores**. No premature enablement.
 - **CapFrameX:** explicitly bundled, no ordinary path selector; only exact verified upstream artifact, runtime/rights and reversible config checks authorize packaging. Current development shell has no CapFrameX binary and reports that honestly.
+
+
+## 2026-11-04 — refined Page 1 and MO2 mode
+- Normal setup shows only Game folder /Cyberpunk2077; the Normal/MO2 selector is inside the game source box, not a new page.
+- MO2 additionally selects instance and actual profile; read-only physical source map tracks game files, enabled mod packages, Overwrite and loose-file precedence. Never infer runtime VFS equivalence, RootBuilder behavior or verified game launch from files alone.
+- Show 0-Engine path/mandatory Nexus link when missing, r6/scripts and red4ext/plugins statuses. Preserve owner/dependency evidence; no source copying.
+- Use CET dark/cyan colors, larger yellow/green instructions, legible gray disabled controls, and magenta Continue only after verified capture plus restore.
+- CapFrameX will be bundled, so remove ordinary external executable path chooser. Do not claim binary staged before actual vendor provenance, licensing, F11 settings and .NET 10 compatibility checks.

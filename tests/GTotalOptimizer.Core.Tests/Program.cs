@@ -141,56 +141,71 @@ try
         "component drift disables installer");
 
 
-    // MO2 read-only profile projection: active packages, priority and Overwrite ownership.
-    var mo2Instance = Path.Combine(root, "mo2-instance");
-    var mo2Storage = Path.Combine(root, "mo2-storage");
-    var mo2Mods = Path.Combine(mo2Storage, "mods");
-    var mo2Profiles = Path.Combine(mo2Storage, "profiles");
-    var mo2Overwrite = Path.Combine(mo2Storage, "overwrite");
-    Directory.CreateDirectory(mo2Instance);
+    // MO2 source resolution: highest-priority enabled package wins and the game is a
+    // low-priority physical layer. Capture inventories are not used as installation data.
+    var mo2InstanceDir = Path.Combine(root, "ModOrganizer");
+    var mo2Base = Path.Combine(root, "MO2-Storage");
+    var mo2Mods = Path.Combine(mo2Base, "mods");
+    var mo2Profiles = Path.Combine(mo2Base, "profiles");
+    var activeProfile = Path.Combine(mo2Profiles, "Active");
+    Directory.CreateDirectory(mo2InstanceDir);
+    Directory.CreateDirectory(activeProfile);
     Directory.CreateDirectory(mo2Mods);
-    Directory.CreateDirectory(Path.Combine(mo2Profiles, "Current"));
-    Directory.CreateDirectory(mo2Overwrite);
-    File.WriteAllText(Path.Combine(mo2Instance, "ModOrganizer.ini"),
-        "[Settings]\nbase_directory=" + mo2Storage.Replace('\\', '/') +
-        "\nmod_directory=" + mo2Mods.Replace('\\', '/') +
-        "\nprofiles_directory=" + mo2Profiles.Replace('\\', '/') +
-        "\noverwrite_directory=" + mo2Overwrite.Replace('\\', '/') +
-        "\n[General]\nselected_profile=Current\n");
-    File.WriteAllText(Path.Combine(mo2Profiles, "Current", "modlist.txt"),
-        "# Priority from low to high\n+Author First\n-Disabled Author\n+Author Winner\n");
-    var virtualInit = Path.Combine("bin", "x64", "plugins", "cyber_engine_tweaks", "mods", "CyberTrials", "init.lua");
-    var lowerInit = Path.Combine(mo2Mods, "Author First", virtualInit);
-    var winnerInit = Path.Combine(mo2Mods, "Author Winner", virtualInit);
-    var disabledInit = Path.Combine(mo2Mods, "Disabled Author", virtualInit);
-    Directory.CreateDirectory(Path.GetDirectoryName(lowerInit)!);
-    Directory.CreateDirectory(Path.GetDirectoryName(winnerInit)!);
-    Directory.CreateDirectory(Path.GetDirectoryName(disabledInit)!);
-    File.WriteAllText(lowerInit, "first");
-    File.WriteAllText(winnerInit, "winner");
-    File.WriteAllText(disabledInit, "disabled");
-    var mo2Red = Path.Combine(mo2Mods, "Author Winner", "r6", "scripts", "foo.reds");
-    Directory.CreateDirectory(Path.GetDirectoryName(mo2Red)!);
-    File.WriteAllText(mo2Red, "red");
-    var mo2 = Mo2SourceInspector.Inspect(mo2Instance, gameRoot: root);
-    Require(mo2.Valid && mo2.ProfileName == "Current" && mo2.EnabledPackages == 2,
-        "MO2 configured physical storage and selected profile resolved");
-    Require(mo2.CetModCount == 1 && mo2.HasRedscript,
-        "MO2 detects enabled init.lua and r6/scripts without copying files");
-    Require(mo2.EffectiveFiles.Single(x => x.GameRelativePath.EndsWith("CyberTrials/init.lua", StringComparison.OrdinalIgnoreCase)).Owner == "Author Winner",
-        "MO2 higher-priority enabled package wins duplicate CET file");
-    var overwriteInit = Path.Combine(mo2Overwrite, virtualInit);
-    Directory.CreateDirectory(Path.GetDirectoryName(overwriteInit)!);
-    File.WriteAllText(overwriteInit, "overwrite");
-    var mo2Override = Mo2SourceInspector.Inspect(mo2Instance);
-    Require(mo2Override.EffectiveFiles.Single(x => x.GameRelativePath.EndsWith("CyberTrials/init.lua", StringComparison.OrdinalIgnoreCase)).Owner == "MO2 Overwrite",
-        "MO2 Overwrite wins normal enabled package priority");
-    Require(!Mo2SourceInspector.Inspect(Path.Combine(root, "missing-MO2")).Valid,
-        "nonexistent MO2 instance fails safely");
-    File.WriteAllText(Path.Combine(mo2Instance, "ModOrganizer.ini"),
-        "[Settings]\nbase_directory=%UNKNOWN_VARIABLE%\n[General]\nselected_profile=Current\n");
-    Require(!Mo2SourceInspector.Inspect(mo2Instance).Valid,
-        "unknown MO2 virtual path variable does not resolve to incorrect physical sources");
+    File.WriteAllText(Path.Combine(mo2InstanceDir, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=../MO2-Storage\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\noverwrite_directory=%BASE_DIR%/overwrite\n");
+    File.WriteAllText(Path.Combine(activeProfile, "modlist.txt"),
+        "#highest priority first\n+High\n-LegacyDisabled\n+Low\n+../escape\n+Divider_separator\n");
+    var highCet = Path.Combine(mo2Mods, "High", "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "CyberTrials");
+    var lowCet = Path.Combine(mo2Mods, "Low", "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "CyberTrials");
+    Directory.CreateDirectory(highCet);
+    Directory.CreateDirectory(lowCet);
+    File.WriteAllText(Path.Combine(highCet, "init.lua"), "high-priority");
+    File.WriteAllText(Path.Combine(lowCet, "init.lua"), "low-priority");
+    var disabledCet = Path.Combine(mo2Mods, "LegacyDisabled", "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "Legacy");
+    Directory.CreateDirectory(disabledCet);
+    File.WriteAllText(Path.Combine(disabledCet, "init.lua"), "disabled");
+    var highRed = Path.Combine(mo2Mods, "High", "r6", "scripts", "shared.reds");
+    var lowRed = Path.Combine(mo2Mods, "Low", "r6", "scripts", "shared.reds");
+    Directory.CreateDirectory(Path.GetDirectoryName(highRed)!);
+    Directory.CreateDirectory(Path.GetDirectoryName(lowRed)!);
+    File.WriteAllText(highRed, "high redscript");
+    File.WriteAllText(lowRed, "low redscript");
+    var mo2Plugin = Path.Combine(mo2Mods, "High", "red4ext", "plugins", "SomePlugin.dll");
+    Directory.CreateDirectory(Path.GetDirectoryName(mo2Plugin)!);
+    File.WriteAllText(mo2Plugin, "native component");
+
+    var mo2 = Mo2SourceInspector.Discover(mo2InstanceDir);
+    Require(mo2.Recognized && mo2.Profiles.SequenceEqual(["Active"]), "MO2 INI paths/profiles parsed");
+    Require(mo2.ModsDirectory == mo2Mods && mo2.ProfilesDirectory == mo2Profiles,
+        "MO2 separate storage paths resolve without copying mods");
+    Require(!Mo2SourceInspector.Resolve(root, mo2, "Missing").Ready,
+        "unknown MO2 profile never silently selected");
+    Require(!Mo2SourceInspector.Resolve(null, mo2, "Active").Ready,
+        "MO2 source package alone cannot establish the current game root");
+
+    var selectedStack = Mo2SourceInspector.Resolve(root, mo2, "Active");
+    Require(selectedStack.Ready && selectedStack.EnabledPackages == 2,
+        "only enabled valid MO2 package names enter active loose-file stack");
+    Require(selectedStack.CetOwners == 2 && selectedStack.HasZeroEngine,
+        "source-resolved stack preserves physical 0-Engine and counts winning CET init.lua");
+    Require(selectedStack.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/CyberTrials/init.lua") == Path.GetFullPath(Path.Combine(highCet, "init.lua")),
+        "highest-priority MO2 package wins when two enabled packages provide same CET file");
+    Require(selectedStack.Winner("r6/scripts/shared.reds") == Path.GetFullPath(highRed),
+        "REDscript conflicts follow MO2 modlist highest-priority-first order");
+    Require(selectedStack.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/Legacy/init.lua") is null,
+        "disabled mod excluded even though physical package remains installed in MO2 storage");
+    Require(selectedStack.RedscriptFiles >= 2 && selectedStack.Red4extFiles == 1,
+        "MO2 REDscript and red4ext loose-file trees are inventoried");
+    Require(selectedStack.ShadowedFiles >= 2,
+        "MO2 file conflicts are tracked without modifying installed sources");
+    Require(selectedStack.Warnings.Any(w => w.Contains("RootBuilder")),
+        "MO2 candidate inventory never claims proven runtime VFS/RootBuilder compatibility");
+
+    var unmanaged = Mo2SourceInspector.Discover(Path.Combine(root, "nonexistent-MO2"));
+    Require(!unmanaged.Recognized, "missing MO2 instance is refused");
 
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
