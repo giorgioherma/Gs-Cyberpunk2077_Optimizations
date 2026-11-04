@@ -575,13 +575,13 @@ internal sealed class MainForm : Form
 
         var zeroEnginePresent = mo2Mode.Checked
             ? stack?.Ready == true && stack.HasZeroEngine
-            : current.Checks.Any(c => c.Name == "0-Engine source" && c.State != CheckState.Missing);
+            : current.Checks.Any(c => c.Name == "0-Engine source" && c.State != GTotalOptimizer.Core.CheckState.Missing);
         var hasScripts = mo2Mode.Checked
             ? stack?.Ready == true && stack.HasRedscript
-            : current.Checks.Any(c => c.Name == "REDscript source folder" && c.State != CheckState.Missing);
+            : current.Checks.Any(c => c.Name == "REDscript source folder" && c.State != GTotalOptimizer.Core.CheckState.Missing);
         var hasRed4ext = mo2Mode.Checked
             ? stack?.Ready == true && stack.Red4extFiles > 0
-            : current.Checks.Any(c => c.Name == "RED4ext plugin folder" && c.State != CheckState.Missing);
+            : current.Checks.Any(c => c.Name == "RED4ext plugin folder" && c.State != GTotalOptimizer.Core.CheckState.Missing);
         ApplyCheck(zeroEngineCheck, "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", zeroEnginePresent);
         ApplyCheck(scriptsCheck, "r6/scripts", hasScripts);
         ApplyCheck(red4extCheck, "red4ext/plugins", hasRed4ext);
