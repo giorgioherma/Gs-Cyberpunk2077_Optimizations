@@ -11,6 +11,14 @@ var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().
 try
 {
     Directory.CreateDirectory(root);
+    Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: false),
+        "Normal setup fits reference window without a scrollbar");
+    Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: true),
+        "MO2 setup fits reference window without a scrollbar");
+    Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, mo2: true) >=
+        SetupPageLayout.MinimumWorkflowHeight, "MO2 tab preserves all three workflow steps");
+    Require(!SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight - 110, mo2: true),
+        "layout contract detects an undersized window instead of claiming no clipping");
     Require(!GameInspector.Inspect(root).IsValidGame, "empty folder rejected");
     Directory.CreateDirectory(Path.Combine(root, "bin", "x64"));
     File.WriteAllText(Path.Combine(root, "bin", "x64", "Cyberpunk2077.exe"), "");

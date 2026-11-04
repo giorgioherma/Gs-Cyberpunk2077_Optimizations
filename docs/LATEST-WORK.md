@@ -91,3 +91,13 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - 52/52 core read-only/MO2 contracts passed; .NET 10 Windows publish passed; v1.1.0.0 metadata and single private runtime verified; artifact 13365971513.
 - Previous failed runs 41917561978, 41917813927, 41917984334 exposed WinForms CheckState ambiguity and WFO1000 property-serialization issues. Fixed at source, latest CI green.
 - Actual GUI display and gameplay untested; verified MO2 live USVFS/RootBuilder, cross-component profiling lifecycle, CapFrameX vendor packaging and combined optimization output remain pending.
+
+
+## 2026-11-04 — compact non-scrollable Page 1 / full Normal–MO2 tabs
+
+- User supplied screenshots showing the CET reference is significantly cleaner than the v1.1.0 build. Explicit requested correction: reduce game path height, use **full-width Normal/MO2 tabs with mutually exclusive content**, and **remove the Page 1 scrollbar**.
+- Replaced the Page 1 scrollable FlowLayoutPanel with a fixed three-row TableLayoutPanel; the source group switches between compact game-folder input and the MO2 instance/profile view. Page 2 remains scrollable.
+- Preserved the single saved game-root source of truth: MO2 view reuses the verified normal game root and will request it if not set; MO2 filesystem profile mapping still does **not** prove virtual runtime/RootBuilder behavior.
+- Kept CET colors, cyan/yellow/green instruction hierarchy, dependency checks, visible missing 0-Engine link, gray disabled workflow controls and pink Continue once legitimately unlocked.
+- Added a shared size contract with tests for both modes at the reference client height, including a minimum workflow-area threshold. Set minimum window size to prevent accidental clipping instead of making Page 1 scroll. User must visually verify on Windows at their chosen DPI.
+- **No backend changes, no profiler binaries, no installation/generation enabled. CI pending at this commit; record exact run once completed.**

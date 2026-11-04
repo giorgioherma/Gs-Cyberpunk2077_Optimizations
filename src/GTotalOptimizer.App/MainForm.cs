@@ -29,8 +29,9 @@ internal sealed class MainForm : Form
     };
     private readonly RadioButton normalMode = ModeChoice("NORMAL", true);
     private readonly RadioButton mo2Mode = ModeChoice("MO2", false);
+    private readonly Panel normalPanel = new();
     private readonly Panel mo2Panel = new() { Visible = false };
-    private readonly Label mo2Hint = Readout();
+    private TableLayoutPanel? setupContent;
     private readonly Label zeroEngineCheck = Readout();
     private readonly Label scriptsCheck = Readout();
     private readonly Label red4extCheck = Readout();
@@ -74,7 +75,7 @@ internal sealed class MainForm : Form
     {
         Text = $"G's Cyberpunk 2077 Total Optimization Generator — v{Application.ProductVersion}";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(920, 670);
+        MinimumSize = new Size(960, 828);
         ClientSize = new Size(1010, 790);
         Font = new Font("Segoe UI", 9.5f);
         BackColor = Bg;
@@ -100,8 +101,18 @@ internal sealed class MainForm : Form
                 await RefreshSourceAsync();
             }
         };
-        normalMode.CheckedChanged += async (_, _) => { SetSourceMode(); await RefreshSourceAsync(); };
-        mo2Mode.CheckedChanged += async (_, _) => { SetSourceMode(); await RefreshSourceAsync(); };
+        normalMode.CheckedChanged += async (_, _) =>
+        {
+            if (!normalMode.Checked) return;
+            SetSourceMode();
+            await RefreshSourceAsync();
+        };
+        mo2Mode.CheckedChanged += async (_, _) =>
+        {
+            if (!mo2Mode.Checked) return;
+            SetSourceMode();
+            await RefreshSourceAsync();
+        };
         zeroEngineLink.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(
             "https://www.nexusmods.com/cyberpunk2077/mods/27967") { UseShellExecute = true });
         install.Click += (_, _) => ExplainPending("Profiler installation requires exact, independently verified CET and GRSP packages and transactional rollback tests. No game file has been changed.");
@@ -134,178 +145,217 @@ internal sealed class MainForm : Form
     private void BuildProfilerPage()
     {
         var grid = PageLayout(pageOne, "SETUP",
-            "Install the profilers, record your capture, then collect results and restore the original game files.");
-        var content = (FlowLayoutPanel)grid.GetControlFromPosition(0, 1)!;
+            "Install the profilers, record gameplay, then collect results and restore.", setup: true);
+        setupContent = (TableLayoutPanel)grid.GetControlFromPosition(0, 1)!;
 
-        sourceSection = Section("Game folder /Cyberpunk2077", 245);
-        sourceSection.Controls.AddRange([normalMode, mo2Mode]);
-        normalMode.SetBounds(17, 29, 108, 27);
-        mo2Mode.SetBounds(133, 29, 85, 27);
+        sourceSection = Section("Game folder /Cyberpunk2077", SetupPageLayout.NormalSourceHeight);
+        sourceSection.Dock = DockStyle.Fill;
+        sourceSection.Margin = new Padding(0, 2, 0, 4);
 
-        var pathRow = new TableLayoutPanel
+        // Full-width, mutually exclusive views. MO2 replaces the Normal form;
+        // it is not a small radio choice followed by both sets of input fields.
+        var tabs = new TableLayoutPanel
         {
-            Location = new Point(15, 62), Size = new Size(890, 38),
+            Location = new Point(14, 22), Size = new Size(880, 28),
             ColumnCount = 2, RowCount = 1, Margin = Padding.Empty
         };
+        tabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        foreach (var radio in new[] { normalMode, mo2Mode })
+        {
+            radio.Dock = DockStyle.Fill;
+            radio.Margin = new Padding(0);
+            radio.FlatAppearance.BorderSize = 1;
+            radio.FlatAppearance.CheckedBackColor = Color.FromArgb(23, 38, 47);
+            radio.FlatAppearance.MouseOverBackColor = Color.FromArgb(20, 34, 41);
+            tabs.Controls.Add(radio);
+        }
+        sourceSection.Controls.Add(tabs);
+
+        normalPanel.SetBounds(14, 56, 880, 30);
+        var pathRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1,
+            Margin = Padding.Empty
+        };
         pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 113));
+        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         sourcePath.AutoSize = false;
-        sourcePath.Height = 37;
-        sourcePath.Font = new Font("Consolas", 11f);
-        sourcePath.Margin = new Padding(0, 1, 9, 1);
+        sourcePath.Font = new Font("Consolas", 9f);
         sourcePath.Dock = DockStyle.Fill;
+        sourcePath.Margin = new Padding(0, 1, 8, 1);
         pathRow.Controls.Add(sourcePath, 0, 0);
-        var browse = Action("BROWSE...");
+        var browse = Action("Browse...");
         browse.Dock = DockStyle.Fill;
         browse.Margin = Padding.Empty;
         browse.Click += (_, _) => ChooseSource();
         pathRow.Controls.Add(browse, 1, 0);
-        sourceSection.Controls.Add(pathRow);
+        normalPanel.Controls.Add(pathRow);
+        sourceSection.Controls.Add(normalPanel);
 
-        mo2Panel.SetBounds(15, 106, 890, 108);
+        // MO2 instance/profile occupy their own complete view, as in the reference.
+        mo2Panel.SetBounds(14, 55, 880, 85);
+        var instanceLabel = Readout();
+        instanceLabel.Text = "MO2 Instance Folder";
+        instanceLabel.ForeColor = Muted;
+        instanceLabel.Font = new Font("Segoe UI", 8.5f);
+        instanceLabel.SetBounds(0, 0, 850, 16);
+        mo2Panel.Controls.Add(instanceLabel);
+
         var mo2PathRow = new TableLayoutPanel
         {
-            Location = new Point(0, 0), Size = new Size(890, 36),
-            ColumnCount = 3, RowCount = 1
+            Location = new Point(0, 17), Size = new Size(880, 27),
+            ColumnCount = 2, RowCount = 1, Margin = Padding.Empty
         };
-        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 113));
-        var instanceLabel = Readout();
-        instanceLabel.Text = "MO2 instance:";
-        instanceLabel.ForeColor = TextColor;
-        instanceLabel.Dock = DockStyle.Fill;
-        mo2PathRow.Controls.Add(instanceLabel, 0, 0);
+        mo2PathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         mo2Directory.AutoSize = false;
-        mo2Directory.Height = 34;
+        mo2Directory.Font = new Font("Consolas", 9f);
         mo2Directory.Dock = DockStyle.Fill;
-        mo2Directory.Margin = new Padding(0, 1, 9, 1);
-        mo2PathRow.Controls.Add(mo2Directory, 1, 0);
-        var browseMo2 = Action("BROWSE...");
-        browseMo2.Margin = Padding.Empty;
+        mo2Directory.Margin = new Padding(0, 1, 8, 1);
+        mo2PathRow.Controls.Add(mo2Directory, 0, 0);
+        var browseMo2 = Action("Browse...");
         browseMo2.Dock = DockStyle.Fill;
+        browseMo2.Margin = Padding.Empty;
         browseMo2.Click += (_, _) =>
         {
             using var picker = new FolderBrowserDialog
             {
-                Description = "Select the MO2 instance folder containing ModOrganizer.ini",
+                Description = "Select the MO2 instance containing ModOrganizer.ini",
                 UseDescriptionForTitle = true,
                 SelectedPath = Directory.Exists(mo2Directory.Text)
                     ? mo2Directory.Text : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             };
             if (picker.ShowDialog(this) == DialogResult.OK) mo2Directory.Text = picker.SelectedPath;
         };
-        mo2PathRow.Controls.Add(browseMo2, 2, 0);
+        mo2PathRow.Controls.Add(browseMo2, 1, 0);
         mo2Panel.Controls.Add(mo2PathRow);
-        var profileRow = new TableLayoutPanel
-        {
-            Location = new Point(0, 41), Size = new Size(890, 29),
-            ColumnCount = 2, RowCount = 1
-        };
-        profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
         var profileLabel = Readout();
-        profileLabel.Text = "Active profile:";
-        profileLabel.Dock = DockStyle.Fill;
-        profileRow.Controls.Add(profileLabel, 0, 0);
-        mo2Profile.Margin = Padding.Empty;
-        profileRow.Controls.Add(mo2Profile, 1, 0);
-        mo2Panel.Controls.Add(profileRow);
-        mo2Hint.SetBounds(0, 76, 890, 30);
-        mo2Hint.ForeColor = Amber;
-        mo2Panel.Controls.Add(mo2Hint);
+        profileLabel.Text = "MO2 Profile";
+        profileLabel.ForeColor = Muted;
+        profileLabel.Font = new Font("Segoe UI", 8.5f);
+        profileLabel.SetBounds(0, 46, 850, 15);
+        mo2Panel.Controls.Add(profileLabel);
+        mo2Profile.SetBounds(0, 62, 880, 23);
+        mo2Profile.Dock = DockStyle.None;
+        mo2Panel.Controls.Add(mo2Profile);
         sourceSection.Controls.Add(mo2Panel);
 
-        sourceStatus.ForeColor = Amber;
+        sourceStatus.Font = new Font("Segoe UI", 8.8f);
+        sourceStatus.AutoEllipsis = true;
         sourceSection.Controls.Add(sourceStatus);
-        zeroEngineCheck.ForeColor = TextColor;
-        scriptsCheck.ForeColor = TextColor;
-        red4extCheck.ForeColor = TextColor;
-        sourceSection.Controls.AddRange([zeroEngineCheck, scriptsCheck, red4extCheck, zeroEngineLink]);
+        foreach (var check in new[] { zeroEngineCheck, scriptsCheck, red4extCheck })
+        {
+            check.ForeColor = TextColor;
+            check.Font = new Font("Segoe UI", 8.8f);
+            sourceSection.Controls.Add(check);
+        }
+        zeroEngineLink.Font = new Font("Segoe UI", 8.7f);
+        sourceSection.Controls.Add(zeroEngineLink);
+
         sourceSection.Resize += (_, _) =>
         {
-            var width = Math.Max(320, sourceSection.ClientSize.Width - 30);
-            pathRow.Width = mo2Panel.Width = width;
-            mo2PathRow.Width = profileRow.Width = mo2Hint.Width = width;
-            foreach (var item in new Control[] { sourceStatus, zeroEngineCheck, scriptsCheck, red4extCheck, zeroEngineLink })
-                item.Width = width;
+            var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
+            tabs.Width = normalPanel.Width = mo2Panel.Width = width;
+            mo2PathRow.Width = mo2Profile.Width = instanceLabel.Width = profileLabel.Width = width;
+            sourceStatus.Width = width;
+            zeroEngineCheck.Width = Math.Min(520, width);
+            zeroEngineLink.Width = Math.Max(190, width - zeroEngineLink.Left);
+            red4extCheck.Width = Math.Max(180, width - red4extCheck.Left);
         };
-        content.Controls.Add(sourceSection);
+        setupContent.Controls.Add(sourceSection, 0, 0);
 
-        var guide = Section("INSTRUCTIONS", 331);
+        var guide = Section("INSTRUCTIONS", SetupPageLayout.InstructionsHeight);
+        guide.Dock = DockStyle.Fill;
+        guide.Margin = new Padding(0, 2, 0, 4);
+
         var top = Readout();
-        top.Text = "START the game and load the world. Press F11 to START, then F11 again to STOP.";
+        top.Text = "Start Cyberpunk 2077 and load the world. Press F11 to START; press F11 again to STOP.";
         top.ForeColor = Amber;
-        top.Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold);
-        top.SetBounds(15, 30, 895, 32);
+        top.Font = new Font("Segoe UI Semibold", 9.7f, FontStyle.Bold);
+        top.SetBounds(15, 24, 890, 23);
         guide.Controls.Add(top);
 
-        cetKey.SetBounds(18, 69, 292, 28);
-        redKey.SetBounds(321, 69, 292, 28);
-        capKey.SetBounds(627, 69, 292, 28);
-        foreach (var label in new[] { cetKey, redKey, capKey })
+        cetKey.SetBounds(16, 52, 285, 22);
+        redKey.SetBounds(307, 52, 285, 22);
+        capKey.SetBounds(598, 52, 290, 22);
+        foreach (var key in new[] { cetKey, redKey, capKey })
         {
-            label.Font = new Font("Segoe UI Semibold", 10.5f, FontStyle.Bold);
-            guide.Controls.Add(label);
+            key.Font = new Font("Segoe UI Semibold", 9.3f, FontStyle.Bold);
+            guide.Controls.Add(key);
         }
+
         var conflicts = Readout();
-        conflicts.Text = "Temporarily unbind any OTHER mod using F11 in CET and game settings.";
+        conflicts.Text = "Temporarily unbind other mods or game controls using F11 (CET and Settings).";
         conflicts.ForeColor = Amber;
-        conflicts.SetBounds(15, 103, 905, 25);
+        conflicts.Font = new Font("Segoe UI", 9.2f);
+        conflicts.SetBounds(15, 79, 890, 21);
         guide.Controls.Add(conflicts);
 
         var headline = Readout();
         headline.Text = "RECORD 5–10 MINUTES IN THE CITY";
         headline.ForeColor = Green;
-        headline.Font = new Font("Segoe UI Semibold", 16f, FontStyle.Bold);
-        headline.SetBounds(15, 139, 900, 34);
+        headline.Font = new Font("Segoe UI Semibold", 14f, FontStyle.Bold);
+        headline.SetBounds(15, 107, 890, 29);
         guide.Controls.Add(headline);
+
         var phases = Readout();
-        phases.Text = "IDLE   →   MOVEMENT   →   DRIVING   →   HEAVY COMBAT";
+        phases.Text = "IDLE   •   MOVEMENT   •   DRIVING   •   HEAVY COMBAT";
         phases.ForeColor = Green;
-        phases.Font = new Font("Segoe UI Semibold", 12f, FontStyle.Bold);
-        phases.SetBounds(15, 178, 900, 26);
+        phases.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
+        phases.SetBounds(15, 139, 890, 25);
         guide.Controls.Add(phases);
+
         var avoid = Readout();
         avoid.Text = "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS";
         avoid.ForeColor = Green;
-        avoid.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
-        avoid.SetBounds(15, 209, 900, 28);
+        avoid.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+        avoid.SetBounds(15, 165, 890, 22);
         guide.Controls.Add(avoid);
 
         var detail = Readout();
         detail.ForeColor = Amber;
+        detail.Font = new Font("Segoe UI", 9f);
         detail.Text =
-            "Stay in open, in-world gameplay. Use an older save or a Phantom Liberty quick start.\r\n" +
-            "For heavy combat, provoke police. If you die, STOP with F11 promptly before loading.\r\n" +
-            "Shorter captures can work, but 5–10 minutes is preferred. Close the game when finished.\r\n" +
-            "Return here and use COLLECT RESULTS / RESTORE before continuing.";
-        detail.Font = new Font("Segoe UI", 10f);
-        detail.SetBounds(15, 247, 900, 75);
+            "Stay in-world. Use an old save or Phantom Liberty start; fight police for heavy combat.\r\n" +
+            "If you die, stop with F11 before loading. Captures under five minutes also work.\r\n" +
+            "Close the game, return here and use COLLECT RESULTS / RESTORE.";
+        detail.SetBounds(15, 188, 890, 48);
         guide.Controls.Add(detail);
         guide.Resize += (_, _) =>
         {
+            var width = Math.Max(350, guide.ClientSize.Width - 30);
             foreach (Control item in new Control[] { top, conflicts, headline, phases, avoid, detail })
-                item.Width = Math.Max(300, guide.ClientSize.Width - 30);
-            var column = Math.Max(170, (guide.ClientSize.Width - 36) / 3);
-            cetKey.Width = redKey.Width = capKey.Width = column;
-            redKey.Left = 18 + column;
-            capKey.Left = 18 + 2 * column;
+                item.Width = width;
+            var cell = width / 3;
+            cetKey.Width = redKey.Width = capKey.Width = cell;
+            redKey.Left = 16 + cell;
+            capKey.Left = 16 + 2 * cell;
         };
-        content.Controls.Add(guide);
+        setupContent.Controls.Add(guide, 0, 1);
 
-        var steps = Section("Profiler status — install → capture → restore", 190);
-        profilerReady.Text = "PROFILER IS NOT READY!";
+        var steps = Section("Profiler status — install → capture → restore", 142);
+        steps.Dock = DockStyle.Fill;
+        steps.Margin = new Padding(0, 2, 0, 2);
         profilerReady.ForeColor = Amber;
-        profilerReady.Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold);
-        profilerReady.SetBounds(17, 31, 890, 30);
+        profilerReady.Font = new Font("Segoe UI Semibold", 11.2f, FontStyle.Bold);
+        profilerReady.SetBounds(16, 26, 885, 23);
         steps.Controls.Add(profilerReady);
-        stepOne.SetBounds(18, 72, 895, 27);
-        stepTwo.SetBounds(18, 106, 895, 27);
-        stepThree.SetBounds(18, 140, 895, 27);
-        steps.Controls.AddRange([stepOne, stepTwo, stepThree]);
-        steps.Resize += (_, _) => profilerReady.Width = stepOne.Width = stepTwo.Width = stepThree.Width = steps.ClientSize.Width - 34;
-        content.Controls.Add(steps);
+        stepOne.SetBounds(16, 55, 885, 19);
+        stepTwo.SetBounds(16, 77, 885, 19);
+        stepThree.SetBounds(16, 99, 885, 19);
+        foreach (var step in new[] { stepOne, stepTwo, stepThree })
+        {
+            step.Font = new Font("Segoe UI", 9f);
+            steps.Controls.Add(step);
+        }
+        steps.Resize += (_, _) =>
+        {
+            var width = Math.Max(350, steps.ClientSize.Width - 32);
+            profilerReady.Width = stepOne.Width = stepTwo.Width = stepThree.Width = width;
+        };
+        setupContent.Controls.Add(steps, 0, 2);
         UpdateWorkflowVisuals();
 
         var footer = (TableLayoutPanel)grid.GetControlFromPosition(0, 2)!;
@@ -324,25 +374,40 @@ internal sealed class MainForm : Form
         status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         status.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 165));
         pageOneStatus.Dock = DockStyle.Fill;
+        pageOneStatus.Font = new Font("Segoe UI", 8.5f);
+        pageOneStatus.AutoEllipsis = true;
         pageOneStatus.Text = "Profiler binaries and restore integration not yet verified.";
         status.Controls.Add(pageOneStatus, 0, 0);
         next.Dock = DockStyle.Fill;
         if (next is NeonButton nextButton) nextButton.IsAccent = true;
         status.Controls.Add(next, 1, 0);
+        SetSourceMode();
     }
 
     private void SetSourceMode()
     {
-        if (sourceSection is null) return;
+        if (sourceSection is null || setupContent is null) return;
         var mo2 = mo2Mode.Checked;
+        normalPanel.Visible = !mo2;
         mo2Panel.Visible = mo2;
-        sourceSection.Height = mo2 ? 363 : 245;
-        var y = mo2 ? 219 : 109;
-        sourceStatus.SetBounds(15, y, 890, 24);
-        zeroEngineCheck.SetBounds(15, y + 26, 890, 22);
-        scriptsCheck.SetBounds(15, y + 51, 890, 22);
-        red4extCheck.SetBounds(15, y + 76, 890, 22);
-        zeroEngineLink.SetBounds(15, y + 100, 890, 23);
+        setupContent.RowStyles[0].Height = mo2
+            ? SetupPageLayout.Mo2SourceHeight : SetupPageLayout.NormalSourceHeight;
+
+        // Keep the mode selector visually segmented across the whole upper panel.
+        foreach (var tab in new[] { normalMode, mo2Mode })
+        {
+            var selected = tab.Checked;
+            tab.BackColor = selected ? Color.FromArgb(23, 38, 47) : PanelAlt;
+            tab.ForeColor = selected ? Cyan : Muted;
+            tab.FlatAppearance.BorderColor = selected ? Cyan : Border;
+        }
+
+        var y = mo2 ? 142 : 91;
+        sourceStatus.SetBounds(14, y, 880, 20);
+        zeroEngineCheck.SetBounds(14, y + 22, 520, 20);
+        scriptsCheck.SetBounds(14, y + 43, 210, 20);
+        red4extCheck.SetBounds(240, y + 43, 220, 20);
+        zeroEngineLink.SetBounds(535, y + 22, 335, 20);
     }
 
     private void RefreshProfiles()
@@ -359,8 +424,6 @@ internal sealed class MainForm : Form
             if (selected is not null) mo2Profile.SelectedItem = selected;
             else if (mo2Instance.Profiles.Count == 1) mo2Profile.SelectedIndex = 0;
             else mo2Profile.SelectedIndex = -1;
-            mo2Hint.Text = mo2Instance.Detail;
-            mo2Hint.ForeColor = mo2Instance.Recognized ? Green : Amber;
             UserSettings.WriteMo2Directory(mo2Directory.Text);
         }
         finally { settingProfiles = false; }
@@ -384,11 +447,12 @@ internal sealed class MainForm : Form
 
     private static RadioButton ModeChoice(string label, bool selected) => new()
     {
-        Text = label, Checked = selected, Appearance = Appearance.Button,
-        FlatStyle = FlatStyle.Flat, ForeColor = Cyan, BackColor = PanelAlt,
-        Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold),
-        TextAlign = ContentAlignment.MiddleCenter,
-        Cursor = Cursors.Hand
+        Text = label.Equals("NORMAL", StringComparison.OrdinalIgnoreCase) ? "Normal" : "MO2",
+        Checked = selected, Appearance = Appearance.Button, AutoSize = false,
+        FlatStyle = FlatStyle.Flat, ForeColor = selected ? Cyan : Muted,
+        BackColor = selected ? Color.FromArgb(23, 38, 47) : PanelAlt,
+        Font = new Font("Segoe UI Semibold", 9.5f),
+        TextAlign = ContentAlignment.MiddleCenter, Cursor = Cursors.Hand
     };
 
     private void BuildResultsPage()
@@ -448,46 +512,87 @@ internal sealed class MainForm : Form
         status.Controls.Add(pageTwoStatus, 1, 0);
     }
 
-    private static TableLayoutPanel PageLayout(Panel page, string title, string subtitle)
+    private static TableLayoutPanel PageLayout(Panel page, string title, string subtitle, bool setup = false)
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(19, 14, 19, 12), ColumnCount = 1, RowCount = 4 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 91));
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = setup
+                ? new Padding(17, SetupPageLayout.LayoutTopPadding, 17, SetupPageLayout.LayoutBottomPadding)
+                : new Padding(19, 14, 19, 12),
+            ColumnCount = 1, RowCount = 4
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            setup ? SetupPageLayout.HeaderHeight : 91));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 67));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 51));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            setup ? SetupPageLayout.ActionsHeight : 67));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,
+            setup ? SetupPageLayout.StatusHeight : 51));
         page.Controls.Add(layout);
 
         var header = new Panel { Dock = DockStyle.Fill };
         var logo = new Label
         {
-            Text = "G", Font = new Font("Segoe UI", 21f, FontStyle.Bold),
+            Text = "G", Font = new Font("Segoe UI", setup ? 17f : 21f, FontStyle.Bold),
             ForeColor = Magenta, BackColor = PanelBg, TextAlign = ContentAlignment.MiddleCenter,
-            Location = new Point(0, 5), Size = new Size(55, 59),
+            Location = new Point(0, 2), Size = setup ? new Size(47, 49) : new Size(55, 59),
             BorderStyle = BorderStyle.FixedSingle
         };
         var heading = new Label
         {
-            Text = title, Font = new Font("Segoe UI Semibold", 18f, FontStyle.Bold),
-            ForeColor = Cyan, Location = new Point(69, 4), AutoSize = true
+            Text = title, Font = new Font("Segoe UI Semibold", setup ? 16.5f : 18f, FontStyle.Bold),
+            ForeColor = Cyan, Location = new Point(setup ? 60 : 69, 2), AutoSize = true
         };
-        var sub = new Label { Text = subtitle, ForeColor = Muted, Location = new Point(70, 42), AutoSize = true };
+        var sub = new Label
+        {
+            Text = subtitle, ForeColor = Muted,
+            Location = new Point(setup ? 61 : 70, setup ? 36 : 42), AutoSize = true
+        };
         var line = new Panel { BackColor = Border, Height = 1, Dock = DockStyle.Bottom };
         header.Controls.AddRange([logo, heading, sub, line]);
         layout.Controls.Add(header, 0, 0);
 
-        var flow = new FlowLayoutPanel
+        if (setup)
         {
-            Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-            AutoScroll = true, BackColor = Bg, Padding = new Padding(0, 5, 5, 5)
-        };
-        flow.Resize += (_, _) =>
+            // Page 1 is a three-row, fixed-layout form: never a scrollable flow.
+            var compact = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3,
+                AutoScroll = false, Margin = Padding.Empty, Padding = Padding.Empty,
+                BackColor = Bg
+            };
+            compact.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            compact.RowStyles.Add(new RowStyle(SizeType.Absolute, SetupPageLayout.NormalSourceHeight));
+            compact.RowStyles.Add(new RowStyle(SizeType.Absolute, SetupPageLayout.InstructionsHeight));
+            compact.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.Controls.Add(compact, 0, 1);
+        }
+        else
         {
-            var width = Math.Max(330, flow.ClientSize.Width - 29);
-            foreach (Control child in flow.Controls) child.Width = width;
-        };
-        layout.Controls.Add(flow, 0, 1);
-        layout.Controls.Add(new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 1, Margin = new Padding(0, 7, 0, 0) }, 0, 2);
-        layout.Controls.Add(new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 1, Margin = new Padding(0, 3, 0, 0) }, 0, 3);
+            // Page 2 retains its independently scrollable CET and REDscript reports.
+            var flow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+                AutoScroll = true, BackColor = Bg, Padding = new Padding(0, 5, 5, 5)
+            };
+            flow.Resize += (_, _) =>
+            {
+                var width = Math.Max(330, flow.ClientSize.Width - 29);
+                foreach (Control child in flow.Controls) child.Width = width;
+            };
+            layout.Controls.Add(flow, 0, 1);
+        }
+        layout.Controls.Add(new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, RowCount = 1,
+            Margin = new Padding(0, setup ? 3 : 7, 0, 0)
+        }, 0, 2);
+        layout.Controls.Add(new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, RowCount = 1,
+            Margin = new Padding(0, setup ? 1 : 3, 0, 0)
+        }, 0, 3);
         return layout;
     }
 
@@ -568,7 +673,7 @@ internal sealed class MainForm : Form
         mo2Stack = stack;
         sourceStatus.Text = mo2Mode.Checked
             ? stack?.Detail ?? (current.IsValidGame ? "Select an MO2 instance and active profile."
-                : "Choose a valid game folder first.")
+                : "Select the Cyberpunk game folder once in the Normal tab.")
             : current.Summary;
         sourceStatus.ForeColor = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true)
             ? Green : Amber;
@@ -587,14 +692,6 @@ internal sealed class MainForm : Form
         ApplyCheck(red4extCheck, "red4ext/plugins", hasRed4ext);
         zeroEngineLink.Visible = current.IsValidGame && (!mo2Mode.Checked || stack?.Ready == true) &&
                                  !zeroEnginePresent;
-
-        if (mo2Mode.Checked)
-        {
-            mo2Hint.Text = stack?.Ready == true
-                ? $"Profile {stack.Profile}: {stack.CetOwners} CET mods, {stack.RedscriptFiles} REDscript files; {stack.ShadowedFiles} loose-file conflicts. MO2 runtime not verified."
-                : mo2Instance.Detail;
-            mo2Hint.ForeColor = stack?.Ready == true ? Green : Amber;
-        }
 
         var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
         var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);

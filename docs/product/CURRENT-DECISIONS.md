@@ -64,3 +64,11 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - Show 0-Engine path/mandatory Nexus link when missing, r6/scripts and red4ext/plugins statuses. Preserve owner/dependency evidence; no source copying.
 - Use CET dark/cyan colors, larger yellow/green instructions, legible gray disabled controls, and magenta Continue only after verified capture plus restore.
 - CapFrameX will be bundled, so remove ordinary external executable path chooser. Do not claim binary staged before actual vendor provenance, licensing, F11 settings and .NET 10 compatibility checks.
+
+
+## 2026-11-04 — final CET-style first-page layout correction
+
+- User rejected the narrow inline Normal/MO2 radio pair and the tall scrollable first page shown in the v1.1.0 build. **Normal and MO2 are now equal-width full tabs inside the Game folder box**; selecting MO2 replaces the normal game-root input with the MO2 instance/profile controls. They are views of one source-selection step, not additional pages.
+- **Page 1 must not scroll at the reference 1010 × 790 client size**. Compact the path field back to CET-like height, remove excess space/margins, and allocate three fixed screen sections above the workflow buttons. Page 2 keeps its scrollable reports.
+- Keep 0-Engine, r6/scripts and red4ext checks beneath the active tab; keep mandatory missing 0-Engine link, F11 source-status truthfulness and the existing read-only safety gates. No cosmetic change authorizes installing or modifying user mods.
+- Preserve version **v1.1.0**; this is a design correction, not a new product version.
