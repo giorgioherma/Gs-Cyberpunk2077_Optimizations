@@ -1,12 +1,12 @@
-# G's Cyberpunk 2077 Total Optimization Generator — v1.1.2
+# G's Cyberpunk 2077 Total Optimization Generator — v1.1.3
 
 **Current milestone: integrated CET + REDscript profiler workflow, not a stable optimizer release.** The normal two-page GUI now packages and coordinates the authoritative CET v1.3.4 and GRSP v1.0.0 managers, with PresentMon 2.6.0 for frametimes. All managed applications run on **one private .NET 10 Core + Windows Desktop Runtime**. Source-owned native profiler DLLs remain unchanged. Direct physical game installations only; MO2 is disabled.
 
-**[Download v1.1.2 integrated Windows application](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42049460675/artifacts/13426900277)** · [Successful Windows CI #42049460675](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42049460675) · Source SHA `c7d22c68ff86b039280885dd8fc97bd9f6d61da9` · 121 core contracts passed.
+**[Download v1.1.3 integrated Windows application](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42056516984/artifacts/13428358426)** · [Successful Windows CI #42056516984](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42056516984) · Build source SHA `028cf91738e8c808cce4a5dbd625f7b5b023fdc3` · **126 core/package contracts passed**, including verification of the *final assembled package* with GCO's own manifest verifier.
 
 ## Integrated package and initial gameplay test
 
-Extract the complete artifact to a writable folder. Run `G-Total-Optimizer.exe`, not the internal app EXE. Select the physical **Cyberpunk 2077 game root**. The Page 1 actions are now real: `INSTALL PROFILERS` (transactional owner CLI), `START CYBERPUNK / CAPTURE` (PresentMon admin prompt; F11 twice in game), then after closing the game `COLLECT RESULTS / RESTORE`. A verified completed CET + GRSP capture **and** verified restoration unlock Page 2. PresentMon evidence is optional and independently reported; its F11 registration interaction still needs a user game test.
+Extract the complete **v1.1.3 Integrated** artifact to a new, empty, writable folder (do not merge with an older v1.1.2 shell or test package). Run `G-Total-Optimizer.exe`, not the internal app EXE. Select the physical **Cyberpunk 2077 game root**. The Page 1 actions are now real: `INSTALL PROFILERS` (transactional owner CLI), `START CYBERPUNK / CAPTURE` (PresentMon admin prompt; F11 twice in game), then after closing the game `COLLECT RESULTS / RESTORE`. A verified completed CET + GRSP capture **and** verified restoration unlock Page 2. PresentMon evidence is optional and independently reported; its F11 registration interaction still needs a user game test.
 
 The package contains:
 
