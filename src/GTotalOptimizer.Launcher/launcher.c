@@ -75,6 +75,26 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
         return 3;
     }
     CloseHandle(child.hThread);
+    // Normal GUI launch is detached. Headless verification and elevated
+    // PresentMon control must propagate the private-runtime child's exit code
+    // so the parent can refuse an unverified/failed operation.
+    if (commandLine && *commandLine)
+    {
+        DWORD wait = WaitForSingleObject(child.hProcess, 30000);
+        if (wait != WAIT_OBJECT_0)
+        {
+            CloseHandle(child.hProcess);
+            return 4;
+        }
+        DWORD code = 0;
+        if (!GetExitCodeProcess(child.hProcess, &code))
+        {
+            CloseHandle(child.hProcess);
+            return 5;
+        }
+        CloseHandle(child.hProcess);
+        return (int)code;
+    }
     CloseHandle(child.hProcess);
     return 0;
 }
