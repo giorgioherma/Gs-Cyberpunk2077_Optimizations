@@ -233,9 +233,16 @@ public sealed class UnifiedProfilerWorkflow
                     throw new InvalidDataException("GRSP archive destination is missing.");
             }
         }
-        catch (Exception ex) { captured = false; detail += "Collection failed: " + ex.Message + ". "; }
-        // Owner restoration is mandatory even when capture failed.
-        var restored = await RestoreOwnedAsync(game, CancellationToken.None);
+        catch (Exception ex)
+        {
+            // One owner may have already archived its data. Do not destroy
+            // the other owner's live evidence after a partial collect failure.
+            return new(false, "Collection failed: " + ex.Message +
+                ". Partial archives retained. Explicit recovery required.",
+                cet, grsp);
+        }
+        var restored = await RestoreOwnedAsync(game, CancellationToken.None,
+            preserveIncompleteEvidence: false);
         return new(captured && restored.RestoreVerified,
             detail + restored.Detail, cet, grsp, captured && restored.RestoreVerified,
             restored.RestoreVerified);
