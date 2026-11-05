@@ -4,7 +4,11 @@
 
 One user-oriented Windows application for **CET/Lua profiling, REDscript profiling, optional CapFrameX frame measurements, unified analysis, and a single game-installable optimization ZIP**. The project's currently tested game target is Cyberpunk 2077 **2.31**. Do not use the game version or third-party mod versions as rigid source-hash admission criteria.
 
-**Previous v1.1.1 portable development build (historical):** [Windows CI #41950289302](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41950289302) — [download the CET-style portable folder](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41950289302/artifacts/13380467867). **101/101 read-only/source/CLI contracts passed**. This is not the completed optimizer.
+**Current v1.1.2 portable development shell:** [Windows CI #42040291055](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291055) — [download shell artifact](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291055/artifacts/13420771520). **SUCCESS**. This is not the completed optimizer.
+
+**Separate v1.1.2 developer test (CET + GRSP + PresentMon together):** [Windows CI #42040291301](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291301) — [download triple-profiler test](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291301/artifacts/13419939142). **SUCCESS**. Run `RUN-ALL-THREE-TEST.cmd`; gameplay, three-way F11 and recovery still require user verification.
+
+**Optional CapFrameX private-runtime developer test:** [Windows CI #42040291135](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291135) — [test artifact](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42040291135/artifacts/13419998910). This is not included in the triple-profiler test.
 
 
 ## Portable Windows folder (v1.1.2)
@@ -20,7 +24,7 @@ G-Total-Optimizer-v1.1.2/
 └─ RESULTS/                       # reserved capture results workspace
 ```
 
-Run the root launcher; **do not move the internal `app/` contents separately**. The root launcher resolves the application relative to its own location, and the managed app resolves component paths against the public package root. No CET profiler, GRSP, CapFrameX or optimization generator binaries are bundled yet. MO2 source resolution is read-only and uses the live physical game as the baseline, with only validated selected-profile winners layered above it; an absent `modlist.txt` excludes all MO2-managed sources rather than discarding physical game mods. The MO2 virtualized runtime/RootBuilder behavior remains unverified.
+Run the root launcher; **do not move the internal `app/` contents separately**. The root launcher resolves the application relative to its own location, and the managed app resolves component paths against the public package root. This ordinary GUI shell does not yet bundle CET, GRSP, CapFrameX or optimization-generator binaries; the separately downloaded triple-profiler developer test does include CET, GRSP and PresentMon. MO2 source resolution is read-only and uses the live physical game as the baseline, with only validated selected-profile winners layered above it; an absent `modlist.txt` excludes all MO2-managed sources rather than discarding physical game mods. The MO2 virtualized runtime/RootBuilder behavior remains unverified.
 
 ## The agreed product
 
