@@ -13,8 +13,8 @@ public static class SetupPageLayout
     public const int StatusHeight = 38;
     public const int NormalSourceHeight = 166;
     public const int Mo2SourceHeight = 241;
-    public const int InstructionsHeight = 250;
-    public const int InstructionLastTextBottom = 239;
+    public const int InstructionsHeight = 272;
+    public const int InstructionLastTextBottom = 261;
     public const int Mo2EngineNoticeTop = 174;
     public const int Mo2ChecksTop = 194;
     public const int Mo2StatusTop = 215;

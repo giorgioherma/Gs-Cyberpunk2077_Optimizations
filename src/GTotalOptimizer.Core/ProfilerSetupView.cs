@@ -49,11 +49,22 @@ public sealed record ProfilerSetupView(
 // User-visible first-page copy is centralized for exact layout/content tests.
 public static class SetupCopy
 {
+    public const string CaptureStartInstruction =
+        "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.\r\n" +
+        "You will hear Start/Stop in CapX and RED. CET Start displays a UI timer in the upper left corner.";
+
+    public const string StepInstall =
+        "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
+    public const string StepStart =
+        "2. START CYBERPUNK — Record a capture using all profilers.";
+    public const string StepCollect =
+        "3. COLLECT RESULTS / RESTORE — Close game, collect results, restore files and continue.";
+
     public const string CapFrameXProcess =
         "Make sure Cyberpunk 2077 is detected in CapX and is the ONLY process.";
 
     public const string CaptureDetails =
         "Stay in-world. Use an old save or Phantom Liberty start; aim for heavy combat.\r\n" +
         "If you're having issues getting a longer combat capture, fight police. If you die, stop recording with F11 before loading.\r\n" +
-        "Short captures work. Close the game, return to this screen and use COLLECT RESULTS / RESTORE.";
+        "Shorter captures also work. Close the game, return to this screen and use COLLECT RESULTS / RESTORE.";
 }

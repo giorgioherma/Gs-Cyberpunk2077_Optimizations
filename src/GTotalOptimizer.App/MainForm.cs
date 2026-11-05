@@ -59,6 +59,9 @@ internal sealed class MainForm : Form
         AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
     };
     private readonly Label profilerReady = Readout();
+    private readonly Label stepInstructionOne = Readout();
+    private readonly Label stepInstructionTwo = Readout();
+    private readonly Label stepInstructionThree = Readout();
     private readonly CheckBox stepOne = SourceCheck("CET");
     private readonly CheckBox stepTwo = SourceCheck("REDscript");
     private readonly CheckBox stepThree = SourceCheck("CapX");
@@ -380,10 +383,11 @@ internal sealed class MainForm : Form
             provision.Top, 22, provision.Height);
 
         var start = Readout();
-        start.Text = "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.";
+        start.Text = SetupCopy.CaptureStartInstruction;
         start.ForeColor = TextColor;
         start.Font = new Font("Segoe UI Semibold", 9.7f, FontStyle.Bold);
-        start.SetBounds(15, 44, 890, 22);
+        start.TextAlign = ContentAlignment.TopLeft;
+        start.SetBounds(15, 44, 890, 43);
         guide.Controls.Add(start);
 
         var conflicts = Readout();
@@ -392,28 +396,28 @@ internal sealed class MainForm : Form
             SetupCopy.CapFrameXProcess;
         conflicts.ForeColor = TextColor;
         conflicts.Font = new Font("Segoe UI", 9.2f);
-        conflicts.SetBounds(15, 67, 890, 37);
+        conflicts.SetBounds(15, 89, 890, 37);
         guide.Controls.Add(conflicts);
 
         var headline = Readout();
         headline.Text = "RECORD 5–10 MINUTES IN THE CITY";
         headline.ForeColor = Green;
         headline.Font = new Font("Segoe UI Semibold", 14f, FontStyle.Bold);
-        headline.SetBounds(15, 107, 890, 27);
+        headline.SetBounds(15, 129, 890, 27);
         guide.Controls.Add(headline);
 
         var phases = Readout();
         phases.Text = "IDLE   •   MOVEMENT   •   DRIVING   •   HEAVY COMBAT";
         phases.ForeColor = Amber;
         phases.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
-        phases.SetBounds(15, 135, 890, 24);
+        phases.SetBounds(15, 157, 890, 24);
         guide.Controls.Add(phases);
 
         var avoid = Readout();
         avoid.Text = "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS";
         avoid.ForeColor = TextColor;
         avoid.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-        avoid.SetBounds(15, 160, 890, 22);
+        avoid.SetBounds(15, 182, 890, 22);
         guide.Controls.Add(avoid);
 
         var detail = Readout();
@@ -421,7 +425,7 @@ internal sealed class MainForm : Form
         detail.Font = new Font("Segoe UI", 9f);
         detail.Text = SetupCopy.CaptureDetails;
         detail.Font = new Font("Segoe UI", 8.8f);
-        detail.SetBounds(15, 184, 890, 55);
+        detail.SetBounds(15, 206, 890, 55);
         detail.TextAlign = ContentAlignment.TopLeft;
         guide.Controls.Add(detail);
         guide.Resize += (_, _) =>
@@ -440,31 +444,59 @@ internal sealed class MainForm : Form
         profilerReady.Font = new Font("Segoe UI Semibold", 11.2f, FontStyle.Bold);
         profilerReady.SetBounds(16, 26, 885, 23);
         steps.Controls.Add(profilerReady);
+
+        // Restore the original three workflow descriptions on the LEFT.
+        // Read-only installation checks and keybind labels remain on the RIGHT.
+        var descriptions = new[] { stepInstructionOne, stepInstructionTwo, stepInstructionThree };
+        var originalCopy = new[]
+        {
+            SetupCopy.StepInstall, SetupCopy.StepStart, SetupCopy.StepCollect
+        };
+        for (var i = 0; i < descriptions.Length; i++)
+        {
+            descriptions[i].Text = originalCopy[i];
+            descriptions[i].ForeColor = i == 0 ? Cyan : Color.FromArgb(104, 118, 126);
+            descriptions[i].Font = new Font("Segoe UI", 8.7f);
+            descriptions[i].AutoEllipsis = true;
+            descriptions[i].SetBounds(16, 55 + i * 26, 575, 22);
+            steps.Controls.Add(descriptions[i]);
+        }
+
         var checks = new[] { stepOne, stepTwo, stepThree };
         var keys = new[] { cetCaptureKey, redCaptureKey, capxCaptureKey };
         for (var i = 0; i < checks.Length; i++)
         {
             var y = 55 + i * 26;
-            checks[i].SetBounds(16, y, 185, 23);
+            checks[i].SetBounds(608, y, 117, 23);
             checks[i].Font = new Font("Segoe UI Semibold", 9.5f);
             checks[i].ForeColor = TextColor;
             steps.Controls.Add(checks[i]);
-            keys[i].SetBounds(233, y, 330, 23);
-            keys[i].Font = new Font("Consolas", 9.5f);
+            keys[i].SetBounds(736, y, 220, 23);
+            keys[i].Font = new Font("Consolas", 9.3f);
             keys[i].ForeColor = TextColor;
             steps.Controls.Add(keys[i]);
         }
         captureKeyWarning.Font = new Font("Segoe UI", 9f);
         captureKeyWarning.ForeColor = Amber;
         captureKeyWarning.TextAlign = ContentAlignment.TopLeft;
-        captureKeyWarning.SetBounds(16, 139, 885, 38);
+        captureKeyWarning.SetBounds(16, 139, 920, 36);
         steps.Controls.Add(captureKeyWarning);
-        steps.Resize += (_, _) =>
+
+        void ArrangeProfilerColumns()
         {
-            var width = Math.Max(350, steps.ClientSize.Width - 32);
-            profilerReady.Width = captureKeyWarning.Width = width;
-            foreach (var label in keys) label.Width = Math.Max(100, width - 233);
-        };
+            var width = Math.Max(760, steps.ClientSize.Width);
+            var right = width - 365;
+            profilerReady.Width = captureKeyWarning.Width = width - 32;
+            for (var i = 0; i < descriptions.Length; i++)
+            {
+                descriptions[i].Width = Math.Max(260, right - 25);
+                checks[i].Left = right;
+                keys[i].Left = right + 128;
+                keys[i].Width = Math.Max(120, width - keys[i].Left - 12);
+            }
+        }
+        steps.Resize += (_, _) => ArrangeProfilerColumns();
+        ArrangeProfilerColumns();
         setupContent.Controls.Add(steps, 0, 2);
         UpdateWorkflowVisuals();
 

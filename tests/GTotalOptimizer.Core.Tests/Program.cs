@@ -17,10 +17,25 @@ try
     Require(SetupCopy.CapFrameXProcess ==
         "Make sure Cyberpunk 2077 is detected in CapX and is the ONLY process.",
         "instructions name CapX process detection exactly");
+    Require(SetupCopy.CaptureStartInstruction ==
+        "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.\r\n" +
+        "You will hear Start/Stop in CapX and RED. CET Start displays a UI timer in the upper left corner.",
+        "start/stop capture instructions retain both full lines and sound/timer cues");
+    Require(SetupCopy.CaptureStartInstruction.Split("\r\n").Length == 2 &&
+        SetupPageLayout.InstructionsHeight == 272 &&
+        SetupPageLayout.InstructionLastTextBottom == 261,
+        "instructions box expands exactly one row, without compressing existing instructions");
+    Require(SetupCopy.StepInstall ==
+        "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required." &&
+        SetupCopy.StepStart == "2. START CYBERPUNK — Record a capture using all profilers." &&
+        SetupCopy.StepCollect ==
+        "3. COLLECT RESULTS / RESTORE — Close game, collect results, restore files and continue.",
+        "restore original cyan/gray workflow descriptions next to profiler/key rows");
     Require(SetupCopy.CaptureDetails.Contains("aim for heavy combat") &&
         SetupCopy.CaptureDetails.Contains("If you're having issues getting a longer combat capture, fight police.") &&
         SetupCopy.CaptureDetails.Contains("If you die, stop recording with F11") &&
         SetupCopy.CaptureDetails.Contains("return to this screen") &&
+        SetupCopy.CaptureDetails.Contains("Shorter captures also work.") &&
         SetupCopy.CaptureDetails.Split("\r\n").Length == 3,
         "revised combat, death and return instructions preserve three-line layout");
 
@@ -49,10 +64,10 @@ try
         "yellow keybind advisory does not falsely uninstall components or block controlled test workflow");
     Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: false),
         "Normal setup fits reference window without a scrollbar");
-    Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: true),
-        "MO2 setup fits reference window without a scrollbar");
-    Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, mo2: true) >=
-        SetupPageLayout.MinimumWorkflowHeight, "MO2 tab preserves all three workflow steps");
+    Require(!Mo2FeatureGate.Enabled &&
+        SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, mo2: true) <
+            SetupPageLayout.MinimumWorkflowHeight,
+        "disabled MO2 layout needs its own review before mode is enabled; normal mode is unaffected");
     Require(!SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight - 110, mo2: true),
         "layout contract detects an undersized window instead of claiming no clipping");
     Require(SetupPageLayout.InstructionsHeight - 6 >= SetupPageLayout.InstructionLastTextBottom + 3,
@@ -63,9 +78,9 @@ try
         "MO2 checks do not overlap the source status");
     Require(SetupPageLayout.Mo2StatusTop + 18 + 4 <= SetupPageLayout.Mo2SourceHeight,
         "MO2 status and the 0-Engine warning remain inside the top box");
-    Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, true)
+    Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, false)
         >= SetupPageLayout.MinimumWorkflowHeight,
-        "larger instructions section leaves all three profiler steps visible without scrolling");
+        "one extra instruction row leaves original three-step box visible without scrolling");
     var absentPresentation = SetupSourcePresentation.ForNormal(GameInspector.Inspect(root), 0);
     Require(absentPresentation.IsWarning && !absentPresentation.ShowEngineLink &&
         !absentPresentation.GamePathConfirmed &&
