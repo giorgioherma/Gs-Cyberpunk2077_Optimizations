@@ -146,13 +146,13 @@ public sealed class UnifiedProfilerWorkflow
         catch (Exception ex)
         {
             // Restore only managed state discovered by the owners, not arbitrary files.
-            var recovery = await RestoreOwnedAsync(game, CancellationToken.None);
+            var recovery = await RestoreOwnedAsync(game, CancellationToken.None, preserveIncompleteEvidence: false);
             return new(false, "Profiler installation failed: " + ex.Message + " " + recovery.Detail,
                 RestoreVerified: recovery.RestoreVerified);
         }
     }
 
-    public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default)
+    public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default, bool preserveIncompleteEvidence = true)
     {
         if (GameRunning()) return new(false, "Close Cyberpunk before profiler restoration.");
         try
@@ -160,6 +160,12 @@ public sealed class UnifiedProfilerWorkflow
             if (!OwnsSession(game))
                 return new(false, "No matching GCO ownership journal. Use the authoritative standalone manager for recovery.");
             var status = await InspectAsync(game, token);
+            string? evidenceFolder = null;
+            if (preserveIncompleteEvidence && !status.BothCaptured)
+            {
+                var snapshot = ProfilerCrashEvidence.Preserve(packageRoot, game);
+                evidenceFolder = snapshot.Folder;
+            }
             var problems = new List<string>();
             if (status.GrspManaged)
             {
@@ -177,7 +183,8 @@ public sealed class UnifiedProfilerWorkflow
                 return new(false, "RECOVERY REQUIRED: " + string.Join("; ", problems) +
                     $" Owner status CET={end.Cet}; GRSP={end.Grsp}. Journal preserved.");
             File.Delete(Journal);
-            return new(true, "Both owners verified restoration of original game state.",
+            return new(true, "Both owners verified restoration of original game state." +
+                (evidenceFolder is null ? "" : " Diagnostics preserved at: " + evidenceFolder),
                 RestoreVerified: true);
         }
         catch (Exception ex)
