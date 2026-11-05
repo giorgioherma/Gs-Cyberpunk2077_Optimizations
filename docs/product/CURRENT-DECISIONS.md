@@ -178,3 +178,8 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 ## 2026-11-05 — explicit-only GCO version policy
 
 - The user explicitly authorized GCO v1.1.5. **Never increment the GCO version again unless the user explicitly orders it.** Bug fixes, CI runs, packaging corrections and ordinary development retain their current version. Do not alter CET, GRSP or PresentMon versions implicitly.
+
+
+## 2026-11-05 — explicit PresentMon collection boundary
+
+User clarified the first-page three-button workflow: bundled optional PresentMon starts on button 2 without its own F11 hotkey, continuously records Cyberpunk, and stops/collects on button 3 COLLECT RESULTS. It requires no separate config or setup step. CET/GRSP remain instrumented after collection until CONTINUE, which invokes their authoritative original-file restore. A missing PresentMon CSV is explicitly skippable and never silently treated as successful frametime analysis. Do not make native profiler restoration responsible for PresentMon shutdown. Keep one game root, two pages, no unrequested version bump or unmeasured performance claims.

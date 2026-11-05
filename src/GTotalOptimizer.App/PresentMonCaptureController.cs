@@ -7,7 +7,7 @@ using GTotalOptimizer.Core;
 namespace GTotalOptimizer.App;
 
 // Elevated helper lives in the SAME shipped WinExe as GCO. A single UAC approval
-// authorizes stop-old + start-new, without starting another admin-console shim.
+// authorizes owned session start or graceful stop, without a hotkey handler.
 internal static class PresentMonCaptureController
 {
     public const string CliSwitch = "--presentmon-control";
@@ -119,6 +119,7 @@ internal static class PresentMonCaptureController
                 throw new TimeoutException("Another GCO PresentMon restart is still running.");
             try
             {
+            var ownedPids = new List<int>();
             foreach (var process in Process.GetProcessesByName("PresentMon"))
             {
                 using (process)
@@ -133,25 +134,52 @@ internal static class PresentMonCaptureController
                     catch (Win32Exception ex)
                     {
                         throw new InvalidOperationException(
-                            "Cannot inspect existing PresentMon PID " + process.Id +
-                            "; refusing to start a duplicate.", ex);
+                            "Cannot inspect PresentMon PID " + process.Id +
+                            "; refusing to manipulate an unverified process.", ex);
                     }
                     var currentOwner = PresentMonLifecyclePolicy.IsOwnedProcess(root, livePath);
-                    // A previous version extracted in a different GCO folder is
-                    // also ours if it has the same pinned bytes and package layout.
+                    // A previous GCO extraction remains owned only when the
+                    // executable has identical official bytes and package path.
                     var previousGco = livePath.EndsWith(expectedPart, StringComparison.OrdinalIgnoreCase) &&
                         File.Exists(livePath) &&
                         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(livePath)))
                             .Equals(officialHash, StringComparison.OrdinalIgnoreCase);
                     if (!currentOwner && !previousGco)
                         throw new InvalidOperationException(
-                            "Another non-GCO PresentMon is running (PID " + process.Id +
-                            "). Close it before starting a GCO capture.");
-                    process.Kill(entireProcessTree: true);
-                    if (!process.WaitForExit(10000))
-                        throw new InvalidOperationException(
-                            "Previous PresentMon PID " + process.Id +
-                            " did not exit. No duplicate was launched.");
+                            "Non-GCO PresentMon PID " + process.Id +
+                            " is running. Close it manually before GCO capture.");
+                    ownedPids.Add(process.Id);
+                }
+            }
+
+            // PresentMon 2.6.0 supports a graceful, source-owned session stop.
+            // Never Process.Kill() the CSV writer before it has flushed.
+            if (ownedPids.Count > 0 || action == "stop")
+            {
+                var stop = new ProcessStartInfo(presentMon)
+                {
+                    UseShellExecute = false, CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(presentMon)!
+                };
+                foreach (var arg in PresentMonLifecyclePolicy.StopArguments())
+                    stop.ArgumentList.Add(arg);
+                using var stopping = Process.Start(stop) ??
+                    throw new InvalidOperationException("PresentMon session terminator did not start.");
+                if (!stopping.WaitForExit(15000))
+                    throw new TimeoutException("PresentMon session termination did not complete.");
+                if (!PresentMonLifecyclePolicy.StopExitAccepted(stopping.ExitCode, ownedPids.Count))
+                    throw new InvalidOperationException(
+                        "PresentMon session terminator exited " + stopping.ExitCode + ".");
+                foreach (var ownedPid in ownedPids)
+                {
+                    try
+                    {
+                        using var previous = Process.GetProcessById(ownedPid);
+                        if (!previous.WaitForExit(15000))
+                            throw new TimeoutException(
+                                "Previous PresentMon PID " + ownedPid + " did not flush and exit.");
+                    }
+                    catch (ArgumentException) { /* PID has exited */ }
                 }
             }
 
@@ -164,12 +192,8 @@ internal static class PresentMonCaptureController
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(presentMon)!
                 };
-                foreach (var argument in new[]
-                {
-                    "--process_name", "Cyberpunk2077.exe",
-                    "--hotkey", "F11", "--session_name", "GCO",
-                    "--output_file", csv
-                }) launch.ArgumentList.Add(argument);
+                foreach (var argument in PresentMonLifecyclePolicy.StartArguments(csv))
+                    launch.ArgumentList.Add(argument);
                 // This controller already runs elevated. Do NOT also pass
                 // --restart_as_admin or request a second UAC transition.
                 using var spawned = Process.Start(launch)
@@ -186,8 +210,8 @@ internal static class PresentMonCaptureController
                 action,
                 pid,
                 detail = action == "restart"
-                    ? "Previous GCO PresentMon closed; one new process started."
-                    : "GCO PresentMon stopped."
+                    ? "GCO PresentMon started with no hotkey; CSV recording is continuous."
+                    : "GCO PresentMon ETW session ended gracefully; CSV writer exited."
             }));
             return 0;
             }

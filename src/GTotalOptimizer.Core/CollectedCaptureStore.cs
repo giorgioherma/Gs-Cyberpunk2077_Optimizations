@@ -7,7 +7,8 @@ public sealed record CollectedFile(string Path, long Bytes, string Sha256);
 public sealed record CollectedOwner(string SourceArchive, List<CollectedFile> Files);
 public sealed record CollectedCaptureIndex(
     string SessionId, string GameRoot, CollectedOwner? Cet, CollectedOwner? Redscript,
-    string? FrameTimeCsv, bool Restored = false, List<string>? Skipped = null)
+    string? FrameTimeCsv, bool Restored = false, List<string>? Skipped = null,
+    CollectedFile? FrameTimeEvidence = null)
 {
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
@@ -47,6 +48,26 @@ public static class CollectedCaptureStore
             throw new InvalidDataException("GCO collection does not belong to current install session.");
         if (item.Cet is not null) Verify(root, id, "CET", item.Cet, verifyHashes);
         if (item.Redscript is not null) Verify(root, id, "REDscript", item.Redscript, verifyHashes);
+        if (item.FrameTimeCsv is not null)
+        {
+            if (item.FrameTimeEvidence is null)
+                throw new InvalidDataException("Frame-time data has no SHA-256 provenance.");
+            var expected = Path.GetFullPath(Path.Combine(SessionFolder(root, id),
+                item.FrameTimeEvidence.Path.Replace('/', Path.DirectorySeparatorChar)));
+            var relative = Path.GetRelativePath(SessionFolder(root, id), expected);
+            if (Path.IsPathRooted(relative) || relative == ".." ||
+                relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+                !string.Equals(expected, Path.GetFullPath(item.FrameTimeCsv),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("PresentMon evidence is outside its capture session.");
+            PresentMonLifecyclePolicy.ValidateOutputCsv(root, expected);
+            if (!File.Exists(expected) ||
+                (File.GetAttributes(expected) & FileAttributes.ReparsePoint) != 0 ||
+                new FileInfo(expected).Length != item.FrameTimeEvidence.Bytes ||
+                (verifyHashes && !Hash(expected).Equals(item.FrameTimeEvidence.Sha256,
+                    StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("Collected PresentMon CSV is missing or modified.");
+        }
         return item;
     }
     private static string Hash(string path)
@@ -128,6 +149,26 @@ public static class CollectedCaptureStore
             if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true);
         }
     }
+    public static CollectedCaptureIndex CollectPresentMon(string root, string game,
+        string sessionId, string csv)
+    {
+        var path = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
+        var folder = SessionFolder(root, sessionId);
+        var relative = Path.GetRelativePath(folder, path);
+        if (Path.IsPathRooted(relative) || relative == ".." ||
+            relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new InvalidDataException("PresentMon CSV belongs to a different capture session.");
+        var state = Read(root, game, sessionId, verifyHashes: true);
+        // Capture is not counted unless the source-generated CSV has real
+        // Cyberpunk frame rows. Collection needs no CET/GRSP completion.
+        PresentMonLifecyclePolicy.CountVerifiedFrames(path);
+        var proof = new CollectedFile(relative.Replace(Path.DirectorySeparatorChar, '/'),
+            new FileInfo(path).Length, Hash(path));
+        state = state with { FrameTimeCsv = path, FrameTimeEvidence = proof };
+        Write(root, state);
+        return state;
+    }
+
     public static void MarkRestored(string root, CollectedCaptureIndex state,
         bool skipCet, bool skipRedscript, bool skipFrameTime)
     {

@@ -15,11 +15,11 @@ try
         "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
 
     Require(SetupCopy.CapFrameXProcess ==
-        "Frame-time provider paused after crash; CET + REDscript captures remain available.",
+        "PresentMon records without a hotkey; only CET and REDscript use F11.",
         "instructions name CapX process detection exactly");
     Require(SetupCopy.CaptureStartInstruction ==
         "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.\r\n" +
-        "REDscript uses audio signals; CET displays its capture timer in the upper left corner.",
+        "PresentMon records automatically; CET shows its timer and REDscript uses audio signals.",
         "start/stop capture instructions retain both full lines and sound/timer cues");
     Require(SetupCopy.CaptureStartInstruction.Split("\r\n").Length == 2 &&
         SetupPageLayout.InstructionsHeight == 272 &&
@@ -27,9 +27,9 @@ try
         "instructions box expands exactly one row, without compressing existing instructions");
     Require(SetupCopy.StepInstall ==
         "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required." &&
-        SetupCopy.StepStart == "2. START CYBERPUNK — Record CET and REDscript; frame-time currently disabled." &&
+        SetupCopy.StepStart == "2. START CYBERPUNK — PresentMon auto-records; CET + REDscript use F11." &&
         SetupCopy.StepCollect ==
-        "3. COLLECT RESULTS — Copy completed captures; Continue restores originals.",
+        "3. COLLECT RESULTS — Stop PresentMon, copy captures; Continue restores originals.",
         "restore original cyan/gray workflow descriptions next to profiler/key rows");
     Require(SetupCopy.CaptureDetails.Contains("aim for heavy combat") &&
         SetupCopy.CaptureDetails.Contains("If you're having issues getting a longer combat capture, fight police.") &&
@@ -353,6 +353,65 @@ try
     catch (InvalidDataException) { pmTraversalRejected = true; }
     Require(pmTraversalRejected,
         "elevated PresentMon helper refuses destinations outside its own RESULTS");
+    // PresentMon CLI contracts: no RegisterHotKey; dedicated ETW session
+    // terminator flushes on Collect, not on profiler restore.
+    var automaticCsv = PresentMonLifecyclePolicy.NewSessionCsv(pmRoot, sessionId);
+    Require(PresentMonLifecyclePolicy.ValidateOutputCsv(pmRoot, automaticCsv) == automaticCsv &&
+        automaticCsv.Contains(Path.Combine("GCO-Capture-" + sessionId, "FrameTime")),
+        "fresh PresentMon output lives inside the current GCO capture under RESULTS");
+    var startArgs = PresentMonLifecyclePolicy.StartArguments(automaticCsv);
+    var stopArgs = PresentMonLifecyclePolicy.StopArguments();
+    Require(startArgs.Contains("--process_name") &&
+        startArgs.Contains("Cyberpunk2077.exe") &&
+        startArgs.Contains("--date_time") &&
+        startArgs.Contains("--no_track_input") &&
+        startArgs.Contains("--stop_existing_session") &&
+        startArgs.Contains("--output_file") &&
+        startArgs.Contains(automaticCsv) &&
+        !startArgs.Contains("--hotkey") &&
+        !startArgs.Contains("--terminate_on_proc_exit"),
+        "PresentMon starts continuous ETW capture with no F11 RegisterHotKey");
+    Require(stopArgs.SequenceEqual(new[]
+        { "--terminate_existing_session", "--session_name", PresentMonLifecyclePolicy.SessionName }),
+        "Collect must gracefully terminate the named ETW session");
+    Require(PresentMonLifecyclePolicy.StopExitAccepted(0, 1) &&
+        PresentMonLifecyclePolicy.StopExitAccepted(7, 0) &&
+        !PresentMonLifecyclePolicy.StopExitAccepted(7, 1) &&
+        !PresentMonLifecyclePolicy.StopExitAccepted(2, 0),
+        "PresentMon session-not-found code 7 is safe only without a running owned process");
+    Directory.CreateDirectory(Path.GetDirectoryName(automaticCsv)!);
+    var frameCsvBody = "Application,CPUStartDateTime,MsBetweenPresents,MsInPresentAPI\r\n" +
+        "Cyberpunk2077.exe,2026-11-05T22:40:00.1234567,16.6,0.5\r\n" +
+        "Cyberpunk2077.exe,2026-11-05T22:40:00.1404567,17.0,0.3\r\n";
+    File.WriteAllText(automaticCsv, frameCsvBody);
+    Require(PresentMonLifecyclePolicy.CountVerifiedFrames(automaticCsv) == 2,
+        "frame-time evidence has the expected clock column and real Cyberpunk rows");
+    var frameOnlyId = Guid.NewGuid().ToString("N");
+    var frameOnlyCsv = PresentMonLifecyclePolicy.NewSessionCsv(pmRoot, frameOnlyId);
+    Directory.CreateDirectory(Path.GetDirectoryName(frameOnlyCsv)!);
+    File.WriteAllText(frameOnlyCsv, frameCsvBody);
+    var pmGame = Path.Combine(root, "FrameOnlyGame");
+    Directory.CreateDirectory(pmGame);
+    var onlyMon = CollectedCaptureStore.CollectPresentMon(pmRoot, pmGame, frameOnlyId, frameOnlyCsv);
+    Require(onlyMon.HasAny && onlyMon.Cet is null && onlyMon.Redscript is null &&
+        onlyMon.FrameTimeCsv == frameOnlyCsv && onlyMon.FrameTimeEvidence?.Bytes > 80,
+        "a valid PresentMon-only recording can be collected independently of CET and REDscript");
+    Require(CollectedCaptureStore.Read(pmRoot, pmGame, frameOnlyId, verifyHashes: true)
+        .FrameTimeEvidence is not null,
+        "PresentMon evidence persists in session index with verified SHA-256");
+    File.AppendAllText(frameOnlyCsv, "tamper");
+    var pmChangedRejected = false;
+    try { CollectedCaptureStore.Read(pmRoot, pmGame, frameOnlyId, verifyHashes: true); }
+    catch (InvalidDataException) { pmChangedRejected = true; }
+    Require(pmChangedRejected, "modified PresentMon CSV fails session hash verification");
+    var wrongProcessCsv = PresentMonLifecyclePolicy.NewSessionCsv(pmRoot, Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(Path.GetDirectoryName(wrongProcessCsv)!);
+    File.WriteAllText(wrongProcessCsv, frameCsvBody.Replace("Cyberpunk2077.exe", "NotCyberpunk.exe"));
+    var wrongProcessRejected = false;
+    try { PresentMonLifecyclePolicy.CountVerifiedFrames(wrongProcessCsv); }
+    catch (InvalidDataException) { wrongProcessRejected = true; }
+    Require(wrongProcessRejected, "non-Cyberpunk CSV cannot satisfy frame-time capture");
+
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
         "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");

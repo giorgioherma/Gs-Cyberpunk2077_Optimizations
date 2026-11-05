@@ -6,8 +6,8 @@ public sealed record ProfilerSetupView(
     bool CetInstalled, bool RedscriptInstalled, bool CapXInstalled,
     CaptureKeyCheck CetKey, CaptureKeyCheck CapXKey)
 {
-    // CapFrameX is optional frame-time measurement. CET + GRSP are the actual
-    // required native profilers; a CapX X is still shown if its payload is absent.
+    // CET + GRSP are installed native profilers. The third readout is the
+    // optional frame-time provider; no separate game instrumentation is installed.
     public string Heading => CetInstalled && RedscriptInstalled
         ? "PROFILERS INSTALLED" : "PROFILERS NOT INSTALLED";
 
@@ -51,17 +51,17 @@ public static class SetupCopy
 {
     public const string CaptureStartInstruction =
         "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.\r\n" +
-        "REDscript uses audio signals; CET displays its capture timer in the upper left corner.";
+        "PresentMon records automatically; CET shows its timer and REDscript uses audio signals.";
 
     public const string StepInstall =
         "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
     public const string StepStart =
-        "2. START CYBERPUNK — Record CET and REDscript; frame-time currently disabled.";
+        "2. START CYBERPUNK — PresentMon auto-records; CET + REDscript use F11.";
     public const string StepCollect =
-        "3. COLLECT RESULTS — Copy completed captures; Continue restores originals.";
+        "3. COLLECT RESULTS — Stop PresentMon, copy captures; Continue restores originals.";
 
     public const string CapFrameXProcess =
-        "Frame-time provider paused after crash; CET + REDscript captures remain available.";
+        "PresentMon records without a hotkey; only CET and REDscript use F11.";
 
     public const string CaptureDetails =
         "Stay in-world. Use an old save or Phantom Liberty start; aim for heavy combat.\r\n" +

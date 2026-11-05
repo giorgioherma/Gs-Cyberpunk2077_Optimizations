@@ -658,7 +658,7 @@ internal sealed class MainForm : Form
         // presence and a responding CLI do not establish profiler installation.
         profilerReady.Text = profilerSetup.Heading;
         profilerReady.ForeColor = profilerSetup.Heading == "PROFILERS INSTALLED" ? Green : Amber;
-        stepThree.Text = "Frame-time";
+        stepThree.Text = "PresentMon";
         stepOne.Checked = profilerSetup.CetInstalled;
         stepTwo.Checked = profilerSetup.RedscriptInstalled;
         stepThree.Checked = profilerSetup.CapXInstalled;
@@ -1074,19 +1074,25 @@ internal sealed class MainForm : Form
             profilerSetup = new ProfilerSetupView(
                 status.Cet == "PROFILER_ACTIVE" && status.CetManaged,
                 status.Grsp == "INSTALLED_CURRENT" && status.GrspManaged,
-                false, CaptureKeyInspector.InspectCet(current.GameRoot, true),
-                new CaptureKeyCheck("Frame-time", "Unavailable", false, "PresentMon disabled after crash."));
+                true, CaptureKeyInspector.InspectCet(current.GameRoot, true),
+                new CaptureKeyCheck("PresentMon", "AUTO", true, "Automatic recording; no hotkey registered."));
             UpdateWorkflowVisuals();
             var running = Process.GetProcessesByName("Cyberpunk2077").Length != 0;
             var session = Workflow.HasRecoveryJournal;
             if (!running) captureLaunched = false;
             CollectedCaptureIndex? saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
-            var readyToCollect = status.CanCollect(session, running) &&
+            var trackedFrameCsv = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+            var sameFrameSession = saved is not null && trackedFrameCsv is not null &&
+                Path.GetFullPath(trackedFrameCsv).StartsWith(
+                    CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId) +
+                    Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            var nativeReady = status.CanCollect(session, running) &&
                 ((status.CetCaptureReady && saved?.Cet is null) ||
                  (status.GrspCaptureReady && saved?.Redscript is null));
+            var readyToCollect = nativeReady || session && !running && sameFrameSession;
             install.Enabled = !busy && status.CleanForInstall && !session;
             launch.Enabled = !busy && status.CanLaunch(session, running) &&
-                !status.BothCaptured && !captureLaunched;
+                !status.BothCaptured && !captureLaunched && trackedFrameCsv is null;
             collect.Enabled = !busy && readyToCollect;
             if (!busy && saved?.HasAny == true)
             {
@@ -1102,12 +1108,12 @@ internal sealed class MainForm : Form
                 : saved?.HasAny == true
                     ? "Results saved. Continue restores originals; missing captures require explicit skips."
                     : readyToCollect
-                        ? "Completed capture available. Collect copies results without restoring profilers."
+                        ? "Collect ends PresentMon and copies completed captures; originals remain installed."
                         : status.BothInstalled
                             ? "Profilers installed. No completed captures yet."
                             : session
                                 ? "Session requires recovery. Restore Originals when game is closed."
-                                : $"CET: {status.Cet}  |  REDscript: {status.Grsp}  |  Frame-time: disabled";
+                                : $"CET: {status.Cet}  |  REDscript: {status.Grsp}  |  PresentMon: auto";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1198,14 +1204,47 @@ internal sealed class MainForm : Form
                 throw new FileNotFoundException("Cyberpunk2077.exe is missing.", gameExe);
             if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
                 throw new InvalidOperationException("Combined component provenance is no longer valid.");
-            // PresentMon auto-launch disabled following the user's game crash.
-            // No ETW collector or F11 hotkey contention is introduced here.
-            Process.Start(new ProcessStartInfo(gameExe)
+            var capture = Workflow.ReadCollected(game) ??
+                throw new InvalidOperationException("GCO capture session identity is unavailable.");
+            var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, capture.SessionId);
+            string? frameWarning = null;
+            try
             {
-                UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
-            });
+                // PresentMon records from launch without RegisterHotKey.
+                // F11 remains solely CET + REDscript input.
+                await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
+            }
+            catch (Exception ex)
+            {
+                frameWarning = ex.Message;
+            }
+            try
+            {
+                Process.Start(new ProcessStartInfo(gameExe)
+                {
+                    UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
+                }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
+            }
+            catch
+            {
+                // If launching the game fails, do not abandon a live ETW
+                // session. Preserve its tracked path if termination fails.
+                var tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+                if (tracked is not null)
+                {
+                    await PresentMonCaptureController.RunAsync(packageRoot, tracked, restart: false);
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                }
+                throw;
+            }
             captureLaunched = true;
-            pageOneStatus.Text = "Game launched without PresentMon. F11 starts/stops CET + REDscript. Close game before Collect.";
+            pageOneStatus.Text = frameWarning is null
+                ? "PresentMon recording automatically. F11 starts/stops CET + REDscript. Collect ends PresentMon."
+                : "Game launched. PresentMon failed to start; CET + REDscript remain usable.";
+            if (frameWarning is not null)
+                MessageBox.Show(this, "PresentMon unavailable: " + frameWarning +
+                    Environment.NewLine + "The game launched with CET + REDscript. Frame-time can be skipped.",
+                    "Optional frame-time capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
@@ -1236,9 +1275,42 @@ internal sealed class MainForm : Form
             return;
         }
         SetWorkflowBusy(true);
-        pageOneStatus.Text = "Copying owner archives to GCO RESULTS; no restoration...";
+        pageOneStatus.Text = "Stopping PresentMon and copying captured data to RESULTS. No restoration...";
         try
         {
+            var current = Workflow.ReadCollected(game);
+            if (current is null)
+                throw new InvalidOperationException("No current GCO installation session.");
+            string? frameWarning = null;
+            var tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+            if (tracked is not null)
+            {
+                try
+                {
+                    var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, current.SessionId) +
+                        Path.DirectorySeparatorChar;
+                    if (!Path.GetFullPath(tracked).StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("Tracked frame-time data belongs to another session.");
+                    // Collect is the explicit and ONLY normal PresentMon stop.
+                    await PresentMonCaptureController.RunAsync(packageRoot, tracked, restart: false);
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                    try
+                    {
+                        CollectedCaptureStore.CollectPresentMon(packageRoot, game, current.SessionId, tracked);
+                    }
+                    catch (Exception ex)
+                    {
+                        frameWarning = "PresentMon stopped but no usable Cyberpunk CSV: " + ex.Message;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    frameWarning = "PresentMon stop failed: " + ex.Message +
+                        ". Retry Collect before Continue.";
+                }
+            }
+            // CET and GRSP are collected independently through their original
+            // managers, without restoring either game's native payload.
             var result = await Workflow.CollectResultsAsync(game);
             var saved = Workflow.ReadCollected(game);
             if (saved?.HasAny == true)
@@ -1248,10 +1320,16 @@ internal sealed class MainForm : Form
                     "CET copied to " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
                 redReport.Text = saved.Redscript is null ? "REDscript capture not available." :
                     "REDscript copied to " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
+                redReport.Text += saved.FrameTimeCsv is null
+                    ? Environment.NewLine + "PresentMon: not available / explicit skip required."
+                    : Environment.NewLine + "PresentMon CSV: " + saved.FrameTimeCsv +
+                      " (time alignment pending)";
             }
-            if (!result.Ok)
-                MessageBox.Show(this, result.Detail, "Capture collection",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            pageOneStatus.Text = result.Detail + (frameWarning is null ? "" : " " + frameWarning);
+            if (!result.Ok || frameWarning is not null)
+                MessageBox.Show(this, result.Detail +
+                    (frameWarning is null ? "" : Environment.NewLine + frameWarning),
+                    "Capture collection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
@@ -1342,6 +1420,12 @@ internal sealed class MainForm : Form
             return;
         }
         if (saved?.HasAny != true) return;
+        if (PresentMonCaptureController.ReadTrackedCsv(packageRoot) is not null)
+        {
+            MessageBox.Show(this, "PresentMon must be stopped with COLLECT RESULTS before Continue.",
+                "Frame-time capture still active", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         var skip = ConfirmMissingCaptureSkips(saved);
         if (skip is null) return;
         SetWorkflowBusy(true);
@@ -1366,6 +1450,9 @@ internal sealed class MainForm : Form
                 "CET capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
             redReport.Text = saved.Redscript is null ? "REDscript skipped by user." :
                 "REDscript capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
+            redReport.Text += saved.FrameTimeCsv is null
+                ? Environment.NewLine + "Frame-time skipped or unavailable."
+                : Environment.NewLine + "PresentMon CSV verified: " + saved.FrameTimeCsv;
             openResults.Enabled = true;
             pageOne.Visible = false; pageTwo.Visible = true; pageTwo.BringToFront();
         }

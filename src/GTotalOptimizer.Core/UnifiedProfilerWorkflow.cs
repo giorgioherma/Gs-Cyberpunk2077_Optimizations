@@ -225,10 +225,14 @@ public sealed class UnifiedProfilerWorkflow
         LiveProfilerState state;
         try { state = await InspectAsync(game, token); }
         catch (Exception ex) { return new(false, "Owner capture status unavailable: " + ex.Message); }
-        if (!state.BothInstalled)
-            return new(false, "Both installed owner profilers must be verified before collection.");
+        if (!state.BothInstalled && !saved.HasAny)
+            return new(false, "Profiler owners are not both installed and no frame-time evidence was saved.");
         if (!state.CetCaptureReady && !state.GrspCaptureReady && !saved.HasAny)
-            return new(false, "Neither profiler has a completed F11 capture. No results collected.");
+            return new(false, "No completed CET, REDscript or frame-time capture.");
+        if (!state.BothInstalled)
+            return new(true, "Only verified frame-time evidence collected; profiler owner state requires recovery. " +
+                "Original game files are still instrumented until Continue or explicit Restore.",
+                CaptureVerified: saved.HasAny);
 
         try
         {
@@ -273,6 +277,10 @@ public sealed class UnifiedProfilerWorkflow
         try { saved = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true); }
         catch (Exception ex) { return new(false, "Saved collection verification failed: " + ex.Message); }
         if (!saved.HasAny) return new(false, "Collect at least one completed capture first.");
+        // The external ETW collector must be stopped at Collect, not during
+        // the native-owner restoration transition.
+        if (File.Exists(Path.Combine(packageRoot, "RESULTS", "GCO-current-PresentMon.txt")))
+            return new(false, "PresentMon is not yet collected. Use COLLECT RESULTS to stop it first.");
         if ((saved.Cet is null && !skipCet) ||
             (saved.Redscript is null && !skipRedscript) ||
             (saved.FrameTimeCsv is null && !skipFrameTime))
