@@ -621,4 +621,18 @@ finally
 {
     try { Directory.Delete(root, true); } catch { }
 }
-Console.WriteLine($"PASS {checks} read-only installation/CLI contracts.");
+if (args.Length > 0)
+{
+    Require(args.Length == 1, "exactly one packaged GCO directory supplied");
+    var delivered = Path.GetFullPath(args[0]);
+    Require(Directory.Exists(delivered), "finished GCO package directory exists");
+    Require(PortablePackagePaths.RootFromAppDirectory(Path.Combine(delivered, "app")) == delivered,
+        "actual packaged managed app resolves root shared with native launcher and components");
+    Require(File.Exists(Path.Combine(delivered, "G-Total-Optimizer.exe")),
+        "final GCO package includes public native launcher");
+    var verification = ComponentBundleVerifier.Inspect(delivered);
+    Require(verification.Ready,
+        "finished CI package contains both profiler managers and all required verified payloads: " +
+        verification.Detail);
+}
+Console.WriteLine($"PASS {checks} installation/CLI/package contracts.");
