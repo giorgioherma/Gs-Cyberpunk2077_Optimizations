@@ -230,15 +230,44 @@ try
     var items = new[]
     {
         new { id = "cet", executable = "components/cet/G-CET-Runtime-Profiler.exe",
-            sha256 = Hash(cetBundleExe), sourceCommit = new string('a', 40), ciRun = 1, artifactId = 1 },
+            sha256 = Hash(cetBundleExe), sourceCommit = new string('a', 40), ciRun = 1, artifactId = 1,
+            releaseSha256 = new string('a', 64) },
         new { id = "grsp", executable = "components/grsp/G-REDscript-Profiler.exe",
-            sha256 = Hash(redBundleExe), sourceCommit = new string('b', 40), ciRun = 2, artifactId = 2 }
+            sha256 = Hash(redBundleExe), sourceCommit = new string('b', 40), ciRun = 0, artifactId = 0,
+            releaseSha256 = new string('b', 64) }
     };
+    var payloadPaths = new[]
+    {
+        "components/cet/payload/cyber_engine_tweaks.PROFILER.dll",
+        "components/cet/payload/0-Engine/modules/G-CET/Scheduler.lua",
+        "components/cet/payload/CETProfilerControls/init.lua",
+        "components/grsp/payload/G-REDscript-Profiler.dll",
+        "components/presentmon/PresentMon.exe"
+    };
+    var payloads = payloadPaths.Select(path =>
+    {
+        var full = Path.Combine(bundleDir, path.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "payload fixture: " + path);
+        return new { path, sha256 = Hash(full) };
+    }).ToArray();
     var manifestPath = Path.Combine(bundleDir, "components", "manifest.json");
     File.WriteAllText(manifestPath, System.Text.Json.JsonSerializer.Serialize(
-        new { schemaVersion = 1, components = items }));
+        new { schemaVersion = 2, components = items, payloads }));
     Require(ComponentBundleVerifier.Inspect(bundleDir).Ready,
         "complete SHA-matched source/CI-staged component manifest passes read-only identity gate");
+    var goodStatus = LiveProfilerStateParser.Parse(
+        "{\\"ok\\":true,\\"cet\\":\\"OFFICIAL\\",\\"managed\\":false,\\"captureReadyForCollection\\":false}",
+        "{\\"ok\\":true,\\"result\\":{\\"State\\":\\"NOT_INSTALLED\\",\\"ManagedStatePresent\\":false,\\"CompletedCaptureCount\\":0,\\"LegacyDllPresent\\":false}}");
+    Require(goodStatus.CleanForInstall && !goodStatus.BothInstalled,
+        "CET/GRSP real owner JSON fields establish clean preflight without guessing");
+    var installedStatus = LiveProfilerStateParser.Parse(
+        "{\\"ok\\":true,\\"cet\\":\\"PROFILER_ACTIVE\\",\\"managed\\":true,\\"captureReadyForCollection\\":true}",
+        "{\\"ok\\":true,\\"result\\":{\\"State\\":\\"INSTALLED_CURRENT\\",\\"ManagedStatePresent\\":true,\\"CompletedCaptureCount\\":1,\\"LegacyDllPresent\\":false}}");
+    Require(installedStatus.BothInstalled && installedStatus.BothCaptured,
+        "both owner-reported installed payloads and captured state verified before collection");
+    Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
+        "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Ready,
         "component drift disables installer");
