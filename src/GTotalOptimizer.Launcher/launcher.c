@@ -17,6 +17,27 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
     if (!slash) return 1;
     *slash = 0;
 
+    // Prefer the bundle's single private .NET 10 Desktop Runtime when it is
+    // present. This changes only the environment of this launcher's child
+    // process, not the user's Windows or system-wide .NET installation.
+    // Legacy self-contained shell packages continue to run unchanged.
+    wchar_t dotnetRoot[MAX_PATH * 4] = {0};
+    wchar_t dotnetExe[MAX_PATH * 4] = {0};
+    if (wcscpy_s(dotnetRoot, ARRAYSIZE(dotnetRoot), root) == 0 &&
+        wcscat_s(dotnetRoot, ARRAYSIZE(dotnetRoot), L"\\runtime") == 0 &&
+        wcscpy_s(dotnetExe, ARRAYSIZE(dotnetExe), dotnetRoot) == 0 &&
+        wcscat_s(dotnetExe, ARRAYSIZE(dotnetExe), L"\\dotnet.exe") == 0)
+    {
+        DWORD rtAttrs = GetFileAttributesW(dotnetExe);
+        if (rtAttrs != INVALID_FILE_ATTRIBUTES && !(rtAttrs & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            SetEnvironmentVariableW(L"DOTNET_ROOT_X64", dotnetRoot);
+            SetEnvironmentVariableW(L"DOTNET_ROOT", dotnetRoot);
+            SetEnvironmentVariableW(L"G_TOTAL_PRIVATE_DOTNET", dotnetRoot);
+            SetEnvironmentVariableW(L"DOTNET_MULTILEVEL_LOOKUP", L"0");
+        }
+    }
+
     wchar_t exe[MAX_PATH * 4] = {0};
     if (wcscpy_s(exe, ARRAYSIZE(exe), root) != 0 ||
         wcscat_s(exe, ARRAYSIZE(exe), L"\\app\\G-Total-Optimizer.App.exe") != 0)
