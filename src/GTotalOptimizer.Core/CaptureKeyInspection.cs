@@ -23,6 +23,11 @@ public static class CaptureKeyInspector
         ];
     }
 
+    // Reads only the player's actual binding. This does NOT assert profiler
+    // payload installation or capture readiness.
+    public static CaptureKeyCheck ReadCetBinding(string? gameRoot) =>
+        InspectCet(gameRoot, backendPresent: true);
+
     public static CaptureKeyCheck InspectCet(string? gameRoot, bool backendPresent)
     {
         if (string.IsNullOrWhiteSpace(gameRoot) || !backendPresent)
@@ -45,9 +50,19 @@ public static class CaptureKeyInspector
                 JsonValueKind.String when long.TryParse(value.GetString(), out var number) => number,
                 _ => -1L
             };
-            return found == CetF11Code
-                ? new("CET", "F11", true, "Existing CET capture toggle is F11.")
-                : new("CET", "CUSTOM", false, "Existing binding is preserved. Set F11 manually in CET before capture.");
+            if (found < 0)
+                return new("CET", "Unknown", false, "CET binding value was not readable.");
+            if (found == CetF11Code)
+                return new("CET", "F11", true, "Existing CET capture toggle is F11.");
+
+            // Decode CET function-key VK bytes so F10/F12 are shown as actually
+            // configured, instead of the vague CUSTOM label.
+            var vk = (int)((found >> 48) & 0xFF);
+            var display = vk is >= 0x70 and <= 0x87
+                ? "F" + (vk - 0x70 + 1)
+                : "CUSTOM";
+            return new("CET", display, false,
+                "Existing binding preserved; REDscript uses fixed F11.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

@@ -13,6 +13,40 @@ try
     Directory.CreateDirectory(root);
     Require(!Mo2FeatureGate.Enabled,
         "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
+
+    Require(SetupCopy.CapFrameXProcess ==
+        "Make sure Cyberpunk 2077 is detected in CapX and is the ONLY process.",
+        "instructions name CapX process detection exactly");
+    Require(SetupCopy.CaptureDetails.Contains("aim for heavy combat") &&
+        SetupCopy.CaptureDetails.Contains("If you're having issues getting a longer combat capture, fight police.") &&
+        SetupCopy.CaptureDetails.Contains("If you die, stop recording with F11") &&
+        SetupCopy.CaptureDetails.Contains("return to this screen") &&
+        SetupCopy.CaptureDetails.Split("\r\n").Length == 3,
+        "revised combat, death and return instructions preserve three-line layout");
+
+    var unverified = ProfilerSetupView.Unverified();
+    Require(unverified.Heading == "PROFILERS NOT INSTALLED" &&
+        !unverified.CetInstalled && !unverified.RedscriptInstalled && !unverified.CapXInstalled,
+        "no displayed green profiler install check without authoritative payload evidence");
+    Require(unverified.CetKeyDisplay.Contains("F11") && unverified.CapXKeyDisplay.Contains("F11") &&
+        unverified.SynchronizationWarning is null,
+        "unproven keys show proposed F11 preset without asserting detection or false mismatch");
+    var synced = new ProfilerSetupView(false, false, false,
+        new CaptureKeyCheck("CET", "F11", true, "detected"),
+        new CaptureKeyCheck("CapFrameX", "F11", true, "detected"));
+    Require(synced.SynchronizationWarning is null && synced.Heading == "PROFILERS NOT INSTALLED",
+        "F11 detection is not installation proof");
+    var allRequired = synced with { CetInstalled = true, RedscriptInstalled = true };
+    Require(allRequired.Heading == "PROFILERS INSTALLED" && !allRequired.CapXInstalled,
+        "verified CET and REDscript profilers allow installed heading; optional CapX remains unchecked");
+    var unsynced = allRequired with
+    {
+        CetKey = new CaptureKeyCheck("CET", "F10", false, "user custom"),
+        CapXKey = new CaptureKeyCheck("CapFrameX", "F9", false, "user custom")
+    };
+    Require(unsynced.SynchronizationWarning?.Contains("CET and CapX keybinds to F11") == true &&
+        unsynced.Heading == "PROFILERS INSTALLED",
+        "yellow keybind advisory does not falsely uninstall components or block controlled test workflow");
     Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: false),
         "Normal setup fits reference window without a scrollbar");
     Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: true),
@@ -118,6 +152,12 @@ try
     Require(!CaptureKeyInspector.InspectCet(root, true).Confirmed, "missing CET binding is pending, never falsely green");
     File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":34339947158700032}}");
     Require(CaptureKeyInspector.InspectCet(root, true).Confirmed, "CET F11 numeric binding recognized");
+    Require(CaptureKeyInspector.ReadCetBinding(root).Value == "F11",
+        "read-only CET binding inspection works without asserting installed profiler");
+    File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":34058472181989376}}");
+    Require(CaptureKeyInspector.ReadCetBinding(root).Value == "F10" &&
+        !CaptureKeyInspector.ReadCetBinding(root).Confirmed,
+        "CET F10 is displayed as detected key and not as synchronized F11");
     File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":123}}");
     var custom = CaptureKeyInspector.InspectCet(root, true);
     Require(custom.Value == "CUSTOM" && !custom.Confirmed, "existing custom CET key is preserved, not claimed synchronized");

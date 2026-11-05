@@ -59,9 +59,14 @@ internal sealed class MainForm : Form
         AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
     };
     private readonly Label profilerReady = Readout();
-    private readonly Label stepOne = Readout();
-    private readonly Label stepTwo = Readout();
-    private readonly Label stepThree = Readout();
+    private readonly CheckBox stepOne = SourceCheck("CET");
+    private readonly CheckBox stepTwo = SourceCheck("REDscript");
+    private readonly CheckBox stepThree = SourceCheck("CapX");
+    private readonly Label cetCaptureKey = Readout();
+    private readonly Label redCaptureKey = Readout();
+    private readonly Label capxCaptureKey = Readout();
+    private readonly Label captureKeyWarning = Readout();
+    private ProfilerSetupView profilerSetup = ProfilerSetupView.Unverified();
     private GroupBox? sourceSection;
     private readonly Label sourceStatus = Readout();
     private readonly Label pageOneStatus = Readout();
@@ -384,7 +389,7 @@ internal sealed class MainForm : Form
         var conflicts = Readout();
         conflicts.Text =
             "Temporarily unbind other mods or game controls using F11 (CET and Settings).\r\n" +
-            "Make sure Cyberpunk 2077 is the ONLY process selected in CapFrameX.";
+            SetupCopy.CapFrameXProcess;
         conflicts.ForeColor = TextColor;
         conflicts.Font = new Font("Segoe UI", 9.2f);
         conflicts.SetBounds(15, 67, 890, 37);
@@ -414,10 +419,8 @@ internal sealed class MainForm : Form
         var detail = Readout();
         detail.ForeColor = TextColor;
         detail.Font = new Font("Segoe UI", 9f);
-        detail.Text =
-            "Stay in-world. Use an old save or Phantom Liberty start; fight police for heavy combat.\r\n" +
-            "If you die, stop with F11 before loading. Captures under five minutes also work.\r\n" +
-            "Close the game, return here and use COLLECT RESULTS / RESTORE.";
+        detail.Text = SetupCopy.CaptureDetails;
+        detail.Font = new Font("Segoe UI", 8.8f);
         detail.SetBounds(15, 184, 890, 55);
         detail.TextAlign = ContentAlignment.TopLeft;
         guide.Controls.Add(detail);
@@ -430,25 +433,37 @@ internal sealed class MainForm : Form
         };
         setupContent.Controls.Add(guide, 0, 1);
 
-        var steps = Section("Profiler status — install → capture → restore", 142);
+        var steps = Section("PROFILER STATUS / CAPTURE KEYBINDS", 142);
         steps.Dock = DockStyle.Fill;
         steps.Margin = new Padding(0, 2, 0, 2);
         profilerReady.ForeColor = Amber;
         profilerReady.Font = new Font("Segoe UI Semibold", 11.2f, FontStyle.Bold);
         profilerReady.SetBounds(16, 26, 885, 23);
         steps.Controls.Add(profilerReady);
-        stepOne.SetBounds(16, 55, 885, 19);
-        stepTwo.SetBounds(16, 77, 885, 19);
-        stepThree.SetBounds(16, 99, 885, 19);
-        foreach (var step in new[] { stepOne, stepTwo, stepThree })
+        var checks = new[] { stepOne, stepTwo, stepThree };
+        var keys = new[] { cetCaptureKey, redCaptureKey, capxCaptureKey };
+        for (var i = 0; i < checks.Length; i++)
         {
-            step.Font = new Font("Segoe UI", 9f);
-            steps.Controls.Add(step);
+            var y = 55 + i * 26;
+            checks[i].SetBounds(16, y, 185, 23);
+            checks[i].Font = new Font("Segoe UI Semibold", 9.5f);
+            checks[i].ForeColor = TextColor;
+            steps.Controls.Add(checks[i]);
+            keys[i].SetBounds(233, y, 330, 23);
+            keys[i].Font = new Font("Consolas", 9.5f);
+            keys[i].ForeColor = TextColor;
+            steps.Controls.Add(keys[i]);
         }
+        captureKeyWarning.Font = new Font("Segoe UI", 9f);
+        captureKeyWarning.ForeColor = Amber;
+        captureKeyWarning.TextAlign = ContentAlignment.TopLeft;
+        captureKeyWarning.SetBounds(16, 139, 885, 38);
+        steps.Controls.Add(captureKeyWarning);
         steps.Resize += (_, _) =>
         {
             var width = Math.Max(350, steps.ClientSize.Width - 32);
-            profilerReady.Width = stepOne.Width = stepTwo.Width = stepThree.Width = width;
+            profilerReady.Width = captureKeyWarning.Width = width;
+            foreach (var label in keys) label.Width = Math.Max(100, width - 233);
         };
         setupContent.Controls.Add(steps, 0, 2);
         UpdateWorkflowVisuals();
@@ -584,14 +599,21 @@ internal sealed class MainForm : Form
 
     private void UpdateWorkflowVisuals()
     {
-        // The current build contains no verified combined session. Never manufacture readiness.
-        profilerReady.Text = "PROFILER NOT INSTALLED";
-        profilerReady.ForeColor = Amber;
-        stepOne.Text = "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
-        stepTwo.Text = "2. START CYBERPUNK — Record a capture using all profilers.";
-        stepThree.Text = "3. COLLECT RESULTS / RESTORE — Close game, collect results, restore files and continue.";
-        stepOne.ForeColor = Cyan;
-        stepTwo.ForeColor = stepThree.ForeColor = Color.FromArgb(104, 118, 126);
+        // Only authoritative install/restore transactions with verified payload
+        // identity may set these to true. Game paths, source checks, binding
+        // presence and a responding CLI do not establish profiler installation.
+        profilerReady.Text = profilerSetup.Heading;
+        profilerReady.ForeColor = profilerSetup.Heading == "PROFILERS INSTALLED" ? Green : Amber;
+        stepOne.Checked = profilerSetup.CetInstalled;
+        stepTwo.Checked = profilerSetup.RedscriptInstalled;
+        stepThree.Checked = profilerSetup.CapXInstalled;
+        cetCaptureKey.Text = profilerSetup.CetKeyDisplay;
+        redCaptureKey.Text = "F11 (fixed)";
+        capxCaptureKey.Text = profilerSetup.CapXKeyDisplay;
+        var warning = profilerSetup.SynchronizationWarning;
+        captureKeyWarning.Text = warning ?? "";
+        captureKeyWarning.Visible = warning is not null;
+        // Keybind mismatch is advisory; never change workflow progression.
         next.Enabled = captureAndRestoreVerified;
     }
 
@@ -871,6 +893,11 @@ internal sealed class MainForm : Form
             return;
         }
         inspection = current;
+        // The current shell has no staged/verified native profiler payloads.
+        // Read the actual CET key from live bindings if available, but NEVER
+        // grant an installed check from a binding, directory or loose ASI.
+        profilerSetup = ProfilerSetupView.Unverified(
+            CaptureKeyInspector.ReadCetBinding(current.GameRoot));
         captureAndRestoreVerified = false;
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
