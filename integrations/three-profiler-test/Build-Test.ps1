@@ -2,7 +2,7 @@ param([switch]$Integrated)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.3') { throw "Unexpected unified app version: $version" }
+if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.4') { throw "Unexpected unified app version: $version" }
 $root = if ($Integrated) { Join-Path (Get-Location) ('publish/G-Total-Optimizer-v' + $version) } else { Join-Path (Get-Location) 'triple-test' }
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $temp = Join-Path $env:RUNNER_TEMP 'GTriple'
