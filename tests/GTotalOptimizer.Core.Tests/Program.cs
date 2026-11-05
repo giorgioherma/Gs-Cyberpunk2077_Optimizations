@@ -30,10 +30,21 @@ try
     Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, true)
         >= SetupPageLayout.MinimumWorkflowHeight,
         "larger instructions section leaves all three profiler steps visible without scrolling");
+    var absentPresentation = SetupSourcePresentation.ForNormal(GameInspector.Inspect(root), 0);
+    Require(absentPresentation.IsWarning && !absentPresentation.ShowEngineLink &&
+        !absentPresentation.GamePathConfirmed &&
+        absentPresentation.StatusText == "Select the Cyberpunk 2077 Game root - /Cyberpunk2077",
+        "missing game root has yellow selection guidance, no dependency link and no verified-game tick");
     Require(!GameInspector.Inspect(root).IsValidGame, "empty folder rejected");
     Directory.CreateDirectory(Path.Combine(root, "bin", "x64"));
     File.WriteAllText(Path.Combine(root, "bin", "x64", "Cyberpunk2077.exe"), "");
     Require(GameInspector.Inspect(root).IsValidGame, "game executable proves candidate root");
+    var missingEngineDisplay = SetupSourcePresentation.ForNormal(GameInspector.Inspect(root), 2);
+    Require(missingEngineDisplay.IsWarning && missingEngineDisplay.ShowEngineLink &&
+        missingEngineDisplay.GamePathConfirmed &&
+        missingEngineDisplay.StatusText == "Game found; 0-ENGINE MISSING!!",
+        "valid game with missing 0-Engine remains yellow beside Nexus link and confirms game path");
+
     var initially = GameInspector.Inspect(root).Checks;
     Require(initially.Any(c => c.Name == "REDscript source folder" && c.State == CheckState.Missing),
         "missing redscript not inferred from captures");
@@ -45,6 +56,11 @@ try
     Directory.CreateDirectory(red);
     File.WriteAllText(Path.Combine(red, "Runtime.reds"), "");
     var probe = GameInspector.Inspect(root);
+    var installedEngineDisplay = SetupSourcePresentation.ForNormal(GameInspector.Inspect(root), 249);
+    Require(!installedEngineDisplay.IsWarning && !installedEngineDisplay.ShowEngineLink &&
+        installedEngineDisplay.GamePathConfirmed &&
+        installedEngineDisplay.StatusText.Contains("249 REDscript mods.", StringComparison.Ordinal),
+        "0-Engine present switches normal game status to white with source counts and no warning link");
     Require(probe.Checks.Any(c => c.Name == "0-Engine source" && c.State == CheckState.Unverified),
         "source file detected but not advertised compatible");
     Require(probe.Checks.Any(c => c.Name == "G-REDruntime source" && c.State == CheckState.Unverified),

@@ -107,3 +107,12 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - Keep 'RECORD 5–10 MINUTES IN THE CITY' green; idle/movement/driving/heavy-combat line becomes yellow; the uppercase avoid-menus instruction and all remaining explanatory text stay white. Increase instruction section to display all three bottom lines without clipping.
 - The profiler status remains 'PROFILER NOT INSTALLED'. Step two explains recording with all profilers; step three reads 'COLLECT RESULTS / RESTORE — Close game, collect results and continue'.
 - MO2's missing 0-Engine notice appears above the five source checks, not below them. Page 1 stays non-scrollable at the reference 1010×790 client size, while Page 2 remains scrollable. Version 1.1.0 retained; no backend authorization implied.
+
+
+## 2026-11-05 — Page 1 post-v1.1.1 visual corrections
+- The unresolved Normal/MO2 path outline must be a genuine **one-pixel** magenta border, not a four-pixel magenta-filled panel. Confirmed source paths use CET's subdued border.
+- A valid game root with missing 0-Engine must display `Game found; 0-ENGINE MISSING!!` in amber next to the 0-Engine Nexus link. The normal game status changes to white with mod counts only after 0-Engine is present; a missing game root remains amber and has no 0-Engine link.
+- Normal path checks for 0-Engine, r6/scripts and red4ext/plugins must show their path/missing text **white** and the actual status glyph **red X** or **green tick**. Render the full mixed-color result together to prevent hidden glyphs or clipping.
+- The first line of the instructions receives a green tick whenever a physical Cyberpunk game root is verified. This indicates the game path only, not profiler or MO2 VFS runtime validation.
+- Add a **REFRESH** button at the top right of Page 1 to reread physical paths and MO2 configuration/profile, with no writes to game files.
+- Complete step 3 wording with explicit restoration before continuation. Keep v1.1.1 and component boundaries; do not unlock profiler install/capture/restore/generation from these visual changes.

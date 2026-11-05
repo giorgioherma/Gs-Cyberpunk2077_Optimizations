@@ -42,12 +42,17 @@ internal sealed class MainForm : Form
     private readonly Panel normalPanel = new();
     private readonly Panel mo2Panel = new() { Visible = false };
     private TableLayoutPanel? setupContent;
-    private readonly Label zeroEngineCheck = Readout();
-    private readonly Label scriptsCheck = Readout();
-    private readonly Label red4extCheck = Readout();
-    private readonly Label zeroEngineGlyph = StatusGlyph();
-    private readonly Label scriptsGlyph = StatusGlyph();
-    private readonly Label red4extGlyph = StatusGlyph();
+    private readonly SourcePathCheck zeroEngineCheck = PathCheck();
+    private readonly SourcePathCheck scriptsCheck = PathCheck();
+    private readonly SourcePathCheck red4extCheck = PathCheck();
+    private readonly Label gamePathTick = new()
+    {
+        Text = "✓", ForeColor = Green, BackColor = Color.Transparent,
+        AutoSize = false, Visible = false,
+        Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold),
+        TextAlign = ContentAlignment.MiddleLeft
+    };
+    private readonly Label engineMissingNotice = Readout();
     private readonly Dictionary<TextBox, Panel> pathOutlines = new();
     private readonly LinkLabel zeroEngineLink = new()
     {
@@ -183,6 +188,22 @@ internal sealed class MainForm : Form
         var grid = PageLayout(pageOne, "SETUP",
             "Install the profilers, record gameplay, then collect results and restore.", setup: true);
         setupContent = (TableLayoutPanel)grid.GetControlFromPosition(0, 1)!;
+        var header = (Panel)grid.GetControlFromPosition(0, 0)!;
+        var refreshButton = BrowseAction();
+        refreshButton.Text = "REFRESH";
+        refreshButton.Size = new Size(94, 28);
+        refreshButton.Top = 13;
+        refreshButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        void PlaceRefresh() => refreshButton.Left =
+            Math.Max(0, header.ClientSize.Width - refreshButton.Width - 7);
+        header.Controls.Add(refreshButton);
+        header.Resize += (_, _) => PlaceRefresh();
+        PlaceRefresh();
+        refreshButton.Click += async (_, _) =>
+        {
+            if (mo2Mode.Checked) RefreshMo2Configuration();
+            await RefreshSourceAsync();
+        };
 
         sourceSection = Section("Game folder /Cyberpunk2077", SetupPageLayout.NormalSourceHeight);
         sourceSection.Dock = DockStyle.Fill;
@@ -321,7 +342,11 @@ internal sealed class MainForm : Form
             check.Font = new Font("Segoe UI", 8.8f);
             sourceSection.Controls.Add(check);
         }
-        sourceSection.Controls.AddRange([zeroEngineGlyph, scriptsGlyph, red4extGlyph]);
+        engineMissingNotice.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
+        engineMissingNotice.ForeColor = Amber;
+        engineMissingNotice.Text = "0-ENGINE MISSING!!";
+        engineMissingNotice.Visible = false;
+        sourceSection.Controls.Add(engineMissingNotice);
         zeroEngineLink.Font = new Font("Segoe UI", 8.7f);
         sourceSection.Controls.Add(zeroEngineLink);
 
@@ -336,9 +361,10 @@ internal sealed class MainForm : Form
                 mo2ComponentChecks[i].Width = width / mo2ComponentChecks.Length - 3;
             }
             zeroEngineCheck.Width = Math.Min(610, width);
-            zeroEngineLink.Width = Math.Max(190, width - zeroEngineLink.Left);
+            zeroEngineLink.Width = Math.Max(150,
+                Math.Min(250, width - zeroEngineLink.Left));
             red4extCheck.Width = Math.Max(180, width - red4extCheck.Left);
-            PositionNormalGlyphs();
+            LayoutEngineWarning();
         };
         setupContent.Controls.Add(sourceSection, 0, 0);
 
@@ -352,6 +378,11 @@ internal sealed class MainForm : Form
         provision.Font = new Font("Segoe UI", 9.3f);
         provision.SetBounds(15, 23, 890, 21);
         guide.Controls.Add(provision);
+        guide.Controls.Add(gamePathTick);
+        var provisionSize = TextRenderer.MeasureText(provision.Text, provision.Font,
+            new Size(900, provision.Height), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        gamePathTick.SetBounds(provision.Left + provisionSize.Width + 5,
+            provision.Top, 22, provision.Height);
 
         var start = Readout();
         start.Text = "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.";
@@ -475,16 +506,17 @@ internal sealed class MainForm : Form
         }
         foreach (var check in mo2ComponentChecks) check.Visible = mo2;
         foreach (var check in new Control[]
-            { zeroEngineCheck, scriptsCheck, red4extCheck,
-              zeroEngineGlyph, scriptsGlyph, red4extGlyph })
+            { zeroEngineCheck, scriptsCheck, red4extCheck })
             check.Visible = !mo2;
         if (mo2)
         {
             var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
             // Missing 0-Engine warning belongs ABOVE the five MO2 checks;
             // nothing may extend below the group box bottom border.
-            zeroEngineLink.SetBounds(14, SetupPageLayout.Mo2EngineNoticeTop,
-                Math.Min(width, 550), 18);
+            engineMissingNotice.SetBounds(14, SetupPageLayout.Mo2EngineNoticeTop,
+                170, 18);
+            zeroEngineLink.SetBounds(184, SetupPageLayout.Mo2EngineNoticeTop,
+                Math.Min(width - 170, 260), 18);
             for (var i = 0; i < mo2ComponentChecks.Length; i++)
                 mo2ComponentChecks[i].SetBounds(14 + width * i / 5,
                     SetupPageLayout.Mo2ChecksTop, width / 5 - 3, 20);
@@ -496,8 +528,8 @@ internal sealed class MainForm : Form
             zeroEngineCheck.SetBounds(14, 113, 520, 20);
             scriptsCheck.SetBounds(14, 134, 210, 20);
             red4extCheck.SetBounds(240, 134, 220, 20);
-            zeroEngineLink.SetBounds(685, 113, 220, 20);
-            PositionNormalGlyphs();
+            engineMissingNotice.Visible = false;
+            LayoutEngineWarning();
         }
     }
 
@@ -509,12 +541,10 @@ internal sealed class MainForm : Form
         Cursor = Cursors.Default
     };
 
-    private static Label StatusGlyph() => new()
+    private static SourcePathCheck PathCheck() => new()
     {
-        Text = "✕", ForeColor = Color.FromArgb(255, 95, 112),
-        AutoSize = false, BackColor = Color.Transparent,
-        Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold),
-        TextAlign = ContentAlignment.MiddleLeft
+        BackColor = PanelBg, ForeColor = TextColor,
+        Font = new Font("Segoe UI Semibold", 9.3f)
     };
 
     private static ComboBox SourceDropdown() => new()
@@ -570,7 +600,7 @@ internal sealed class MainForm : Form
         profilerReady.ForeColor = Amber;
         stepOne.Text = "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
         stepTwo.Text = "2. START CYBERPUNK — Record a capture using all profilers.";
-        stepThree.Text = "3. COLLECT RESULTS / RESTORE — Close game, collect results and continue.";
+        stepThree.Text = "3. COLLECT RESULTS / RESTORE — Close game, collect results, restore files and continue.";
         stepOne.ForeColor = Cyan;
         stepTwo.ForeColor = stepThree.ForeColor = Color.FromArgb(104, 118, 126);
         next.Enabled = captureAndRestoreVerified;
@@ -769,9 +799,10 @@ internal sealed class MainForm : Form
 
     private void ConfigureCetPathRow(Panel panel, TextBox field, Button browse, int top)
     {
-        // A 2px outline is drawn by the host panel. The textbox itself stays
-        // CET-sized (26px) and its path stays editable without a clipped border.
+        // One-pixel border: the inner surface covers everything except 1px.
+        // The previous panel left a 4px solid magenta band around a borderless textbox.
         var outline = new Panel { BackColor = Magenta };
+        var surface = new Panel { BackColor = PanelAlt, Margin = Padding.Empty };
         pathOutlines[field] = outline;
         field.AutoSize = false;
         field.Dock = DockStyle.None;
@@ -784,7 +815,15 @@ internal sealed class MainForm : Form
 
         void ArrangeField()
         {
-            field.SetBounds(5, 4, Math.Max(100, outline.ClientSize.Width - 10), 19);
+            var height = Math.Min(19, field.PreferredHeight);
+            field.SetBounds(4, Math.Max(0, (surface.ClientSize.Height - height) / 2),
+                Math.Max(100, surface.ClientSize.Width - 8), height);
+        }
+        void ArrangeOutline()
+        {
+            surface.SetBounds(1, 1, Math.Max(1, outline.ClientSize.Width - 2),
+                Math.Max(1, outline.ClientSize.Height - 2));
+            ArrangeField();
         }
         void Arrange()
         {
@@ -792,11 +831,13 @@ internal sealed class MainForm : Form
             outline.SetBounds(0, top + 2, Math.Max(180, width - 103), 26);
             browse.SetBounds(Math.Max(185, width - 92), top, 92,
                 Math.Min(30, Math.Max(25, panel.ClientSize.Height - top)));
-            ArrangeField();
+            ArrangeOutline();
         }
-        outline.Controls.Add(field);
+        surface.Controls.Add(field);
+        outline.Controls.Add(surface);
         panel.Controls.AddRange([outline, browse]);
-        outline.Resize += (_, _) => ArrangeField();
+        outline.Resize += (_, _) => ArrangeOutline();
+        surface.Resize += (_, _) => ArrangeField();
         panel.Resize += (_, _) => Arrange();
         Arrange();
     }
@@ -903,28 +944,29 @@ internal sealed class MainForm : Form
                                     ? "Select the MO2 profile used to launch Cyberpunk."
                                     : stack?.Detail ?? "Reading the selected MO2 profile.";
             // A valid physical source candidate still needs runtime USVFS proof.
-            zeroEngineLink.Visible = sourceVerified && stack!.CetOwners > 0 && !stack.HasZeroEngine;
+            var mo2EngineMissing = sourceVerified && stack!.CetOwners > 0 && !stack.HasZeroEngine;
+            zeroEngineLink.Visible = mo2EngineMissing;
+            engineMissingNotice.Visible = mo2EngineMissing;
             pageOneStatus.Text = sourceVerified
                 ? "Profile inventory and file winners resolved; MO2 VFS/RootBuilder runtime still unverified."
                 : "MO2 checks require INI, selected profile, enabled modlist and complete winning-file inventory.";
         }
         else
         {
-            sourceStatus.Text = current.IsValidGame
-                ? $"Game found. {current.CetModCount} CET mods and " +
-                    $"{RedscriptModCounter.CountPhysical(current.GameRoot)} REDscript mods."
-                : "Select the Cyberpunk 2077 Game root - /Cyberpunk2077";
-            var engine = current.Checks.Any(c => c.Name == "0-Engine source" &&
-                c.State != GTotalOptimizer.Core.CheckState.Missing);
+            var display = SetupSourcePresentation.ForNormal(
+                current, RedscriptModCounter.CountPhysical(current.GameRoot));
+            sourceStatus.Text = display.StatusText;
+            var engine = !display.ShowEngineLink && display.GamePathConfirmed;
             var scripts = current.Checks.Any(c => c.Name == "REDscript source folder" &&
                 c.State != GTotalOptimizer.Core.CheckState.Missing);
             var plugins = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
                 c.State != GTotalOptimizer.Core.CheckState.Missing);
-            ApplyCheck(zeroEngineCheck, zeroEngineGlyph,
+            ApplyCheck(zeroEngineCheck,
                 "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", engine);
-            ApplyCheck(scriptsCheck, scriptsGlyph, "r6/scripts", scripts);
-            ApplyCheck(red4extCheck, red4extGlyph, "red4ext/plugins", plugins);
-            zeroEngineLink.Visible = current.IsValidGame && !engine;
+            ApplyCheck(scriptsCheck, "r6/scripts", scripts);
+            ApplyCheck(red4extCheck, "red4ext/plugins", plugins);
+            zeroEngineLink.Visible = display.ShowEngineLink;
+            engineMissingNotice.Visible = false;
             pageOneStatus.Text = current.IsValidGame
                 ? "Game detected. Profiler installation and restoration are not yet integrated."
                 : "Select a valid Cyberpunk 2077 game folder.";
@@ -933,7 +975,11 @@ internal sealed class MainForm : Form
         // the dedicated check/X glyphs carry green/red status.
         sourceStatus.ForeColor = mo2Mode.Checked
             ? sourceVerified ? TextColor : Amber
-            : current.IsValidGame ? TextColor : Amber;
+            : SetupSourcePresentation.ForNormal(current,
+                RedscriptModCounter.CountPhysical(current.GameRoot)).IsWarning
+                ? Amber : TextColor;
+        gamePathTick.Visible = current.IsValidGame;
+        LayoutEngineWarning();
         SetPathOutline(sourcePath, current.IsValidGame);
         SetPathOutline(mo2GameRoot, current.IsValidGame);
         SetPathOutline(mo2Folder, mo2Location.HasInstallation);
@@ -955,28 +1001,21 @@ internal sealed class MainForm : Form
         catch (OperationCanceledException) { }
     }
 
-    private void ApplyCheck(Label label, Label glyph, string path, bool present)
+    private static void ApplyCheck(SourcePathCheck label, string path, bool present)
     {
-        label.Text = path + (present ? "" : "  NOT FOUND");
-        label.ForeColor = TextColor;
-        label.Font = new Font("Segoe UI Semibold", 9.3f);
-        glyph.Text = present ? "✓" : "✕";
-        glyph.ForeColor = present ? Green : Color.FromArgb(255, 95, 112);
-        PositionNormalGlyphs();
+        label.SetStatus(path, present);
     }
 
-    private void PositionNormalGlyphs()
+    private void LayoutEngineWarning()
     {
-        PlaceGlyph(zeroEngineCheck, zeroEngineGlyph);
-        PlaceGlyph(scriptsCheck, scriptsGlyph);
-        PlaceGlyph(red4extCheck, red4extGlyph);
-    }
-
-    private static void PlaceGlyph(Label text, Label glyph)
-    {
-        var measured = TextRenderer.MeasureText(text.Text, text.Font,
-            new Size(2000, 24), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-        glyph.SetBounds(text.Left + measured.Width + 5, text.Top, 23, text.Height);
+        if (sourceSection is null || mo2Mode.Checked) return;
+        // Keep the yellow missing-dependency message and link adjacent.
+        var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
+        var textWidth = TextRenderer.MeasureText(sourceStatus.Text, sourceStatus.Font,
+            new Size(width, 22), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+        sourceStatus.Width = Math.Min(width, textWidth + 4);
+        zeroEngineLink.SetBounds(sourceStatus.Left + sourceStatus.Width + 8,
+            sourceStatus.Top, Math.Min(280, Math.Max(100, width - sourceStatus.Width - 12)), 20);
     }
 
     private void ExplainPending(string message) =>
@@ -987,6 +1026,48 @@ internal sealed class MainForm : Form
         scanCancellation?.Cancel();
         scanCancellation?.Dispose();
         base.OnFormClosed(e);
+    }
+}
+
+// Single owner-painted source status: path and NOT FOUND remain white,
+// while the X / tick is rendered next to the actual text in red / green.
+// This avoids native Label transparency/z-order hiding the status glyph.
+internal sealed class SourcePathCheck : Control
+{
+    private string displayPath = "";
+    private bool present;
+
+    internal void SetStatus(string path, bool found)
+    {
+        displayPath = path;
+        present = found;
+        Invalidate();
+    }
+
+    public SourcePathCheck()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer, true);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor);
+        var message = displayPath + (present ? "" : "  NOT FOUND");
+        var flags = TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter |
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        var size = TextRenderer.MeasureText(e.Graphics, message, Font,
+            new Size(2048, Math.Max(20, Height)), flags);
+        TextRenderer.DrawText(e.Graphics, message, Font,
+            new Rectangle(0, 0, Math.Min(Width, size.Width), Height), ForeColor, flags);
+        var iconX = size.Width + 6;
+        if (iconX + 20 <= Width)
+        {
+            TextRenderer.DrawText(e.Graphics, present ? "✓" : "✕", Font,
+                new Rectangle(iconX, 0, 20, Height),
+                present ? Color.FromArgb(94, 255, 130) : Color.FromArgb(255, 95, 112),
+                flags);
+        }
     }
 }
 

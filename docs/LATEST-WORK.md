@@ -150,3 +150,12 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Updated shared managed assembly/file/product version and the Windows CI version assertions, package stamp and artifact name. The GUI title reads the assembly product version.
 - No new runtime, profiler, MO2, or gameplay integration is implied.
 - **CI VERIFIED:** [Windows CI #41943882133](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41943882133), code commit `a0cc867cdf8c2a5fe4b925b3c05612e3a08fe552`. **81/81** core read-only contracts passed; .NET 10 win-x64 self-contained publish passed, exactly one bundled runtime checked, app display version **1.1.1**, file version **1.1.1.0**; artifact **G-Total-Optimizer-v1.1.1-Shell-win-x64** ID **13377591563** uploaded. No GUI/gameplay test or functional install/restore/generator claim.
+
+
+## 2026-11-05 — v1.1.1 path outlines, visible source checks and manual Refresh (CI pending)
+- Corrected v1.1.1 screenshots from the user: path selector magenta frame is now 1px instead of a thick solid magenta band; verified paths use the muted border.
+- Introduced a single owner-drawn Normal source status control that displays white path text and NOT FOUND alongside a red X or green tick. This replaces separate labels whose colored glyphs were absent in the user's screenshot.
+- Added `SetupSourcePresentation` (read-only UI state): missing game path => amber selection prompt; valid game without 0-Engine => amber `Game found; 0-ENGINE MISSING!!` beside Nexus link; valid game plus 0-Engine => white game and mod counts. Unit tests cover all three.
+- Added green tick to the instructions' 'Provide the path to the live Cyberpunk 2077 game files' row after executable-root verification. This tick is only for the physical game path, not proof of MO2 virtual loading.
+- Added top-right REFRESH to rerun real path/status inspection and reload MO2 INI/profile discovery when applicable; corrected step 3 to include restoring original files before continuing.
+- Preserved non-scrollable Page 1, two-page product, CET dark palette, MO2 owner/source admission and existing disabled workflow gates. Windows GUI visual confirmation is pending; CI run not yet recorded.
