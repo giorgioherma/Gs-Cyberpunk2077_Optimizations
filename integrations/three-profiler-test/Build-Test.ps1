@@ -99,7 +99,15 @@ $nativeRes=Join-Path $temp 'launcher.res'
 $nativeObj=Join-Path $temp 'launcher.obj'
 $nativeExe=Join-Path $root 'G-Total-Optimizer.exe'
 $cmdPath=Join-Path $temp 'build.cmd'
-$buildLines=@('@echo off','call "'+$vcvars+'" >nul','if errorlevel 1 exit /b %errorlevel%','rc.exe /nologo /fo"'+$nativeRes+'" "'+$rcPath+'"','if errorlevel 1 exit /b %errorlevel%','cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"'+$nativeObj+'" "'+$nativeSource+'" "'+$nativeRes+'" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"'+$nativeExe+'"','exit /b %errorlevel%')
+$buildLines=@(
+  '@echo off'
+  ('call "{0}" >nul' -f $vcvars)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  'exit /b %errorlevel%'
+)
 Set-Content $cmdPath $buildLines -Encoding ascii
 & $cmdPath
 if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
