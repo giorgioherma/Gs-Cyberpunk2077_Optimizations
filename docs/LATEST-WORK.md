@@ -148,4 +148,5 @@ When implementation starts, append exact commits, build jobs, test output and ga
 ## 2026-11-05 — v1.1.1 unified app version bump (CI pending)
 - User requested a version-only bump from v1.1.0 to v1.1.1 for the unified .NET 10 shell; no changes to CET, GRSP, framework or game version.
 - Updated shared managed assembly/file/product version and the Windows CI version assertions, package stamp and artifact name. The GUI title reads the assembly product version.
-- No new runtime, profiler, MO2, or gameplay integration is implied. Record final CI run, results and artifact ID below.
+- No new runtime, profiler, MO2, or gameplay integration is implied.
+- **CI VERIFIED:** [Windows CI #41943882133](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41943882133), code commit `a0cc867cdf8c2a5fe4b925b3c05612e3a08fe552`. **81/81** core read-only contracts passed; .NET 10 win-x64 self-contained publish passed, exactly one bundled runtime checked, app display version **1.1.1**, file version **1.1.1.0**; artifact **G-Total-Optimizer-v1.1.1-Shell-win-x64** ID **13377591563** uploaded. No GUI/gameplay test or functional install/restore/generator claim.
