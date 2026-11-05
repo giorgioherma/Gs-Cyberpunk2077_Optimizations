@@ -59,18 +59,29 @@ internal static class PresentMonCaptureController
         {
             throw new TimeoutException("PresentMon controller did not finish; no new game launch was authorized.");
         }
-        string? detail = null;
-        if (File.Exists(resultPath))
-        {
-            using var result = JsonDocument.Parse(File.ReadAllText(resultPath));
-            if (result.RootElement.TryGetProperty("detail", out var node))
-                detail = node.GetString();
-        }
         if (controller.ExitCode != 0)
-            throw new InvalidOperationException("PresentMon controller failed: " +
-                (detail ?? $"exit code {controller.ExitCode}. No second PresentMon was started."));
+            throw new InvalidOperationException(
+                "Elevated GCO launcher failed (exit " + controller.ExitCode + "). No new game was started.");
+
+        // The native launcher returns once the private-runtime GUI host starts.
+        // Wait for the elevated CHILD's atomic result, not the launcher's exit.
+        var deadline = Stopwatch.StartNew();
+        while (!File.Exists(resultPath) && deadline.Elapsed < TimeSpan.FromSeconds(20))
+            await Task.Delay(100);
         if (!File.Exists(resultPath))
-            throw new InvalidDataException("PresentMon controller ended without a verifiable status.");
+            throw new TimeoutException(
+                "No result from elevated PresentMon controller; refusing an unverified second instance.");
+        using (var result = JsonDocument.Parse(File.ReadAllText(resultPath)))
+        {
+            var item = result.RootElement;
+            var success = item.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True;
+            if (!success)
+            {
+                var detail = item.TryGetProperty("detail", out var node)
+                    ? node.GetString() : "Unknown elevated-controller failure.";
+                throw new InvalidOperationException("PresentMon controller failed: " + detail);
+            }
+        }
         if (restart)
         {
             Directory.CreateDirectory(Path.Combine(packageRoot, "RESULTS"));
@@ -158,7 +169,7 @@ internal static class PresentMonCaptureController
                 pid = spawned.Id;
             }
 
-            File.WriteAllText(resultPath, JsonSerializer.Serialize(new
+            WriteAtomicResult(resultPath, JsonSerializer.Serialize(new
             {
                 ok = true,
                 action,
@@ -174,11 +185,18 @@ internal static class PresentMonCaptureController
             try
             {
                 if (resultPath is not null)
-                    File.WriteAllText(resultPath,
+                    WriteAtomicResult(resultPath,
                         JsonSerializer.Serialize(new { ok = false, detail = ex.Message }));
             }
             catch { /* real failure is still the nonzero exit code */ }
             return 2;
         }
+    }
+
+    private static void WriteAtomicResult(string resultPath, string content)
+    {
+        var temp = resultPath + ".tmp";
+        File.WriteAllText(temp, content);
+        File.Move(temp, resultPath, overwrite: true);
     }
 }
