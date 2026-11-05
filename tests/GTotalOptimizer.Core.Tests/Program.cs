@@ -11,6 +11,8 @@ var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().
 try
 {
     Directory.CreateDirectory(root);
+    Require(!Mo2FeatureGate.Enabled,
+        "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
     Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: false),
         "Normal setup fits reference window without a scrollbar");
     Require(SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight, mo2: true),
@@ -227,6 +229,10 @@ try
     Require(mo2.Recognized && mo2.Profiles.SequenceEqual(["Active"]), "MO2 INI paths/profiles parsed");
     Require(mo2.ModsDirectory == mo2Mods && mo2.ProfilesDirectory == mo2Profiles,
         "MO2 separate storage paths resolve without copying mods");
+    Require(mo2.SelectedModlistPath("Active") == Path.Combine(activeProfile, "modlist.txt"),
+        "MO2 modlist location derived from INI profiles directory and selected profile");
+    Require(mo2.SelectedModlistPath("Unknown") is null,
+        "unknown MO2 profile cannot resolve to an invented modlist");
     var noSelectedProfile = Mo2SourceInspector.Resolve(root, mo2, "Missing");
     Require(noSelectedProfile.Ready && noSelectedProfile.GameOnlyFallback &&
         !noSelectedProfile.ProfileVerified &&
@@ -382,6 +388,9 @@ try
         anyLocation.ProfilesDirectory == arbitraryProfiles &&
         anyLocation.OverwriteDirectory == arbitraryOverwrite,
         "MO2 honors configured absolute arbitrary Mods/Profiles/Overwrite directories");
+    Require(anyLocation.SelectedModlistPath("Random Profile") ==
+        Path.Combine(arbitraryProfiles, "Random Profile", "modlist.txt"),
+        "modlist auto-discovered on arbitrary external storage without a file picker");
     var anywhere = Mo2SourceInspector.Resolve(emptyPhysicalGame, anyLocation, "Random Profile");
     Require(anywhere.Ready && anywhere.RedscriptFiles == 1 &&
         RedscriptModCounter.CountEffective(anywhere) == 1,
@@ -444,6 +453,9 @@ try
         detectedPortable.InstanceFolder == portable &&
         Mo2SourceInspector.Discover(detectedPortable.InstanceFolder).PreferredProfile == "Active",
         "portable MO2 resolves INI and preferred profile within installation folder");
+    Require(Mo2SourceInspector.Discover(detectedPortable.InstanceFolder)
+            .SelectedModlistPath("Active") == Path.Combine(activeProfile, "modlist.txt"),
+        "portable MO2 finds active profile modlist from the same selected INI");
 
     var manualInstance = Path.Combine(root, "Manual instance on another drive");
     Directory.CreateDirectory(manualInstance);

@@ -5,7 +5,18 @@ namespace GTotalOptimizer.Core;
 public sealed record Mo2Instance(
     bool Recognized, string Detail, string ModsDirectory, string ProfilesDirectory,
     string OverwriteDirectory, IReadOnlyList<string> Profiles,
-    string? PreferredProfile = null);
+    string? PreferredProfile = null)
+{
+    // Read-only selected-profile lookup. A modlist is a file within the
+    // INI-configured profiles directory; it is never a separate user path.
+    public string? SelectedModlistPath(string? profile)
+    {
+        if (!Recognized || string.IsNullOrWhiteSpace(profile) ||
+            !Profiles.Contains(profile, StringComparer.OrdinalIgnoreCase))
+            return null;
+        return Path.Combine(ProfilesDirectory, profile, "modlist.txt");
+    }
+}
 
 public sealed record Mo2WinningFile(string GameRelativePath, string PhysicalPath, string Owner,
     int Priority, bool FromMo2);
@@ -75,8 +86,8 @@ public static class Mo2SourceInspector
             !instance.Profiles.Contains(profile, StringComparer.OrdinalIgnoreCase))
             return ResolveGameOnly(gameRoot, "MO2 profile unverified; physical game scanned without MO2.", profile, token);
 
-        var modlist = Path.Combine(instance.ProfilesDirectory, profile, "modlist.txt");
-        if (!File.Exists(modlist))
+        var modlist = instance.SelectedModlistPath(profile);
+        if (modlist is null || !File.Exists(modlist))
             return ResolveGameOnly(gameRoot,
                 "modlist.txt absent: no MO2 packages or Overwrite; only physical game files.", profile, token);
         try

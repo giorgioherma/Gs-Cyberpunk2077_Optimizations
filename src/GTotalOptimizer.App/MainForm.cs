@@ -23,7 +23,6 @@ internal sealed class MainForm : Form
     private readonly TextBox sourcePath = Entry();
     private readonly TextBox mo2Folder = Entry();
     private readonly TextBox mo2GameRoot = Entry();
-    private readonly TextBox mo2ModsFolder = Entry();
     private readonly ComboBox mo2InstanceChoice = SourceDropdown();
     private readonly ComboBox mo2Profile = SourceDropdown();
     private readonly CheckBox[] mo2ComponentChecks =
@@ -35,7 +34,6 @@ internal sealed class MainForm : Form
     private Mo2Instance mo2Configuration = Mo2SourceInspector.Discover(null);
     private Mo2Stack? mo2Effective;
     private string? selectedMo2Instance;
-    private string? manualModsPath;
     private bool loadingMo2;
     private readonly RadioButton normalMode = ModeChoice("NORMAL", true);
     private readonly RadioButton mo2Mode = ModeChoice("MO2", false);
@@ -115,8 +113,7 @@ internal sealed class MainForm : Form
         {
             if (loadingMo2) return;
             selectedMo2Instance = null;
-            manualModsPath = null;
-            UserSettings.WriteMo2Setup(mo2Folder.Text, "", "", "");
+            UserSettings.WriteMo2Setup(mo2Folder.Text, "", "");
             RefreshMo2Configuration();
             await RefreshSourceAsync();
         };
@@ -126,14 +123,14 @@ internal sealed class MainForm : Form
             var i = mo2InstanceChoice.SelectedIndex;
             selectedMo2Instance = i >= 0 && i < mo2Location.InstanceChoices.Count
                 ? mo2Location.InstanceChoices[i] : null;
-            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance ?? "", manualModsPath ?? "", "");
+            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance ?? "", "");
             RefreshMo2Configuration();
             await RefreshSourceAsync();
         };
         mo2Profile.SelectedIndexChanged += async (_, _) =>
         {
             if (loadingMo2) return;
-            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance ?? "", manualModsPath ?? "",
+            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance ?? "",
                 mo2Profile.SelectedItem?.ToString() ?? "");
             await RefreshSourceAsync();
         };
@@ -146,6 +143,11 @@ internal sealed class MainForm : Form
         mo2Mode.CheckedChanged += async (_, _) =>
         {
             if (!mo2Mode.Checked) return;
+            if (!Mo2FeatureGate.Enabled)
+            {
+                normalMode.Checked = true;
+                return;
+            }
             SetSourceMode();
             await RefreshSourceAsync();
         };
@@ -173,7 +175,12 @@ internal sealed class MainForm : Form
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
         var setup = UserSettings.ReadMo2Setup();
         selectedMo2Instance = setup.InstanceFolder;
-        manualModsPath = setup.ModsOverride;
+        // MO2 discovery is retained but its runtime/source workflow is deferred.
+        mo2Mode.Enabled = Mo2FeatureGate.Enabled;
+        mo2Mode.Text = "MO2 — COMING LATER";
+        var mo2Hint = new ToolTip();
+        mo2Hint.SetToolTip(mo2Mode,
+            "MO2 paths and profiles are discoverable, but profiling and optimization are disabled for the initial release.");
         loadingMo2 = true;
         mo2Folder.Text = setup.InstallationFolder;
         loadingMo2 = false;
@@ -237,10 +244,10 @@ internal sealed class MainForm : Form
         browse.Click += (_, _) => ChooseSource();
         sourceSection.Controls.Add(normalPanel);
 
-        // One MO2 installation path resolves portable or instance configuration;
-        // the config supplies Mods/Profiles/Overwrite and priority. Manual Mods
-        // override remains a recovery option, not a substitute for modlist.txt.
-        mo2Panel.SetBounds(14, 54, 880, 119);
+        // MO2 remains disabled for the initial direct-install release.
+        // Future mode needs only the game and MO2 folders; the INI determines
+        // Mods/Profiles/Overwrite, while the selected profile determines modlist.txt.
+        mo2Panel.SetBounds(14, 54, 880, 89);
         void AddMo2Path(string label, TextBox field, int top, Action browse)
         {
             var row = new Panel { Left = 0, Top = top, Width = 880, Height = 29 };
@@ -268,33 +275,17 @@ internal sealed class MainForm : Form
             if (dialog.ShowDialog(this) == DialogResult.OK) mo2Folder.Text = dialog.SelectedPath;
         });
         AddMo2Path("Game folder", mo2GameRoot, 29, () => ChooseSource());
-        AddMo2Path("Mods folder", mo2ModsFolder, 58, () =>
-        {
-            using var dialog = new FolderBrowserDialog
-            {
-                Description = "Only when needed: select the enabled packages directory configured by MO2",
-                UseDescriptionForTitle = true,
-                SelectedPath = Directory.Exists(mo2ModsFolder.Text) ? mo2ModsFolder.Text : ""
-            };
-            if (dialog.ShowDialog(this) != DialogResult.OK) return;
-            manualModsPath = dialog.SelectedPath;
-            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance ?? "",
-                manualModsPath, mo2Profile.SelectedItem?.ToString() ?? "");
-            RefreshMo2Configuration();
-            _ = RefreshSourceAsync();
-        });
-        mo2ModsFolder.ReadOnly = true;
         var instanceCaption = Readout();
         instanceCaption.Text = "Instance";
         instanceCaption.ForeColor = TextColor;
-        instanceCaption.SetBounds(0, 87, 65, 29);
+        instanceCaption.SetBounds(0, 58, 65, 29);
         mo2Panel.Controls.Add(instanceCaption);
-        mo2InstanceChoice.SetBounds(65, 89, 281, 27);
+        mo2InstanceChoice.SetBounds(65, 60, 281, 27);
         mo2InstanceChoice.Dock = DockStyle.None;
         mo2Panel.Controls.Add(mo2InstanceChoice);
         var browseInstance = BrowseAction();
         browseInstance.Text = "...";
-        browseInstance.SetBounds(351, 88, 36, 28);
+        browseInstance.SetBounds(351, 59, 36, 28);
         browseInstance.Click += (_, _) =>
         {
             using var dialog = new FolderBrowserDialog
@@ -304,8 +295,7 @@ internal sealed class MainForm : Form
             };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             selectedMo2Instance = dialog.SelectedPath;
-            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance,
-                manualModsPath ?? "", "");
+            UserSettings.WriteMo2Setup(mo2Folder.Text, selectedMo2Instance, "");
             RefreshMo2Configuration();
             _ = RefreshSourceAsync();
         };
@@ -313,9 +303,9 @@ internal sealed class MainForm : Form
         var profileCaption = Readout();
         profileCaption.Text = "Profile";
         profileCaption.ForeColor = TextColor;
-        profileCaption.SetBounds(401, 87, 55, 29);
+        profileCaption.SetBounds(401, 58, 55, 29);
         mo2Panel.Controls.Add(profileCaption);
-        mo2Profile.SetBounds(456, 89, 424, 27);
+        mo2Profile.SetBounds(456, 60, 424, 27);
         mo2Profile.Dock = DockStyle.None;
         mo2Panel.Controls.Add(mo2Profile);
         mo2Panel.Resize += (_, _) =>
@@ -492,7 +482,7 @@ internal sealed class MainForm : Form
     private void SetSourceMode()
     {
         if (sourceSection is null || setupContent is null) return;
-        var mo2 = mo2Mode.Checked;
+        var mo2 = Mo2FeatureGate.Enabled && mo2Mode.Checked;
         normalPanel.Visible = !mo2;
         mo2Panel.Visible = mo2;
         setupContent.RowStyles[0].Height = mo2
@@ -574,8 +564,7 @@ internal sealed class MainForm : Form
                     c.Equals(selectedMo2Instance, StringComparison.OrdinalIgnoreCase));
             mo2InstanceChoice.SelectedIndex = index;
 
-            mo2Configuration = Mo2SourceInspector.Discover(selectedMo2Instance, manualModsPath);
-            mo2ModsFolder.Text = manualModsPath ?? mo2Configuration.ModsDirectory;
+            mo2Configuration = Mo2SourceInspector.Discover(selectedMo2Instance);
 
             mo2Profile.Items.Clear();
             foreach (var profile in mo2Configuration.Profiles)
@@ -893,7 +882,8 @@ internal sealed class MainForm : Form
         // Mods directory; every enabled package; and winning physical file paths.
         Mo2Stack? stack = null;
         var profile = mo2Profile.SelectedItem as string;
-        if (mo2Mode.Checked && current.IsValidGame)
+        var activeMo2 = Mo2FeatureGate.Enabled && mo2Mode.Checked;
+        if (activeMo2 && current.IsValidGame)
         {
             var config = mo2Configuration;
             var gameRoot = current.GameRoot;
@@ -911,11 +901,11 @@ internal sealed class MainForm : Form
         // A missing modlist is NOT a verified MO2 profile; in that case four
         // source checks can still reflect the direct live game, with no MO2
         // files (including Overwrite) admitted to the effective map.
-        var sourceAvailable = mo2Mode.Checked && stack?.Ready == true;
+        var sourceAvailable = activeMo2 && stack?.Ready == true;
         var sourceVerified = sourceAvailable && stack!.ProfileVerified &&
             mo2Location.HasConfiguration && mo2Configuration.Recognized;
 
-        if (mo2Mode.Checked)
+        if (activeMo2)
         {
             var checks = new[]
             {
@@ -973,7 +963,7 @@ internal sealed class MainForm : Form
         }
         // Only missing paths/prompts are highlighted. Valid status text is white;
         // the dedicated check/X glyphs carry green/red status.
-        sourceStatus.ForeColor = mo2Mode.Checked
+        sourceStatus.ForeColor = activeMo2
             ? sourceVerified ? TextColor : Amber
             : SetupSourcePresentation.ForNormal(current,
                 RedscriptModCounter.CountPhysical(current.GameRoot)).IsWarning
@@ -983,8 +973,6 @@ internal sealed class MainForm : Form
         SetPathOutline(sourcePath, current.IsValidGame);
         SetPathOutline(mo2GameRoot, current.IsValidGame);
         SetPathOutline(mo2Folder, mo2Location.HasInstallation);
-        SetPathOutline(mo2ModsFolder,
-            mo2Configuration.Recognized && Directory.Exists(mo2Configuration.ModsDirectory));
 
         var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
         var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);
@@ -1139,14 +1127,15 @@ internal sealed class NeonButton : Button
 
 internal static class UserSettings
 {
-    internal sealed record Mo2Setup(string InstallationFolder, string InstanceFolder,
-        string ModsOverride, string Profile);
+    internal sealed record Mo2Setup(string InstallationFolder, string InstanceFolder, string Profile);
 
     private sealed class Settings
     {
         public string GameRoot { get; set; } = "";
         public string Mo2InstallationFolder { get; set; } = "";
         public string Mo2InstanceFolder { get; set; } = "";
+        // Old versions stored a manual Mods-directory override. Retained for
+        // backward deserialization only; the INI always supplies this path.
         public string Mo2ModsOverride { get; set; } = "";
         public string Mo2Profile { get; set; } = "";
         // Old per-source-folder settings are retained only for backward
@@ -1170,20 +1159,17 @@ internal static class UserSettings
     internal static Mo2Setup ReadMo2Setup()
     {
         var s = Read();
-        return new(s.Mo2InstallationFolder, s.Mo2InstanceFolder,
-            s.Mo2ModsOverride, s.Mo2Profile);
+        return new(s.Mo2InstallationFolder, s.Mo2InstanceFolder, s.Mo2Profile);
     }
     internal static void WriteGameRoot(string value)
     {
         var s = Read(); s.GameRoot = value; Write(s);
     }
-    internal static void WriteMo2Setup(string installation, string instance,
-        string modsOverride, string profile)
+    internal static void WriteMo2Setup(string installation, string instance, string profile)
     {
         var s = Read();
         s.Mo2InstallationFolder = installation;
         s.Mo2InstanceFolder = instance;
-        s.Mo2ModsOverride = modsOverride;
         s.Mo2Profile = profile;
         Write(s);
     }
