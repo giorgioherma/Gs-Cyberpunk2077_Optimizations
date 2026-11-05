@@ -30,7 +30,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.1') { throw "Unexpected app version: $version" }
+          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.2') { throw "Unexpected app version: $version" }
           $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio\Installer\vswhere.exe'
           if (!(Test-Path $vswhere -PathType Leaf)) { throw 'vswhere.exe unavailable.' }
           $vs = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
@@ -92,7 +92,7 @@ jobs:
           if (Test-Path (Join-Path $root 'CapFrameX.exe')) { throw 'Unverified CapFrameX was shipped.' }
           $v1 = (Get-Item (Join-Path $root 'G-Total-Optimizer.exe')).VersionInfo.FileVersion
           $v2 = (Get-Item (Join-Path $root 'app/G-Total-Optimizer.App.exe')).VersionInfo.FileVersion
-          if ($v1 -ne '1.1.1.0' -or $v2 -ne '1.1.1.0') { throw "Version drift: launcher=$v1 app=$v2" }
+          if ($v1 -ne '1.1.2.0' -or $v2 -ne '1.1.2.0') { throw "Version drift: launcher=$v1 app=$v2" }
           $allowed = @('G-Total-Optimizer.exe','VERSION.txt')
           foreach ($name in @(Get-ChildItem $root -File | Select-Object -ExpandProperty Name)) {
             if ($name -notin $allowed) { throw "Unexpected root file: $name" }
@@ -103,6 +103,6 @@ jobs:
           Write-Host "Verified clean v$version portable folder, native launcher and one private runtime."
       - uses: actions/upload-artifact@v4
         with:
-          name: G-Total-Optimizer-v1.1.1-Portable-win-x64
+          name: G-Total-Optimizer-v1.1.2-Portable-win-x64
           path: publish/
           if-no-files-found: error

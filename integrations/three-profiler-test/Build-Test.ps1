@@ -1,5 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
+if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.2') { throw "Unexpected unified app version: $version" }
 $root = Join-Path (Get-Location) 'triple-test'
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $temp = Join-Path $env:RUNNER_TEMP 'GTriple'
@@ -92,7 +94,7 @@ $vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.V
 if (-not $vs) { throw 'Required x64 compiler missing on runner' }
 $vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
 $rcPath=Join-Path $temp 'launcher.rc'
-$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@','1,1,1').Replace('@VERSION_DOTS@','1.1.1')
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version)
 Set-Content $rcPath $rcTxt -Encoding ascii
 $nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
 $nativeRes=Join-Path $temp 'launcher.res'
@@ -111,6 +113,11 @@ $buildLines=@(
 Set-Content $cmdPath $buildLines -Encoding ascii
 & $cmdPath
 if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Assert version identity in the built native launcher and managed application.
+foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+  if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") { throw "Unified executable version mismatch: $exe" }
+}
 
 # Native PresentMon CLI, exact release digest. No 160 MB MSI.
 $pm=Join-Path $components 'presentmon'
@@ -134,7 +141,7 @@ foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path 
 New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
 Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1')
 Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii
-Set-Content (Join-Path $root 'VERSION.txt') '1.1.1' -NoNewline
+Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
 $provenance=@{
   testOnly=$true
   cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }

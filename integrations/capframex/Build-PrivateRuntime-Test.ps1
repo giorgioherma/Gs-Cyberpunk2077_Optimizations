@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $version = (dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.1') { throw "Version drift: $version" }
+if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.2') { throw "Version drift: $version" }
 $expectedCapXCommit = 'd1ab1e7e87a989ce8d55f38d5769327bb9f89369'
 $commit = (& git -C $VendorFolder rev-parse HEAD).Trim()
 if ($commit -ne $expectedCapXCommit) { throw "Unexpected CapFrameX source $commit" }
@@ -123,7 +123,7 @@ if (-not (Test-Path (Join-Path $capx 'LICENSE'))) {
   Copy-Item (Join-Path $VendorFolder 'LICENSE') (Join-Path $capx 'LICENSE-CapFrameX.txt')
 }
 Set-Content -Path (Join-Path $root 'README-TEST.txt') -Encoding UTF8 -Value @'
-G-Total-Optimizer v1.1.1 — CapFrameX private runtime TEST only.
+G-Total-Optimizer v1.1.2 — CapFrameX private runtime TEST only.
 1. Extract the ENTIRE archive to a writable folder.
 2. Double-click G-Total-Optimizer.exe to verify our app opens.
 3. Double-click modules\CapFrameX\Start-CapFrameX-Private.exe to test CapFrameX.
