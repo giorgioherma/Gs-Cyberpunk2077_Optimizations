@@ -25,6 +25,9 @@ internal static class Program
             return verification.Ready ? 0 : 2;
         }
 
+        if (args.Length == 3 && args[0] == PresentMonCaptureController.CliSwitch)
+            return PresentMonCaptureController.ExecuteElevated(args[1], args[2]);
+
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
         return 0;
