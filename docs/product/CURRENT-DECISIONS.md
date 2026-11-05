@@ -145,3 +145,8 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - **Do not replace the three original cyan/gray install, start and collect workflow descriptions.** Keep them on the **left** of the third box. Place the already-approved three CET/REDscript/CapX installation checks and capture keys on the **right**. Leave status heading and keybind-warning semantics intact.
 - Add one line to the existing F11 instruction: **“You will hear Start/Stop in CapX and RED. CET Start displays a UI timer in the upper left corner.”** Enlarge the second box by one text row instead of shrinking its contents. Restore **“Shorter captures also work.”** No other capture copy changes.
 - MO2 remains disabled and will need a separate fit review before reactivation; do not adjust its backend/source handling as part of this UI correction.
+
+## 2026-11-05 — one root launcher; artifact-based integration
+
+- Portable root contains only the `G-Total-Optimizer.exe` launcher, not an additional `.lnk` file. The shortcut was redundant and may contain the Actions runner absolute target. Existing user's local shortcut may be deleted manually; future packages must not stage it.
+- CET and CapFrameX reported ready; GRSP remains paused by user. Prefer reproducible GitHub Actions import/verification of each component's own exact upstream artifact, manifest, hashes and payload, not manually copied build outputs. Only the unified orchestrator coordinates lifecycle. Do not claim components integrated until verified end-to-end.
