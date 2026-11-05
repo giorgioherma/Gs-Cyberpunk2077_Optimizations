@@ -150,3 +150,10 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 
 - Portable root contains only the `G-Total-Optimizer.exe` launcher, not an additional `.lnk` file. The shortcut was redundant and may contain the Actions runner absolute target. Existing user's local shortcut may be deleted manually; future packages must not stage it.
 - CET and CapFrameX reported ready; GRSP remains paused by user. Prefer reproducible GitHub Actions import/verification of each component's own exact upstream artifact, manifest, hashes and payload, not manually copied build outputs. Only the unified orchestrator coordinates lifecycle. Do not claim components integrated until verified end-to-end.
+
+
+## 2026-11-05 — one-runtime CapFrameX test explicitly authorized
+
+- User rejected any default system-wide .NET or VC++ installation and requested a runnable CapFrameX test linked to the unified application's **private .NET10 runtime**. Preserve one shared runtime design and a portable ZIP. No switch to system-only framework-dependent release.
+- Build source-owned CapFrameX dependency-check assembly against exact pinned vendor 1.9.1.2 beta source, preserving vendor original `CapFrameX.exe` and all native capture binaries; recognize private framework tree and app-local CRT, preserve original behavior without the unified private-runtime environment. Use separate test-only CI, not the ordinary shell release workflow. CapFrameX already requires UAC; use an elevated native CapFrameX launcher before setting the private process environment.
+- Accept test only after genuine Windows launch/capture and restored source safety, not from compile or file topology alone. CET/GRSP integration and MO2 still deferred or independently staged.
