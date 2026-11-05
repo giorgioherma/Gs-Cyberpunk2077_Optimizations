@@ -1220,7 +1220,7 @@ internal sealed class MainForm : Form
             }
             try
             {
-                Process.Start(new ProcessStartInfo(gameExe)
+                _ = Process.Start(new ProcessStartInfo(gameExe)
                 {
                     UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
                 }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
