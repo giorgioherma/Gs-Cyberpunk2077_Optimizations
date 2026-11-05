@@ -12,6 +12,21 @@ internal static class PresentMonCaptureController
 {
     public const string CliSwitch = "--presentmon-control";
     private const string ResultName = "PresentMon-controller.json";
+    private static string TrackingFile(string root) =>
+        Path.Combine(root, "RESULTS", "GCO-current-PresentMon.txt");
+
+    public static string? ReadTrackedCsv(string root)
+    {
+        var tracking = TrackingFile(root);
+        if (!File.Exists(tracking)) return null;
+        return PresentMonLifecyclePolicy.ValidateOutputCsv(root, File.ReadAllText(tracking).Trim());
+    }
+
+    public static void ClearTrackedCsv(string root)
+    {
+        var tracking = TrackingFile(root);
+        if (File.Exists(tracking)) File.Delete(tracking);
+    }
 
     public static async Task RunAsync(string packageRoot, string csv, bool restart)
     {
@@ -54,6 +69,11 @@ internal static class PresentMonCaptureController
                 (detail ?? $"exit code {controller.ExitCode}. No second PresentMon was started."));
         if (!File.Exists(resultPath))
             throw new InvalidDataException("PresentMon controller ended without a verifiable status.");
+        if (restart)
+        {
+            Directory.CreateDirectory(Path.Combine(packageRoot, "RESULTS"));
+            File.WriteAllText(TrackingFile(packageRoot), safeCsv);
+        }
     }
 
     public static int ExecuteElevated(string action, string outputCsv)
