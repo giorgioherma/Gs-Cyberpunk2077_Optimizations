@@ -28,10 +28,32 @@ function Backend([string]$Which,[string]$Action) {
   $exe=if ($Which -eq 'CET') { Join-Path $root 'components/cet/G-CET-Runtime-Profiler.exe' }
        else { Join-Path $root 'components/grsp/G-REDscript-Profiler.exe' }
   Log "$Which --$Action"
-  $output=@(& $exe ('--'+$Action) '--game' $GameRoot '--json' 2>&1)
-  $code=$LASTEXITCODE
-  $payload=$output -join [Environment]::NewLine
-  if ($code -ne 0) { throw "$Which --$Action failed (exit $code): $payload" }
+  # Root launcher is a native Windows GUI-subsystem EXE; PowerShell's '&'
+  # operator does not reliably wait/receive its redirected CLI stdout. Use
+  # an explicit Win32 process with inherited standard handles, like the
+  # product's existing ComponentCommandRunner.
+  $info=New-Object System.Diagnostics.ProcessStartInfo
+  $info.FileName=$exe
+  $info.Arguments=('--{0} --game "{1}" --json' -f $Action,$GameRoot)
+  $info.WorkingDirectory=Split-Path $exe
+  $info.UseShellExecute=$false
+  $info.CreateNoWindow=$true
+  $info.RedirectStandardOutput=$true
+  $info.RedirectStandardError=$true
+  $process=New-Object System.Diagnostics.Process
+  $process.StartInfo=$info
+  if (!$process.Start()) { throw "$Which --$Action process could not start" }
+  $stdoutTask=$process.StandardOutput.ReadToEndAsync()
+  $stderrTask=$process.StandardError.ReadToEndAsync()
+  if (!$process.WaitForExit(180000)) {
+    try { $process.Kill() } catch { }
+    throw "$Which --$Action timed out; leave recovery state for inspection"
+  }
+  $code=$process.ExitCode
+  $payload=$stdoutTask.GetAwaiter().GetResult()
+  $errors=$stderrTask.GetAwaiter().GetResult()
+  $process.Dispose()
+  if ($code -ne 0) { throw "$Which --$Action failed (exit $code): $errors $payload" }
   $response=$payload | ConvertFrom-Json
   if ($null -eq $response) { throw "$Which --$Action gave no status JSON" }
   if ($response.PSObject.Properties.Name -contains 'ok') {
