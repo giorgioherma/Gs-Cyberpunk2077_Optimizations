@@ -91,6 +91,7 @@ internal sealed class MainForm : Form
     private readonly string packageRoot = PortablePackagePaths.RootFromAppDirectory(AppContext.BaseDirectory);
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
     private bool busy;
+    private bool captureLaunched;
     private string? presentMonCaptureFolder;
     private Process? presentMonProcess;
 
@@ -1054,7 +1055,7 @@ internal sealed class MainForm : Form
                 new CaptureKeyCheck("PresentMon", "F11", true, "Bundled PresentMon F11 command."));
             UpdateWorkflowVisuals();
             install.Enabled = !busy && status.CleanForInstall && !Workflow.HasRecoveryJournal;
-            launch.Enabled = !busy && status.BothInstalled && Workflow.HasRecoveryJournal;
+            launch.Enabled = !busy && !captureLaunched && status.BothInstalled && Workflow.HasRecoveryJournal;
             collect.Enabled = !busy && Workflow.HasRecoveryJournal;
             pageOneStatus.Text = status.BothInstalled
                 ? "CET and REDscript: verified installed by owner status. Start capture when ready."
@@ -1108,6 +1109,7 @@ internal sealed class MainForm : Form
         {
             var result = await Workflow.InstallAsync(game);
             if (IsDisposed) return;
+            if (result.Ok) captureLaunched = false;
             await RefreshSourceAsync();
             if (IsDisposed) return;
             pageOneStatus.Text = result.Detail;
@@ -1132,7 +1134,8 @@ internal sealed class MainForm : Form
 
     private async Task LaunchCaptureAsync()
     {
-        if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
+        if (busy || captureLaunched || !inspection.IsValidGame ||
+            string.IsNullOrWhiteSpace(inspection.GameRoot))
             return;
         var game = inspection.GameRoot!;
         SetWorkflowBusy(true);
@@ -1181,6 +1184,7 @@ internal sealed class MainForm : Form
             {
                 UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
             });
+            captureLaunched = true;
             pageOneStatus.Text = "Game launched. Use F11 to start/stop CET + REDscript + PresentMon. Close game before COLLECT.";
         }
         catch (Exception ex)
@@ -1194,7 +1198,7 @@ internal sealed class MainForm : Form
             {
                 busy = false;
                 sourcePath.Enabled = true;
-                launch.Enabled = Workflow.HasRecoveryJournal;
+                launch.Enabled = Workflow.HasRecoveryJournal && !captureLaunched;
                 collect.Enabled = Workflow.HasRecoveryJournal;
             }
         }
@@ -1217,6 +1221,7 @@ internal sealed class MainForm : Form
         {
             var result = await Workflow.CollectAndRestoreAsync(game);
             if (IsDisposed) return;
+            if (result.RestoreVerified) captureLaunched = false;
             if (presentMonProcess is { HasExited: false })
             {
                 try { presentMonProcess.Kill(); } catch { /* elevated process may be independent */ }
