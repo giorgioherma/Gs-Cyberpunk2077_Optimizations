@@ -199,6 +199,16 @@ public sealed class UnifiedProfilerWorkflow
         if (GameRunning()) return new(false, "Close Cyberpunk before collecting/restoring.");
         if (!OwnsSession(game))
             return new(false, "No matching GCO session. No game files changed.");
+        LiveProfilerState preflight;
+        try { preflight = await InspectAsync(game, token); }
+        catch (Exception ex)
+        {
+            return new(false, "Cannot verify capture completion: " + ex.Message +
+                ". No collection or restoration was attempted.");
+        }
+        if (!preflight.BothCaptured)
+            return new(false, "CET or REDscript capture is incomplete. Live files preserved. " +
+                "Use RESTORE WITHOUT CAPTURE for diagnostic preservation and recovery.");
         string? cet = null, grsp = null;
         bool captured = false;
         string detail = "";
