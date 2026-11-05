@@ -25,3 +25,13 @@ Only the **new unified WinForms executable** is compiled and packaged, self-cont
 ### Potential separate runtimes during development
 
 If someone manually places current self-contained CET (.NET 8) or GRSP (.NET 8) standalone releases beside the new shell, they each carry their own runtime. This is temporary **development compatibility**, not the final optimized distribution layout. Never advertise this stage as "one shared runtime for the whole suite." 
+
+
+## 2026-11-05 — user-approved source build exception and test outcome
+
+The previous default instruction to leave CapFrameX *completely unchanged* is superseded **for the explicit private-runtime test only**. User authorized a source-built adjustment to its dependency checker. No manual binary patching or editing of official native hooks or capture executables. The vendor's original `CapFrameX.exe` is kept, and only `CapFrameX.Configuration.dll` is compiled from pinned upstream MIT-licensed source with the scoped dependency check. Keep MIT and accompanying license notices.
+
+- Implemented dedicated non-shipping Actions workflow `.github/workflows/capframex-private-runtime-test.yml` and its source-checked builder `integrations/capframex/Build-PrivateRuntime-Test.ps1`. Test package is framework-dependent managed WinForms + vendor CapFrameX, one private Microsoft .NET 10.0.14 Desktop/Core runtime root, app-local Microsoft VC x64 CRT from official VS redistributable.
+- Unified root native launcher detects a bundled `runtime/dotnet.exe`, selects process-local `DOTNET_ROOT_X64`, `DOTNET_ROOT` and `G_TOTAL_PRIVATE_DOTNET`, and does nothing to the user's Windows global environment. CapFrameX requires administrator elevation, so its separate native `Start-CapFrameX-Private.exe` is built with requireAdministrator and configures the same process-local runtime after UAC.
+- [Dedicated CI #42020999015](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42020999015) validates exact upstream source/artifact, successful source checker compilation, bundle contents, and exactly one private runtime, with artifact ID **13412011394**. This is **not proof of actual app startup/capture** or of fully standalone native child services; Windows user test required.
+- Existing production v1.1.1 shell workflow still packages itself self-contained, so the **one-shared-runtime claim applies to the dedicated TEST artifact only**. Do not switch stable shell packaging or authorize profiling from this limited evidence.
