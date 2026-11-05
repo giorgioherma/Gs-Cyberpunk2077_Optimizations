@@ -609,6 +609,18 @@ try
     File.WriteAllText(Path.Combine(portableApp, PortablePackagePaths.ManagedExecutableName), "fixture");
     Require(PortablePackagePaths.RootFromAppDirectory(portableApp) == portableBase,
         "CET-style portable layout resolves package root from nested managed app");
+    File.Delete(Path.Combine(portableApp, PortablePackagePaths.ManagedExecutableName));
+    Require(PortablePackagePaths.RootFromAppDirectory(portableApp) == portableBase,
+        "package-root detection cannot fail because the private EXE is missing or locked");
+    File.WriteAllText(Path.Combine(portableApp, PortablePackagePaths.ManagedExecutableName), "fixture");
+    var unrelatedBase = Path.Combine(root, "Wrong Working Folder", "app");
+    Require(PortablePackagePaths.RootFromExecutablePath(
+            Path.Combine(portableApp, PortablePackagePaths.ManagedExecutableName), unrelatedBase) == portableBase,
+        "real managed process path wins over unrelated base-directory or working-directory hints");
+    Require(PortablePackagePaths.RootFromExecutablePath(null, portableApp) == portableBase,
+        "process-path unavailable falls back to the private app directory");
+    Require(!Mo2FeatureGate.Enabled,
+        "MO2 disabled setting cannot affect component package-root resolution");
     Require(PortablePackagePaths.RootFromAppDirectory(root) == Path.GetFullPath(root),
         "IDE/nonportable debug layout keeps its original package path");
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
@@ -628,6 +640,10 @@ if (args.Length > 0)
     Require(Directory.Exists(delivered), "finished GCO package directory exists");
     Require(PortablePackagePaths.RootFromAppDirectory(Path.Combine(delivered, "app")) == delivered,
         "actual packaged managed app resolves root shared with native launcher and components");
+    Require(PortablePackagePaths.RootFromExecutablePath(
+            Path.Combine(delivered, "app", PortablePackagePaths.ManagedExecutableName),
+            Path.Combine(delivered, "unrelated")) == delivered,
+        "real delivered executable selects correct manifest root despite unrelated host-directory hint");
     Require(File.Exists(Path.Combine(delivered, "G-Total-Optimizer.exe")),
         "final GCO package includes public native launcher");
     var verification = ComponentBundleVerifier.Inspect(delivered);
