@@ -8,6 +8,8 @@ New-Item -ItemType Directory -Force $session | Out-Null
 $log=Join-Path $session 'test.log'
 $installedCet=$false
 $installedGrsp=$false
+$attemptCet=$false
+$attemptGrsp=$false
 $collectedCet=$false
 $collectedGrsp=$false
 $presentMon=$null
@@ -89,9 +91,11 @@ try {
     throw "GRSP live state is $grState. Must be NOT_INSTALLED. No files changed."
   }
   Log 'Both standalone profilers passed non-mutating preflight'
+  $attemptCet=$true
   $null=Backend 'CET' 'install'
   $installedCet=$true
   Log 'CET installed by its authoritative transaction'
+  $attemptGrsp=$true
   $null=Backend 'GRSP' 'install'
   $installedGrsp=$true
   Log 'GRSP installed by its authoritative transaction'
@@ -137,7 +141,7 @@ try {
   $found=@()
   foreach ($file in $pms) {
     $sample=@(Import-Csv -LiteralPath $file.FullName | Select-Object -First 50)
-    if ($sample.Count -gt 0 -and ($sample[0].PSObject.Properties.Name -contains 'MsBetweenPresents') -and ($sample[0].PSObject.Properties.Name -contains 'Application')) {
+    if ($sample.Count -gt 0 -and ($sample[0].PSObject.Properties.Name -contains 'MsBetweenPresents') -and ($sample[0].PSObject.Properties.Name -contains 'Application') -and @($sample | Where-Object { $_.Application -eq 'Cyberpunk2077.exe' }).Count -gt 0) {
       $found+=,$file
     }
   }
@@ -162,6 +166,21 @@ finally {
   if ($null -ne $presentMon -and !$presentMon.HasExited) {
     try { $presentMon.Kill(); Log 'PresentMon controller terminated after CSV inspection' }
     catch { Log ('PresentMon termination requires manual review: ' + $_) }
+  }
+  # If an authoritative owner failed midway through INSTALL, its transaction
+  # state can already exist even though the CLI returned an error. Inspect
+  # ownership first; then use that owner's own RESTORE, never an app-side delete.
+  if ($attemptGrsp -and !$installedGrsp) {
+    try {
+      $status=Backend 'GRSP' 'status'
+      if ($status.result.ManagedStatePresent) { $installedGrsp=$true; Log 'Partial GRSP transaction detected for safe owner restore' }
+    } catch { Log ('Partial GRSP state unreadable; manual recovery required: ' + $_) }
+  }
+  if ($attemptCet -and !$installedCet) {
+    try {
+      $status=Backend 'CET' 'status'
+      if ($status.Managed) { $installedCet=$true; Log 'Partial CET transaction detected for safe owner restore' }
+    } catch { Log ('Partial CET state unreadable; manual recovery required: ' + $_) }
   }
   $recovered=RestoreOwned
   if ($recovered) { Log 'RESTORE complete for both owned profiler transactions' }
