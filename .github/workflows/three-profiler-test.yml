@@ -109,7 +109,7 @@ jobs:
             throw "Unexpected CET status JSON schema/state: $($cetPre | ConvertTo-Json -Compress -Depth 4)"
           }
           $tripleScript=Get-Content (Join-Path $root 'Run-Triple-Test.ps1') -Raw
-          if ($tripleScript -match '\\.CetState\\b') { throw 'Triple harness must use CET wire field cet, not C# property CetState' }
+          if ($tripleScript -match '\.CetState\b') { throw 'Triple harness must use CET wire field cet, not C# property CetState' }
           Write-Host 'PASS actual CET CLI status JSON wire schema (cet/managed/captureReadyForCollection).'
           $pre=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
           if (!$pre.ok -or $pre.result.State -ne 'NOT_INSTALLED') { throw "GRSP preflight failed: $($pre.result.State)" }
