@@ -108,6 +108,17 @@ internal static class PresentMonCaptureController
             var officialHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(presentMon)));
             var expectedPart = Path.Combine("components", "presentmon", "PresentMon.exe");
 
+            // Serialize all GCO windows (including after app restarts). Without
+            // this gate two elevated helpers could both observe no PresentMon
+            // and create two capture processes simultaneously.
+            using var gate = new Mutex(false, @"Local\GCO_PresentMon_Single_Instance");
+            bool gateHeld;
+            try { gateHeld = gate.WaitOne(TimeSpan.FromSeconds(15)); }
+            catch (AbandonedMutexException) { gateHeld = true; }
+            if (!gateHeld)
+                throw new TimeoutException("Another GCO PresentMon restart is still running.");
+            try
+            {
             foreach (var process in Process.GetProcessesByName("PresentMon"))
             {
                 using (process)
@@ -179,6 +190,8 @@ internal static class PresentMonCaptureController
                     : "GCO PresentMon stopped."
             }));
             return 0;
+            }
+            finally { gate.ReleaseMutex(); }
         }
         catch (Exception ex)
         {
