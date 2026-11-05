@@ -227,8 +227,11 @@ try
     Require(mo2.Recognized && mo2.Profiles.SequenceEqual(["Active"]), "MO2 INI paths/profiles parsed");
     Require(mo2.ModsDirectory == mo2Mods && mo2.ProfilesDirectory == mo2Profiles,
         "MO2 separate storage paths resolve without copying mods");
-    Require(!Mo2SourceInspector.Resolve(root, mo2, "Missing").Ready,
-        "unknown MO2 profile never silently selected");
+    var noSelectedProfile = Mo2SourceInspector.Resolve(root, mo2, "Missing");
+    Require(noSelectedProfile.Ready && noSelectedProfile.GameOnlyFallback &&
+        !noSelectedProfile.ProfileVerified &&
+        noSelectedProfile.EffectiveFiles.Values.All(file => !file.FromMo2),
+        "unknown MO2 profile never admits any MO2-managed files; physical game remains available");
     Require(!Mo2SourceInspector.Resolve(null, mo2, "Active").Ready,
         "MO2 source package alone cannot establish the current game root");
 
