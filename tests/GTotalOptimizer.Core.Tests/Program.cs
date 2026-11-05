@@ -169,6 +169,12 @@ try
     Require(CaptureKeyInspector.InspectCet(root, true).Confirmed, "CET F11 numeric binding recognized");
     Require(CaptureKeyInspector.ReadCetBinding(root).Value == "F11",
         "read-only CET binding inspection works without asserting installed profiler");
+    // Real source may contain case-distinct mod IDs; PowerShell ConvertFrom-Json
+    // rejects these, but JsonDocument must preserve both and still find CET F11.
+    File.WriteAllText(cetBindings,
+        """{"HideMeshes":{},"hideMeshes":{},"CETProfilerControls":{"CETProfiler_Toggle":34339947158700032}}""");
+    Require(CaptureKeyInspector.ReadCetBinding(root).Confirmed,
+        "case-distinct user mod bindings do not break GUI F11 detection");
     File.WriteAllText(cetBindings, "{\"CETProfilerControls\":{\"CETProfiler_Toggle\":34058472181989376}}");
     Require(CaptureKeyInspector.ReadCetBinding(root).Value == "F10" &&
         !CaptureKeyInspector.ReadCetBinding(root).Confirmed,
