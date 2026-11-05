@@ -169,3 +169,8 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 ## 2026-11-05 — unified app test-bundle version v1.1.2
 
 - User explicitly chose **v1.1.2** after confirming the main unified application was already v1.1.1. Apply version to the unified shell and triple-profiler test, including embedded executable metadata and CI artifact names; retain CET v1.3.4 and GRSP v1.0.0 independently. No gameplay/restore acceptance is implied by the packaging version bump.
+
+## 2026-11-05 — stop standalone harness loop, implement real app
+
+- User explicitly ordered integration of **both CET and GRSP now** into the unified application's existing two-page workflow; PresentMon is the initial lightweight frame provider and may be replaced if it fails real-game validation. No separate test-only GUI. Rebuild managed CET/GRSP managers for **.NET 10** using authoritative source in disposable CI; retain original native binary identity and owner-managed install/restore. Existing CapFrameX-heavy Page 1 wording can be updated later, after the core lifecycle is functional.
+- Real GUI installation, launch and collection are authorized, with strict hash/owner-status preflight, session journal and owner-controlled restore. **Only** completed CET+GRSP captures with confirmed restoration unlock Page 2. No optimization ZIP button until CET Resolver and REDscript source generator, compilation, dependencies and actual output have been validated. No MO2 until its separate integration milestone.

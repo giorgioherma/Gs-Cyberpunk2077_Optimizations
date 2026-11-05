@@ -7,27 +7,27 @@
 - [x] Locate original October 16 design on CET `dev/native-static-anchors-experimental`.
 - [x] Preserve original accepted design unedited in this repository; record source Git blob.
 - [x] Create unified product `main` documentation, source ownership, contract inventory and agent startup.
-- [ ] Verify/document current CI/binary identities, payload packaging, licenses and environment with an actual build.
-- [ ] New app code: **not started**.
+- [x] Verify/document current owner binary identities and actual integrated .NET10 portable packaging in Windows CI; gameplay verification remains separate.
+- [x] New two-page WinForms shell and CET/GRSP session coordinator implemented on `main`; actual gameplay and optimizer integration pending.
 
 ## Milestone 1 — minimal, real application shell
 
 - [x] Create one .NET 10 WinForms desktop project and initial Windows CI (**successful**; see LATEST-WORK for exact run and artifact).
 - [x] Implement the **first read-only Page 1/Page 2 shell** and original action labels; no Page 2 unlock without real capture evidence. Current game root persists under the user's LocalAppData.
 - [~] Read-only detect game, CET source, RED4ext directory, REDscript source, 0-Engine and G-REdruntime source **as unverified presence**; full native/API health proof and compatibility still pending.
-- [~] Implement optional standalone CET/GRSP known-path `--status` adapters and separate JSON parsing; no backend binaries bundled or status-ready claim until verified.
-- [x] Add/CI-run 14 offline core contracts for source paths, missing backends and domain-specific JSON error handling; real Windows process invocation, interactive GUI launch and verified component staging still pending.
+- [x] Bundle verified CET/GRSP owner managers and parse their actual independent status JSON. Live installed-state checks now drive GUI controls; in-game checks are still pending.
+- [x] Run 121 offline contracts; Windows CI launches both source-owned managed CLIs under shared .NET10 and validates isolated GRSP install/restore. Interactive GUI/gameplay not yet tested.
 - **Acceptance:** app runs and accurately displays status with both, either or neither profiler. No pretend "Install succeeded", generated ZIP, or measured report.
 
-[Shared .NET 10 Desktop Runtime packaging contract](technical/SHARED-NET-RUNTIME.md): single private runtime for final integrated managers and CapFrameX is **not yet validated**.
+[Shared .NET 10 Desktop Runtime packaging contract](technical/SHARED-NET-RUNTIME.md): one private runtime verified for integrated GCO/CET/GRSP; CapFrameX remains optional and outside the normal package.
 
 ## Milestone 2 — verified packaging, reversible profiler install and capture
 
-- [ ] Build/package **verified current** CET Profiler, CET Resolver, GRSP and optional CapFrameX companion (if license/download verified) with component manifest hashes and provenance; no legacy TOTAL binaries.
-- [ ] Coordinate CET + GRSP standalone `--install` / `--collect` / `--restore`, including failed second install and interrupted sessions. Never duplicate underlying file mutation logic.
-- [ ] Launch game and configured CapFrameX; explain current F11 capture and optional F10 controlled benchmark without changing existing controls blindly.
-- [ ] Track one uniquely identified session; detect started/ended/archived current data. Continue remains disabled if evidence incomplete/stale.
-- [ ] Archive and verify profiler evidence before clearing temporary live captures, then restore both native layers **before normal Page 2 generation**. Require explicit recovery on failed restore.
+- [~] Package verified CET Profiler and GRSP, plus PresentMon, with payload SHA manifests; CET Resolver remains a later milestone. No legacy TOTAL binaries.
+- [~] Coordinate CET + GRSP owner `--install` / `--collect` / `--restore` in the GUI, with pre-install journal and failed-second-owner recovery. Needs actual partial/crash game validation; never duplicate owner mutations.
+- [~] GUI launches the game and elevated PresentMon with F11; preserves existing CET F10/F11 choices. Validate the hotkey interaction and update remaining CapX UI text.
+- [~] Journal one owner-installed session and record archive paths/optional PresentMon CSV. Validate real synchronized capture windows before trusting full correlation.
+- [~] CET/GRSP owner collection and restoration wired; Page 2 requires verified completed capture and restore. Test real interrupted/recovery and raw report completeness.
 - **Acceptance:** actual end-to-end game run + crash/partial rollback tests, not only a DLL on disk. CapFrameX absent is honest optional status.
 
 ## Milestone 3 — unified analytics/report + CET Resolver
