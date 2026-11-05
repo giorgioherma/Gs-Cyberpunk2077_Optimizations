@@ -1,0 +1,134 @@
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$root = Join-Path (Get-Location) 'triple-test'
+New-Item -ItemType Directory -Path $root -Force | Out-Null
+$temp = Join-Path $env:RUNNER_TEMP 'GTriple'
+New-Item -ItemType Directory -Path $temp -Force | Out-Null
+
+function VerifyFile([string]$Path, [string]$Expected) {
+  if (-not (Test-Path $Path -PathType Leaf)) { throw "File missing: $Path" }
+  $hash=(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($hash -ne $Expected.ToLowerInvariant()) { throw "SHA256 mismatch: $Path $hash" }
+}
+function GetExact([string]$Url,[string]$Path,[string]$Sha) {
+  Invoke-WebRequest -Uri $Url -OutFile $Path
+  VerifyFile $Path $Sha
+}
+
+$artifact=Join-Path (Get-Location) 'downloaded-cet'
+foreach ($z in @(Get-ChildItem $artifact -Filter '*.zip' -File -Recurse)) {
+  Expand-Archive -LiteralPath $z.FullName -DestinationPath (Join-Path $temp 'CET') -Force
+}
+$candidates=@(Get-ChildItem $artifact,(Join-Path $temp 'CET') -Filter 'G-CET-Runtime-Profiler.exe' -Recurse -File -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.DirectoryName 'MANIFEST.json') })
+if ($candidates.Count -ne 1) { throw "Expected exactly one CET package: $($candidates.Count)" }
+$cetSource=$candidates[0].DirectoryName
+$cm=Get-Content (Join-Path $cetSource 'MANIFEST.json') -Raw | ConvertFrom-Json
+if ($cm.packageVersion -ne '1.3.4') { throw 'CET artifact version drift' }
+VerifyFile (Join-Path $cetSource 'payload/cyber_engine_tweaks.PROFILER.dll') $cm.targetCET.profilerSha256
+VerifyFile (Join-Path $cetSource 'payload/0-Engine/modules/G-CET/Scheduler.lua') $cm.zeroEngine.profilerSchedulerSha256
+if (-not (Test-Path (Join-Path $cetSource 'payload/CETProfilerControls/init.lua'))) { throw 'CET profiler controls missing' }
+Write-Host 'PASS current CET 1.3.4 native profiler, controls and canonical Scheduler'
+
+$grzip=Join-Path $temp 'GRSP-1.0.0.zip'
+GetExact 'https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/releases/download/v1.0.0/G-REDscript-Profiler-v1.0.0.zip' $grzip '15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'
+$grUnzip=Join-Path $temp 'GRSP'
+Expand-Archive $grzip $grUnzip -Force
+$grCandidates=@(Get-ChildItem $grUnzip -Filter 'G-REDscript-Profiler.exe' -Recurse -File | Where-Object { Test-Path (Join-Path $_.DirectoryName 'MANIFEST.json') })
+if ($grCandidates.Count -ne 1) { throw "Expected one official GRSP package: $($grCandidates.Count)" }
+$grSource=$grCandidates[0].DirectoryName
+$gm=Get-Content (Join-Path $grSource 'MANIFEST.json') -Raw | ConvertFrom-Json
+if ($gm.version -ne '1.0.0') { throw 'GRSP release version drift' }
+if (-not (Test-Path (Join-Path $grSource 'payload/G-REDscript-Profiler.dll'))) { throw 'GRSP native payload missing' }
+Write-Host 'PASS official GRSP v1.0.0 release ZIP integrity and payload'
+
+$components=Join-Path $root 'components'
+$cet=Join-Path $components 'cet'
+$gr=Join-Path $components 'grsp'
+New-Item -ItemType Directory -Force $cet,$gr | Out-Null
+Copy-Item (Join-Path $cetSource '*') $cet -Recurse -Force
+Copy-Item (Join-Path $grSource '*') $gr -Recurse -Force
+Remove-Item (Join-Path $cet 'app') -Recurse -Force
+Remove-Item (Join-Path $gr 'app') -Recurse -Force
+
+# Build the unmodified manager sources against net10 and publish framework-dependent.
+# Native DLLs continue to come from exact verified owner packages above.
+function PublishManager([string]$Csproj, [string]$Dest) {
+  & dotnet publish $Csproj -c Release -r win-x64 --self-contained false -p:TargetFramework=net10.0-windows -p:SelfContained=false -p:PublishSingleFile=false -p:PublishTrimmed=false -o $Dest
+  if ($LASTEXITCODE -ne 0) { throw "Manager net10 retarget failed: $Csproj" }
+  if (Test-Path (Join-Path $Dest 'coreclr.dll')) { throw 'Duplicate managed runtime' }
+}
+PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join-Path $cet 'app')
+PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
+PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $root 'app')
+
+# One private Microsoft .NET 10 Core and WindowsDesktop runtime.
+$runtime=Join-Path $root 'runtime'
+$installer=Join-Path $temp 'dotnet-install.ps1'
+Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer
+& $installer -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $runtime -NoPath
+if ($LASTEXITCODE -ne 0) { throw 'Private .NET Core 10 runtime installation failed' }
+& $installer -Channel 10.0 -Runtime windowsdesktop -Architecture x64 -InstallDir $runtime -NoPath
+if ($LASTEXITCODE -ne 0) { throw 'Private .NET Desktop 10 runtime installation failed' }
+$runtimes=& (Join-Path $runtime 'dotnet.exe') --list-runtimes
+if (-not ($runtimes | Select-String 'Microsoft.NETCore.App 10\.') -or -not ($runtimes | Select-String 'Microsoft.WindowsDesktop.App 10\.')) { throw 'Private .NET 10 Desktop layout incomplete' }
+Write-Host "PASS private runtime: $($runtimes -join '; ')"
+
+# Build the existing source-owned native root launcher.
+$vswhere=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+$vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+if (-not $vs) { throw 'Required x64 compiler missing on runner' }
+$vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+$rcPath=Join-Path $temp 'launcher.rc'
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@','1,1,1').Replace('@VERSION_DOTS@','1.1.1')
+Set-Content $rcPath $rcTxt -Encoding ascii
+$nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
+$nativeRes=Join-Path $temp 'launcher.res'
+$nativeObj=Join-Path $temp 'launcher.obj'
+$nativeExe=Join-Path $root 'G-Total-Optimizer.exe'
+$cmdPath=Join-Path $temp 'build.cmd'
+$buildLines=@('@echo off','call "'+$vcvars+'" >nul','if errorlevel 1 exit /b %errorlevel%','rc.exe /nologo /fo"'+$nativeRes+'" "'+$rcPath+'"','if errorlevel 1 exit /b %errorlevel%','cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"'+$nativeObj+'" "'+$nativeSource+'" "'+$nativeRes+'" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"'+$nativeExe+'"','exit /b %errorlevel%')
+Set-Content $cmdPath $buildLines -Encoding ascii
+& $cmdPath
+if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Native PresentMon CLI, exact release digest. No 160 MB MSI.
+$pm=Join-Path $components 'presentmon'
+New-Item -ItemType Directory -Force $pm | Out-Null
+$pmExe=Join-Path $pm 'PresentMon.exe'
+GetExact 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe' $pmExe 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile (Join-Path $pm 'LICENSE-PresentMon.txt')
+Write-Host 'PASS official PresentMon CLI 2.6.0'
+
+# One coreclr in entire bundle. Stable released GRSP and CET native DLLs were
+# not recompiled, and no original third-party mod source is shipped.
+$core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
+if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Expected one shared .NET runtime; found $($core.Count)"
+}
+foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'))) {
+  if (!(Test-Path $exe)) { throw "Manager executable absent $exe" }
+  $json=Get-Content ([IO.Path]::ChangeExtension($exe,'.runtimeconfig.json')) -Raw
+  if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
+}
+New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
+Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1')
+Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii
+Set-Content (Join-Path $root 'VERSION.txt') '1.1.1' -NoNewline
+$provenance=@{
+  testOnly=$true
+  cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
+  presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
+}
+$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components 'TEST-PROVENANCE.json') -Encoding UTF8
+Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
+CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
+Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
+It uses both profiler owners' original install/collect/restore headless CLIs.
+PresentMon starts with F11 capture targeting Cyberpunk2077.exe and asks for UAC.
+Start/stop F11 twice in the game. CLOSE game before collecting/restore.
+Retain RESULTS/Triple-* logs and raw data to report success or errors.
+The ordinary G-Total GUI install/generate buttons remain gated.
+No third-party mod source or optimization output is distributed.
+'@ -Encoding UTF8
+Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
