@@ -1,0 +1,71 @@
+name: Verify CapFrameX portable runtime compatibility (non-shipping)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/capframex-runtime-check.yml' ]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-capframex:
+    runs-on: windows-latest
+    steps:
+      - name: Fetch and verify exact upstream CapFrameX 1.9.1.2 beta portable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/CXWorld/CapFrameX/releases/download/v1.9.1_beta/CapFrameX_1.9.1.2_Beta_Portable.zip'
+          $expected = 'acd8f82598bc794d8f666996eb8157c445c05af0fc04c9e4129e4ac76bf1086a'
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile 'evidence/CapFrameX-Portable.zip'
+          $actual = (Get-FileHash 'evidence/CapFrameX-Portable.zip' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Upstream CapFrameX SHA mismatch: $actual" }
+          Write-Host "PASS official release SHA-256 $actual"
+          Expand-Archive -LiteralPath 'evidence/CapFrameX-Portable.zip' -DestinationPath 'evidence/CapFrameX' -Force
+
+      - name: Inspect portable payload and its declared framework requirements
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $folder = 'evidence/CapFrameX'
+          $exe = @(Get-ChildItem $folder -Filter 'CapFrameX.exe' -Recurse -File)
+          if ($exe.Count -ne 1) { throw "Expected one CapFrameX.exe, found $($exe.Count)" }
+          $root = $exe[0].DirectoryName
+          $runtimeJson = @(Get-ChildItem $folder -Filter 'CapFrameX.runtimeconfig.json' -Recurse -File)
+          if ($runtimeJson.Count -eq 0) { throw 'CapFrameX runtimeconfig.json absent; cannot assert runtime mode.' }
+          $config = Get-Content $runtimeJson[0].FullName -Raw | ConvertFrom-Json
+          $frameworks = @()
+          if ($config.runtimeOptions.framework) { $frameworks += $config.runtimeOptions.framework.name }
+          if ($config.runtimeOptions.frameworks) { $frameworks += $config.runtimeOptions.frameworks | ForEach-Object { $_.name } }
+          Write-Host "CapFrameX framework references: $($frameworks -join ', ')"
+          if ('Microsoft.WindowsDesktop.App' -notin $frameworks) { throw 'Unexpected CapFrameX runtime framework metadata.' }
+          $native = @('coreclr.dll','hostfxr.dll','PresentationFramework.dll','vcruntime140.dll','msvcp140.dll')
+          foreach ($file in $native) {
+            $present = @(Get-ChildItem $folder -Filter $file -Recurse -File).Count
+            Write-Host "$file packaged count: $present"
+          }
+          $hasProperPrivateRuntime = (Test-Path (Join-Path $root 'shared/Microsoft.NETCore.App')) -and
+              (Test-Path (Join-Path $root 'shared/Microsoft.WindowsDesktop.App')) -and
+              (Test-Path (Join-Path $root 'host/fxr'))
+          Write-Host "Official portable includes a complete private .NET runtime root: $hasProperPrivateRuntime"
+          if ($hasProperPrivateRuntime) { throw 'Unexpected CapFrameX private runtime; re-evaluate packaging assumptions.' }
+          Write-Host "PASS official portable is framework-dependent and requires an external or separately packaged compatible runtime."
+
+      - name: Verify upstream source contains mandatory system-level checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = 'https://raw.githubusercontent.com/CXWorld/CapFrameX/v1.9.1_beta/source/CapFrameX.Configuration'
+          $checker = (Invoke-WebRequest -Uri "$repo/AppDependencyChecker.cs").Content
+          $detector = (Invoke-WebRequest -Uri "$repo/DotNetRuntimeDetector.cs").Content
+          foreach ($marker in @('Registry.LocalMachine.OpenSubKey','CheckAndNotifyMissingDependencies','IsRequiredDotNetInstalled')) {
+            if (-not $checker.Contains($marker)) { throw "Upstream VC++/.NET check marker missing: $marker" }
+          }
+          foreach ($marker in @('Environment.SpecialFolder.ProgramFiles','Microsoft.WindowsDesktop.App','RequiredMajorVersion = 10')) {
+            if (-not $detector.Contains($marker)) { throw "Upstream machine .NET path marker missing: $marker" }
+          }
+          Write-Host 'PASS CapFrameX 1.9.1.2 beta checks installed system .NET Desktop 10 plus machine-wide VC++ registry.'
+          Write-Host 'NO PASS CLAIM: this cannot verify no-install startup; the unchanged vendor app can reject private runtime and app-local VC++.'
