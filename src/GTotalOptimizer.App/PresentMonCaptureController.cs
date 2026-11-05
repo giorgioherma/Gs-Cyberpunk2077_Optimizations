@@ -34,12 +34,14 @@ internal static class PresentMonCaptureController
         var resultPath = Path.Combine(Path.GetDirectoryName(safeCsv)!, ResultName);
         if (File.Exists(resultPath)) File.Delete(resultPath);
 
-        var host = Path.Combine(packageRoot, "app", PortablePackagePaths.ManagedExecutableName);
+        // Use the native GUI launcher, which prepares the private .NET 10
+        // runtime even after Windows switches to the elevated token.
+        var host = Path.Combine(packageRoot, PortablePackagePaths.RootLauncherName);
         var psi = new ProcessStartInfo(host)
         {
             UseShellExecute = true,
             Verb = "runas",
-            WorkingDirectory = Path.Combine(packageRoot, "app"),
+            WorkingDirectory = packageRoot,
             WindowStyle = ProcessWindowStyle.Hidden
         };
         psi.ArgumentList.Add(CliSwitch);

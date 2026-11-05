@@ -7,7 +7,7 @@
 // The executable and internal app must remain together in the extracted tree.
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
 {
-    (void)inst; (void)prev; (void)commandLine; (void)show;
+    (void)inst; (void)prev; (void)show;
     wchar_t root[MAX_PATH * 4] = {0};
     DWORD len = GetModuleFileNameW(NULL, root, ARRAYSIZE(root));
     if (!len || len >= ARRAYSIZE(root))
@@ -54,7 +54,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
     }
 
     wchar_t cmd[MAX_PATH * 4 + 16] = {0};
-    if (swprintf_s(cmd, ARRAYSIZE(cmd), L"\"%ls\"", exe) < 0)
+    // Forward intentional headless control arguments to the same managed app.
+    // Crucially, the public launcher also supplies the private .NET 10 runtime
+    // to elevated child processes without assuming a system .NET install.
+    int n = commandLine && *commandLine
+        ? swprintf_s(cmd, ARRAYSIZE(cmd), L"\"%ls\" %ls", exe, commandLine)
+        : swprintf_s(cmd, ARRAYSIZE(cmd), L"\"%ls\"", exe);
+    if (n < 0)
         return 2;
 
     STARTUPINFOW start = {0};

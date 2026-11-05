@@ -20,7 +20,7 @@ public sealed record LiveProfilerState(
     public bool CanCollect(bool hasCurrentSession, bool gameRunning) =>
         hasCurrentSession && !gameRunning && BothCaptured;
     public bool CanLaunch(bool hasCurrentSession, bool gameRunning) =>
-        hasCurrentSession && !gameRunning && BothInstalled;
+        hasCurrentSession && !gameRunning && BothInstalled && !BothCaptured;
 }
 
 public sealed record ProfilerWorkflowResult(
