@@ -1,4 +1,5 @@
 name: Build integrated GCO CET GRSP PresentMon
+# Product version changes only on an explicit user request; keep fixed otherwise.
 
 on:
   workflow_dispatch:
