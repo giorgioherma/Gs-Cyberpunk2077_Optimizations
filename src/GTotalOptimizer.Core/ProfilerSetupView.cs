@@ -66,5 +66,5 @@ public static class SetupCopy
     public const string CaptureDetails =
         "Stay in-world. Use an old save or Phantom Liberty start; aim for heavy combat.\r\n" +
         "If you're having issues getting a longer combat capture, fight police. If you die, stop recording with F11 before loading.\r\n" +
-        "Shorter captures also work. Close the game, return here and use COLLECT RESULTS.";
+        "Shorter captures also work. Close the game, return to this screen and use COLLECT RESULTS.";
 }
