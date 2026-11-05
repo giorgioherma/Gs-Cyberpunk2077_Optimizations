@@ -116,3 +116,10 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - The first line of the instructions receives a green tick whenever a physical Cyberpunk game root is verified. This indicates the game path only, not profiler or MO2 VFS runtime validation.
 - Add a **REFRESH** button at the top right of Page 1 to reread physical paths and MO2 configuration/profile, with no writes to game files.
 - Complete step 3 wording with explicit restoration before continuation. Keep v1.1.1 and component boundaries; do not unlock profiler install/capture/restore/generation from these visual changes.
+
+
+## 2026-11-05 — physical baseline, MO2 absence and portable distribution
+
+- **Every MO2 source projection includes the live physical game as lowest precedence**, whether MO2 is empty or enabled. Enabled MO2 package files override same game-relative paths based on profile priority; preserve winning owner and file path for source drift/optimizer protection. Disabled MO2 packages never enter.
+- **Missing `modlist.txt` is not proof of active MO2 packages**: exclude all MO2 packages and MO2 Overwrite; physical game remains analyzable as its own source. An existing readable list with zero enabled packages is a valid 0-enabled profile. Corrupt/unreadable/incomplete enabled lists also exclude all MO2 layers (no guessing); show missing verification separately from directly found game files. MO2 VFS/runtime winner proof is still pending before MO2 optimization.
+- Package unified `v1.1.1` as one clean folder like the CET profiler: root native launcher plus Windows shortcut, managed application and exactly one private .NET 10 runtime under `app/`, `RESULTS/` folder and `VERSION.txt`. The root launcher is a source-built small Windows executable, not another profiler or managed runtime. Never ship third-party binaries before approval/provenance. No new release tag or change to CET/GRSP component versions.

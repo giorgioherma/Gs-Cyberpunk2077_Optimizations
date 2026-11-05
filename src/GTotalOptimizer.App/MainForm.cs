@@ -82,7 +82,7 @@ internal sealed class MainForm : Form
     private GameInspection inspection = GameInspector.Inspect(null);
     private string? resultsFolder;
     private bool captureAndRestoreVerified;
-    private readonly string packageRoot = AppContext.BaseDirectory;
+    private readonly string packageRoot = PortablePackagePaths.RootFromAppDirectory(AppContext.BaseDirectory);
 
     public MainForm()
     {
@@ -893,9 +893,7 @@ internal sealed class MainForm : Form
         // Mods directory; every enabled package; and winning physical file paths.
         Mo2Stack? stack = null;
         var profile = mo2Profile.SelectedItem as string;
-        if (mo2Mode.Checked && current.IsValidGame &&
-            mo2Location.HasConfiguration && mo2Configuration.Recognized &&
-            !string.IsNullOrWhiteSpace(profile))
+        if (mo2Mode.Checked && current.IsValidGame)
         {
             var config = mo2Configuration;
             var gameRoot = current.GameRoot;
@@ -910,46 +908,48 @@ internal sealed class MainForm : Form
         }
 
         mo2Effective = stack;
-        var sourceVerified = mo2Mode.Checked &&
-            mo2Location.HasConfiguration && mo2Configuration.Recognized &&
-            stack?.Ready == true && !string.IsNullOrWhiteSpace(profile);
+        // A missing modlist is NOT a verified MO2 profile; in that case four
+        // source checks can still reflect the direct live game, with no MO2
+        // files (including Overwrite) admitted to the effective map.
+        var sourceAvailable = mo2Mode.Checked && stack?.Ready == true;
+        var sourceVerified = sourceAvailable && stack!.ProfileVerified &&
+            mo2Location.HasConfiguration && mo2Configuration.Recognized;
 
         if (mo2Mode.Checked)
         {
-            var types = new[]
+            var checks = new[]
             {
                 sourceVerified,
-                sourceVerified && stack!.HasCetAsi,
-                sourceVerified && stack!.CetOwners > 0,
-                sourceVerified && stack!.HasRedscript,
-                sourceVerified && stack!.Red4extFiles > 0
+                sourceAvailable && stack!.HasCetAsi,
+                sourceAvailable && stack!.CetOwners > 0,
+                sourceAvailable && stack!.HasRedscript,
+                sourceAvailable && stack!.Red4extFiles > 0
             };
-            for (var i = 0; i < types.Length; i++)
-                mo2ComponentChecks[i].Checked = types[i];
+            for (var i = 0; i < checks.Length; i++)
+                mo2ComponentChecks[i].Checked = checks[i];
 
-            var redscriptCount = sourceVerified ? RedscriptModCounter.CountEffective(stack) : 0;
-            sourceStatus.Text = sourceVerified
-                ? $"Profile {profile}: {stack!.EnabledPackages} enabled packages · " +
-                    $"{stack.CetOwners} CET mods · {redscriptCount} REDscript mod groups · " +
-                    $"{stack.ShadowedFiles} loose-file conflicts"
-                : !mo2Location.HasInstallation
-                    ? mo2Location.Detail
-                    : !mo2Location.HasConfiguration
-                        ? mo2Location.Detail
-                        : !mo2Configuration.Recognized
-                            ? mo2Configuration.Detail
-                            : !current.IsValidGame
-                                ? "Select the Cyberpunk 2077 Game root - /Cyberpunk2077"
-                                : string.IsNullOrWhiteSpace(profile)
-                                    ? "Select the MO2 profile used to launch Cyberpunk."
-                                    : stack?.Detail ?? "Reading the selected MO2 profile.";
-            // A valid physical source candidate still needs runtime USVFS proof.
-            var mo2EngineMissing = sourceVerified && stack!.CetOwners > 0 && !stack.HasZeroEngine;
-            zeroEngineLink.Visible = mo2EngineMissing;
-            engineMissingNotice.Visible = mo2EngineMissing;
+            if (sourceAvailable)
+            {
+                var reds = RedscriptModCounter.CountEffective(stack);
+                var origin = stack!.GameOnlyFallback
+                    ? "Live game only — MO2 modlist unavailable"
+                    : $"MO2 {profile}: {stack.EnabledPackages} enabled packages";
+                sourceStatus.Text = $"{origin} · {stack.CetOwners} CET mods · " +
+                    $"{reds} REDscript groups · {stack.ShadowedFiles} file conflicts";
+            }
+            else
+                sourceStatus.Text = !current.IsValidGame
+                    ? "Select the Cyberpunk 2077 Game root - /Cyberpunk2077"
+                    : stack?.Detail ?? "Select the MO2 profile or inspect the live game files.";
+
+            var engineMissing = sourceAvailable && stack!.CetOwners > 0 && !stack.HasZeroEngine;
+            zeroEngineLink.Visible = engineMissing;
+            engineMissingNotice.Visible = engineMissing;
             pageOneStatus.Text = sourceVerified
-                ? "Profile inventory and file winners resolved; MO2 VFS/RootBuilder runtime still unverified."
-                : "MO2 checks require INI, selected profile, enabled modlist and complete winning-file inventory.";
+                ? "Physical game and enabled MO2 file winners resolved; USVFS/RootBuilder remains unverified."
+                : sourceAvailable
+                    ? "Live game scanned. MO2 packages excluded until modlist and profile prove active files."
+                    : "No trusted live source. Check the selected physical game folder.";
         }
         else
         {

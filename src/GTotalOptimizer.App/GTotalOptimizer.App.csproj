@@ -9,7 +9,7 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
-    <AssemblyName>G-Total-Optimizer</AssemblyName>
+    <AssemblyName>G-Total-Optimizer.App</AssemblyName>
     <RootNamespace>GTotalOptimizer.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

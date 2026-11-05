@@ -16,7 +16,7 @@ public sealed record Mo2Stack(
     int ShadowedFiles, bool HasZeroEngine, bool HasRedscript,
     IReadOnlyDictionary<string, Mo2WinningFile> EffectiveFiles,
     IReadOnlyList<string> Warnings,
-    bool HasCetAsi = false)
+    bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false)
 {
     public string? Winner(string relative) =>
         EffectiveFiles.TryGetValue(relative.Replace('\\', '/'), out var file) ? file.PhysicalPath : null;
@@ -45,17 +45,18 @@ public static class Mo2SourceInspector
             var selectedProfile = ReadProfileSelection(ini);
             var choices = Directory.Exists(profiles)
                 ? Directory.EnumerateDirectories(profiles)
-                    .Where(folder => File.Exists(Path.Combine(folder, "modlist.txt")))
                     .Select(folder => Path.GetFileName(folder))
                     .Where(name => !string.IsNullOrWhiteSpace(name))
                     .Select(name => name!).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray()
                 : [];
-            if (!Directory.Exists(mods))
-                return new(false, "MO2 mods directory missing: " + mods, mods, profiles, overwrite, choices, selectedProfile);
-            if (choices.Length == 0)
-                return new(false, "No profiles with modlist.txt found under " + profiles, mods, profiles, overwrite, choices, selectedProfile);
-            return new(true, $"MO2 paths found; {choices.Length} profile(s). Select the actual launched profile.",
-                mods, profiles, overwrite, choices, selectedProfile);
+            // No modlist is not permission to read MO2 packages, but the live
+            // game remains a valid source and the profile remains selectable.
+            var detail = !Directory.Exists(profiles)
+                ? "Profiles directory missing; live game remains available."
+                : !Directory.Exists(mods)
+                    ? "MO2 Mods directory missing; enabled packages cannot be resolved."
+                    : $"MO2 paths found; {choices.Length} profile(s). Select the launched profile.";
+            return new(true, detail, mods, profiles, overwrite, choices, selectedProfile);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
         {
@@ -68,82 +69,113 @@ public static class Mo2SourceInspector
     // under the selected MO2 profile or that RootBuilder/virtual paths match this layout.
     public static Mo2Stack Resolve(string? gameRoot, Mo2Instance instance, string? profile, CancellationToken token = default)
     {
-        var empty = new Dictionary<string, Mo2WinningFile>(StringComparer.OrdinalIgnoreCase);
-        Mo2Stack Refuse(string reason) => new(false, reason, profile ?? "", 0, 0, 0, 0, 0,
-            false, false, empty, [reason]);
+        if (!IsValidGameRoot(gameRoot))
+            return Refuse("Live Cyberpunk game root required.", profile);
+        if (!instance.Recognized || string.IsNullOrWhiteSpace(profile) ||
+            !instance.Profiles.Contains(profile, StringComparer.OrdinalIgnoreCase))
+            return ResolveGameOnly(gameRoot, "MO2 profile unverified; physical game scanned without MO2.", profile, token);
 
-        if (!instance.Recognized) return Refuse(instance.Detail);
-        if (string.IsNullOrWhiteSpace(profile) || !instance.Profiles.Contains(profile, StringComparer.OrdinalIgnoreCase))
-            return Refuse("Select a profile found in the MO2 instance.");
-        if (string.IsNullOrWhiteSpace(gameRoot) ||
-            !File.Exists(Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe")))
-            return Refuse("MO2 needs the actual Cyberpunk game root for mixed game/MO2 source resolution.");
-
+        var modlist = Path.Combine(instance.ProfilesDirectory, profile, "modlist.txt");
+        if (!File.Exists(modlist))
+            return ResolveGameOnly(gameRoot,
+                "modlist.txt absent: no MO2 packages or Overwrite; only physical game files.", profile, token);
         try
         {
-            var profileDir = Path.Combine(instance.ProfilesDirectory, profile);
-            var entries = ReadEnabledMods(Path.Combine(profileDir, "modlist.txt"));
-            if (entries.Count == 0)
-                return Refuse("Profile has no enabled package entries in modlist.txt.");
-            var warnings = new List<string>();
+            var entries = ReadEnabledMods(modlist);
+            if (entries.Count > 0 && !Directory.Exists(instance.ModsDirectory))
+                return ResolveGameOnly(gameRoot, "Configured MO2 Mods directory missing; enabled MO2 files excluded.", profile, token);
             var winners = new Dictionary<string, Mo2WinningFile>(StringComparer.OrdinalIgnoreCase);
             var shadows = 0;
             var scanned = 0;
-
-            // Lowest precedence: game's physical files, including separately installed CET.
-            IndexLayer(gameRoot, "(physical game)", -1, false, winners, ref scanned, ref shadows, token);
-            // MO2 modlist.txt is highest-to-lowest. Reverse to let highest priority win last.
             var missingPackages = 0;
+
+            // The physical game is always lowest priority, never discarded.
+            IndexLayer(gameRoot!, "(physical game)", -1, false, winners, ref scanned, ref shadows, token);
+            // MO2 modlist is highest-priority first; reverse so higher priority overwrites lower.
             for (var i = entries.Count - 1; i >= 0; i--)
             {
                 token.ThrowIfCancellationRequested();
-                var modName = entries[i];
-                var folder = Path.GetFullPath(Path.Combine(instance.ModsDirectory, modName));
+                var name = entries[i];
+                var folder = Path.GetFullPath(Path.Combine(instance.ModsDirectory, name));
                 if (!IsChildPath(instance.ModsDirectory, folder))
-                {
-                    warnings.Add("Rejected unsafe modlist path outside MO2 mods root: " + modName);
-                    continue;
-                }
+                    return ResolveGameOnly(gameRoot, "Unsafe enabled MO2 package path; no MO2 packages trusted.", profile, token);
                 if (!Directory.Exists(folder))
                 {
-                    warnings.Add("Enabled MO2 package not found: " + modName);
                     missingPackages++;
                     continue;
                 }
-                IndexLayer(folder, modName, entries.Count - i, true, winners, ref scanned, ref shadows, token);
+                IndexLayer(folder, name, entries.Count - i, true,
+                    winners, ref scanned, ref shadows, token);
             }
+            if (missingPackages != 0)
+                return ResolveGameOnly(gameRoot, $"{missingPackages} enabled MO2 package(s) not found; all MO2 layers excluded.", profile, token);
 
-            // Never claim a usable stack if enabled package inventory is incomplete.
-            if (missingPackages > 0)
-                return Refuse($"{missingPackages} enabled MO2 package(s) could not be located. Check configured Mods directory.");
-
-            // MO2 Overwrite loose files have the highest nominal precedence.
+            // Overwrite is MO2-managed; include only after a real modlist was read.
             if (Directory.Exists(instance.OverwriteDirectory))
                 IndexLayer(instance.OverwriteDirectory, "(MO2 Overwrite)", int.MaxValue,
                     true, winners, ref scanned, ref shadows, token);
 
-            var paths = winners.Keys.ToArray();
-            var cetNames = paths
-                .Where(IsCetInit)
-                .Select(s => s.Split('/')[5])
-                .Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            var redCount = paths.Count(p => p.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase)
-                                          && p.EndsWith(".reds", StringComparison.OrdinalIgnoreCase));
-            var nativeCount = paths.Count(p => p.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase)
-                                            && p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
-            var engine = winners.ContainsKey("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua");
-            var hasRed = redCount > 0;
-            var asi = winners.ContainsKey("bin/x64/plugins/cyber_engine_tweaks.asi") ||
-                winners.ContainsKey("bin/x64/plugins/cet.asi");
-            warnings.Add("Loose-file priority only: verify MO2 launch, archive mapping, hidden file overrides, and RootBuilder/virtualized root plugins before generation.");
-            return new(true, $"Resolved physical loose-file candidates from {entries.Count} enabled MO2 packages. Runtime VFS unverified.",
-                profile, entries.Count, cetNames, redCount, nativeCount, shadows, engine,
-                hasRed, winners, warnings, asi);
+            var caveat = "Loose-file precedence only; MO2 USVFS, RootBuilder, archive and file-exception loading remain unverified.";
+            return Build(profile, entries.Count, winners, shadows, [caveat],
+                profileVerified: true, gameOnlyFallback: false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+            or NotSupportedException or InvalidDataException)
         {
-            return Refuse("MO2 source resolution blocked: " + ex.Message);
+            // Missing file is a special game-only state; corrupt/unreadable files
+            // cannot be trusted to reconstruct the enabled stack.
+            return ResolveGameOnly(gameRoot, "MO2 profile inventory unreadable or unsafe; all MO2 layers excluded: " + ex.Message, profile, token);
         }
+    }
+
+    public static Mo2Stack ResolveGameOnly(string? gameRoot, string reason, string? profile = null,
+        CancellationToken token = default)
+    {
+        if (!IsValidGameRoot(gameRoot))
+            return Refuse("Select the live Cyberpunk game root.", profile);
+        try
+        {
+            var files = new Dictionary<string, Mo2WinningFile>(StringComparer.OrdinalIgnoreCase);
+            var scanned = 0;
+            var shadows = 0;
+            IndexLayer(gameRoot!, "(physical game)", -1, false, files, ref scanned, ref shadows, token);
+            return Build(profile ?? "", 0, files, shadows, [reason],
+                profileVerified: false, gameOnlyFallback: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+            or NotSupportedException or InvalidDataException)
+        {
+            return Refuse("Cannot inspect live game: " + ex.Message, profile);
+        }
+    }
+
+    private static bool IsValidGameRoot(string? root) => !string.IsNullOrWhiteSpace(root) &&
+        File.Exists(Path.Combine(root, "bin", "x64", "Cyberpunk2077.exe"));
+
+    private static Mo2Stack Refuse(string detail, string? profile) =>
+        new(false, detail, profile ?? "", 0, 0, 0, 0, 0,
+            false, false, new Dictionary<string, Mo2WinningFile>(StringComparer.OrdinalIgnoreCase),
+            [detail], ProfileVerified: false);
+
+    private static Mo2Stack Build(string profile, int enabled,
+        IReadOnlyDictionary<string, Mo2WinningFile> files, int shadowed,
+        IReadOnlyList<string> notes, bool profileVerified, bool gameOnlyFallback)
+    {
+        var paths = files.Keys.ToArray();
+        var cetOwners = paths.Where(IsCetInit).Select(p => p.Split('/')[5])
+            .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var reds = paths.Count(p => p.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase)
+            && p.EndsWith(".reds", StringComparison.OrdinalIgnoreCase));
+        var plugins = paths.Count(p => p.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase)
+            && p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+        var engine = files.ContainsKey("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua");
+        var asi = files.ContainsKey("bin/x64/plugins/cyber_engine_tweaks.asi") ||
+            files.ContainsKey("bin/x64/plugins/cet.asi");
+        var detail = gameOnlyFallback
+            ? "Live game only; MO2 package selection unavailable. " + notes[0]
+            : $"Live game + {enabled} enabled MO2 packages; {shadowed} loose-file overrides. VFS not proven.";
+        return new(true, detail, profile, enabled, cetOwners, reds, plugins,
+            shadowed, engine, reds > 0, files, notes, asi, profileVerified, gameOnlyFallback);
     }
 
     private static void IndexLayer(string root, string owner, int priority, bool fromMo2,
@@ -214,12 +246,16 @@ public static class Mo2SourceInspector
         foreach (var raw in File.ReadLines(modlist))
         {
             var line = raw.Trim();
-            if (!line.StartsWith('+') || line.Length < 2) continue;
+            if (!line.StartsWith('+')) continue;
             var name = line[1..].Trim();
-            if (name.Length == 0 || name.EndsWith("_separator", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains('/') || name.Contains('\\') || name == ".." || name == "." ||
-                name.Contains(':') || name.Contains('\0')) continue;
-            if (seen.Add(name)) entries.Add(name);
+            if (name.EndsWith("_separator", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (name.Length == 0 || name.Contains('/') || name.Contains('\\') ||
+                name == ".." || name == "." || name.Contains(':') || name.Contains('\0'))
+                throw new InvalidDataException("Unsafe enabled MO2 package path in modlist.txt.");
+            if (!seen.Add(name))
+                throw new InvalidDataException("Duplicate enabled MO2 package in modlist.txt.");
+            entries.Add(name);
         }
         return entries;
     }

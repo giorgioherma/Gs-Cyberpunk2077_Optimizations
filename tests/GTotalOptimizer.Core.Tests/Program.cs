@@ -200,7 +200,7 @@ try
     File.WriteAllText(Path.Combine(mo2InstanceDir, "ModOrganizer.ini"),
         "[Settings]\nbase_directory=../MO2-Storage\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\noverwrite_directory=%BASE_DIR%/overwrite\n");
     File.WriteAllText(Path.Combine(activeProfile, "modlist.txt"),
-        "#highest priority first\n+High\n-LegacyDisabled\n+Low\n+../escape\n+Divider_separator\n");
+        "#highest priority first\n+High\n-LegacyDisabled\n+Low\n+Divider_separator\n");
     var highCet = Path.Combine(mo2Mods, "High", "bin", "x64", "plugins",
         "cyber_engine_tweaks", "mods", "CyberTrials");
     var lowCet = Path.Combine(mo2Mods, "Low", "bin", "x64", "plugins",
@@ -250,12 +250,86 @@ try
     Require(selectedStack.Warnings.Any(w => w.Contains("RootBuilder")),
         "MO2 candidate inventory never claims proven runtime VFS/RootBuilder compatibility");
 
+    // Physical game files are never discarded when any MO2 packages are active.
+    // Only same-path conflicts are won by higher-priority active MO2 layers.
+    var directPhysical = Path.Combine(root, "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods", "DirectOwner", "init.lua");
+    Directory.CreateDirectory(Path.GetDirectoryName(directPhysical)!);
+    File.WriteAllText(directPhysical, "direct owner");
+    var physicalConflict = Path.Combine(root, "r6", "scripts", "shared.reds");
+    File.WriteAllText(physicalConflict, "physical redscript");
+    var physicalExtra = Path.Combine(root, "r6", "scripts", "DirectOnly", "main.reds");
+    Directory.CreateDirectory(Path.GetDirectoryName(physicalExtra)!);
+    File.WriteAllText(physicalExtra, "direct redscript");
+    var withPhysical = Mo2SourceInspector.Resolve(root, mo2, "Active");
+    Require(withPhysical.Ready && withPhysical.ProfileVerified && withPhysical.EnabledPackages == 2,
+        "enabled MO2 packages remain active on top of a full physical game layer");
+    Require(withPhysical.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/DirectOwner/init.lua") ==
+        directPhysical && withPhysical.CetOwners == 3,
+        "direct CET owner remains in effective stack when other MO2 mods are enabled");
+    Require(withPhysical.Winner("r6/scripts/DirectOnly/main.reds") == physicalExtra,
+        "direct REDscript file remains visible when MO2 has enabled packages");
+    Require(withPhysical.Winner("r6/scripts/shared.reds") == highRed &&
+        withPhysical.EffectiveFiles["r6/scripts/shared.reds"].FromMo2,
+        "highest-priority MO2 loose file overrides physical game only at the same relative path");
+    Require(withPhysical.ShadowedFiles > selectedStack.ShadowedFiles,
+        "physical/MO2 conflict contributes to shadowed-file count");
+
     var overwriteRoot = Path.Combine(mo2Base, "overwrite", "r6", "scripts");
     Directory.CreateDirectory(overwriteRoot);
     File.WriteAllText(Path.Combine(overwriteRoot, "shared.reds"), "MO2 overwrite");
     var withOverwrite = Mo2SourceInspector.Resolve(root, mo2, "Active");
     Require(withOverwrite.Winner("r6/scripts/shared.reds") == Path.Combine(overwriteRoot, "shared.reds"),
         "MO2 Overwrite wins over all enabled package files");
+    // Zero enabled MO2 mods: valid modlist, live game still counted.
+    // Completely missing modlist: MO2 (including Overwrite) is excluded,
+    // but the live game still supplies CET/REDscript/RED4ext files.
+    var disabledProfile = Path.Combine(mo2Profiles, "AllDisabled");
+    Directory.CreateDirectory(disabledProfile);
+    File.WriteAllText(Path.Combine(disabledProfile, "modlist.txt"),
+        "# no enabled packages\n-High\n-Low\n");
+    var noListProfile = Path.Combine(mo2Profiles, "NoModlist");
+    Directory.CreateDirectory(noListProfile);
+    var verifiedProfiles = Mo2SourceInspector.Discover(mo2InstanceDir);
+    Require(verifiedProfiles.Profiles.Contains("AllDisabled") &&
+        verifiedProfiles.Profiles.Contains("NoModlist"),
+        "profile choice does not silently exclude an existing profile without modlist.txt");
+
+    var allDisabled = Mo2SourceInspector.Resolve(root, verifiedProfiles, "AllDisabled");
+    Require(allDisabled.Ready && allDisabled.ProfileVerified && !allDisabled.GameOnlyFallback &&
+        allDisabled.EnabledPackages == 0 && allDisabled.CetOwners >= 2,
+        "all-disabled MO2 profile is valid, and the physical CET installation is still scanned");
+    Require(allDisabled.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/CyberTrials/init.lua") is null,
+        "disabled MO2 CyberTrials is not admitted to game-only content");
+    Require(allDisabled.Winner("r6/scripts/DirectOnly/main.reds") == physicalExtra,
+        "live game REDscript remains available with all MO2 mods disabled");
+
+    var noModlist = Mo2SourceInspector.Resolve(root, verifiedProfiles, "NoModlist");
+    Require(noModlist.Ready && noModlist.GameOnlyFallback &&
+        !noModlist.ProfileVerified && noModlist.EnabledPackages == 0,
+        "missing modlist is NOT considered verified, but game-only inspection still succeeds");
+    Require(noModlist.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/DirectOwner/init.lua") ==
+        directPhysical && noModlist.Winner("r6/scripts/DirectOnly/main.reds") == physicalExtra,
+        "missing modlist must preserve live game files");
+    Require(noModlist.Winner("r6/scripts/shared.reds") == physicalConflict &&
+        noModlist.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/CyberTrials/init.lua") is null,
+        "missing modlist excludes both MO2 Overwrite and every MO2 package from conflict resolution");
+    var unknownProfile = Mo2SourceInspector.Resolve(root, verifiedProfiles, "NotInProfileList");
+    Require(unknownProfile.Ready && unknownProfile.GameOnlyFallback &&
+        unknownProfile.EffectiveFiles.Values.All(f => !f.FromMo2),
+        "unknown profile never admits unselected MO2 files but still scans the direct game");
+
+    var originalValidModlist = File.ReadAllText(Path.Combine(activeProfile, "modlist.txt"));
+    try
+    {
+        File.WriteAllText(Path.Combine(activeProfile, "modlist.txt"), "+../escape\n");
+        var malformed = Mo2SourceInspector.Resolve(root, verifiedProfiles, "Active");
+        Require(malformed.Ready && malformed.GameOnlyFallback && !malformed.ProfileVerified &&
+            malformed.EffectiveFiles.Values.All(file => !file.FromMo2),
+            "malformed enabled MO2 paths exclude MO2 completely but preserve live game inventory");
+    }
+    finally { File.WriteAllText(Path.Combine(activeProfile, "modlist.txt"), originalValidModlist); }
+
     File.WriteAllText(Path.Combine(mo2InstanceDir, "ModOrganizer.ini"),
         "[Settings]\nbase_directory=%UNKNOWN_VARIABLE%\nprofiles_directory=%BASE_DIR%/profiles\n");
     Require(!Mo2SourceInspector.Discover(mo2InstanceDir).Recognized,
@@ -407,8 +481,10 @@ try
     try
     {
         File.WriteAllText(brokenList, "+Missing Enabled Package\n" + previousList);
-        Require(!Mo2SourceInspector.Resolve(emptyPhysicalGame, recovered, "Active").Ready,
-            "missing enabled package fails closed instead of checking CET mods");
+        var missingEnabled = Mo2SourceInspector.Resolve(emptyPhysicalGame, recovered, "Active");
+        Require(missingEnabled.Ready && missingEnabled.GameOnlyFallback &&
+            !missingEnabled.ProfileVerified && missingEnabled.EffectiveFiles.Values.All(f => !f.FromMo2),
+            "missing enabled package excludes all MO2 packages while preserving physical-game source");
     }
     finally { File.WriteAllText(brokenList, previousList); }
 
@@ -416,6 +492,14 @@ try
     Require(!noGame.Ready && noGame.CetOwners == 0,
         "without verified game root, a matching MO2 profile cannot claim active checks");
 
+    var portableBase = Path.Combine(root, "Portable Optimizer Package");
+    var portableApp = Path.Combine(portableBase, "app");
+    Directory.CreateDirectory(portableApp);
+    File.WriteAllText(Path.Combine(portableApp, PortablePackagePaths.ManagedExecutableName), "fixture");
+    Require(PortablePackagePaths.RootFromAppDirectory(portableApp) == portableBase,
+        "CET-style portable layout resolves package root from nested managed app");
+    Require(PortablePackagePaths.RootFromAppDirectory(root) == Path.GetFullPath(root),
+        "IDE/nonportable debug layout keeps its original package path");
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
         "standalone adapter layout predictable");
