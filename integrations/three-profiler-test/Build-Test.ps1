@@ -50,10 +50,23 @@ Copy-Item (Join-Path $grSource '*') $gr -Recurse -Force
 Remove-Item (Join-Path $cet 'app') -Recurse -Force
 Remove-Item (Join-Path $gr 'app') -Recurse -Force
 
-# Build the unmodified manager sources against net10 and publish framework-dependent.
+# Source-level retarget in CI's disposable checkout only. Rebuild both managers
+# from the owner's pinned source rather than editing built EXEs/assemblies.
+foreach ($project in @(
+  'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj',
+  'vendor-cet/src/G.CETProfiler.Core/G.CETProfiler.Core.csproj',
+  'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj'
+)) {
+  $text=Get-Content $project -Raw
+  if ($text -notmatch '<TargetFramework>net8\.0-windows</TargetFramework>') {
+    throw "Cannot safely retarget unexpected owner source: $project"
+  }
+  $text=$text.Replace('<TargetFramework>net8.0-windows</TargetFramework>','<TargetFramework>net10.0-windows</TargetFramework>')
+  Set-Content $project $text -Encoding UTF8
+}
 # Native DLLs continue to come from exact verified owner packages above.
 function PublishManager([string]$Csproj, [string]$Dest) {
-  & dotnet publish $Csproj -c Release -r win-x64 --self-contained false -p:TargetFramework=net10.0-windows -p:SelfContained=false -p:PublishSingleFile=false -p:PublishTrimmed=false -o $Dest
+  & dotnet publish $Csproj -c Release -r win-x64 --self-contained false -p:SelfContained=false -p:PublishSingleFile=false -p:PublishTrimmed=false -o $Dest
   if ($LASTEXITCODE -ne 0) { throw "Manager net10 retarget failed: $Csproj" }
   if (Test-Path (Join-Path $Dest 'coreclr.dll')) { throw 'Duplicate managed runtime' }
 }
