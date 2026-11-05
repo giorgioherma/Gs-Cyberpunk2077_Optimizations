@@ -1205,6 +1205,12 @@ internal sealed class MainForm : Form
         if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
             return;
         var game = inspection.GameRoot!;
+        if (Process.GetProcessesByName("Cyberpunk2077").Length > 0)
+        {
+            MessageBox.Show(this, "Close Cyberpunk completely before collecting or restoring native profilers.",
+                "Game still running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         SetWorkflowBusy(true);
         pageOneStatus.Text = "Collecting completed owner captures, then restoring original game state...";
         try

@@ -149,7 +149,7 @@ $provenance=@{
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
 }
-$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components 'TEST-PROVENANCE.json') -Encoding UTF8
+$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if (!$Integrated) {
 Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
 CET + GRSP + PresentMon triple test package — NOT a production optimizer build.

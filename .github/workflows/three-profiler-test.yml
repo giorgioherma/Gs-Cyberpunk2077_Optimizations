@@ -2,13 +2,6 @@ name: Build all-three CET GRSP PresentMon capture test
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - '.github/workflows/three-profiler-test.yml'
-      - 'integrations/three-profiler-test/**'
-      - 'src/GTotalOptimizer.Launcher/**'
-      - 'src/GTotalOptimizer.Core/**'
 
 permissions:
   contents: read
