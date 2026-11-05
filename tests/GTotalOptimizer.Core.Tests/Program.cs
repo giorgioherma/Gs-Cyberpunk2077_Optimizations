@@ -462,8 +462,14 @@ try
         "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
         "\nmod_directory=" + Path.Combine(root, "not-real").Replace('\\', '/') +
         "\nprofiles_directory=%BASE_DIR%/profiles\n");
-    Require(!Mo2SourceInspector.Discover(brokenConfig).Recognized,
-        "missing configured mods path cannot claim an active stack");
+    var missingConfiguredMods = Mo2SourceInspector.Discover(brokenConfig);
+    Require(missingConfiguredMods.Recognized && !Directory.Exists(missingConfiguredMods.ModsDirectory),
+        "missing Mods directory retains configured profile discovery but cannot verify enabled packages");
+    var missingConfiguredStack = Mo2SourceInspector.Resolve(emptyPhysicalGame,
+        missingConfiguredMods, "Active");
+    Require(missingConfiguredStack.Ready && missingConfiguredStack.GameOnlyFallback &&
+        !missingConfiguredStack.ProfileVerified,
+        "missing configured Mods directory excludes MO2 layers but preserves the physical game");
     var recovered = Mo2SourceInspector.Discover(brokenConfig, mo2Mods);
     Require(recovered.Recognized && recovered.ModsDirectory == mo2Mods,
         "manual Mods folder override restores INI/profile-based source resolution");
