@@ -1,0 +1,66 @@
+name: Build all-three CET GRSP PresentMon capture test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/three-profiler-test.yml'
+      - 'integrations/three-profiler-test/**'
+      - 'src/GTotalOptimizer.Launcher/**'
+      - 'src/GTotalOptimizer.Core/**'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bundle:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: unified
+      - uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/G-CET_Runtime_Profiler
+          ref: 7f3489d8fd7e02d595f4a053616044cf2f6b2dab
+          path: unified/vendor-cet
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/GRSP-G-REDscript-Profiler
+          ref: c6871e21d3d3ece8e36d3ea47d45e18d0d7acead
+          path: unified/vendor-grsp
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Download exact latest successful CET developer profiler artifact
+        shell: pwsh
+        working-directory: unified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
+          Write-Host 'CET dev artifact download succeeded.'
+      - name: Assemble all-three portable test (one shared runtime)
+        shell: pwsh
+        working-directory: unified
+        run: |
+          & ./integrations/three-profiler-test/Build-Test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Combined capture test bundle build failed' }
+      - name: Test source-only integrated adapters
+        shell: pwsh
+        working-directory: unified
+        run: |
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Unified contracts failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: G-Total-Optimizer-CET-GRSP-PresentMon-TRIPLE-TEST
+          path: unified/triple-test/
+          if-no-files-found: error
