@@ -53,6 +53,46 @@ jobs:
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Combined capture test bundle build failed' }
+      - name: Smoke CET and GRSP native launchers and GRSP restore in isolated fixture
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=(Resolve-Path triple-test).Path
+          $env:DOTNET_ROOT_X64=Join-Path $root 'runtime'
+          $env:DOTNET_ROOT=$env:DOTNET_ROOT_X64
+          $env:DOTNET_MULTILEVEL_LOOKUP='0'
+          $env:DOTNET_HOST_TRACE='1'
+          $env:DOTNET_HOST_TRACEFILE=Join-Path $env:RUNNER_TEMP 'Triple-Net10-Host.txt'
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'Run-Triple-Test.ps1'),[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw "Triple-test script parse error: $($errors -join '; ')" }
+          $cet=Join-Path $root 'components/cet/G-CET-Runtime-Profiler.exe'
+          $grsp=Join-Path $root 'components/grsp/G-REDscript-Profiler.exe'
+          $cetHelp=@(& $cet --help 2>&1) -join [Environment]::NewLine
+          if ($LASTEXITCODE -ne 0 -or $cetHelp -notmatch '--install') { throw "CET private net10 CLI failed: $cetHelp" }
+          $grHelp=@(& $grsp --help 2>&1) -join [Environment]::NewLine
+          if ($LASTEXITCODE -ne 0 -or $grHelp -notmatch '--install') { throw "GRSP private net10 CLI failed: $grHelp" }
+          $fixture=Join-Path $env:RUNNER_TEMP 'Triple-RED4ext-Fixture'
+          New-Item -ItemType Directory -Force (Join-Path $fixture 'bin/x64'),(Join-Path $fixture 'red4ext/plugins') | Out-Null
+          New-Item -ItemType File -Force (Join-Path $fixture 'bin/x64/Cyberpunk2077.exe') | Out-Null
+          $pre=(& $grsp --status --game $fixture --json | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0 -or !$pre.ok -or $pre.result.State -ne 'NOT_INSTALLED') { throw 'GRSP fixture preflight failed' }
+          try {
+            $install=(& $grsp --install --game $fixture --json | ConvertFrom-Json)
+            if ($LASTEXITCODE -ne 0 -or !$install.ok) { throw 'GRSP fixture installer failed' }
+            $status=(& $grsp --status --game $fixture --json | ConvertFrom-Json)
+            if ($LASTEXITCODE -ne 0 -or !$status.ok -or $status.result.State -ne 'INSTALLED_CURRENT') { throw 'GRSP installed state not verified' }
+          }
+          finally {
+            $restore=(& $grsp --restore --game $fixture --json | ConvertFrom-Json)
+            if ($LASTEXITCODE -ne 0 -or !$restore.ok) { throw 'GRSP fixture restore failed' }
+          }
+          $post=(& $grsp --status --game $fixture --json | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0 -or $post.result.State -ne 'NOT_INSTALLED') { throw 'GRSP fixture cleanup incomplete' }
+          if (!(Test-Path $env:DOTNET_HOST_TRACEFILE)) { throw 'Private .NET10 host trace missing' }
+          Write-Host 'PASS CET and GRSP net10 private CLI launches, PowerShell syntax, GRSP isolated install-status-restore.'
       - name: Test source-only integrated adapters
         shell: pwsh
         working-directory: unified
