@@ -1049,9 +1049,14 @@ internal sealed class MainForm : Form
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
-            pageOneStatus.Text = "Profiler components unverified: " + bundle.Detail;
+            packagePathFailure = bundle.Detail + Environment.NewLine + Environment.NewLine +
+                PortablePackagePaths.RuntimePathDiagnostic(packageRoot);
+            pageOneStatus.Text = "Profiler package verification blocked. Click here for actual executable, root and manifest paths.";
+            pageOneStatus.Cursor = Cursors.Hand;
             return;
         }
+        packagePathFailure = null;
+        pageOneStatus.Cursor = Cursors.Default;
         try
         {
             var status = await Workflow.InspectAsync(current.GameRoot!, cancel.Token);
