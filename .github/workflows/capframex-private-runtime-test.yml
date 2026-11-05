@@ -1,0 +1,66 @@
+name: Build CapFrameX private-runtime test bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/capframex-private-runtime-test.yml'
+      - 'integrations/capframex/**'
+      - 'src/GTotalOptimizer.Launcher/launcher.c'
+
+permissions:
+  contents: read
+
+jobs:
+  capx-private-runtime-test:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gtotal
+
+      - uses: actions/checkout@v4
+        with:
+          repository: CXWorld/CapFrameX
+          ref: d1ab1e7e87a989ce8d55f38d5769327bb9f89369
+          path: gtotal/vendor-capframex
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build source-adapted CapFrameX plus one private .NET 10 runtime
+        shell: pwsh
+        working-directory: gtotal
+        run: |
+          & ./integrations/capframex/Build-PrivateRuntime-Test.ps1
+          if ($LASTEXITCODE -ne 0) { throw "CapFrameX private-runtime test build failed" }
+
+      - name: Verify no duplicate private .NET runtimes or unsafe launcher
+        shell: pwsh
+        working-directory: gtotal
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'private-capx-test'
+          $coreclrs = @(Get-ChildItem $root -Filter 'coreclr.dll' -Recurse -File)
+          if ($coreclrs.Count -ne 1 -or $coreclrs[0].FullName -notmatch '[\\/]runtime[\\/]') { throw "Runtime duplication: $($coreclrs.Count)" }
+          if (Test-Path (Join-Path $root 'Start G-Total-Optimizer.lnk')) { throw 'Obsolete shortcut present' }
+          foreach ($item in @('G-Total-Optimizer.exe','runtime/dotnet.exe',
+            'app/G-Total-Optimizer.App.exe',
+            'modules/CapFrameX/CapFrameX.exe',
+            'modules/CapFrameX/CapFrameX.Configuration.dll',
+            'modules/CapFrameX/Start-CapFrameX-Private.cmd',
+            'modules/CapFrameX/vcruntime140.dll',
+            'modules/CapFrameX/msvcp140.dll')) {
+            if (!(Test-Path (Join-Path $root $item) -PathType Leaf)) { throw "Missing $item" }
+          }
+          Write-Host 'PASS one private .NET 10 runtime, two framework-dependent apps, CapFrameX portable, app-local VC++ CRT.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: G-Total-Optimizer-v1.1.1-CapX-PrivateRuntime-TEST
+          path: gtotal/private-capx-test/
+          if-no-files-found: error
