@@ -4,7 +4,7 @@
 
 One user-oriented Windows application for **CET/Lua profiling, REDscript profiling, optional CapFrameX frame measurements, unified analysis, and a single game-installable optimization ZIP**. The project's currently tested game target is Cyberpunk 2077 **2.31**. Do not use the game version or third-party mod versions as rigid source-hash admission criteria.
 
-**Current v1.1.0 development shell:** [Windows CI #41918316512](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41936579433) — artifact [G-Total-Optimizer-v1.1.0-Shell-win-x64](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41936579433/artifacts/13373772655). 75 read-only/MO2/layout/source contracts passed; NOT the completed optimizer.
+**Current v1.1.0 development shell:** [Windows CI #41918316512](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41941112037) — artifact [G-Total-Optimizer-v1.1.0-Shell-win-x64](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41941112037/artifacts/13376042492). 76 read-only/MO2/source contracts passed; NOT the completed optimizer.
 
 ## The agreed product
 
