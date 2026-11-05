@@ -494,6 +494,14 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static CheckBox SourceCheck(string label) => new()
+    {
+        Text = label, AutoCheck = false, Checked = false,
+        AutoSize = false, TabStop = false, FlatStyle = FlatStyle.Flat,
+        BackColor = Color.Transparent, ForeColor = TextColor,
+        Cursor = Cursors.Default
+    };
+
     private static ComboBox SourceDropdown() => new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
