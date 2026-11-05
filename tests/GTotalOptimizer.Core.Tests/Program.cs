@@ -272,6 +272,55 @@ try
         """{"ok":true,"result":{"State":"INSTALLED_CURRENT","ManagedStatePresent":true,"CompletedCaptureCount":1,"LegacyDllPresent":false}}""");
     Require(installedStatus.BothInstalled && installedStatus.BothCaptured,
         "both owner-reported installed payloads and captured state verified before collection");
+    var installedNoCapture = installedStatus with
+    {
+        CetCaptureReady = false, GrspCaptureReady = false
+    };
+    Require(installedNoCapture.BothInstalled &&
+        installedNoCapture.CanLaunch(hasCurrentSession: true, gameRunning: false) &&
+        !installedNoCapture.CanCollect(hasCurrentSession: true, gameRunning: false),
+        "installing both profilers enables launch but NEVER enables Collect before F11 completion");
+    Require(!installedNoCapture.CanLaunch(hasCurrentSession: false, gameRunning: false) &&
+        !installedNoCapture.CanLaunch(hasCurrentSession: true, gameRunning: true),
+        "reopened app cannot launch without ownership journal or while Cyberpunk is still running");
+    Require(installedStatus.CanCollect(hasCurrentSession: true, gameRunning: false) &&
+        !installedStatus.CanCollect(hasCurrentSession: true, gameRunning: true) &&
+        !installedStatus.CanCollect(hasCurrentSession: false, gameRunning: false) &&
+        !installedStatus.CanLaunch(hasCurrentSession: true, gameRunning: false),
+        "only completed dual-domain owner capture and closed game unlock Collect, not another launch");
+    Require(!(installedStatus with { CetCaptureReady = false })
+            .CanCollect(hasCurrentSession: true, gameRunning: false) &&
+        !(installedStatus with { GrspCaptureReady = false })
+            .CanCollect(hasCurrentSession: true, gameRunning: false),
+        "one domain captured without the other must never unlock Collect");
+
+    var pmRoot = Path.Combine(root, "GCO-pm-package");
+    var pmExe = PresentMonLifecyclePolicy.Executable(pmRoot);
+    var pmCsv = Path.Combine(pmRoot, "RESULTS", "GCO-Capture-20261105", "PresentMon.csv");
+    Require(PresentMonLifecyclePolicy.IsOwnedProcess(pmRoot, pmExe) &&
+        PresentMonLifecyclePolicy.ValidateOutputCsv(pmRoot, pmCsv) == Path.GetFullPath(pmCsv),
+        "PresentMon restart is scoped to the bundled process and to the current GCO results directory");
+    Require(!PresentMonLifecyclePolicy.IsOwnedProcess(pmRoot,
+        Path.Combine(root, "OtherTool", "PresentMon.exe")),
+        "an unrelated PresentMon process is never silently treated as GCO-owned");
+    var pmTraversalRejected = false;
+    try
+    {
+        PresentMonLifecyclePolicy.ValidateOutputCsv(pmRoot,
+            Path.Combine(pmRoot, "RESULTS", "..", "mods", "PresentMon.csv"));
+    }
+    catch (InvalidDataException) { pmTraversalRejected = true; }
+    Require(pmTraversalRejected,
+        "elevated PresentMon helper rejects path traversal into game/source directories");
+    pmTraversalRejected = false;
+    try
+    {
+        PresentMonLifecyclePolicy.ValidateOutputCsv(pmRoot,
+            Path.Combine(root, "OtherTool", "PresentMon.csv"));
+    }
+    catch (InvalidDataException) { pmTraversalRejected = true; }
+    Require(pmTraversalRejected,
+        "elevated PresentMon helper refuses destinations outside its own RESULTS");
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
         "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");
