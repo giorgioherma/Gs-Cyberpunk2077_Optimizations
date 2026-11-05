@@ -1,7 +1,7 @@
 namespace GTotalOptimizer.Core;
 
-// The public package mirrors CET: a small root launcher and a contained
-// managed app/runtime in app/. All component paths resolve from package root.
+// Resolve the package from the actual managed host, never the game/MO2 path
+// or the process working directory. The public launcher is one folder above app/.
 public static class PortablePackagePaths
 {
     public const string RootLauncherName = "G-Total-Optimizer.exe";
@@ -9,16 +9,32 @@ public static class PortablePackagePaths
 
     public static string RootFromAppDirectory(string appDirectory)
     {
-        var directory = Path.GetFullPath(appDirectory);
-        if (Path.GetFileName(Path.TrimEndingDirectorySeparator(directory))
-            .Equals("app", StringComparison.OrdinalIgnoreCase) &&
-            File.Exists(Path.Combine(directory, ManagedExecutableName)))
-        {
-            var parent = Directory.GetParent(directory);
-            if (parent is not null)
-                return parent.FullName;
-        }
-        // IDE and source-only debug builds retain their existing layout.
+        var directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(appDirectory));
+        if (Path.GetFileName(directory).Equals("app", StringComparison.OrdinalIgnoreCase))
+            return Directory.GetParent(directory)?.FullName ?? directory;
+
+        // IDE/source-only debug runs do not have the packaged app/ layout.
         return directory;
     }
+
+    public static string RootFromExecutablePath(string? executablePath, string appBaseDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(executablePath) &&
+            Path.GetFileName(executablePath).Equals(ManagedExecutableName, StringComparison.OrdinalIgnoreCase))
+        {
+            var physicalDir = Path.GetDirectoryName(Path.GetFullPath(executablePath))!;
+            return RootFromAppDirectory(physicalDir);
+        }
+        return RootFromAppDirectory(appBaseDirectory);
+    }
+
+    public static string CurrentPackageRoot() =>
+        RootFromExecutablePath(Environment.ProcessPath, AppContext.BaseDirectory);
+
+    public static string RuntimePathDiagnostic(string packageRoot) =>
+        "Running executable: " + (Environment.ProcessPath ?? "(unavailable)") +
+        Environment.NewLine + "App base: " + AppContext.BaseDirectory +
+        Environment.NewLine + "Resolved GCO root: " + packageRoot +
+        Environment.NewLine + "Expected manifest: " +
+        Path.Combine(packageRoot, "components", "manifest.json");
 }
