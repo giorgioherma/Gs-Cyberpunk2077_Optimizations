@@ -18,7 +18,8 @@ public sealed record LiveProfilerState(
     // The two source owners decide capture completion. A journal alone means
     // only that profiler files were installed; it never unlocks collection.
     public bool CanCollect(bool hasCurrentSession, bool gameRunning) =>
-        hasCurrentSession && !gameRunning && BothCaptured;
+        hasCurrentSession && !gameRunning && BothInstalled &&
+        (CetCaptureReady || GrspCaptureReady);
     public bool CanLaunch(bool hasCurrentSession, bool gameRunning) =>
         hasCurrentSession && !gameRunning && BothInstalled && !BothCaptured;
 }
@@ -91,6 +92,25 @@ public sealed class UnifiedProfilerWorkflow
         return LiveProfilerStateParser.Parse(c.RawJson!, g.RawJson!);
     }
 
+    private string? JournalSessionId()
+    {
+        if (!File.Exists(Journal)) return null;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+        return doc.RootElement.TryGetProperty("sessionId", out var id) &&
+               id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+    }
+
+    public CollectedCaptureIndex? ReadCollected(string game, bool verifyHashes = false)
+    {
+        if (!OwnsSession(game)) return null;
+        var id = JournalSessionId();
+        return id is null ? null :
+            CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes);
+    }
+
+    private string SessionId() => JournalSessionId() ??
+        throw new InvalidDataException("Profiler journal lacks a capture session identity. Use owner recovery.");
+
     private string? JournalGame()
     {
         if (!File.Exists(Journal)) return null;
@@ -105,10 +125,11 @@ public sealed class UnifiedProfilerWorkflow
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         var temp = Journal + ".tmp";
+        var id = JournalSessionId() ?? Guid.NewGuid().ToString("N");
         File.WriteAllText(temp, JsonSerializer.Serialize(new
         {
-            gameRoot = Normalize(game), stage,
-            createdUtc = DateTimeOffset.UtcNow
+            gameRoot = Normalize(game), stage, sessionId = id,
+            updatedUtc = DateTimeOffset.UtcNow
         }));
         File.Move(temp, Journal, overwrite: true);
     }
@@ -194,57 +215,88 @@ public sealed class UnifiedProfilerWorkflow
         }
     }
 
-    public async Task<ProfilerWorkflowResult> CollectAndRestoreAsync(string game, CancellationToken token = default)
+    // Collection never restores; source-owner archives remain untouched.
+    public async Task<ProfilerWorkflowResult> CollectResultsAsync(string game, CancellationToken token = default)
     {
-        if (GameRunning()) return new(false, "Close Cyberpunk before collecting/restoring.");
-        if (!OwnsSession(game))
-            return new(false, "No matching GCO session. No game files changed.");
-        LiveProfilerState preflight;
-        try { preflight = await InspectAsync(game, token); }
-        catch (Exception ex)
-        {
-            return new(false, "Cannot verify capture completion: " + ex.Message +
-                ". No collection or restoration was attempted.");
-        }
-        if (!preflight.BothCaptured)
-            return new(false, "CET or REDscript capture is incomplete. Live files preserved. " +
-                "Use RESTORE WITHOUT CAPTURE for diagnostic preservation and recovery.");
-        string? cet = null, grsp = null;
-        bool captured = false;
-        string detail = "";
+        if (GameRunning()) return new(false, "Close Cyberpunk before collecting.");
+        if (!OwnsSession(game)) return new(false, "No matching GCO session. No files changed.");
+        var id = SessionId();
+        var saved = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
+        LiveProfilerState state;
+        try { state = await InspectAsync(game, token); }
+        catch (Exception ex) { return new(false, "Owner capture status unavailable: " + ex.Message); }
+        if (!state.BothInstalled)
+            return new(false, "Both installed owner profilers must be verified before collection.");
+        if (!state.CetCaptureReady && !state.GrspCaptureReady && !saved.HasAny)
+            return new(false, "Neither profiler has a completed F11 capture. No results collected.");
+
         try
         {
-            var state = await InspectAsync(game, token);
-            if (!state.BothInstalled)
-                detail = $"Incomplete profiler installation: CET={state.Cet}, GRSP={state.Grsp}. ";
-            else if (!state.BothCaptured)
-                detail = "Capture incomplete in CET and/or REDscript. ";
-            else
+            if (state.CetCaptureReady && saved.Cet is null)
             {
-                captured = true;
-                // Preserve owner archives and never move external PresentMon CSVs.
                 var c = Require(await Run(BackendKind.Cet, "collect", game, token));
-                cet = c.ArchivePath;
-                if (string.IsNullOrWhiteSpace(cet) || !Directory.Exists(cet))
-                    throw new InvalidDataException("CET archive destination is missing.");
+                saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
+                    BackendKind.Cet, c.ArchivePath);
+            }
+            if (state.GrspCaptureReady && saved.Redscript is null)
+            {
                 var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
-                grsp = g.ArchivePath;
-                if (string.IsNullOrWhiteSpace(grsp) || !Directory.Exists(grsp))
-                    throw new InvalidDataException("GRSP archive destination is missing.");
+                saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
+                    BackendKind.Grsp, g.ArchivePath);
             }
         }
         catch (Exception ex)
         {
-            // One owner may have already archived its data. Do not destroy
-            // the other owner's live evidence after a partial collect failure.
-            return new(false, "Collection failed: " + ex.Message +
-                ". Partial archives retained. Explicit recovery required.",
-                cet, grsp);
+            return new(false, "Collection incomplete: " + ex.Message +
+                ". Previously copied results remain in RESULTS; profilers are still installed.",
+                saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
+                saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"));
         }
-        var restored = await RestoreOwnedAsync(game, CancellationToken.None,
-            preserveIncompleteEvidence: false);
-        return new(captured && restored.RestoreVerified,
-            detail + restored.Detail, cet, grsp, captured && restored.RestoreVerified,
-            restored.RestoreVerified);
+
+        return new(saved.HasAny, "Collected " +
+            (saved.Cet is null ? "no CET" : "CET") + " / " +
+            (saved.Redscript is null ? "no REDscript" : "REDscript") +
+            ". Original game files are still instrumented until Continue or explicit Restore.",
+            saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
+            saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"),
+            CaptureVerified: saved.HasAny, RestoreVerified: false);
     }
+
+    public async Task<ProfilerWorkflowResult> ContinueAsync(string game,
+        bool skipCet, bool skipRedscript, bool skipFrameTime,
+        CancellationToken token = default)
+    {
+        if (GameRunning()) return new(false, "Close Cyberpunk before restoring.");
+        if (!OwnsSession(game)) return new(false, "No matching GCO session.");
+        var id = SessionId();
+        CollectedCaptureIndex saved;
+        try { saved = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true); }
+        catch (Exception ex) { return new(false, "Saved collection verification failed: " + ex.Message); }
+        if (!saved.HasAny) return new(false, "Collect at least one completed capture first.");
+        if ((saved.Cet is null && !skipCet) ||
+            (saved.Redscript is null && !skipRedscript) ||
+            (saved.FrameTimeCsv is null && !skipFrameTime))
+            return new(false, "Explicit acknowledgment required for every missing capture.");
+        try
+        {
+            var state = await InspectAsync(game, token);
+            if ((state.CetCaptureReady && saved.Cet is null) ||
+                (state.GrspCaptureReady && saved.Redscript is null))
+                return new(false, "A completed native capture remains uncollected. Collect results first.");
+        }
+        catch (Exception ex) { return new(false, "Cannot inspect native capture state: " + ex.Message); }
+
+        var restored = await RestoreOwnedAsync(game, CancellationToken.None,
+            preserveIncompleteEvidence: true);
+        if (!restored.RestoreVerified) return restored;
+        CollectedCaptureStore.MarkRestored(packageRoot, saved,
+            skipCet, skipRedscript, skipFrameTime);
+        return new(true, "Original profiler files restored. Results retained under " +
+            CollectedCaptureStore.SessionFolder(packageRoot, id),
+            saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
+            saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"),
+            CaptureVerified: true, RestoreVerified: true);
+    }
+
+
 }

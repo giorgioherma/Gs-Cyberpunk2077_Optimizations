@@ -15,11 +15,11 @@ try
         "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
 
     Require(SetupCopy.CapFrameXProcess ==
-        "Make sure Cyberpunk 2077 is detected in CapX and is the ONLY process.",
+        "Frame-time provider paused after crash; CET + REDscript captures remain available.",
         "instructions name CapX process detection exactly");
     Require(SetupCopy.CaptureStartInstruction ==
         "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.\r\n" +
-        "You will hear Start/Stop in CapX and RED. CET Start displays a UI timer in the upper left corner.",
+        "REDscript uses audio signals; CET displays its capture timer in the upper left corner.",
         "start/stop capture instructions retain both full lines and sound/timer cues");
     Require(SetupCopy.CaptureStartInstruction.Split("\r\n").Length == 2 &&
         SetupPageLayout.InstructionsHeight == 272 &&
@@ -27,9 +27,9 @@ try
         "instructions box expands exactly one row, without compressing existing instructions");
     Require(SetupCopy.StepInstall ==
         "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required." &&
-        SetupCopy.StepStart == "2. START CYBERPUNK — Record a capture using all profilers." &&
+        SetupCopy.StepStart == "2. START CYBERPUNK — Record CET and REDscript; frame-time currently disabled." &&
         SetupCopy.StepCollect ==
-        "3. COLLECT RESULTS / RESTORE — Close game, collect results, restore files and continue.",
+        "3. COLLECT RESULTS — Copy completed captures; Continue restores originals.",
         "restore original cyan/gray workflow descriptions next to profiler/key rows");
     Require(SetupCopy.CaptureDetails.Contains("aim for heavy combat") &&
         SetupCopy.CaptureDetails.Contains("If you're having issues getting a longer combat capture, fight police.") &&
@@ -288,11 +288,43 @@ try
         !installedStatus.CanCollect(hasCurrentSession: false, gameRunning: false) &&
         !installedStatus.CanLaunch(hasCurrentSession: true, gameRunning: false),
         "only completed dual-domain owner capture and closed game unlock Collect, not another launch");
-    Require(!(installedStatus with { CetCaptureReady = false })
+    Require((installedStatus with { CetCaptureReady = false })
             .CanCollect(hasCurrentSession: true, gameRunning: false) &&
-        !(installedStatus with { GrspCaptureReady = false })
+        (installedStatus with { GrspCaptureReady = false })
             .CanCollect(hasCurrentSession: true, gameRunning: false),
-        "one domain captured without the other must never unlock Collect");
+        "independent CET-only and REDscript-only results can be collected");
+
+    // Archive copies are verified, immutable evidence for Continue.
+    var archiveGame = Path.Combine(root, "CaptureGame");
+    Directory.CreateDirectory(archiveGame);
+    var archiveRoot = Path.Combine(root, "OriginalArchives");
+    var cetSource = Path.Combine(archiveRoot, "CET");
+    var redSource = Path.Combine(archiveRoot, "RED");
+    Directory.CreateDirectory(cetSource);
+    Directory.CreateDirectory(redSource);
+    File.WriteAllText(Path.Combine(cetSource, "CET_Summary.json"), "{\"capture\":\"CET\"}");
+    File.WriteAllText(Path.Combine(redSource, "GRSP_Summary.json"), "{\"capture\":\"RED\"}");
+    var package = Path.Combine(root, "GCO-package");
+    var sessionId = Guid.NewGuid().ToString("N");
+    var emptyCapture = CollectedCaptureStore.Read(package, archiveGame, sessionId);
+    Require(!emptyCapture.HasAny, "no old files treated as a new session");
+    var cetCopy = CollectedCaptureStore.CopyOwner(package, archiveGame, sessionId,
+        BackendKind.Cet, cetSource);
+    Require(cetCopy.HasAny && cetCopy.Cet is not null && cetCopy.Redscript is null &&
+        File.Exists(Path.Combine(CollectedCaptureStore.DomainFolder(package, sessionId, "CET"),
+            "CET_Summary.json")), "CET-only capture copied under GCO root RESULTS");
+    var redCopy = CollectedCaptureStore.CopyOwner(package, archiveGame, sessionId,
+        BackendKind.Grsp, redSource);
+    Require(redCopy.Cet is not null && redCopy.Redscript is not null,
+        "second capture merges into one session without losing CET");
+    Require(File.Exists(Path.Combine(cetSource, "CET_Summary.json")),
+        "source-owner archive remains untouched after GCO copy");
+    File.AppendAllText(Path.Combine(CollectedCaptureStore.DomainFolder(package,sessionId,"CET"),
+        "CET_Summary.json"), "tampered");
+    var tamperCaught = false;
+    try { CollectedCaptureStore.Read(package, archiveGame, sessionId, verifyHashes: true); }
+    catch (InvalidDataException) { tamperCaught = true; }
+    Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
 
     var pmRoot = Path.Combine(root, "GCO-pm-package");
     var pmExe = PresentMonLifecyclePolicy.Executable(pmRoot);
