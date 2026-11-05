@@ -1242,7 +1242,14 @@ internal sealed class MainForm : Form
         }
         // Final read-only owner state is mandatory even if a stale UI button
         // was enabled before a session changed.
-        var currentState = await Workflow.InspectAsync(game);
+        LiveProfilerState currentState;
+        try { currentState = await Workflow.InspectAsync(game); }
+        catch (Exception ex)
+        {
+            pageOneStatus.Text = "Cannot verify current capture status: " + ex.Message;
+            collect.Enabled = false;
+            return;
+        }
         if (!currentState.CanCollect(Workflow.HasRecoveryJournal, gameRunning: false))
         {
             collect.Enabled = false;
@@ -1269,15 +1276,18 @@ internal sealed class MainForm : Form
                     presentMonWarning = "PresentMon stop requires attention: " + ex.Message;
                 }
             }
-            string? frameCsv = tracked is not null && File.Exists(tracked) &&
-                new FileInfo(tracked).Length > 500 ? tracked : null;
+            string? frameCsv = presentMonWarning is null && tracked is not null &&
+                File.Exists(tracked) && new FileInfo(tracked).Length > 500
+                    ? tracked : null;
             if (result.RestoreVerified)
             {
                 pageOneStatus.Text = result.Detail;
                 if (result.CaptureVerified)
                 {
                     var sessionDir = presentMonCaptureFolder ??
-                        Path.Combine(packageRoot, "RESULTS", "GCO-Capture-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
+                        (tracked is not null ? Path.GetDirectoryName(tracked)! :
+                        Path.Combine(packageRoot, "RESULTS", "GCO-Capture-" +
+                            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")));
                     Directory.CreateDirectory(sessionDir);
                     var metadata = new
                     {
@@ -1350,7 +1360,14 @@ internal sealed class MainForm : Form
             return;
         }
         var game = inspection.GameRoot!;
-        var state = await Workflow.InspectAsync(game);
+        LiveProfilerState state;
+        try { state = await Workflow.InspectAsync(game); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Cannot verify current owners: " + ex.Message,
+                "Restore status", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
         if (state.CanCollect(Workflow.HasRecoveryJournal, gameRunning: false))
         {
             await RefreshSourceAsync();
