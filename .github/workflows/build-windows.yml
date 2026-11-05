@@ -176,6 +176,26 @@ jobs:
             throw "GCO process resolved the wrong package root: $out"
           }
           Write-Host 'PASS actual shipped GUI host detects verified component manifest from unrelated CWD'
+          # The native launcher now forwards headless control arguments and
+          # provides the bundled private .NET10 runtime, including under UAC.
+          # This headless path does not request elevation or modify the game.
+          $native=New-Object System.Diagnostics.ProcessStartInfo
+          $native.FileName=Join-Path $root 'G-Total-Optimizer.exe'
+          $native.ArgumentList.Add('--verify-package')
+          $native.WorkingDirectory=$env:RUNNER_TEMP
+          $native.UseShellExecute=$false
+          $native.CreateNoWindow=$true
+          $launcherCheck=New-Object System.Diagnostics.Process
+          $launcherCheck.StartInfo=$native
+          if (!$launcherCheck.Start()) { throw 'Native GCO launcher did not start' }
+          if (!$launcherCheck.WaitForExit(45000)) {
+            $launcherCheck.Kill()
+            throw 'Native launcher did not forward headless verifier and exit'
+          }
+          if ($launcherCheck.ExitCode -ne 0) {
+            throw "Native launcher/private runtime verifier failed with exit $($launcherCheck.ExitCode)"
+          }
+          Write-Host 'PASS native GCO launcher forwards args and starts verified private runtime'
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
       - uses: actions/upload-artifact@v4
         with:

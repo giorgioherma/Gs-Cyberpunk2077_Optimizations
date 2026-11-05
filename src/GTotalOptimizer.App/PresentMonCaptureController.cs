@@ -50,7 +50,7 @@ internal static class PresentMonCaptureController
 
         using var controller = Process.Start(psi)
             ?? throw new InvalidOperationException("Windows could not start the elevated PresentMon controller.");
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         try
         {
             await controller.WaitForExitAsync(timeout.Token);

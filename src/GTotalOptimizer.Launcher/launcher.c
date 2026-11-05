@@ -80,7 +80,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
     // so the parent can refuse an unverified/failed operation.
     if (commandLine && *commandLine)
     {
-        DWORD wait = WaitForSingleObject(child.hProcess, 30000);
+        DWORD wait = WaitForSingleObject(child.hProcess, 40000);
         if (wait != WAIT_OBJECT_0)
         {
             CloseHandle(child.hProcess);
