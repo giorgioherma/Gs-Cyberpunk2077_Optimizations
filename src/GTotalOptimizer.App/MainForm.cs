@@ -90,7 +90,6 @@ internal sealed class MainForm : Form
     private bool captureAndRestoreVerified;
     private readonly string packageRoot = PortablePackagePaths.RootFromAppDirectory(AppContext.BaseDirectory);
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
-    private readonly ComponentCommandRunner ownerCommands = new();
     private bool busy;
     private string? presentMonCaptureFolder;
     private Process? presentMonProcess;
@@ -1274,13 +1273,14 @@ internal sealed class MainForm : Form
         {
             if (!IsDisposed)
             {
+                var captureComplete = captureAndRestoreVerified;
                 busy = false;
                 sourcePath.Enabled = true;
                 await RefreshSourceAsync();
-                // Refresh is intentionally read-only; preserve current-session proof.
-                // Only the Collect result can authorize Page 2.
-                next.Enabled = captureAndRestoreVerified;
-                openResults.Enabled = captureAndRestoreVerified;
+                // Refresh rescans sources and cannot itself prove a new capture.
+                captureAndRestoreVerified = captureComplete;
+                next.Enabled = captureComplete;
+                openResults.Enabled = captureComplete;
             }
         }
     }
