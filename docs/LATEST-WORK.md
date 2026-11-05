@@ -128,3 +128,9 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Added effective CET ASI winner support, configured preferred profile, and fail-closed missing enabled-package handling to Mo2SourceInspector. The five UI checkboxes (MO2 profile plus four component types) only activate after profile/modlist and winning-file inventory are resolved.
 - Removed the obsolete arbitrary-file folder scanner and replaced its tests with portable/instance/autodiscovery/manual mapping, profile preference, incomplete enabled package, ASI winner and mods-directory recovery tests.
 - Critical unresolved: actual USVFS launch/RootBuilder/file-exception/archive loading, component installer/restore safety, CapFrameX packaging and unified REDscript generator. CI not yet checked for this source revision; no in-game performance claims.
+
+
+### 2026-11-05 — verified MO2 portable/instance source discovery
+- **CI PASSED:** https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41941112037 — source commit 245d9a1bb5b90be1a8c683be9cc24c3a5b080b9d. 76/76 core read-only/CLI/MO2 contracts passed, .NET 10 win-x64 publish passed, version 1.1.0.0 verified and one private runtime packaging checked. Artifact G-Total-Optimizer-v1.1.0-Shell-win-x64, ID **13376042492**.
+- Previous run #41940986432 passed the 76 core contracts but failed Windows compilation due to missing read-only SourceCheck UI helper; fixed at source in commit 245d9a1. Latest Windows build is green.
+- UI/runtime visuals and actual MO2 injected file inventory are not game-tested. Component discovery is logical loose-file precedence, not a claim about full USVFS/RootBuilder/file-level exception behavior. Profiler install/collect/restore and combined optimizer ZIP remain disabled.
