@@ -90,3 +90,11 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - Detection is based on bounded physical file walking (no modification, no copying). Read-only checkboxes reflect discovered content, **not** that the files belong to MO2's enabled profile or that RootBuilder and VFS inject them at runtime. This provenance remains unverified and generation stays gated.
 - Existing MO2 INI/modlist-based source reader remains available as a separate code service but is not silently substituted for arbitrary-folder discovery. Game root is still a future prerequisite for profiler launch/install; four source fields are not redefined as a game-executable selector.
 - Normal mode and Page 2 stay unchanged; Page 1 stays non-scrollable; v1.1.0 remains the requested display version.
+
+
+## 2026-11-05 — MO2 configuration and profile replace arbitrary-folder check workflow
+- User superseded the standalone 1–4 folder-only checks. Require MO2 application folder first. Portable uses ModOrganizer.ini in that folder. Global instance config uses %LOCALAPPDATA%/ModOrganizer/<instance>/ModOrganizer.ini. Multiple instances require explicit selection; manually selected custom instance paths are supported.
+- Read configured Mods, Profiles and Overwrite paths from the chosen INI regardless of drive. Show actual game root separately, auto-resolved Mods folder with an explicit Browse recovery override, and selected active profile dropdown. Only honor selected_profile if that profile exists.
+- Do NOT check CET ASI, CET mods, REDscript or RED4ext from loose files/init.lua alone. Require selected MO2 instance and profile, modlist enabled list, all enabled packages, and the winning game-relative file map first. MO2 profile is a fifth prerequisite check.
+- Current MO2 loose-file evidence is not proof that Cyberpunk launched through MO2 or of RootBuilder/USVFS, archive precedence and file exceptions. No profiler install or optimization generation enabled until source equivalence and restore are verified.
+- Removed superseded independent folder-only scanner to avoid parallel source inventories. The active profile resolver is authoritative for the UI. Normal mode and two-page layout retained; version stays v1.1.0.

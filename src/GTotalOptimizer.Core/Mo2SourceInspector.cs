@@ -4,7 +4,8 @@ namespace GTotalOptimizer.Core;
 // MO2 launch/USVFS, archive precedence and RootBuilder mappings require separate runtime proof.
 public sealed record Mo2Instance(
     bool Recognized, string Detail, string ModsDirectory, string ProfilesDirectory,
-    string OverwriteDirectory, IReadOnlyList<string> Profiles);
+    string OverwriteDirectory, IReadOnlyList<string> Profiles,
+    string? PreferredProfile = null);
 
 public sealed record Mo2WinningFile(string GameRelativePath, string PhysicalPath, string Owner,
     int Priority, bool FromMo2);
@@ -14,7 +15,8 @@ public sealed record Mo2Stack(
     int EnabledPackages, int CetOwners, int RedscriptFiles, int Red4extFiles,
     int ShadowedFiles, bool HasZeroEngine, bool HasRedscript,
     IReadOnlyDictionary<string, Mo2WinningFile> EffectiveFiles,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    bool HasCetAsi = false)
 {
     public string? Winner(string relative) =>
         EffectiveFiles.TryGetValue(relative.Replace('\\', '/'), out var file) ? file.PhysicalPath : null;
@@ -24,7 +26,7 @@ public static class Mo2SourceInspector
 {
     private const int MaximumScannedFiles = 250_000;
 
-    public static Mo2Instance Discover(string? selectedInstance)
+    public static Mo2Instance Discover(string? selectedInstance, string? modsDirectoryOverride = null)
     {
         if (string.IsNullOrWhiteSpace(selectedInstance))
             return Failed("Select an MO2 instance containing ModOrganizer.ini.");
@@ -35,9 +37,12 @@ public static class Mo2SourceInspector
             if (!File.Exists(ini)) return Failed("ModOrganizer.ini not found in the selected MO2 instance.");
             var values = ReadIni(ini);
             var baseDir = ResolveSetting(instance, instance, values, "base_directory", ".");
-            var mods = ResolveSetting(instance, baseDir, values, "mod_directory", "mods");
+            var mods = string.IsNullOrWhiteSpace(modsDirectoryOverride)
+                ? ResolveSetting(instance, baseDir, values, "mod_directory", "mods")
+                : Path.GetFullPath(modsDirectoryOverride.Trim().Trim('"'));
             var profiles = ResolveSetting(instance, baseDir, values, "profiles_directory", "profiles");
             var overwrite = ResolveSetting(instance, baseDir, values, "overwrite_directory", "overwrite");
+            var selectedProfile = ReadProfileSelection(ini);
             var choices = Directory.Exists(profiles)
                 ? Directory.EnumerateDirectories(profiles)
                     .Where(folder => File.Exists(Path.Combine(folder, "modlist.txt")))
@@ -46,11 +51,11 @@ public static class Mo2SourceInspector
                     .Select(name => name!).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray()
                 : [];
             if (!Directory.Exists(mods))
-                return new(false, "MO2 mods directory missing: " + mods, mods, profiles, overwrite, choices);
+                return new(false, "MO2 mods directory missing: " + mods, mods, profiles, overwrite, choices, selectedProfile);
             if (choices.Length == 0)
-                return new(false, "No profiles with modlist.txt found under " + profiles, mods, profiles, overwrite, choices);
+                return new(false, "No profiles with modlist.txt found under " + profiles, mods, profiles, overwrite, choices, selectedProfile);
             return new(true, $"MO2 paths found; {choices.Length} profile(s). Select the actual launched profile.",
-                mods, profiles, overwrite, choices);
+                mods, profiles, overwrite, choices, selectedProfile);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
         {
@@ -78,6 +83,8 @@ public static class Mo2SourceInspector
         {
             var profileDir = Path.Combine(instance.ProfilesDirectory, profile);
             var entries = ReadEnabledMods(Path.Combine(profileDir, "modlist.txt"));
+            if (entries.Count == 0)
+                return Refuse("Profile has no enabled package entries in modlist.txt.");
             var warnings = new List<string>();
             var winners = new Dictionary<string, Mo2WinningFile>(StringComparer.OrdinalIgnoreCase);
             var shadows = 0;
@@ -86,6 +93,7 @@ public static class Mo2SourceInspector
             // Lowest precedence: game's physical files, including separately installed CET.
             IndexLayer(gameRoot, "(physical game)", -1, false, winners, ref scanned, ref shadows, token);
             // MO2 modlist.txt is highest-to-lowest. Reverse to let highest priority win last.
+            var missingPackages = 0;
             for (var i = entries.Count - 1; i >= 0; i--)
             {
                 token.ThrowIfCancellationRequested();
@@ -99,10 +107,15 @@ public static class Mo2SourceInspector
                 if (!Directory.Exists(folder))
                 {
                     warnings.Add("Enabled MO2 package not found: " + modName);
+                    missingPackages++;
                     continue;
                 }
                 IndexLayer(folder, modName, entries.Count - i, true, winners, ref scanned, ref shadows, token);
             }
+
+            // Never claim a usable stack if enabled package inventory is incomplete.
+            if (missingPackages > 0)
+                return Refuse($"{missingPackages} enabled MO2 package(s) could not be located. Check configured Mods directory.");
 
             // MO2 Overwrite loose files have the highest nominal precedence.
             if (Directory.Exists(instance.OverwriteDirectory))
@@ -116,13 +129,16 @@ public static class Mo2SourceInspector
                 .Distinct(StringComparer.OrdinalIgnoreCase).Count();
             var redCount = paths.Count(p => p.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase)
                                           && p.EndsWith(".reds", StringComparison.OrdinalIgnoreCase));
-            var nativeCount = paths.Count(p => p.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase));
+            var nativeCount = paths.Count(p => p.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase)
+                                            && p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
             var engine = winners.ContainsKey("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua");
-            var hasRed = paths.Any(p => p.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase));
+            var hasRed = redCount > 0;
+            var asi = winners.ContainsKey("bin/x64/plugins/cyber_engine_tweaks.asi") ||
+                winners.ContainsKey("bin/x64/plugins/cet.asi");
             warnings.Add("Loose-file priority only: verify MO2 launch, archive mapping, hidden file overrides, and RootBuilder/virtualized root plugins before generation.");
             return new(true, $"Resolved physical loose-file candidates from {entries.Count} enabled MO2 packages. Runtime VFS unverified.",
                 profile, entries.Count, cetNames, redCount, nativeCount, shadows, engine,
-                hasRed, winners, warnings);
+                hasRed, winners, warnings, asi);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
         {
@@ -140,6 +156,20 @@ public static class Mo2SourceInspector
             Path.Combine("r6", "scripts"),
             Path.Combine("red4ext", "plugins")
         };
+        // CET's native ASI may be game-installed or in an enabled MO2 package.
+        // RootBuilder-specific mappings remain unproven and never get inferred.
+        var nativeRoot = Path.Combine(root, "bin", "x64", "plugins");
+        foreach (var asiName in new[] { "cyber_engine_tweaks.asi", "cet.asi" })
+        {
+            token.ThrowIfCancellationRequested();
+            var asiFile = Path.Combine(nativeRoot, asiName);
+            if (!File.Exists(asiFile)) continue;
+            if (++scanned > MaximumScannedFiles)
+                throw new InvalidDataException("Too many files for bounded MO2 source inventory.");
+            var nativeRel = Path.GetRelativePath(root, asiFile).Replace('\\', '/');
+            if (winners.ContainsKey(nativeRel)) shadows++;
+            winners[nativeRel] = new(nativeRel, asiFile, owner, priority, fromMo2);
+        }
         foreach (var path in paths)
         {
             var directory = Path.Combine(root, path);
@@ -192,6 +222,26 @@ public static class Mo2SourceInspector
             if (seen.Add(name)) entries.Add(name);
         }
         return entries;
+    }
+
+    private static string? ReadProfileSelection(string ini)
+    {
+        var section = "";
+        foreach (var raw in File.ReadLines(ini))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                section = line[1..^1];
+                continue;
+            }
+            if (section is not ("General" or "Settings")) continue;
+            var equal = line.IndexOf('=');
+            if (equal <= 0 || !line[..equal].Trim()
+                .Equals("selected_profile", StringComparison.OrdinalIgnoreCase)) continue;
+            return line[(equal + 1)..].Trim().Trim('"');
+        }
+        return null;
     }
 
     private static Dictionary<string, string> ReadIni(string path)

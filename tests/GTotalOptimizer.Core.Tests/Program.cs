@@ -287,109 +287,107 @@ try
     Require(!unmanaged.Recognized, "missing MO2 instance is refused");
 
 
-    // Flexible MO2 content-first sources: each folder may contain one, several,
-    // or all four components. Do not require a game-root or MO2 instance here.
-    var mo2Sources = Path.Combine(root, "arbitrary source locations");
-    var asiOnly = Path.Combine(mo2Sources, "anywhere one");
-    var cetOnly = Path.Combine(mo2Sources, "another folder");
-    var redsOnly = Path.Combine(mo2Sources, "third disk candidate");
-    var red4extOnly = Path.Combine(mo2Sources, "fourth folder");
+    // MO2 installation detection: portable INI or instance under LocalAppData.
+    // A directory's mere existence is never enough to select an active profile.
+    var mo2ExecutableDir = Path.Combine(root, "MO2 installed somewhere");
+    Directory.CreateDirectory(mo2ExecutableDir);
+    File.WriteAllText(Path.Combine(mo2ExecutableDir, "ModOrganizer.exe"), "fixture");
+    var exampleAppData = Path.Combine(root, "UserProfile", "AppData", "Local");
+    var instanceStore = Path.Combine(exampleAppData, "ModOrganizer");
+    Require(!Mo2InstallLocator.Inspect("", localAppData: exampleAppData).HasConfiguration,
+        "no MO2 selection never claims configured instance");
+    Require(!Mo2InstallLocator.Inspect(mo2ExecutableDir,
+        localAppData: exampleAppData).HasConfiguration,
+        "MO2 executable alone cannot infer missing instance configuration");
 
-    var asiFile = Path.Combine(asiOnly, "bin", "x64", "plugins", "cyber_engine_tweaks.asi");
-    var luaInit = Path.Combine(cetOnly, "bin", "x64", "plugins",
-        "cyber_engine_tweaks", "mods", "0-Engine", "init.lua");
-    var redFile = Path.Combine(redsOnly, "r6", "scripts", "Mods", "runtime.reds");
-    var pluginDll = Path.Combine(red4extOnly, "red4ext", "plugins", "SomePlugin", "SomePlugin.dll");
-    foreach (var file in new[] { asiFile, luaInit, redFile, pluginDll })
+    var firstInstance = Path.Combine(instanceStore, "Cyberpunk 2077");
+    var secondInstance = Path.Combine(instanceStore, "Other Game");
+    Directory.CreateDirectory(firstInstance);
+    File.WriteAllText(Path.Combine(firstInstance, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
+        "\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n" +
+        "[General]\nselected_profile=Active\n");
+    var singleInstance = Mo2InstallLocator.Inspect(mo2ExecutableDir,
+        localAppData: exampleAppData);
+    Require(singleInstance.HasConfiguration && !singleInstance.IsPortable &&
+        singleInstance.InstanceFolder == firstInstance,
+        "one global MO2 instance is selected from LocalAppData");
+
+    var preferred = Mo2SourceInspector.Discover(firstInstance);
+    Require(preferred.PreferredProfile == "Active" && preferred.Profiles.Contains("Active"),
+        "MO2 preferred profile is read from selected_profile rather than guessed from folder name");
+
+    Directory.CreateDirectory(secondInstance);
+    File.WriteAllText(Path.Combine(secondInstance, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
+        "\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n");
+    var ambiguous = Mo2InstallLocator.Inspect(mo2ExecutableDir, localAppData: exampleAppData);
+    Require(!ambiguous.HasConfiguration && ambiguous.InstanceChoices.Count == 2,
+        "multiple MO2 instances require explicit instance selection; neither is assumed active");
+    var chosen = Mo2InstallLocator.Inspect(mo2ExecutableDir, firstInstance, exampleAppData);
+    Require(chosen.HasConfiguration && chosen.InstanceFolder == firstInstance,
+        "user-selected instance resolves its own configured directories");
+
+    var portable = Path.Combine(root, "Portable MO2");
+    Directory.CreateDirectory(portable);
+    File.WriteAllText(Path.Combine(portable, "ModOrganizer.exe"), "fixture");
+    File.WriteAllText(Path.Combine(portable, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
+        "\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n" +
+        "[General]\nselected_profile=Active\n");
+    var detectedPortable = Mo2InstallLocator.Inspect(portable, localAppData: exampleAppData);
+    Require(detectedPortable.IsPortable && detectedPortable.HasConfiguration &&
+        detectedPortable.InstanceFolder == portable &&
+        Mo2SourceInspector.Discover(detectedPortable.InstanceFolder).PreferredProfile == "Active",
+        "portable MO2 resolves INI and preferred profile within installation folder");
+
+    var manualInstance = Path.Combine(root, "Manual instance on another drive");
+    Directory.CreateDirectory(manualInstance);
+    File.WriteAllText(Path.Combine(manualInstance, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
+        "\nmod_directory=%BASE_DIR%/mods\nprofiles_directory=%BASE_DIR%/profiles\n");
+    var manual = Mo2InstallLocator.Inspect(mo2ExecutableDir, manualInstance, exampleAppData);
+    Require(manual.HasConfiguration && manual.InstanceFolder == manualInstance,
+        "manual instance can be selected outside LocalAppData");
+
+    // A missing configured Mods directory requires an explicit replacement and
+    // validated enabled package names; arbitrary unowned files never grant checks.
+    var brokenConfig = Path.Combine(root, "Broken MO2 instance");
+    Directory.CreateDirectory(brokenConfig);
+    File.WriteAllText(Path.Combine(brokenConfig, "ModOrganizer.ini"),
+        "[Settings]\nbase_directory=" + mo2Base.Replace('\\', '/') +
+        "\nmod_directory=" + Path.Combine(root, "not-real").Replace('\\', '/') +
+        "\nprofiles_directory=%BASE_DIR%/profiles\n");
+    Require(!Mo2SourceInspector.Discover(brokenConfig).Recognized,
+        "missing configured mods path cannot claim an active stack");
+    var recovered = Mo2SourceInspector.Discover(brokenConfig, mo2Mods);
+    Require(recovered.Recognized && recovered.ModsDirectory == mo2Mods,
+        "manual Mods folder override restores INI/profile-based source resolution");
+
+    // CET ASI coverage must come from a physical game file or enabled package,
+    // not from disabled or inactive packages.
+    var asiInEnabled = Path.Combine(mo2Mods, "High", "bin", "x64", "plugins",
+        "cyber_engine_tweaks.asi");
+    Directory.CreateDirectory(Path.GetDirectoryName(asiInEnabled)!);
+    File.WriteAllText(asiInEnabled, "enabled ASI");
+    var profileAsi = Mo2SourceInspector.Resolve(emptyPhysicalGame, recovered, "Active");
+    Require(profileAsi.Ready && profileAsi.HasCetAsi &&
+        profileAsi.CetOwners > 0 && profileAsi.HasRedscript,
+        "enabled active-profile ASI/CET/REDscript resolved from winning physical files");
+
+    var brokenList = Path.Combine(mo2Base, "profiles", "Active", "modlist.txt");
+    var previousList = File.ReadAllText(brokenList);
+    try
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "fixture");
+        File.WriteAllText(brokenList, "+Missing Enabled Package\n" + previousList);
+        Require(!Mo2SourceInspector.Resolve(emptyPhysicalGame, recovered, "Active").Ready,
+            "missing enabled package fails closed instead of checking CET mods");
     }
+    finally { File.WriteAllText(brokenList, previousList); }
 
-    var emptySources = Mo2FolderSources.Inspect(["", "", "", ""]);
-    Require(emptySources.VisibleFolders == 1 && !emptySources.Complete,
-        "MO2 initially shows only one empty folder, with four unchecked components");
-
-    var fourSources = Mo2FolderSources.Inspect([asiOnly, cetOnly, redsOnly, red4extOnly]);
-    Require(fourSources.Complete && fourSources.VisibleFolders == 4 &&
-        fourSources.UsedFolders == 4 && fourSources.HasZeroEngine,
-        "four unrelated physical folders reveal all four rows and recognize all four file types");
-    Require(fourSources.CetOwners == 1 && fourSources.RedscriptOwners == 1,
-        "CET owner requires init.lua and REDscript owner is not the raw file count");
-    Require(fourSources.Has(ModSourceParts.CetAsi) && fourSources.Has(ModSourceParts.CetMods) &&
-        fourSources.Has(ModSourceParts.Redscript) && fourSources.Has(ModSourceParts.Red4ext),
-        "four MO2 checkboxes are derived from file content, not folder names");
-
-    var incomplete = Mo2FolderSources.Inspect([asiOnly, cetOnly, "", ""]);
-    Require(!incomplete.Complete && incomplete.VisibleFolders == 3 &&
-        incomplete.Has(ModSourceParts.CetAsi) && incomplete.Has(ModSourceParts.CetMods) &&
-        !incomplete.Has(ModSourceParts.Redscript),
-        "third slot appears when two folders do not contain all four components");
-
-    var twoFolderFirst = Path.Combine(mo2Sources, "random combined A");
-    var twoFolderSecond = Path.Combine(mo2Sources, "random combined B");
-    var twoAsi = Path.Combine(twoFolderFirst, "other", "CET.asi");
-    var twoInit = Path.Combine(twoFolderFirst, "mods", "SomeMod", "init.lua");
-    var twoReds = Path.Combine(twoFolderSecond, "r6", "scripts", "MyScript", "main.reds");
-    var twoDll = Path.Combine(twoFolderSecond, "red4ext", "plugins", "MyPlugin.dll");
-    foreach (var file in new[] { twoAsi, twoInit, twoReds, twoDll })
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "fixture");
-    }
-    var pair = Mo2FolderSources.Inspect([twoFolderFirst, twoFolderSecond, redsOnly, red4extOnly]);
-    Require(pair.Complete && pair.VisibleFolders == 2 && pair.UsedFolders == 2,
-        "two physical folders cover all four components and hide rows three and four");
-
-    var threeFirst = Path.Combine(mo2Sources, "three 1");
-    var threeSecond = Path.Combine(mo2Sources, "three 2");
-    var threeThird = Path.Combine(mo2Sources, "three 3");
-    foreach (var (folder, relative) in new[]
-    {
-        (threeFirst, "cyber_engine_tweaks.asi"),
-        (threeSecond, "mods/One/init.lua"),
-        (threeSecond, "r6/scripts/C/main.reds"),
-        (threeThird, "red4ext/plugins/My.dll")
-    })
-    {
-        var file = Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "fixture");
-    }
-    var triple = Mo2FolderSources.Inspect([threeFirst, threeSecond, threeThird, red4extOnly]);
-    Require(triple.Complete && triple.VisibleFolders == 3 && triple.UsedFolders == 3,
-        "three source folders automatically hide the fourth chooser");
-
-    var allAtOnce = Path.Combine(mo2Sources, "one random folder");
-    foreach (var original in new[] { asiFile, luaInit, redFile, pluginDll })
-    {
-        var relative = original.StartsWith(asiOnly) ? Path.GetRelativePath(asiOnly, original)
-            : original.StartsWith(cetOnly) ? Path.GetRelativePath(cetOnly, original)
-            : original.StartsWith(redsOnly) ? Path.GetRelativePath(redsOnly, original)
-            : Path.GetRelativePath(red4extOnly, original);
-        var copy = Path.Combine(allAtOnce, relative);
-        Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
-        File.Copy(original, copy);
-    }
-    var single = Mo2FolderSources.Inspect([allAtOnce, asiOnly, cetOnly, redsOnly]);
-    Require(single.Complete && single.VisibleFolders == 1 && single.UsedFolders == 1,
-        "one folder containing all four recognized components hides the other three rows");
-    Require(single.CetOwners == 1 && single.RedscriptOwners == 1,
-        "one-folder source inventory counts the CET and REDscript owners");
-
-    var sameFolderTwice = Mo2FolderSources.Inspect([asiOnly, asiOnly, redsOnly, red4extOnly]);
-    Require(!sameFolderTwice.Complete && sameFolderTwice.UsedFolders == 1 &&
-        sameFolderTwice.Folders[1].Detail.Contains("Duplicate") &&
-        sameFolderTwice.VisibleFolders == 2,
-        "duplicate physical source never falsely satisfies a missing component");
-
-    var noFiles = Path.Combine(mo2Sources, "empty no mods");
-    Directory.CreateDirectory(noFiles);
-    var noContent = Mo2FolderSources.Inspect([noFiles, "", "", ""]);
-    Require(!noContent.Complete && noContent.VisibleFolders == 2,
-        "a folder is not accepted as a component merely because it exists");
-    Require(!Mo2FolderSources.Inspect([Path.Combine(mo2Sources, "not found"), "", "", ""]).Complete,
-        "missing directory does not create a false checked component");
+    var noGame = Mo2SourceInspector.Resolve(null, recovered, "Active");
+    Require(!noGame.Ready && noGame.CetOwners == 0,
+        "without verified game root, a matching MO2 profile cannot claim active checks");
 
     var exe = BackendLocator.Executable(Path.Combine(root, "app"), BackendKind.Cet);
     Require(exe.EndsWith(Path.Combine("components", "cet", "G-CET-Runtime-Profiler.exe"), StringComparison.Ordinal),
