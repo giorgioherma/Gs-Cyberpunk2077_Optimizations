@@ -6,14 +6,18 @@ namespace GTotalOptimizer.Core;
 public static class SetupPageLayout
 {
     public const int ReferenceClientHeight = 790;
-    public const int LayoutTopPadding = 10;
-    public const int LayoutBottomPadding = 8;
-    public const int HeaderHeight = 76;
-    public const int ActionsHeight = 56;
-    public const int StatusHeight = 42;
+    public const int LayoutTopPadding = 7;
+    public const int LayoutBottomPadding = 7;
+    public const int HeaderHeight = 60;
+    public const int ActionsHeight = 52;
+    public const int StatusHeight = 38;
     public const int NormalSourceHeight = 166;
     public const int Mo2SourceHeight = 241;
-    public const int InstructionsHeight = 220;
+    public const int InstructionsHeight = 250;
+    public const int InstructionLastTextBottom = 239;
+    public const int Mo2EngineNoticeTop = 174;
+    public const int Mo2ChecksTop = 194;
+    public const int Mo2StatusTop = 215;
     public const int MinimumWorkflowHeight = 132;
 
     public static int AvailableContentHeight(int clientHeight) =>

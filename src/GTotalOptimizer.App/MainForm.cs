@@ -45,9 +45,13 @@ internal sealed class MainForm : Form
     private readonly Label zeroEngineCheck = Readout();
     private readonly Label scriptsCheck = Readout();
     private readonly Label red4extCheck = Readout();
+    private readonly Label zeroEngineGlyph = StatusGlyph();
+    private readonly Label scriptsGlyph = StatusGlyph();
+    private readonly Label red4extGlyph = StatusGlyph();
+    private readonly Dictionary<TextBox, Panel> pathOutlines = new();
     private readonly LinkLabel zeroEngineLink = new()
     {
-        Text = "0-Engine must be installed!  Open Nexus Mods",
+        Text = "0-Engine required — Nexus Mods",
         LinkColor = Cyan, ActiveLinkColor = Magenta, VisitedLinkColor = Cyan,
         AutoSize = false, TextAlign = ContentAlignment.MiddleLeft
     };
@@ -57,9 +61,6 @@ internal sealed class MainForm : Form
     private readonly Label stepThree = Readout();
     private GroupBox? sourceSection;
     private readonly Label sourceStatus = Readout();
-    private readonly Label cetKey = Readout();
-    private readonly Label redKey = Readout();
-    private readonly Label capKey = Readout();
     private readonly Label pageOneStatus = Readout();
     private readonly Label pageTwoStatus = Readout();
     private readonly TextBox cetReport = ReportBox();
@@ -185,7 +186,7 @@ internal sealed class MainForm : Form
 
         sourceSection = Section("Game folder /Cyberpunk2077", SetupPageLayout.NormalSourceHeight);
         sourceSection.Dock = DockStyle.Fill;
-        sourceSection.Margin = new Padding(0, 2, 0, 4);
+        sourceSection.Margin = new Padding(0, 2, 0, 2);
 
         // Full-width, mutually exclusive views. MO2 replaces the Normal form;
         // it is not a small radio choice followed by both sets of input fields.
@@ -218,7 +219,7 @@ internal sealed class MainForm : Form
         // One MO2 installation path resolves portable or instance configuration;
         // the config supplies Mods/Profiles/Overwrite and priority. Manual Mods
         // override remains a recovery option, not a substitute for modlist.txt.
-        mo2Panel.SetBounds(14, 55, 880, 120);
+        mo2Panel.SetBounds(14, 54, 880, 119);
         void AddMo2Path(string label, TextBox field, int top, Action browse)
         {
             var row = new Panel { Left = 0, Top = top, Width = 880, Height = 29 };
@@ -320,6 +321,7 @@ internal sealed class MainForm : Form
             check.Font = new Font("Segoe UI", 8.8f);
             sourceSection.Controls.Add(check);
         }
+        sourceSection.Controls.AddRange([zeroEngineGlyph, scriptsGlyph, red4extGlyph]);
         zeroEngineLink.Font = new Font("Segoe UI", 8.7f);
         sourceSection.Controls.Add(zeroEngineLink);
 
@@ -333,9 +335,10 @@ internal sealed class MainForm : Form
                 mo2ComponentChecks[i].Left = 14 + (width * i / mo2ComponentChecks.Length);
                 mo2ComponentChecks[i].Width = width / mo2ComponentChecks.Length - 3;
             }
-            zeroEngineCheck.Width = Math.Min(520, width);
+            zeroEngineCheck.Width = Math.Min(610, width);
             zeroEngineLink.Width = Math.Max(190, width - zeroEngineLink.Left);
             red4extCheck.Width = Math.Max(180, width - red4extCheck.Left);
+            PositionNormalGlyphs();
         };
         setupContent.Controls.Add(sourceSection, 0, 0);
 
@@ -343,49 +346,48 @@ internal sealed class MainForm : Form
         guide.Dock = DockStyle.Fill;
         guide.Margin = new Padding(0, 2, 0, 4);
 
-        var top = Readout();
-        top.Text = "Start Cyberpunk 2077 and load the world. Press F11 to START; press F11 again to STOP.";
-        top.ForeColor = TextColor;
-        top.Font = new Font("Segoe UI Semibold", 9.7f, FontStyle.Bold);
-        top.SetBounds(15, 23, 890, 23);
-        guide.Controls.Add(top);
+        var provision = Readout();
+        provision.Text = "Provide the path to the live Cyberpunk 2077 game files.";
+        provision.ForeColor = TextColor;
+        provision.Font = new Font("Segoe UI", 9.3f);
+        provision.SetBounds(15, 23, 890, 21);
+        guide.Controls.Add(provision);
 
-        cetKey.SetBounds(16, 47, 285, 22);
-        redKey.SetBounds(307, 47, 285, 22);
-        capKey.SetBounds(598, 47, 290, 22);
-        foreach (var key in new[] { cetKey, redKey, capKey })
-        {
-            key.Font = new Font("Segoe UI Semibold", 9.3f, FontStyle.Bold);
-            key.ForeColor = TextColor;
-            guide.Controls.Add(key);
-        }
+        var start = Readout();
+        start.Text = "Start Cyberpunk 2077 and load into the world. Press F11 to START; press F11 again to STOP.";
+        start.ForeColor = TextColor;
+        start.Font = new Font("Segoe UI Semibold", 9.7f, FontStyle.Bold);
+        start.SetBounds(15, 44, 890, 22);
+        guide.Controls.Add(start);
 
         var conflicts = Readout();
-        conflicts.Text = "Temporarily unbind other mods or game controls using F11 (CET and Settings).";
+        conflicts.Text =
+            "Temporarily unbind other mods or game controls using F11 (CET and Settings).\r\n" +
+            "Make sure Cyberpunk 2077 is the ONLY process selected in CapFrameX.";
         conflicts.ForeColor = TextColor;
         conflicts.Font = new Font("Segoe UI", 9.2f);
-        conflicts.SetBounds(15, 70, 890, 21);
+        conflicts.SetBounds(15, 67, 890, 37);
         guide.Controls.Add(conflicts);
 
         var headline = Readout();
         headline.Text = "RECORD 5–10 MINUTES IN THE CITY";
         headline.ForeColor = Green;
         headline.Font = new Font("Segoe UI Semibold", 14f, FontStyle.Bold);
-        headline.SetBounds(15, 95, 890, 29);
+        headline.SetBounds(15, 107, 890, 27);
         guide.Controls.Add(headline);
 
         var phases = Readout();
         phases.Text = "IDLE   •   MOVEMENT   •   DRIVING   •   HEAVY COMBAT";
-        phases.ForeColor = Green;
+        phases.ForeColor = Amber;
         phases.Font = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
-        phases.SetBounds(15, 123, 890, 25);
+        phases.SetBounds(15, 135, 890, 24);
         guide.Controls.Add(phases);
 
         var avoid = Readout();
         avoid.Text = "AVOID MENUS, INVENTORY, MAP, CET UI AND LOADING SCREENS";
         avoid.ForeColor = TextColor;
         avoid.Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
-        avoid.SetBounds(15, 147, 890, 22);
+        avoid.SetBounds(15, 160, 890, 22);
         guide.Controls.Add(avoid);
 
         var detail = Readout();
@@ -395,17 +397,15 @@ internal sealed class MainForm : Form
             "Stay in-world. Use an old save or Phantom Liberty start; fight police for heavy combat.\r\n" +
             "If you die, stop with F11 before loading. Captures under five minutes also work.\r\n" +
             "Close the game, return here and use COLLECT RESULTS / RESTORE.";
-        detail.SetBounds(15, 169, 890, 48);
+        detail.SetBounds(15, 184, 890, 55);
+        detail.TextAlign = ContentAlignment.TopLeft;
         guide.Controls.Add(detail);
         guide.Resize += (_, _) =>
         {
             var width = Math.Max(350, guide.ClientSize.Width - 30);
-            foreach (Control item in new Control[] { top, conflicts, headline, phases, avoid, detail })
+            foreach (Control item in new Control[]
+                { provision, start, conflicts, headline, phases, avoid, detail })
                 item.Width = width;
-            var cell = width / 3;
-            cetKey.Width = redKey.Width = capKey.Width = cell;
-            redKey.Left = 16 + cell;
-            capKey.Left = 16 + 2 * cell;
         };
         setupContent.Controls.Add(guide, 0, 1);
 
@@ -474,15 +474,21 @@ internal sealed class MainForm : Form
             tab.FlatAppearance.BorderColor = selected ? Cyan : Border;
         }
         foreach (var check in mo2ComponentChecks) check.Visible = mo2;
-        foreach (var check in new Control[] { zeroEngineCheck, scriptsCheck, red4extCheck })
+        foreach (var check in new Control[]
+            { zeroEngineCheck, scriptsCheck, red4extCheck,
+              zeroEngineGlyph, scriptsGlyph, red4extGlyph })
             check.Visible = !mo2;
         if (mo2)
         {
             var width = Math.Max(350, sourceSection.ClientSize.Width - 28);
+            // Missing 0-Engine warning belongs ABOVE the five MO2 checks;
+            // nothing may extend below the group box bottom border.
+            zeroEngineLink.SetBounds(14, SetupPageLayout.Mo2EngineNoticeTop,
+                Math.Min(width, 550), 18);
             for (var i = 0; i < mo2ComponentChecks.Length; i++)
-                mo2ComponentChecks[i].SetBounds(14 + width * i / 5, 177, width / 5 - 3, 20);
-            sourceStatus.SetBounds(14, 199, width, 18);
-            zeroEngineLink.SetBounds(14, 219, 550, 18);
+                mo2ComponentChecks[i].SetBounds(14 + width * i / 5,
+                    SetupPageLayout.Mo2ChecksTop, width / 5 - 3, 20);
+            sourceStatus.SetBounds(14, SetupPageLayout.Mo2StatusTop, width, 18);
         }
         else
         {
@@ -490,16 +496,25 @@ internal sealed class MainForm : Form
             zeroEngineCheck.SetBounds(14, 113, 520, 20);
             scriptsCheck.SetBounds(14, 134, 210, 20);
             red4extCheck.SetBounds(240, 134, 220, 20);
-            zeroEngineLink.SetBounds(530, 113, 340, 20);
+            zeroEngineLink.SetBounds(685, 113, 220, 20);
+            PositionNormalGlyphs();
         }
     }
 
-    private static CheckBox SourceCheck(string label) => new()
+    private static CheckBox SourceCheck(string label) => new SourceStatusCheck
     {
         Text = label, AutoCheck = false, Checked = false,
         AutoSize = false, TabStop = false, FlatStyle = FlatStyle.Flat,
-        BackColor = Color.Transparent, ForeColor = TextColor,
+        BackColor = PanelBg, ForeColor = TextColor,
         Cursor = Cursors.Default
+    };
+
+    private static Label StatusGlyph() => new()
+    {
+        Text = "✕", ForeColor = Color.FromArgb(255, 95, 112),
+        AutoSize = false, BackColor = Color.Transparent,
+        Font = new Font("Segoe UI Semibold", 10f, FontStyle.Bold),
+        TextAlign = ContentAlignment.MiddleLeft
     };
 
     private static ComboBox SourceDropdown() => new()
@@ -554,8 +569,8 @@ internal sealed class MainForm : Form
         profilerReady.Text = "PROFILER NOT INSTALLED";
         profilerReady.ForeColor = Amber;
         stepOne.Text = "1. INSTALL PROFILERS — CET controls / scheduler + GRSP. Component verification required.";
-        stepTwo.Text = "2. START CYBERPUNK — record synchronized F11 gameplay after both profilers are ready.";
-        stepThree.Text = "3. COLLECT RESULTS / RESTORE — close game, archive evidence and restore original files.";
+        stepTwo.Text = "2. START CYBERPUNK — Record a capture using all profilers.";
+        stepThree.Text = "3. COLLECT RESULTS / RESTORE — Close game, collect results and continue.";
         stepOne.ForeColor = Cyan;
         stepTwo.ForeColor = stepThree.ForeColor = Color.FromArgb(104, 118, 126);
         next.Enabled = captureAndRestoreVerified;
@@ -752,25 +767,44 @@ internal sealed class MainForm : Form
         return button;
     }
 
-    private static void ConfigureCetPathRow(Panel panel, TextBox field, Button browse, int top)
+    private void ConfigureCetPathRow(Panel panel, TextBox field, Button browse, int top)
     {
+        // A 2px outline is drawn by the host panel. The textbox itself stays
+        // CET-sized (26px) and its path stays editable without a clipped border.
+        var outline = new Panel { BackColor = Magenta };
+        pathOutlines[field] = outline;
         field.AutoSize = false;
         field.Dock = DockStyle.None;
         field.Margin = Padding.Empty;
         field.Font = new Font("Consolas", 9f);
-        field.Height = 26;
+        field.BorderStyle = BorderStyle.None;
+        field.BackColor = PanelAlt;
         browse.Dock = DockStyle.None;
         browse.Margin = Padding.Empty;
 
+        void ArrangeField()
+        {
+            field.SetBounds(5, 4, Math.Max(100, outline.ClientSize.Width - 10), 19);
+        }
         void Arrange()
         {
             var width = panel.ClientSize.Width;
-            field.SetBounds(0, top + 2, Math.Max(180, width - 103), 26);
-            browse.SetBounds(Math.Max(185, width - 92), top, 92, 30);
+            outline.SetBounds(0, top + 2, Math.Max(180, width - 103), 26);
+            browse.SetBounds(Math.Max(185, width - 92), top, 92,
+                Math.Min(30, Math.Max(25, panel.ClientSize.Height - top)));
+            ArrangeField();
         }
-        panel.Controls.AddRange([field, browse]);
+        outline.Controls.Add(field);
+        panel.Controls.AddRange([outline, browse]);
+        outline.Resize += (_, _) => ArrangeField();
         panel.Resize += (_, _) => Arrange();
         Arrange();
+    }
+
+    private void SetPathOutline(TextBox field, bool verified)
+    {
+        if (pathOutlines.TryGetValue(field, out var outline))
+            outline.BackColor = verified ? Border : Magenta;
     }
 
     private static Button Action(string text) => new NeonButton
@@ -886,34 +920,28 @@ internal sealed class MainForm : Form
                 c.State != GTotalOptimizer.Core.CheckState.Missing);
             var plugins = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
                 c.State != GTotalOptimizer.Core.CheckState.Missing);
-            ApplyCheck(zeroEngineCheck, "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", engine);
-            ApplyCheck(scriptsCheck, "r6/scripts", scripts);
-            ApplyCheck(red4extCheck, "red4ext/plugins", plugins);
+            ApplyCheck(zeroEngineCheck, zeroEngineGlyph,
+                "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine", engine);
+            ApplyCheck(scriptsCheck, scriptsGlyph, "r6/scripts", scripts);
+            ApplyCheck(red4extCheck, red4extGlyph, "red4ext/plugins", plugins);
             zeroEngineLink.Visible = current.IsValidGame && !engine;
             pageOneStatus.Text = current.IsValidGame
                 ? "Game detected. Profiler installation and restoration are not yet integrated."
                 : "Select a valid Cyberpunk 2077 game folder.";
         }
-        sourceStatus.ForeColor = TextColor;
+        // Only missing paths/prompts are highlighted. Valid status text is white;
+        // the dedicated check/X glyphs carry green/red status.
+        sourceStatus.ForeColor = mo2Mode.Checked
+            ? sourceVerified ? TextColor : Amber
+            : current.IsValidGame ? TextColor : Amber;
+        SetPathOutline(sourcePath, current.IsValidGame);
+        SetPathOutline(mo2GameRoot, current.IsValidGame);
+        SetPathOutline(mo2Folder, mo2Location.HasInstallation);
+        SetPathOutline(mo2ModsFolder,
+            mo2Configuration.Recognized && Directory.Exists(mo2Configuration.ModsDirectory));
 
         var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
         var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);
-        var capExe = Path.Combine(packageRoot, "components", "capframex", "CapFrameX.exe");
-        var keys = CaptureKeyInspector.Inspect(current.GameRoot,
-            File.Exists(cetExe), File.Exists(redExe), capExe);
-        var keyLabels = new[] { cetKey, redKey, capKey };
-        for (var i = 0; i < keys.Count; i++)
-        {
-            var actual = keys[i].Value;
-            var key = actual.Equals("CUSTOM", StringComparison.OrdinalIgnoreCase)
-                ? "CUSTOM (set F11)"
-                : actual.Equals("F11", StringComparison.OrdinalIgnoreCase) && keys[i].Confirmed
-                    ? "F11 ✓" : "F11 (preset)";
-            keyLabels[i].Text = $"{keys[i].Owner}: {key}";
-            keyLabels[i].ForeColor = TextColor;
-            keyLabels[i].AccessibleDescription = keys[i].Detail;
-        }
-
         if (!current.IsValidGame || cancel.IsCancellationRequested) return;
         try
         {
@@ -927,11 +955,28 @@ internal sealed class MainForm : Form
         catch (OperationCanceledException) { }
     }
 
-    private static void ApplyCheck(Label label, string path, bool present)
+    private void ApplyCheck(Label label, Label glyph, string path, bool present)
     {
-        label.Text = $"{path}  {(present ? "✓" : "✕  NOT FOUND")}";
+        label.Text = path + (present ? "" : "  NOT FOUND");
         label.ForeColor = TextColor;
-        label.Font = new Font("Segoe UI Semibold", 9.5f);
+        label.Font = new Font("Segoe UI Semibold", 9.3f);
+        glyph.Text = present ? "✓" : "✕";
+        glyph.ForeColor = present ? Green : Color.FromArgb(255, 95, 112);
+        PositionNormalGlyphs();
+    }
+
+    private void PositionNormalGlyphs()
+    {
+        PlaceGlyph(zeroEngineCheck, zeroEngineGlyph);
+        PlaceGlyph(scriptsCheck, scriptsGlyph);
+        PlaceGlyph(red4extCheck, red4extGlyph);
+    }
+
+    private static void PlaceGlyph(Label text, Label glyph)
+    {
+        var measured = TextRenderer.MeasureText(text.Text, text.Font,
+            new Size(2000, 24), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        glyph.SetBounds(text.Left + measured.Width + 5, text.Top, 23, text.Height);
     }
 
     private void ExplainPending(string message) =>
@@ -942,6 +987,35 @@ internal sealed class MainForm : Form
         scanCancellation?.Cancel();
         scanCancellation?.Dispose();
         base.OnFormClosed(e);
+    }
+}
+
+// User-owned source data stays read-only. Only the indicator changes color:
+// green tick = found in verified winning-file map; red X = missing/unverified.
+// Avoid the black/gray OS checkbox foreground on the CET dark background.
+internal sealed class SourceStatusCheck : CheckBox
+{
+    public SourceStatusCheck()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                 ControlStyles.OptimizedDoubleBuffer, true);
+        AutoCheck = false;
+        TabStop = false;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor);
+        var tint = Checked ? Color.FromArgb(94, 255, 130)
+                           : Color.FromArgb(255, 95, 112);
+        var glyphRect = new Rectangle(0, 0, 20, ClientSize.Height);
+        var textRect = new Rectangle(21, 0, Math.Max(0, ClientSize.Width - 21), ClientSize.Height);
+        var align = TextFormatFlags.VerticalCenter | TextFormatFlags.Left |
+                    TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                    TextFormatFlags.NoPrefix;
+        TextRenderer.DrawText(e.Graphics, Checked ? "✓" : "✕",
+            Font, glyphRect, tint, align);
+        TextRenderer.DrawText(e.Graphics, Text, Font, textRect, ForeColor, align);
     }
 }
 

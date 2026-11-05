@@ -19,6 +19,17 @@ try
         SetupPageLayout.MinimumWorkflowHeight, "MO2 tab preserves all three workflow steps");
     Require(!SetupPageLayout.FitsWithoutScroll(SetupPageLayout.ReferenceClientHeight - 110, mo2: true),
         "layout contract detects an undersized window instead of claiming no clipping");
+    Require(SetupPageLayout.InstructionsHeight - 6 >= SetupPageLayout.InstructionLastTextBottom + 3,
+        "the complete three-line capture instructions fit in their non-scrollable section");
+    Require(SetupPageLayout.Mo2EngineNoticeTop + 18 <= SetupPageLayout.Mo2ChecksTop,
+        "MO2 0-Engine notice is ABOVE all five component checks");
+    Require(SetupPageLayout.Mo2ChecksTop + 20 <= SetupPageLayout.Mo2StatusTop,
+        "MO2 checks do not overlap the source status");
+    Require(SetupPageLayout.Mo2StatusTop + 18 + 4 <= SetupPageLayout.Mo2SourceHeight,
+        "MO2 status and the 0-Engine warning remain inside the top box");
+    Require(SetupPageLayout.WorkflowHeight(SetupPageLayout.ReferenceClientHeight, true)
+        >= SetupPageLayout.MinimumWorkflowHeight,
+        "larger instructions section leaves all three profiler steps visible without scrolling");
     Require(!GameInspector.Inspect(root).IsValidGame, "empty folder rejected");
     Directory.CreateDirectory(Path.Combine(root, "bin", "x64"));
     File.WriteAllText(Path.Combine(root, "bin", "x64", "Cyberpunk2077.exe"), "");

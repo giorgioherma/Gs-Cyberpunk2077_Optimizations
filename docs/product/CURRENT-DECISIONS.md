@@ -98,3 +98,12 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 - Do NOT check CET ASI, CET mods, REDscript or RED4ext from loose files/init.lua alone. Require selected MO2 instance and profile, modlist enabled list, all enabled packages, and the winning game-relative file map first. MO2 profile is a fifth prerequisite check.
 - Current MO2 loose-file evidence is not proof that Cyberpunk launched through MO2 or of RootBuilder/USVFS, archive precedence and file exceptions. No profiler install or optimization generation enabled until source equivalence and restore are verified.
 - Removed superseded independent folder-only scanner to avoid parallel source inventories. The active profile resolver is authoritative for the UI. Normal mode and two-page layout retained; version stays v1.1.0.
+
+
+## 2026-11-05 — Page 1 status colors and capture instructions refinement
+- Normal and MO2 paths use a distinct magenta outline when the selected location is missing or invalid. Confirmed paths revert to CET's subdued outline; no source is admitted based on cosmetics.
+- Source-selection prompt directly under the path is amber/yellow until a valid source is selected. Normal component paths and 'NOT FOUND' text stay white; only independent X / check glyphs are red / green. Five MO2 component checks are owner-drawn with the same glyph colors rather than native OS black-gray checkboxes.
+- Page 1 instructions remove the redundant CET, REDscript and CapFrameX F11 status rows entirely; retain the human-readable F11 start/stop instruction. Start with 'Provide the path to the live Cyberpunk 2077 game files', then start game, unbind F11 collisions, and confirm Cyberpunk is the only process selected in CapFrameX.
+- Keep 'RECORD 5–10 MINUTES IN THE CITY' green; idle/movement/driving/heavy-combat line becomes yellow; the uppercase avoid-menus instruction and all remaining explanatory text stay white. Increase instruction section to display all three bottom lines without clipping.
+- The profiler status remains 'PROFILER NOT INSTALLED'. Step two explains recording with all profilers; step three reads 'COLLECT RESULTS / RESTORE — Close game, collect results and continue'.
+- MO2's missing 0-Engine notice appears above the five source checks, not below them. Page 1 stays non-scrollable at the reference 1010×790 client size, while Page 2 remains scrollable. Version 1.1.0 retained; no backend authorization implied.

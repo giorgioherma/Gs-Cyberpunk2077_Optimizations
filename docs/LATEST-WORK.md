@@ -134,3 +134,12 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - **CI PASSED:** https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/41941112037 — source commit 245d9a1bb5b90be1a8c683be9cc24c3a5b080b9d. 76/76 core read-only/CLI/MO2 contracts passed, .NET 10 win-x64 publish passed, version 1.1.0.0 verified and one private runtime packaging checked. Artifact G-Total-Optimizer-v1.1.0-Shell-win-x64, ID **13376042492**.
 - Previous run #41940986432 passed the 76 core contracts but failed Windows compilation due to missing read-only SourceCheck UI helper; fixed at source in commit 245d9a1. Latest Windows build is green.
 - UI/runtime visuals and actual MO2 injected file inventory are not game-tested. Component discovery is logical loose-file precedence, not a claim about full USVFS/RootBuilder/file-level exception behavior. Profiler install/collect/restore and combined optimizer ZIP remain disabled.
+
+
+## 2026-11-05 — compact capture directions, status glyphs and MO2 warning order (CI pending)
+- Updated CET-style path picker with a magenta outline on unresolved Normal and MO2 path fields, reverting to subdued border only when source is verified. Source guidance is yellow on missing paths.
+- Split Normal source check labels from their icons: white paths and missing text, only red X / green tick glyphs in color. Five MO2 checkboxes now use an owner-drawn red X or green tick to avoid OS theme black checkboxes.
+- Removed all three standalone F11 status badges from Page 1 instructions. Text starts with live-game-files path instruction; then launch+F11, temporarily unbind F11 from other mods/game settings, and ensure Cyberpunk alone is selected in CapFrameX.
+- Kept recording headline green and changed idle/movement/driving/combat to amber. Avoid-menus and final instructions remain white.
+- Rebalanced non-scrollable Page 1: instructions area 250px, header/buttons/status slightly reduced, leaving minimum 132px for three profiler steps in MO2 at 1010×790 reference. Adjusted last three-line label to 55px and moved the MO2 missing 0-Engine warning above the five checks. Added layout assertions for text fit, warning/check order and no clipping.
+- Corrected step 2 (all profilers) and step 3 (close game, collect results and continue). Unchanged: disabled install/capture/restore/generation operations, MO2 source admission and component ownership. Actual WinForms rendered appearance still requires user inspection; CI pending.
