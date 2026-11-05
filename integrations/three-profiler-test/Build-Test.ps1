@@ -1,8 +1,9 @@
+param([switch]$Integrated)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.2') { throw "Unexpected unified app version: $version" }
-$root = Join-Path (Get-Location) 'triple-test'
+$root = if ($Integrated) { Join-Path (Get-Location) ('publish/G-Total-Optimizer-v' + $version) } else { Join-Path (Get-Location) 'triple-test' }
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $temp = Join-Path $env:RUNNER_TEMP 'GTriple'
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
@@ -139,8 +140,8 @@ foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path 
   if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
 }
 New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
-Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1')
-Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii
+if (!$Integrated) { Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1') }
+if (!$Integrated) { Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii }
 Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
 $provenance=@{
   testOnly=$true
@@ -149,6 +150,7 @@ $provenance=@{
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components 'TEST-PROVENANCE.json') -Encoding UTF8
+if (!$Integrated) {
 Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
 CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
 Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
@@ -159,4 +161,31 @@ Retain RESULTS/Triple-* logs and raw data to report success or errors.
 The ordinary G-Total GUI install/generate buttons remain gated.
 No third-party mod source or optimization output is distributed.
 '@ -Encoding UTF8
-Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
+}
+if ($Integrated) {
+  $entries=@(
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+  )
+  foreach ($entry in $entries) {
+    $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+  $payloadPaths=@(
+    'components/cet/payload/cyber_engine_tweaks.PROFILER.dll',
+    'components/cet/payload/0-Engine/modules/G-CET/Scheduler.lua',
+    'components/cet/payload/CETProfilerControls/init.lua',
+    'components/grsp/payload/G-REDscript-Profiler.dll',
+    'components/presentmon/PresentMon.exe'
+  )
+  $payloads=@($payloadPaths | ForEach-Object {
+    @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
+  })
+  VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
+  VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
+  VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+  @{ schemaVersion=2; components=$entries; payloads=$payloads } |
+    ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
+  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
+} else {
+  Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
+}
