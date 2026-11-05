@@ -94,7 +94,7 @@ internal sealed class MainForm : Form
     private bool busy;
     private bool captureLaunched;
     private string? presentMonCaptureFolder;
-    private Process? presentMonProcess;
+    private readonly LinkLabel recoveryLink = new();
 
     public MainForm()
     {
@@ -177,6 +177,7 @@ internal sealed class MainForm : Form
         install.Click += async (_, _) => await InstallProfilersAsync();
         launch.Click += async (_, _) => await LaunchCaptureAsync();
         collect.Click += async (_, _) => await CollectAndRestoreAsync();
+        recoveryLink.Click += async (_, _) => await RestoreIncompleteSessionAsync();
         next.Click += (_, _) =>
         {
             if (!captureAndRestoreVerified) return;
@@ -209,6 +210,12 @@ internal sealed class MainForm : Form
         RefreshMo2Configuration();
         SetSourceMode();
         Shown += async (_, _) => await RefreshSourceAsync();
+        // As in the CET owner UI, returning from the game refreshes owner
+        // capture completion rather than assuming a launch flag proves a run.
+        Activated += async (_, _) =>
+        {
+            if (!busy) await RefreshSourceAsync();
+        };
     }
 
     private void BuildProfilerPage()
@@ -457,6 +464,15 @@ internal sealed class MainForm : Form
         profilerReady.Font = new Font("Segoe UI Semibold", 11.2f, FontStyle.Bold);
         profilerReady.SetBounds(16, 26, 885, 23);
         steps.Controls.Add(profilerReady);
+        recoveryLink.Text = "RESTORE WITHOUT CAPTURE";
+        recoveryLink.Font = new Font("Segoe UI", 8.5f);
+        recoveryLink.LinkColor = Amber;
+        recoveryLink.ActiveLinkColor = Cyan;
+        recoveryLink.VisitedLinkColor = Amber;
+        recoveryLink.BackColor = PanelBg;
+        recoveryLink.SetBounds(690, 28, 240, 20);
+        recoveryLink.Visible = false;
+        steps.Controls.Add(recoveryLink);
 
         // Restore the original three workflow descriptions on the LEFT.
         // Read-only installation checks and keybind labels remain on the RIGHT.
@@ -944,6 +960,7 @@ internal sealed class MainForm : Form
             CaptureKeyInspector.ReadCetBinding(current.GameRoot));
         captureAndRestoreVerified = false;
         install.Enabled = launch.Enabled = collect.Enabled = next.Enabled = false;
+        recoveryLink.Visible = false;
         analyze.Enabled = generate.Enabled = openResults.Enabled = false;
         UpdateWorkflowVisuals();
         UserSettings.WriteGameRoot(sourcePath.Text);
@@ -1067,14 +1084,26 @@ internal sealed class MainForm : Form
                 true, CaptureKeyInspector.InspectCet(current.GameRoot, true),
                 new CaptureKeyCheck("PresentMon", "F11", true, "Bundled PresentMon F11 command."));
             UpdateWorkflowVisuals();
-            install.Enabled = !busy && status.CleanForInstall && !Workflow.HasRecoveryJournal;
-            launch.Enabled = !busy && !captureLaunched && status.BothInstalled && Workflow.HasRecoveryJournal;
-            collect.Enabled = !busy && Workflow.HasRecoveryJournal;
-            pageOneStatus.Text = status.BothInstalled
-                ? "CET and REDscript: verified installed by owner status. Start capture when ready."
-                : Workflow.HasRecoveryJournal
-                    ? "GCO session requires collection/restoration. Close game first."
-                    : $"CET: {status.Cet}  |  REDscript: {status.Grsp}  |  PresentMon: ready";
+            var running = Process.GetProcessesByName("Cyberpunk2077").Length != 0;
+            var session = Workflow.HasRecoveryJournal;
+            if (!running) captureLaunched = false;
+            var readyToCollect = status.CanCollect(session, running);
+            install.Enabled = !busy && status.CleanForInstall && !session;
+            // A valid finished capture must be collected before a new launch;
+            // otherwise any interrupted/empty attempt can be retried.
+            launch.Enabled = !busy && status.CanLaunch(session, running) &&
+                !status.BothCaptured && !captureLaunched;
+            collect.Enabled = !busy && readyToCollect;
+            recoveryLink.Visible = !busy && session && !running && !readyToCollect;
+            pageOneStatus.Text = running
+                ? "Cyberpunk running. Press F11 twice to capture; close game to collect."
+                : readyToCollect
+                    ? "Both CET and REDscript confirm completed captures. Collect/restore is ready."
+                    : status.BothInstalled
+                        ? "CET and REDscript installed. No completed dual-profiler capture yet."
+                        : session
+                            ? "GCO session requires recovery. Use Restore Without Capture when game is closed."
+                            : $"CET: {status.Cet}  |  REDscript: {status.Grsp}  |  PresentMon: ready";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1109,6 +1138,7 @@ internal sealed class MainForm : Form
         install.Enabled = !value && install.Enabled;
         launch.Enabled = !value && launch.Enabled;
         collect.Enabled = !value && collect.Enabled;
+        recoveryLink.Enabled = !value;
     }
 
     private async Task InstallProfilersAsync()
@@ -1147,8 +1177,8 @@ internal sealed class MainForm : Form
 
     private async Task LaunchCaptureAsync()
     {
-        if (busy || captureLaunched || !inspection.IsValidGame ||
-            string.IsNullOrWhiteSpace(inspection.GameRoot))
+        if (busy || captureLaunched || Process.GetProcessesByName("Cyberpunk2077").Length != 0 ||
+            !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
             return;
         var game = inspection.GameRoot!;
         SetWorkflowBusy(true);
@@ -1168,31 +1198,12 @@ internal sealed class MainForm : Form
             presentMonCaptureFolder = Path.Combine(packageRoot, "RESULTS",
                 "GCO-Capture-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
             Directory.CreateDirectory(presentMonCaptureFolder);
-            var psi = new ProcessStartInfo(presentMon)
-            {
-                UseShellExecute = true, Verb = "runas",
-                WorkingDirectory = Path.GetDirectoryName(presentMon)!
-            };
-            foreach (var argument in new[]
-            {
-                "--process_name", "Cyberpunk2077.exe", "--hotkey", "F11",
-                "--session_name", "GCO", "--output_file",
-                Path.Combine(presentMonCaptureFolder, "PresentMon.csv"),
-                "--restart_as_admin"
-            }) psi.ArgumentList.Add(argument);
-            // PresentMon is an optional companion, never the owner of CET/GRSP
-            // installation or restoration. UAC refusal does not undo either.
-            try
-            {
-                presentMonProcess = Process.Start(psi);
-                if (presentMonProcess is null)
-                    pageOneStatus.Text = "PresentMon did not launch. CET/REDscript can still capture.";
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                pageOneStatus.Text = "PresentMon unavailable: " + ex.Message +
-                    " CET/REDscript remain installed.";
-            }
+            // The elevated GCO controller terminates existing bundled
+            // PresentMon instances BEFORE spawning exactly one new process.
+            // It refuses an unrecognized foreign PresentMon rather than
+            // killing user-owned software or creating a hotkey duplicate.
+            await PresentMonCaptureController.RunAsync(packageRoot,
+                Path.Combine(presentMonCaptureFolder, "PresentMon.csv"), restart: true);
             Process.Start(new ProcessStartInfo(gameExe)
             {
                 UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
@@ -1211,8 +1222,9 @@ internal sealed class MainForm : Form
             {
                 busy = false;
                 sourcePath.Enabled = true;
-                launch.Enabled = Workflow.HasRecoveryJournal && !captureLaunched;
-                collect.Enabled = Workflow.HasRecoveryJournal;
+                launch.Enabled = Workflow.HasRecoveryJournal && !captureLaunched &&
+                    Process.GetProcessesByName("Cyberpunk2077").Length == 0;
+                collect.Enabled = false;
             }
         }
     }
@@ -1228,6 +1240,15 @@ internal sealed class MainForm : Form
                 "Game still running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        // Final read-only owner state is mandatory even if a stale UI button
+        // was enabled before a session changed.
+        var currentState = await Workflow.InspectAsync(game);
+        if (!currentState.CanCollect(Workflow.HasRecoveryJournal, gameRunning: false))
+        {
+            collect.Enabled = false;
+            pageOneStatus.Text = "No completed CET + REDscript capture; collection remains disabled.";
+            return;
+        }
         SetWorkflowBusy(true);
         pageOneStatus.Text = "Collecting completed owner captures, then restoring original game state...";
         try
@@ -1235,15 +1256,21 @@ internal sealed class MainForm : Form
             var result = await Workflow.CollectAndRestoreAsync(game);
             if (IsDisposed) return;
             if (result.RestoreVerified) captureLaunched = false;
-            if (presentMonProcess is { HasExited: false })
+            string? presentMonWarning = null;
+            var tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+            if (tracked is not null)
             {
-                try { presentMonProcess.Kill(); } catch { /* elevated process may be independent */ }
+                try
+                {
+                    await PresentMonCaptureController.RunAsync(packageRoot, tracked, restart: false);
+                }
+                catch (Exception ex)
+                {
+                    presentMonWarning = "PresentMon stop requires attention: " + ex.Message;
+                }
             }
-            string? frameCsv = presentMonCaptureFolder is not null &&
-                Directory.Exists(presentMonCaptureFolder)
-                ? Directory.EnumerateFiles(presentMonCaptureFolder, "*.csv",
-                    SearchOption.AllDirectories).FirstOrDefault(file => new FileInfo(file).Length > 500)
-                : null;
+            string? frameCsv = tracked is not null && File.Exists(tracked) &&
+                new FileInfo(tracked).Length > 500 ? tracked : null;
             if (result.RestoreVerified)
             {
                 pageOneStatus.Text = result.Detail;
@@ -1265,6 +1292,7 @@ internal sealed class MainForm : Form
                     File.WriteAllText(Path.Combine(sessionDir, "session.json"),
                         JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true }));
                     resultsFolder = sessionDir;
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
                     cetReport.Text = "CET archived: " + result.CetArchive;
                     redReport.Text = "REDscript archived: " + result.GrspArchive +
                         (frameCsv is null ? "\\r\\nPresentMon CSV not verified." : "\\r\\nPresentMon CSV: " + frameCsv);
@@ -1285,7 +1313,8 @@ internal sealed class MainForm : Form
                 captureAndRestoreVerified = result.CaptureVerified;
                 next.Enabled = result.CaptureVerified;
                 openResults.Enabled = result.CaptureVerified;
-                pageOneStatus.Text = result.Detail;
+                pageOneStatus.Text = result.Detail +
+                    (presentMonWarning is null ? "" : " " + presentMonWarning);
             }
         }
         catch (Exception ex)
@@ -1306,6 +1335,59 @@ internal sealed class MainForm : Form
                 next.Enabled = captureComplete;
                 openResults.Enabled = captureComplete;
             }
+        }
+    }
+
+    private async Task RestoreIncompleteSessionAsync()
+    {
+        if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot) ||
+            !Workflow.HasRecoveryJournal)
+            return;
+        if (Process.GetProcessesByName("Cyberpunk2077").Length != 0)
+        {
+            MessageBox.Show(this, "Close Cyberpunk before restoring the profilers.",
+                "Game running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        var game = inspection.GameRoot!;
+        var state = await Workflow.InspectAsync(game);
+        if (state.CanCollect(Workflow.HasRecoveryJournal, gameRunning: false))
+        {
+            await RefreshSourceAsync();
+            return;
+        }
+        if (MessageBox.Show(this,
+                "Restore CET and REDscript through their original managers without collecting a complete capture? " +
+                "This is the recovery path for cancelled or failed sessions.",
+                "Restore incomplete profiler session", MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        SetWorkflowBusy(true);
+        try
+        {
+            var result = await Workflow.RestoreOwnedAsync(game);
+            var csv = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+            string? pmError = null;
+            if (csv is not null)
+            {
+                try
+                {
+                    await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: false);
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                }
+                catch (Exception ex) { pmError = ex.Message; }
+            }
+            captureLaunched = false;
+            MessageBox.Show(this, result.Detail +
+                (pmError is null ? "" : Environment.NewLine + "PresentMon: " + pmError),
+                "Owner-managed restoration", MessageBoxButtons.OK,
+                result.RestoreVerified ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            busy = false;
+            await RefreshSourceAsync();
         }
     }
 
