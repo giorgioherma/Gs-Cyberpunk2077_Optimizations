@@ -108,6 +108,13 @@ internal sealed class MainForm : Form
 
         BuildProfilerPage();
         BuildResultsPage();
+        // The status is one line high. Clicking it exposes real full paths.
+        pageOneStatus.Click += (_, _) =>
+        {
+            if (packagePathFailure is not null)
+                MessageBox.Show(this, packagePathFailure, "GCO package-path diagnostics",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        };
         Controls.Add(pageTwo);
         Controls.Add(pageOne);
         pageTwo.Visible = false;
