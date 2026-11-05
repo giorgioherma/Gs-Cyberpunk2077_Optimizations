@@ -102,7 +102,21 @@ if ($dirs.Count -eq 0) { throw 'No approved complete MSVC x64 CRT redist payload
 foreach ($dll in @(Get-ChildItem $dirs[0].FullName -Filter '*.dll' -File)) { Copy-Item $dll.FullName (Join-Path $capx $dll.Name) -Force }
 Write-Host "PASS app-local x64 VC runtime from $($dirs[0].FullName)"
 
-Copy-Item integrations/capframex/Start-CapFrameX-Private.cmd (Join-Path $capx 'Start-CapFrameX-Private.cmd') -Force
+# CapFrameX.exe requires elevation. A plain .cmd child can lose custom
+# process environment through UAC; an elevated native parent is reliable.
+$helperSource = (Resolve-Path 'integrations/capframex/launcher.c').Path
+$helperObj = Join-Path $native 'capframex-helper.obj'
+$helperExe = Join-Path $capx 'Start-CapFrameX-Private.exe'
+$helperBat = Join-Path $native 'build-capframex-helper.cmd'
+@"
+@echo off
+call "$vcvars" >nul
+if errorlevel 1 exit /b %errorlevel%
+cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"$helperObj" "$helperSource" /link /SUBSYSTEM:WINDOWS /MANIFESTUAC:"level='requireAdministrator' uiAccess='false'" user32.lib /OUT:"$helperExe"
+exit /b %errorlevel%
+"@ | Set-Content $helperBat -Encoding ASCII
+& $helperBat
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $helperExe)) { throw 'Elevated native CapX helper failed compilation' }
 New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
 Set-Content -Path (Join-Path $root 'VERSION.txt') -Value $version -NoNewline
 if (-not (Test-Path (Join-Path $capx 'LICENSE'))) {
@@ -112,8 +126,8 @@ Set-Content -Path (Join-Path $root 'README-TEST.txt') -Encoding UTF8 -Value @'
 G-Total-Optimizer v1.1.1 — CapFrameX private runtime TEST only.
 1. Extract the ENTIRE archive to a writable folder.
 2. Double-click G-Total-Optimizer.exe to verify our app opens.
-3. Double-click modules\CapFrameX\Start-CapFrameX-Private.cmd to test CapFrameX.
-4. Verify CapFrameX opens; select Cyberpunk 2077 and test F11 capture.
+3. Double-click modules\CapFrameX\Start-CapFrameX-Private.exe to test CapFrameX.
+4. Accept Windows UAC elevation; verify CapFrameX opens, select Cyberpunk 2077 and test F11.
 5. If errors occur, send modules\CapFrameX\Portable\Logs\private-dotnet-host-trace.txt
    and the most recent CapFrameX log.
 
