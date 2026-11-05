@@ -257,13 +257,13 @@ try
     Require(ComponentBundleVerifier.Inspect(bundleDir).Ready,
         "complete SHA-matched source/CI-staged component manifest passes read-only identity gate");
     var goodStatus = LiveProfilerStateParser.Parse(
-        "{\\"ok\\":true,\\"cet\\":\\"OFFICIAL\\",\\"managed\\":false,\\"captureReadyForCollection\\":false}",
-        "{\\"ok\\":true,\\"result\\":{\\"State\\":\\"NOT_INSTALLED\\",\\"ManagedStatePresent\\":false,\\"CompletedCaptureCount\\":0,\\"LegacyDllPresent\\":false}}");
+        """{"ok":true,"cet":"OFFICIAL","managed":false,"captureReadyForCollection":false}""",
+        """{"ok":true,"result":{"State":"NOT_INSTALLED","ManagedStatePresent":false,"CompletedCaptureCount":0,"LegacyDllPresent":false}}""");
     Require(goodStatus.CleanForInstall && !goodStatus.BothInstalled,
         "CET/GRSP real owner JSON fields establish clean preflight without guessing");
     var installedStatus = LiveProfilerStateParser.Parse(
-        "{\\"ok\\":true,\\"cet\\":\\"PROFILER_ACTIVE\\",\\"managed\\":true,\\"captureReadyForCollection\\":true}",
-        "{\\"ok\\":true,\\"result\\":{\\"State\\":\\"INSTALLED_CURRENT\\",\\"ManagedStatePresent\\":true,\\"CompletedCaptureCount\\":1,\\"LegacyDllPresent\\":false}}");
+        """{"ok":true,"cet":"PROFILER_ACTIVE","managed":true,"captureReadyForCollection":true}""",
+        """{"ok":true,"result":{"State":"INSTALLED_CURRENT","ManagedStatePresent":true,"CompletedCaptureCount":1,"LegacyDllPresent":false}}""");
     Require(installedStatus.BothInstalled && installedStatus.BothCaptured,
         "both owner-reported installed payloads and captured state verified before collection");
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
