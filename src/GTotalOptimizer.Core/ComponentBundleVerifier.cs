@@ -14,7 +14,9 @@ public static class ComponentBundleVerifier
     {
         var manifestFile = Path.Combine(packageRoot, "components", "manifest.json");
         if (!File.Exists(manifestFile))
-            return new(false, "No CI-proven component manifest. Profiler installation is disabled.");
+            return new(false, "Incomplete GCO installation: components/manifest.json not found. " +
+                "Extract the entire v1.1.3 Integrated artifact into a new empty folder. " +
+                "Expected: " + manifestFile);
 
         try
         {
