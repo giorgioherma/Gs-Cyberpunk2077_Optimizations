@@ -14,6 +14,13 @@ public sealed record LiveProfilerState(
     public bool CleanForInstall => Cet == "OFFICIAL" && !CetManaged &&
                                    Grsp == "NOT_INSTALLED" && !GrspManaged;
     public bool BothCaptured => BothInstalled && CetCaptureReady && GrspCaptureReady;
+
+    // The two source owners decide capture completion. A journal alone means
+    // only that profiler files were installed; it never unlocks collection.
+    public bool CanCollect(bool hasCurrentSession, bool gameRunning) =>
+        hasCurrentSession && !gameRunning && BothCaptured;
+    public bool CanLaunch(bool hasCurrentSession, bool gameRunning) =>
+        hasCurrentSession && !gameRunning && BothInstalled;
 }
 
 public sealed record ProfilerWorkflowResult(
