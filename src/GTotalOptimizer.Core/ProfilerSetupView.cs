@@ -68,3 +68,29 @@ public static class SetupCopy
         "If you're having issues getting a longer combat capture, fight police. If you die, stop recording with F11 before loading.\r\n" +
         "Shorter captures also work. Close the game, return to this screen and use COLLECT RESULTS.";
 }
+
+ 
+// Visual-only step progression. Native installation status and capture
+// evidence are supplied by the authoritative owners; no keybind or optional
+// frame-time readiness may substitute for a verified profiler install.
+public enum SetupWorkflowStage
+{
+    Install = 1,
+    Capture = 2,
+    Collect = 3,
+    Continue = 4
+}
+
+public static class SetupWorkflowProgress
+{
+    public static SetupWorkflowStage Resolve(bool profilersInstalled,
+        bool hasCurrentSession, bool collectReady, bool hasCollectedEvidence)
+    {
+        if (!hasCurrentSession || !profilersInstalled) return SetupWorkflowStage.Install;
+        // If one owner archive was copied but another completed capture
+        // still needs collection, show Collect rather than premature Continue.
+        if (collectReady) return SetupWorkflowStage.Collect;
+        if (hasCollectedEvidence) return SetupWorkflowStage.Continue;
+        return SetupWorkflowStage.Capture;
+    }
+}

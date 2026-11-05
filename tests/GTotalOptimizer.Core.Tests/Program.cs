@@ -54,6 +54,31 @@ try
     var allRequired = synced with { CetInstalled = true, RedscriptInstalled = true };
     Require(allRequired.Heading == "PROFILERS INSTALLED" && !allRequired.CapXInstalled,
         "verified CET and REDscript profilers allow installed heading; optional CapX remains unchecked");
+    Require(SetupWorkflowProgress.Resolve(false, false, false, false) ==
+        SetupWorkflowStage.Install,
+        "page 1 highlights INSTALL when no profiler installation is verified");
+    Require(SetupWorkflowProgress.Resolve(true, false, false, false) ==
+        SetupWorkflowStage.Install,
+        "native installer state alone without an owned session cannot advance the wizard");
+    Require(SetupWorkflowProgress.Resolve(false, true, false, false) ==
+        SetupWorkflowStage.Install,
+        "PresentMon AUTO and a journal alone cannot mark native profilers ready");
+    Require(SetupWorkflowProgress.Resolve(true, true, false, false) ==
+        SetupWorkflowStage.Capture,
+        "after verified CET and REDscript installation, highlight START CAPTURE rather than INSTALL");
+    Require(SetupWorkflowProgress.Resolve(true, true, true, false) ==
+        SetupWorkflowStage.Collect,
+        "when capture is ready, highlight COLLECT RESULTS");
+    Require(SetupWorkflowProgress.Resolve(true, true, false, true) ==
+        SetupWorkflowStage.Continue,
+        "after collection, mark all three workflow steps complete and unlock Continue state");
+    Require(SetupWorkflowProgress.Resolve(true, true, true, true) ==
+        SetupWorkflowStage.Collect,
+        "an uncollected completed domain still makes Collect the current step");
+    Require(SetupWorkflowProgress.Resolve(true, false, false, true) ==
+        SetupWorkflowStage.Install,
+        "stale results without a matching installation journal never advance the wizard");
+
     var unsynced = allRequired with
     {
         CetKey = new CaptureKeyCheck("CET", "F10", false, "user custom"),

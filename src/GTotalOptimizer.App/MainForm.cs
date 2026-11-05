@@ -668,8 +668,25 @@ internal sealed class MainForm : Form
         var warning = profilerSetup.SynchronizationWarning;
         captureKeyWarning.Text = warning ?? "";
         captureKeyWarning.Visible = warning is not null;
+        // During source refresh, keep the initial visual step neutral until
+        // the owner status and current-session evidence have been read.
+        ApplyWorkflowStage(SetupWorkflowStage.Install);
         // Keybind mismatch is advisory; never change workflow progression.
         if (captureAndRestoreVerified) next.Enabled = true;
+    }
+
+    private void ApplyWorkflowStage(SetupWorkflowStage stage)
+    {
+        // LEFT three-step instructions follow the same authoritative status
+        // that controls the footer buttons. PresentMon AUTO is optional and
+        // never counts as a native profiler install or F11 capture.
+        var descriptions = new[] { stepInstructionOne, stepInstructionTwo, stepInstructionThree };
+        for (var i = 0; i < descriptions.Length; i++)
+        {
+            var step = i + 1;
+            descriptions[i].ForeColor = step < (int)stage ? Green :
+                step == (int)stage ? Cyan : Color.FromArgb(104, 118, 126);
+        }
     }
 
     private static RadioButton ModeChoice(string label, bool selected) => new()
@@ -1090,6 +1107,8 @@ internal sealed class MainForm : Form
                 ((status.CetCaptureReady && saved?.Cet is null) ||
                  (status.GrspCaptureReady && saved?.Redscript is null));
             var readyToCollect = nativeReady || session && !running && sameFrameSession;
+            ApplyWorkflowStage(SetupWorkflowProgress.Resolve(
+                status.BothInstalled, session, readyToCollect, saved?.HasAny == true));
             install.Enabled = !busy && status.CleanForInstall && !session;
             launch.Enabled = !busy && status.CanLaunch(session, running) &&
                 !status.BothCaptured && !captureLaunched && trackedFrameCsv is null;
