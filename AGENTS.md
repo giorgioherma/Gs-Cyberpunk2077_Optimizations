@@ -42,3 +42,7 @@ Read, in order:
 - Never claim the new app is already implemented because its requirements, handoff or mocked UI exist.
 - Keep `docs/LATEST-WORK.md` updated with exact committed implementation, verification and blockers, and `docs/HANDOFF/CORE.md` stable.
 - Do not silently weaken the October 16 product contract in favor of a newer assistant proposal. Any unavoidable conflict must be reported and explicitly agreed with the user before changing the contract.
+
+## Explicit version control
+
+- Never bump the GCO product version, executable metadata, CI artifact version, or release tag unless the user explicitly requests a version change. Routine fixes/builds retain the current version. CET, GRSP and PresentMon are independently versioned and must not be changed as part of a GCO bump.

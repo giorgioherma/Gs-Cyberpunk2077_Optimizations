@@ -174,3 +174,7 @@ The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: n
 
 - User explicitly ordered integration of **both CET and GRSP now** into the unified application's existing two-page workflow; PresentMon is the initial lightweight frame provider and may be replaced if it fails real-game validation. No separate test-only GUI. Rebuild managed CET/GRSP managers for **.NET 10** using authoritative source in disposable CI; retain original native binary identity and owner-managed install/restore. Existing CapFrameX-heavy Page 1 wording can be updated later, after the core lifecycle is functional.
 - Real GUI installation, launch and collection are authorized, with strict hash/owner-status preflight, session journal and owner-controlled restore. **Only** completed CET+GRSP captures with confirmed restoration unlock Page 2. No optimization ZIP button until CET Resolver and REDscript source generator, compilation, dependencies and actual output have been validated. No MO2 until its separate integration milestone.
+
+## 2026-11-05 — explicit-only GCO version policy
+
+- The user explicitly authorized GCO v1.1.5. **Never increment the GCO version again unless the user explicitly orders it.** Bug fixes, CI runs, packaging corrections and ordinary development retain their current version. Do not alter CET, GRSP or PresentMon versions implicitly.
