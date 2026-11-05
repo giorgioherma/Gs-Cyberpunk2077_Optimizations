@@ -88,7 +88,8 @@ internal sealed class MainForm : Form
     private GameInspection inspection = GameInspector.Inspect(null);
     private string? resultsFolder;
     private bool captureAndRestoreVerified;
-    private readonly string packageRoot = PortablePackagePaths.RootFromAppDirectory(AppContext.BaseDirectory);
+    private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
+    private string? packagePathFailure;
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
     private bool busy;
     private bool captureLaunched;
