@@ -39,22 +39,22 @@ jobs:
             throw 'Expected exactly one bundled .NET runtime in this shell.'
           }
           Write-Host "Verified .NET 10 self-contained read-only shell; no external profiler binaries."
-      - name: Verify v1.1.0 Windows file metadata and stamp package
+      - name: Verify v1.1.1 Windows file metadata and stamp package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.0') {
+          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.1') {
             throw "Unexpected app version: $version"
           }
           $fileVersion = (Get-Item 'publish/G-Total-Optimizer.exe').VersionInfo.FileVersion
-          if ($fileVersion -ne '1.1.0.0') {
+          if ($fileVersion -ne '1.1.1.0') {
             throw "Unexpected Windows file version: $fileVersion"
           }
           Set-Content -Path 'publish/VERSION.txt' -Value $version -NoNewline
           Write-Host "Verified unified app v$version; Windows file version $fileVersion."
       - uses: actions/upload-artifact@v4
         with:
-          name: G-Total-Optimizer-v1.1.0-Shell-win-x64
+          name: G-Total-Optimizer-v1.1.1-Shell-win-x64
           path: publish/
           if-no-files-found: error
