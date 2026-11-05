@@ -56,7 +56,7 @@ jobs:
             'app/G-Total-Optimizer.App.exe',
             'modules/CapFrameX/CapFrameX.exe',
             'modules/CapFrameX/CapFrameX.Configuration.dll',
-            'modules/CapFrameX/Start-CapFrameX-Private.cmd',
+            'modules/CapFrameX/Start-CapFrameX-Private.exe',
             'modules/CapFrameX/vcruntime140.dll',
             'modules/CapFrameX/msvcp140.dll')) {
             if (!(Test-Path (Join-Path $root $item) -PathType Leaf)) { throw "Missing $item" }
