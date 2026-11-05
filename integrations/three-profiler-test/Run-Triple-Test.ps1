@@ -106,8 +106,8 @@ try {
   $cetStatus=Backend 'CET' 'status'
   $grStatus=Backend 'GRSP' 'status'
   $grState=[string]$grStatus.result.State
-  if ($cetStatus.CetState -ne 'OFFICIAL' -or $cetStatus.Managed -or $cetStatus.CaptureReadyForCollection) {
-    throw "CET is not an untouched supported installation; current state $($cetStatus.CetState), managed $($cetStatus.Managed). No files changed."
+  if ($cetStatus.cet -ne 'OFFICIAL' -or $cetStatus.Managed -or $cetStatus.CaptureReadyForCollection) {
+    throw "CET is not an untouched supported installation; current state $($cetStatus.cet), managed $($cetStatus.Managed). No files changed."
   }
   if ($grState -ne 'NOT_INSTALLED' -or $grStatus.result.LegacyDllPresent) {
     throw "GRSP live state is $grState. Must be NOT_INSTALLED. No files changed."
@@ -125,7 +125,7 @@ try {
   # Validate actual installed state. Never overwrite existing user F11 binds.
   $cetStatus=Backend 'CET' 'status'
   $grStatus=Backend 'GRSP' 'status'
-  if ($cetStatus.CetState -ne 'PROFILER_ACTIVE' -or !$cetStatus.Managed -or
+  if ($cetStatus.cet -ne 'PROFILER_ACTIVE' -or !$cetStatus.Managed -or
       $grStatus.result.State -ne 'INSTALLED_CURRENT') { throw 'Post-install ownership/identity proof failed' }
   $bindings=Join-Path $GameRoot 'bin/x64/plugins/cyber_engine_tweaks/bindings.json'
   if (!(Test-Path $bindings)) { throw 'CET bindings missing: cannot establish shared F11' }
@@ -205,7 +205,10 @@ finally {
     } catch { Log ('Partial CET state unreadable; manual recovery required: ' + $_) }
   }
   $recovered=RestoreOwned
-  if ($recovered) { Log 'RESTORE complete for both owned profiler transactions' }
+  if ($recovered) {
+    if (!$attemptCet -and !$attemptGrsp) { Log 'NO RESTORE NEEDED: preflight stopped before any profiler installation' }
+    else { Log 'RESTORE complete for owned profiler transactions' }
+  }
   else { Log 'RECOVERY REQUIRED. Inspect game state; do not generate optimizations.' }
   Write-Host ''
   Write-Host "Full test log and PresentMon evidence: $session"

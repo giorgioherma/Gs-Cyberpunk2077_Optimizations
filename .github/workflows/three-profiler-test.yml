@@ -99,8 +99,18 @@ jobs:
           $grHelp=ExecVerified $grsp '--help'
           if ($grHelp -notmatch '--install') { throw "GRSP CLI stdout is missing: $grHelp" }
           $fixture=Join-Path $env:RUNNER_TEMP 'Triple-RED4ext-Fixture'
-          New-Item -ItemType Directory -Force (Join-Path $fixture 'bin/x64'),(Join-Path $fixture 'red4ext/plugins') | Out-Null
+          New-Item -ItemType Directory -Force (Join-Path $fixture 'bin/x64'),(Join-Path $fixture 'bin/x64/plugins'),(Join-Path $fixture 'red4ext/plugins') | Out-Null
           New-Item -ItemType File -Force (Join-Path $fixture 'bin/x64/Cyberpunk2077.exe') | Out-Null
+          # Regression: CET ProfilerStatus.CetState is serialized as JSON field 'cet'.
+          # Exercise the actual source-owned CET headless CLI, not a mock object.
+          $cetPre=(ExecVerified $cet ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (-not $cetPre.ok -or ($cetPre.PSObject.Properties.Name -notcontains 'cet') -or
+              $cetPre.cet -ne 'MISSING' -or $cetPre.managed -or $cetPre.captureReadyForCollection) {
+            throw "Unexpected CET status JSON schema/state: $($cetPre | ConvertTo-Json -Compress -Depth 4)"
+          }
+          $tripleScript=Get-Content (Join-Path $root 'Run-Triple-Test.ps1') -Raw
+          if ($tripleScript -match '\\.CetState\\b') { throw 'Triple harness must use CET wire field cet, not C# property CetState' }
+          Write-Host 'PASS actual CET CLI status JSON wire schema (cet/managed/captureReadyForCollection).'
           $pre=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
           if (!$pre.ok -or $pre.result.State -ne 'NOT_INSTALLED') { throw "GRSP preflight failed: $($pre.result.State)" }
           try {
