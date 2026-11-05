@@ -89,6 +89,11 @@ internal sealed class MainForm : Form
     private string? resultsFolder;
     private bool captureAndRestoreVerified;
     private readonly string packageRoot = PortablePackagePaths.RootFromAppDirectory(AppContext.BaseDirectory);
+    private UnifiedProfilerWorkflow Workflow => new(packageRoot);
+    private readonly ComponentCommandRunner ownerCommands = new();
+    private bool busy;
+    private string? presentMonCaptureFolder;
+    private Process? presentMonProcess;
 
     public MainForm()
     {
@@ -161,9 +166,9 @@ internal sealed class MainForm : Form
         };
         zeroEngineLink.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(
             "https://www.nexusmods.com/cyberpunk2077/mods/27967") { UseShellExecute = true });
-        install.Click += (_, _) => ExplainPending("Profiler installation requires exact, independently verified CET and GRSP packages and transactional rollback tests. No game file has been changed.");
-        launch.Click += (_, _) => ExplainPending("Game launch and synchronized capture are gated until profiler installation and F11 status are verified.");
-        collect.Click += (_, _) => ExplainPending("Collection and restoration require a completed current-session capture and both component-owned restore contracts.");
+        install.Click += async (_, _) => await InstallProfilersAsync();
+        launch.Click += async (_, _) => await LaunchCaptureAsync();
+        collect.Click += async (_, _) => await CollectAndRestoreAsync();
         next.Click += (_, _) =>
         {
             if (!captureAndRestoreVerified) return;
@@ -636,6 +641,7 @@ internal sealed class MainForm : Form
         // presence and a responding CLI do not establish profiler installation.
         profilerReady.Text = profilerSetup.Heading;
         profilerReady.ForeColor = profilerSetup.Heading == "PROFILERS INSTALLED" ? Green : Amber;
+        stepThree.Text = "PresentMon";
         stepOne.Checked = profilerSetup.CetInstalled;
         stepTwo.Checked = profilerSetup.RedscriptInstalled;
         stepThree.Checked = profilerSetup.CapXInstalled;
@@ -925,9 +931,7 @@ internal sealed class MainForm : Form
             return;
         }
         inspection = current;
-        // The current shell has no staged/verified native profiler payloads.
-        // Read the actual CET key from live bindings if available, but NEVER
-        // grant an installed check from a binding, directory or loose ASI.
+        // Bindings are advisory; only actual owner CLI states can mark profilers installed.
         profilerSetup = ProfilerSetupView.Unverified(
             CaptureKeyInspector.ReadCetBinding(current.GameRoot));
         captureAndRestoreVerified = false;
@@ -1033,19 +1037,38 @@ internal sealed class MainForm : Form
         SetPathOutline(mo2GameRoot, current.IsValidGame);
         SetPathOutline(mo2Folder, mo2Location.HasInstallation);
 
-        var cetExe = BackendLocator.Executable(packageRoot, BackendKind.Cet);
-        var redExe = BackendLocator.Executable(packageRoot, BackendKind.Grsp);
         if (!current.IsValidGame || cancel.IsCancellationRequested) return;
+        var bundle = ComponentBundleVerifier.Inspect(packageRoot);
+        if (!bundle.Ready)
+        {
+            pageOneStatus.Text = "Profiler components unverified: " + bundle.Detail;
+            return;
+        }
         try
         {
-            var statuses = await Task.WhenAll(
-                backend.ReadAsync(cetExe, current.GameRoot!, BackendKind.Cet, cancel.Token),
-                backend.ReadAsync(redExe, current.GameRoot!, BackendKind.Grsp, cancel.Token));
+            var status = await Workflow.InspectAsync(current.GameRoot!, cancel.Token);
             if (cancel.IsCancellationRequested || IsDisposed) return;
-            pageOneStatus.Text += "  " + string.Join(" | ", statuses.Select(x =>
-                $"{x.Kind}: {(x.Responded ? "status available" : "not staged")}"));
+            profilerSetup = new ProfilerSetupView(
+                status.Cet == "PROFILER_ACTIVE" && status.CetManaged,
+                status.Grsp == "INSTALLED_CURRENT" && status.GrspManaged,
+                true, CaptureKeyInspector.InspectCet(current.GameRoot, true),
+                new CaptureKeyCheck("PresentMon", "F11", true, "Bundled PresentMon F11 command."));
+            UpdateWorkflowVisuals();
+            install.Enabled = !busy && status.CleanForInstall && !Workflow.HasRecoveryJournal;
+            launch.Enabled = !busy && status.BothInstalled && Workflow.HasRecoveryJournal;
+            collect.Enabled = !busy && Workflow.HasRecoveryJournal;
+            pageOneStatus.Text = status.BothInstalled
+                ? "CET and REDscript: verified installed by owner status. Start capture when ready."
+                : Workflow.HasRecoveryJournal
+                    ? "GCO session requires collection/restoration. Close game first."
+                    : $"CET: {status.Cet}  |  REDscript: {status.Grsp}  |  PresentMon: ready";
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested && !IsDisposed)
+                pageOneStatus.Text = "Owner status unavailable: " + ex.Message;
+        }
     }
 
     private static void ApplyCheck(SourcePathCheck label, string path, bool present)
@@ -1063,6 +1086,203 @@ internal sealed class MainForm : Form
         sourceStatus.Width = Math.Min(width, textWidth + 4);
         zeroEngineLink.SetBounds(sourceStatus.Left + sourceStatus.Width + 8,
             sourceStatus.Top, Math.Min(280, Math.Max(100, width - sourceStatus.Width - 12)), 20);
+    }
+
+
+    private void SetWorkflowBusy(bool value)
+    {
+        busy = value;
+        sourcePath.Enabled = !value;
+        install.Enabled = !value && install.Enabled;
+        launch.Enabled = !value && launch.Enabled;
+        collect.Enabled = !value && collect.Enabled;
+    }
+
+    private async Task InstallProfilersAsync()
+    {
+        if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
+            return;
+        var game = inspection.GameRoot!;
+        SetWorkflowBusy(true);
+        pageOneStatus.Text = "Installing CET and REDscript through their existing managers...";
+        try
+        {
+            var result = await Workflow.InstallAsync(game);
+            if (IsDisposed) return;
+            await RefreshSourceAsync();
+            if (IsDisposed) return;
+            pageOneStatus.Text = result.Detail;
+            if (!result.Ok)
+                MessageBox.Show(this, result.Detail, "Profiler installation", MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed) MessageBox.Show(this, ex.Message, "Profiler installation",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                SetWorkflowBusy(false);
+                await RefreshSourceAsync();
+            }
+        }
+    }
+
+    private async Task LaunchCaptureAsync()
+    {
+        if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
+            return;
+        var game = inspection.GameRoot!;
+        SetWorkflowBusy(true);
+        try
+        {
+            var state = await Workflow.InspectAsync(game);
+            if (!state.BothInstalled || !Workflow.HasRecoveryJournal)
+                throw new InvalidOperationException("Both native profilers and the GCO session must be installed before game launch.");
+
+            var gameExe = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
+            if (!File.Exists(gameExe))
+                throw new FileNotFoundException("Cyberpunk2077.exe is missing.", gameExe);
+            var presentMon = Path.Combine(packageRoot, "components", "presentmon", "PresentMon.exe");
+            if (!ComponentBundleVerifier.Inspect(packageRoot).Ready || !File.Exists(presentMon))
+                throw new InvalidOperationException("Combined component provenance is no longer valid.");
+
+            presentMonCaptureFolder = Path.Combine(packageRoot, "RESULTS",
+                "GCO-Capture-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
+            Directory.CreateDirectory(presentMonCaptureFolder);
+            var psi = new ProcessStartInfo(presentMon)
+            {
+                UseShellExecute = true, Verb = "runas",
+                WorkingDirectory = Path.GetDirectoryName(presentMon)!
+            };
+            foreach (var argument in new[]
+            {
+                "--process_name", "Cyberpunk2077.exe", "--hotkey", "F11",
+                "--session_name", "GCO", "--output_file",
+                Path.Combine(presentMonCaptureFolder, "PresentMon.csv"),
+                "--restart_as_admin"
+            }) psi.ArgumentList.Add(argument);
+            // PresentMon is an optional companion, never the owner of CET/GRSP
+            // installation or restoration. UAC refusal does not undo either.
+            try
+            {
+                presentMonProcess = Process.Start(psi);
+                if (presentMonProcess is null)
+                    pageOneStatus.Text = "PresentMon did not launch. CET/REDscript can still capture.";
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                pageOneStatus.Text = "PresentMon unavailable: " + ex.Message +
+                    " CET/REDscript remain installed.";
+            }
+            Process.Start(new ProcessStartInfo(gameExe)
+            {
+                UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gameExe)!
+            });
+            pageOneStatus.Text = "Game launched. Use F11 to start/stop CET + REDscript + PresentMon. Close game before COLLECT.";
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed)
+                MessageBox.Show(this, ex.Message, "Launch/capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                busy = false;
+                sourcePath.Enabled = true;
+                launch.Enabled = Workflow.HasRecoveryJournal;
+                collect.Enabled = Workflow.HasRecoveryJournal;
+            }
+        }
+    }
+
+    private async Task CollectAndRestoreAsync()
+    {
+        if (busy || !inspection.IsValidGame || string.IsNullOrWhiteSpace(inspection.GameRoot))
+            return;
+        var game = inspection.GameRoot!;
+        SetWorkflowBusy(true);
+        pageOneStatus.Text = "Collecting completed owner captures, then restoring original game state...";
+        try
+        {
+            var result = await Workflow.CollectAndRestoreAsync(game);
+            if (IsDisposed) return;
+            if (presentMonProcess is { HasExited: false })
+            {
+                try { presentMonProcess.Kill(); } catch { /* elevated process may be independent */ }
+            }
+            string? frameCsv = presentMonCaptureFolder is not null &&
+                Directory.Exists(presentMonCaptureFolder)
+                ? Directory.EnumerateFiles(presentMonCaptureFolder, "*.csv",
+                    SearchOption.AllDirectories).FirstOrDefault(file => new FileInfo(file).Length > 500)
+                : null;
+            if (result.RestoreVerified)
+            {
+                pageOneStatus.Text = result.Detail;
+                if (result.CaptureVerified)
+                {
+                    var sessionDir = presentMonCaptureFolder ??
+                        Path.Combine(packageRoot, "RESULTS", "GCO-Capture-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
+                    Directory.CreateDirectory(sessionDir);
+                    var metadata = new
+                    {
+                        gameRoot = game,
+                        cetArchive = result.CetArchive,
+                        grspArchive = result.GrspArchive,
+                        presentMonCsv = frameCsv,
+                        frameTimeStatus = frameCsv is null ? "NOT_AVAILABLE" : "CSV_COLLECTED_ALIGNMENT_PENDING",
+                        note = "CET and REDscript timings are not summed",
+                        collectedUtc = DateTimeOffset.UtcNow
+                    };
+                    File.WriteAllText(Path.Combine(sessionDir, "session.json"),
+                        JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true }));
+                    resultsFolder = sessionDir;
+                    cetReport.Text = "CET archived: " + result.CetArchive;
+                    redReport.Text = "REDscript archived: " + result.GrspArchive +
+                        (frameCsv is null ? "\\r\\nPresentMon CSV not verified." : "\\r\\nPresentMon CSV: " + frameCsv);
+                    captureAndRestoreVerified = true;
+                    openResults.Enabled = true;
+                }
+                else
+                    MessageBox.Show(this, result.Detail, "Capture incomplete, originals restored",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+                MessageBox.Show(this, result.Detail, "Recovery required", MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+
+            await RefreshSourceAsync();
+            if (!IsDisposed)
+            {
+                captureAndRestoreVerified = result.CaptureVerified;
+                next.Enabled = result.CaptureVerified;
+                openResults.Enabled = result.CaptureVerified;
+                pageOneStatus.Text = result.Detail;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed) MessageBox.Show(this, ex.Message,
+                "Collection / restoration", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                busy = false;
+                sourcePath.Enabled = true;
+                await RefreshSourceAsync();
+                // Refresh is intentionally read-only; preserve current-session proof.
+                // Only the Collect result can authorize Page 2.
+                next.Enabled = captureAndRestoreVerified;
+                openResults.Enabled = captureAndRestoreVerified;
+            }
+        }
     }
 
     private void ExplainPending(string message) =>
