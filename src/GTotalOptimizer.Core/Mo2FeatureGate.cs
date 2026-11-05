@@ -5,5 +5,5 @@ namespace GTotalOptimizer.Core;
 // MO2 files, or generate passes using unverified MO2 virtual filesystem state.
 public static class Mo2FeatureGate
 {
-    public const bool Enabled = false;
+    public static readonly bool Enabled = false;
 }
