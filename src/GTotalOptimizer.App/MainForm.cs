@@ -88,6 +88,10 @@ internal sealed class MainForm : Form
     private GameInspection inspection = GameInspector.Inspect(null);
     private string? resultsFolder;
     private bool captureAndRestoreVerified;
+    // Keep the completed, restored capture bound to this window. Continue
+    // deletes the owner journal; it is NOT a signal to discard saved evidence.
+    private string? completedSessionId;
+    private string? completedGameRoot;
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private string? packagePathFailure;
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
@@ -744,16 +748,16 @@ internal sealed class MainForm : Form
         }
 
         var status = (TableLayoutPanel)grid.GetControlFromPosition(0, 3)!;
-        status.ColumnCount = 2;
-        status.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        // After a verified Continue, native original files are restored and
+        // the source-owner journal is deleted. Returning to Setup without an
+        // explicit new-session transaction would strand the user there.
+        // New-capture/reset design will be added separately; do not expose a
+        // nonfunctional Back button.
+        status.ColumnCount = 1;
         status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var back = Action("← BACK");
-        back.Click += (_, _) => { pageTwo.Visible = false; pageOne.Visible = true; pageOne.BringToFront(); };
-        back.Dock = DockStyle.Fill;
-        status.Controls.Add(back, 0, 0);
         pageTwoStatus.Dock = DockStyle.Fill;
         pageTwoStatus.Text = "Generation is blocked until the complete source, dependency and compiler checks pass.";
-        status.Controls.Add(pageTwoStatus, 1, 0);
+        status.Controls.Add(pageTwoStatus, 0, 0);
     }
 
     private static TableLayoutPanel PageLayout(Panel page, string title, string subtitle, bool setup = false)
@@ -951,8 +955,50 @@ internal sealed class MainForm : Form
             sourcePath.Text = dialog.SelectedPath;
     }
 
+    // Completed results have an identity independent of the profiler install
+    // journal. Refresh on focus must never demote Page 2 to an unfinished
+    // Page 1 state after the source managers have restored the originals.
+    private void RefreshCompletedWorkspace()
+    {
+        if (!captureAndRestoreVerified || completedSessionId is null ||
+            completedGameRoot is null) return;
+        try
+        {
+            var saved = CollectedCaptureStore.ReadRestored(packageRoot, completedGameRoot,
+                completedSessionId);
+            resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
+            cetReport.Text = saved.Cet is null ? "CET capture skipped." :
+                "CET capture verified: " +
+                CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
+            redReport.Text = saved.Redscript is null ? "REDscript capture skipped." :
+                "REDscript capture verified: " +
+                CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
+            redReport.Text += saved.FrameTimeCsv is null
+                ? Environment.NewLine + "PresentMon: no frame-time capture."
+                : Environment.NewLine + "PresentMon CSV verified: " + saved.FrameTimeCsv;
+            var skipped = saved.Skipped ?? [];
+            pageTwoStatus.Text = "Original game files restored. " +
+                (skipped.Count == 0 ? "All captures collected. " :
+                    "Skipped: " + string.Join(", ", skipped) + ". ") +
+                "Analysis and generation are not yet integrated.";
+            openResults.Enabled = true;
+        }
+        catch (Exception ex)
+        {
+            openResults.Enabled = false;
+            analyze.Enabled = false;
+            generate.Enabled = false;
+            pageTwoStatus.Text = "Saved capture verification failed: " + ex.Message;
+        }
+    }
+
     private async Task RefreshSourceAsync()
     {
+        if (captureAndRestoreVerified && pageTwo.Visible)
+        {
+            RefreshCompletedWorkspace();
+            return;
+        }
         scanCancellation?.Cancel();
         scanCancellation?.Dispose();
         var cancel = scanCancellation = new CancellationTokenSource();
@@ -1087,7 +1133,8 @@ internal sealed class MainForm : Form
         try
         {
             var status = await Workflow.InspectAsync(current.GameRoot!, cancel.Token);
-            if (cancel.IsCancellationRequested || IsDisposed) return;
+            if (cancel.IsCancellationRequested || IsDisposed ||
+                (captureAndRestoreVerified && pageTwo.Visible)) return;
             profilerSetup = new ProfilerSetupView(
                 status.Cet == "PROFILER_ACTIVE" && status.CetManaged,
                 status.Grsp == "INSTALLED_CURRENT" && status.GrspManaged,
@@ -1425,6 +1472,7 @@ internal sealed class MainForm : Form
         if (busy) return;
         if (captureAndRestoreVerified)
         {
+            RefreshCompletedWorkspace();
             pageOne.Visible = false; pageTwo.Visible = true; pageTwo.BringToFront();
             return;
         }
@@ -1466,19 +1514,13 @@ internal sealed class MainForm : Form
                 pageOneStatus.Text = result.Detail;
                 return;
             }
+            // The owner journal is intentionally removed by Continue.
+            // This saved evidence identity, not the journal, owns Page 2.
+            completedSessionId = saved.SessionId;
+            completedGameRoot = game;
             captureAndRestoreVerified = true;
-            resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            pageTwoStatus.Text = "Originals restored. Skipped: " +
-                (skip.Count == 0 ? "none" : string.Join(", ", skip)) +
-                ". Optimization generation awaits backend validation.";
-            cetReport.Text = saved.Cet is null ? "CET skipped by user." :
-                "CET capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
-            redReport.Text = saved.Redscript is null ? "REDscript skipped by user." :
-                "REDscript capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
-            redReport.Text += saved.FrameTimeCsv is null
-                ? Environment.NewLine + "Frame-time skipped or unavailable."
-                : Environment.NewLine + "PresentMon CSV verified: " + saved.FrameTimeCsv;
-            openResults.Enabled = true;
+            scanCancellation?.Cancel();
+            RefreshCompletedWorkspace();
             pageOne.Visible = false; pageTwo.Visible = true; pageTwo.BringToFront();
         }
         catch (Exception ex)

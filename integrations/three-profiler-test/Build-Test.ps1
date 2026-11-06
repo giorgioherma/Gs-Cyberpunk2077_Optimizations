@@ -3,7 +3,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.5') { throw "Unexpected unified app version: $version" }
-$root = if ($Integrated) { Join-Path (Join-Path (Get-Location) 'publish/release') "G's Cyberpunk 2077 Optimization" } else { Join-Path (Get-Location) 'triple-test' }
+# Publish into a short stable staging path. The long branded end-user folder
+# must be created only after .NET SDK has finished copying managed payloads.
+$root = if ($Integrated) { Join-Path (Get-Location) 'publish/build' } else { Join-Path (Get-Location) 'triple-test' }
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $temp = Join-Path $env:RUNNER_TEMP 'GTriple'
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
@@ -187,7 +189,12 @@ if ($Integrated) {
     ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
   # The GitHub artifact contains ONE portable app directory plus a short
   # adjacent user guide. Never copy the guide into the game optimization ZIP.
-  $releaseRoot=Split-Path -Parent $root
+  $releaseRoot=Join-Path (Get-Location) 'publish/release'
+  New-Item -ItemType Directory -Force $releaseRoot | Out-Null
+  $finalApp=Join-Path $releaseRoot "G's Cyberpunk 2077 Optimization"
+  if (Test-Path $finalApp) { throw 'Existing final app folder would be overwritten' }
+  Move-Item -LiteralPath $root -Destination $finalApp
+  $root=$finalApp
   @'
 GOT LAG? - G's Cyberpunk 2077 Optimizer
 =======================================

@@ -368,6 +368,35 @@ try
     catch (InvalidDataException) { tamperCaught = true; }
     Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
 
+    // Continue invokes owner-managed restore and deletes the active journal.
+    // Page 2 must continue reading its bound collection index independently.
+    var restoredGame = Path.Combine(root, "RestoredSessionGame");
+    Directory.CreateDirectory(restoredGame);
+    var restoredId = Guid.NewGuid().ToString("N");
+    var restoredCopy = CollectedCaptureStore.CopyOwner(package, restoredGame,
+        restoredId, BackendKind.Cet, cetSource);
+    var notRestoredRejected = false;
+    try { CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId); }
+    catch (InvalidDataException) { notRestoredRejected = true; }
+    Require(notRestoredRejected, "unrestored capture cannot be opened as the completed analysis page");
+    CollectedCaptureStore.MarkRestored(package, restoredCopy,
+        skipCet: false, skipRedscript: true, skipFrameTime: true);
+    var postRestore = CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId);
+    Require(postRestore.Restored && postRestore.Cet is not null &&
+        postRestore.Skipped is not null &&
+        postRestore.Skipped.Contains("REDscript") && postRestore.Skipped.Contains("FrameTime"),
+        "Page 2 can read a verified, restored capture after its owner journal is deleted");
+    var wrongGameRejected = false;
+    try { CollectedCaptureStore.ReadRestored(package, archiveGame, restoredId); }
+    catch (InvalidDataException) { wrongGameRejected = true; }
+    Require(wrongGameRejected, "a restored capture never binds to another game root");
+    File.AppendAllText(Path.Combine(
+        CollectedCaptureStore.DomainFolder(package, restoredId, "CET"), "CET_Summary.json"), "tamper");
+    var restoredTamperRejected = false;
+    try { CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId); }
+    catch (InvalidDataException) { restoredTamperRejected = true; }
+    Require(restoredTamperRejected, "analytics refresh refuses modified post-Continue evidence");
+
     var pmRoot = Path.Combine(root, "GCO-pm-package");
     var pmExe = PresentMonLifecyclePolicy.Executable(pmRoot);
     var pmCsv = Path.Combine(pmRoot, "RESULTS", "GCO-Capture-20261105", "PresentMon.csv");

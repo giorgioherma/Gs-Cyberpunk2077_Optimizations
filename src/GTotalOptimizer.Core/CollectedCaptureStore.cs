@@ -70,6 +70,18 @@ public static class CollectedCaptureStore
         }
         return item;
     }
+    // After Continue, the owner installation journal is intentionally gone.
+    // A finished analysis workspace is instead identified by its immutable
+    // session ID, game root and a verified, restored capture index.
+    public static CollectedCaptureIndex ReadRestored(string root, string game, string sessionId)
+    {
+        var saved = Read(root, game, sessionId, verifyHashes: true);
+        if (!saved.Restored || !saved.HasAny)
+            throw new InvalidDataException(
+                "The selected capture is not a completed, restored GCO session.");
+        return saved;
+    }
+
     private static string Hash(string path)
     {
         using var stream = File.OpenRead(path);
