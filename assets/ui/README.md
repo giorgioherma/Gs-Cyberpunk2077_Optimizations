@@ -1,9 +1,9 @@
-# GCO original UI images (not committed yet)
+# GCO Page 1 — authoritative artwork
 
-These exact user-supplied files must eventually be added to this directory for the approved WPF visual build:
+- `Upright_hotka.png` — original user-supplied full-color V, **743×2117**.
+- `GCO_V_original_pixel_locked_silhouette.png` — aligned user hand-painted black V, **743×2117**.
+- `GCO_approved_blue_skyline_crop.png` — small **blue Night City motif extracted from the APPROVED full Page 1 mockup** (`UI_DESIGN-fire.png`, crop x=1226..1380/y=127..296). It was **not** supplied or designed as a separate standalone header. The WPF window displays the crop at the right in the correct aspect ratio, not stretched over the header.
 
-- `Upright_hotka.png` — original 743×2117 full-color V, from `Transition2-more_exact(1).zip`.
-- `GCO_V_original_pixel_locked_silhouette.png` — matching hand-painted 743×2117 black V, same ZIP.
-- `02_cityline_header.png` — original BLUE skyline from the user's `GCO_Installer_Kit.zip`.
+**Do not use `02_cityline_header.png`: it is an unrelated yellow panorama mistakenly packaged earlier, not part of the approved design.** Retain only as unselected source material until the user requests removal; the current builder explicitly ignores it.
 
-The build script packages all three together when present. It refuses incomplete artwork sets; no AI substitute or reconstructed silhouette is allowed. The WPF UI keeps ordinary status/buttons functional while assets are unavailable. This documentation file alone does not mean the images were committed or that final visual acceptance has passed.
+The correct cropped blue skyline is included in `GCO-WPF-approved-blue-skyline-assets.zip` delivered in chat but **has not been committed to GitHub yet**. The build packages it when added. Missing skyline must render a dark background, never fall back to the yellow design. The original V pair has already been committed to `assets/ui/`. Do not regenerate the user's V art or claim an exact match without a visual Windows test.

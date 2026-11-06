@@ -62,3 +62,7 @@
 ## User-approved UI toolkit supersession — 2026-11-06
 
 The user explicitly chose **native .NET 10 WPF** rather than redesigning WinForms first. The visual and capture-safety criteria above remain binding. [WPF migration handoff](WPF-MIGRATION.md) records the green source/build stage, outstanding exact original image admission and real Windows/gameplay testing.
+
+### 2026-11-06 asset provenance clarification
+
+The upper-right **BLUE skyline is a feature of the approved full-composite UI mockup**, not a separate user-owned original image. The file `02_cityline_header.png` (yellow panorama) was an incorrect choice and must not be used in the WPF header. Source-specific solution: display an exact **small blue skyline crop** from `UI_DESIGN-fire.png` at the right, leaving the rest of the WPF header dark. The selected original color/black V pair remains unchanged. See [WPF migration handoff](WPF-MIGRATION.md).

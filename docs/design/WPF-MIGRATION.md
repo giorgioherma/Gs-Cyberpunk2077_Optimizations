@@ -24,3 +24,7 @@
 4. MO2 stays disabled. GCO unified CET+GRSP analysis and new REDscript Resolver/Generator remain future source-validated milestones.
 
 **No new workflow, packaged runtime, native owner DLL, optimization generator or GCO version change.**
+
+## 2026-11-06 — Blue city skyline asset correction
+
+User clarified the approved **BLUE upper-right skyline was generated inside the full Page 1 design mockup**, not provided as an independent original header. The previously selected `02_cityline_header.png` is the **wrong, yellow panoramic header**. That erroneous mapping is removed from WPF's `MainWindow.xaml.cs` and from `Build-Test.ps1`. The WPF city slot now expects **`GCO_approved_blue_skyline_crop.png`**, extracted from the user-approved `UI_DESIGN-fire.png` composite (x=1226..1380, y=127..296), displayed at natural aspect ratio on the upper right. The corrected asset ZIP was provided in chat but the cropped binary still needs to be uploaded to `assets/ui`. The approved two original V files are present in GitHub; the original yellow panorama remains unselected/ignored, not silently deleted. Missing blue asset produces a dark header rather than a yellow substitute. Windows visual verification required.

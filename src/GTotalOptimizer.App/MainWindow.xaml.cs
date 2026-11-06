@@ -81,7 +81,7 @@ public partial class MainWindow : Window
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
-        CityImage.Source = ImageFile("02_cityline_header.png");
+        CityImage.Source = ImageFile("GCO_approved_blue_skyline_crop.png");
     }
 
     private void SetPortraitStage(PortraitStage stage)

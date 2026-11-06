@@ -101,11 +101,15 @@
 
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
-                <RowDefinition Height="132"/>
+                <RowDefinition Height="164"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <Grid Grid.Row="0" ClipToBounds="True" Background="#101A20">
-                <Image x:Name="CityImage" Stretch="UniformToFill" Opacity=".67"/>
+                <!-- The BLUE city is a detail cropped from the approved combined mockup,
+     never a stretched full-width yellow skyline banner. -->
+                <Image x:Name="CityImage" Width="150" Height="160" Stretch="Uniform"
+                       Opacity=".98" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                       Margin="0,0,8,0" />
                 <Rectangle>
                     <Rectangle.Fill>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
