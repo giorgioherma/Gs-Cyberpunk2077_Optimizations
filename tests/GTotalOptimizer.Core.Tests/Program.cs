@@ -338,10 +338,27 @@ try
     Require(cetCopy.HasAny && cetCopy.Cet is not null && cetCopy.Redscript is null &&
         File.Exists(Path.Combine(CollectedCaptureStore.DomainFolder(package, sessionId, "CET"),
             "CET_Summary.json")), "CET-only capture copied under GCO root RESULTS");
+    Require(CaptureCollectionNotice.MissingCaptures(emptyCapture) ==
+        "Missing captures: CET, REDscript, PresentMon",
+        "collection popup lists only missing domains when there is no evidence");
+    Require(CaptureCollectionNotice.MissingCaptures(cetCopy) ==
+        "Missing captures: REDscript, PresentMon",
+        "collection popup omits captured CET and shows only missing REDscript and PresentMon");
     var redCopy = CollectedCaptureStore.CopyOwner(package, archiveGame, sessionId,
         BackendKind.Grsp, redSource);
     Require(redCopy.Cet is not null && redCopy.Redscript is not null,
         "second capture merges into one session without losing CET");
+    Require(CaptureCollectionNotice.MissingCaptures(redCopy) ==
+        "Missing capture: PresentMon",
+        "CET and REDscript collected: popup says only missing PresentMon");
+    Require(CaptureCollectionNotice.MissingCaptures(
+        redCopy with { FrameTimeCsv = "PresentMon.csv" }) is null,
+        "no popup when all three captures were collected");
+    Require(CaptureCollectionNotice.MissingCaptures(
+        redCopy with { Cet = null, FrameTimeCsv = "PresentMon.csv" }) ==
+        "Missing capture: CET",
+        "collection notice names only missing CET when others are present");
+
     Require(File.Exists(Path.Combine(cetSource, "CET_Summary.json")),
         "source-owner archive remains untouched after GCO copy");
     File.AppendAllText(Path.Combine(CollectedCaptureStore.DomainFolder(package,sessionId,"CET"),

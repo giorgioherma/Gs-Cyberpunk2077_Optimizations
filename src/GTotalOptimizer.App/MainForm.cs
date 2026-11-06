@@ -1345,10 +1345,13 @@ internal sealed class MainForm : Form
                       " (time alignment pending)";
             }
             pageOneStatus.Text = result.Detail + (frameWarning is null ? "" : " " + frameWarning);
-            if (!result.Ok || frameWarning is not null)
-                MessageBox.Show(this, result.Detail +
-                    (frameWarning is null ? "" : Environment.NewLine + frameWarning),
-                    "Capture collection", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            // Only announce missing capture domains. The status strip retains
+            // diagnostics, while Continue owns explicit skip acknowledgments.
+            // A complete capture refreshes silently into Continue.
+            var missingNotice = CaptureCollectionNotice.MissingCaptures(saved);
+            if (missingNotice is not null)
+                MessageBox.Show(this, missingNotice, "Missing captures",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {

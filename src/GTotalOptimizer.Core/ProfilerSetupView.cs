@@ -94,3 +94,24 @@ public static class SetupWorkflowProgress
         return SetupWorkflowStage.Capture;
     }
 }
+
+
+// Only missing evidence is announced after Collect Results. Successful
+// domains, restoration details and optional provider diagnostics belong to
+// the page status/results, not the user-facing collection popup.
+public static class CaptureCollectionNotice
+{
+    public static string? MissingCaptures(CollectedCaptureIndex? capture)
+    {
+        var missing = new List<string>(3);
+        if (capture?.Cet is null) missing.Add("CET");
+        if (capture?.Redscript is null) missing.Add("REDscript");
+        if (capture?.FrameTimeCsv is null) missing.Add("PresentMon");
+        return missing.Count switch
+        {
+            0 => null,
+            1 => "Missing capture: " + missing[0],
+            _ => "Missing captures: " + string.Join(", ", missing)
+        };
+    }
+}
