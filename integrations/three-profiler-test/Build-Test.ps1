@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.5') { throw "Unexpected unified app version: $version" }
-$root = if ($Integrated) { Join-Path (Get-Location) ('publish/G-Total-Optimizer-v' + $version) } else { Join-Path (Get-Location) 'triple-test' }
+$root = if ($Integrated) { Join-Path (Join-Path (Get-Location) 'publish/release') "G's Cyberpunk 2077 Optimization" } else { Join-Path (Get-Location) 'triple-test' }
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $temp = Join-Path $env:RUNNER_TEMP 'GTriple'
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
@@ -100,7 +100,7 @@ Set-Content $rcPath $rcTxt -Encoding ascii
 $nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
 $nativeRes=Join-Path $temp 'launcher.res'
 $nativeObj=Join-Path $temp 'launcher.obj'
-$nativeExe=Join-Path $root 'G-Total-Optimizer.exe'
+$nativeExe=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
 $cmdPath=Join-Path $temp 'build.cmd'
 $buildLines=@(
   '@echo off'
@@ -185,6 +185,39 @@ if ($Integrated) {
   VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
   @{ schemaVersion=2; components=$entries; payloads=$payloads } |
     ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
+  # The GitHub artifact contains ONE portable app directory plus a short
+  # adjacent user guide. Never copy the guide into the game optimization ZIP.
+  $releaseRoot=Split-Path -Parent $root
+  @'
+GOT LAG? - G's Cyberpunk 2077 Optimizer
+=======================================
+
+QUICK START
+1. Extract the complete ZIP to a writable folder. Keep the app folder intact.
+2. Open "G's Cyberpunk 2077 Optimization" and run:
+   Gs-Cyberpunk2077_Optimizer.exe
+3. Select the Cyberpunk 2077 game installation folder (containing bin/x64).
+4. Click INSTALL PROFILERS. CET and REDscript install through their own managers.
+5. Click START CYBERPUNK / CAPTURE. PresentMon records automatically.
+6. In the game world, press F11 once to start CET + REDscript and again to stop.
+   Sample movement, driving and combat. A few minutes is sufficient.
+7. Exit Cyberpunk completely. Click COLLECT RESULTS.
+8. Click CONTINUE. Confirm any missing-capture skip boxes if necessary.
+   GCO verifies the current session and restores the original profiler files.
+
+IMPORTANT
+- Keep the entire folder together; do not run the launcher from inside the ZIP.
+- If the game or a profiler is still running, close it before Collect/Continue.
+- PresentMon is optional. It records automatically and does not use F11.
+- If a capture is missing, the app identifies the missing domain before Continue.
+- Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
+  recovery action if interrupted during profiling.
+- The optimization generator/combined ZIP feature is not yet enabled.
+- Your captured data is under the app folder's RESULTS directory.
+
+VERSION 1.1.5 (portable build). No system .NET installation required.
+'@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
   Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
 } else {
   Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'

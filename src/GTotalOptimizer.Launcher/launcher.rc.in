@@ -17,7 +17,7 @@ BEGIN
             VALUE "FileVersion", "@VERSION_DOTS@.0\0"
             VALUE "ProductName", "G's Cyberpunk 2077 Total Optimizer\0"
             VALUE "ProductVersion", "@VERSION_DOTS@\0"
-            VALUE "OriginalFilename", "G-Total-Optimizer.exe\0"
+            VALUE "OriginalFilename", "Gs-Cyberpunk2077_Optimizer.exe\0"
         END
     END
     BLOCK "VarFileInfo"

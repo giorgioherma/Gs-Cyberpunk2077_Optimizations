@@ -4,7 +4,7 @@ namespace GTotalOptimizer.Core;
 // or the process working directory. The public launcher is one folder above app/.
 public static class PortablePackagePaths
 {
-    public const string RootLauncherName = "G-Total-Optimizer.exe";
+    public const string RootLauncherName = "Gs-Cyberpunk2077_Optimizer.exe";
     public const string ManagedExecutableName = "G-Total-Optimizer.App.exe";
 
     public static string RootFromAppDirectory(string appDirectory)

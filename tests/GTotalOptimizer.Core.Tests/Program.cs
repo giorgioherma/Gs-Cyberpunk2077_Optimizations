@@ -860,8 +860,17 @@ if (args.Length > 0)
             Path.Combine(delivered, "app", PortablePackagePaths.ManagedExecutableName),
             Path.Combine(delivered, "unrelated")) == delivered,
         "real delivered executable selects correct manifest root despite unrelated host-directory hint");
-    Require(File.Exists(Path.Combine(delivered, "G-Total-Optimizer.exe")),
-        "final GCO package includes public native launcher");
+    Require(PortablePackagePaths.RootLauncherName == "Gs-Cyberpunk2077_Optimizer.exe" &&
+        File.Exists(Path.Combine(delivered, PortablePackagePaths.RootLauncherName)),
+        "final GCO package includes correctly named public native launcher");
+    Require(Path.GetFileName(delivered) == "G's Cyberpunk 2077 Optimization",
+        "artifact app directory uses the requested user-facing folder name");
+    Require(File.Exists(Path.Combine(Directory.GetParent(delivered)!.FullName, "START-HERE.txt")) &&
+        !File.Exists(Path.Combine(delivered, "START-HERE.txt")),
+        "quick-start instructions ship alongside the portable app folder");
+    Require(File.ReadAllText(Path.Combine(Directory.GetParent(delivered)!.FullName, "START-HERE.txt"))
+        .Contains(PortablePackagePaths.RootLauncherName),
+        "quick-start document launches the actual public executable");
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +

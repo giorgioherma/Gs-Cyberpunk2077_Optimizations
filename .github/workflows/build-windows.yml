@@ -1,4 +1,4 @@
-name: Build integrated GCO CET GRSP PresentMon
+name: Gs-Cyberpunk2077_Optimizer
 # Product version changes only on an explicit user request; keep fixed otherwise.
 
 on:
@@ -62,7 +62,7 @@ jobs:
         working-directory: unified
         run: |
           $ErrorActionPreference='Stop'
-          $root=(Resolve-Path publish/G-Total-Optimizer-v1.1.5).Path
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           $env:DOTNET_ROOT_X64=Join-Path $root 'runtime'
           $env:DOTNET_ROOT=$env:DOTNET_ROOT_X64
           $env:DOTNET_MULTILEVEL_LOOKUP='0'
@@ -132,11 +132,11 @@ jobs:
           $ErrorActionPreference='Stop'
           $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
           if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.5') { throw 'Unexpected GCO package version' }
-          $root=(Resolve-Path "publish/G-Total-Optimizer-v$version").Path
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
           foreach ($exe in @(
-            (Join-Path $root 'G-Total-Optimizer.exe'),
+            (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
             (Join-Path $root 'app/G-Total-Optimizer.App.exe')
           )) {
             if ((Get-Item $exe).VersionInfo.FileVersion -ne '1.1.5.0') {
@@ -180,7 +180,7 @@ jobs:
           # provides the bundled private .NET10 runtime, including under UAC.
           # This headless path does not request elevation or modify the game.
           $native=New-Object System.Diagnostics.ProcessStartInfo
-          $native.FileName=Join-Path $root 'G-Total-Optimizer.exe'
+          $native.FileName=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
           $native.ArgumentList.Add('--verify-package')
           $native.WorkingDirectory=$env:RUNNER_TEMP
           $native.UseShellExecute=$false
@@ -196,9 +196,23 @@ jobs:
             throw "Native launcher/private runtime verifier failed with exit $($launcherCheck.ExitCode)"
           }
           Write-Host 'PASS native GCO launcher forwards args and starts verified private runtime'
+          # Artifact is a sibling guide plus one portable application folder.
+          $release=Split-Path -Parent $root
+          if ((Split-Path $root -Leaf) -ne "G's Cyberpunk 2077 Optimization") {
+            throw 'Portable app folder name differs from the public contract'
+          }
+          $guide=Join-Path $release 'START-HERE.txt'
+          if (!(Test-Path $guide -PathType Leaf)) { throw 'Missing adjacent quick-start document' }
+          if (!(Test-Path (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe') -PathType Leaf)) {
+            throw 'Public Gs-Cyberpunk2077_Optimizer.exe is missing'
+          }
+          if (Test-Path (Join-Path $root 'START-HERE.txt')) {
+            throw 'Quick-start guide belongs beside the app folder, not inside it'
+          }
+          Write-Host 'PASS delivery: sibling START-HERE.txt + Gs-Cyberpunk2077_Optimizer.exe'
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
       - uses: actions/upload-artifact@v4
         with:
-          name: G-Total-Optimizer-v1.1.5-Integrated-win-x64
-          path: unified/publish/G-Total-Optimizer-v1.1.5/
+          name: Gs-Cyberpunk2077_Optimizer
+          path: unified/publish/release/
           if-no-files-found: error
