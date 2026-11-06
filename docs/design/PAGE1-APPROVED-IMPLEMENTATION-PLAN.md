@@ -2,7 +2,7 @@
 
 **Approved design; NOT YET IMPLEMENTED.** This document is the latest explicit update to [the original unchanged two-page specification](../product/UNIFIED-TWO-PAGE-WORKFLOW.md). See [current decisions](../product/CURRENT-DECISIONS.md) and [latest work](../LATEST-WORK.md).
 
-**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`, `main` (owner-renamed, verified). **Public filename is different:** keep launcher `Gs-Cyberpunk2077_Optimizer.exe` and artifact `Gs-Cyberpunk2077_Optimizer.zip`. Preserve GCO v1.1.5, .NET 10 WinForms, one shared private runtime, one canonical `.github/workflows/build-windows.yml`, two pages and one game-relative generated optimization ZIP.
+**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`, `main` (owner-renamed, verified). **Public filename is different:** keep launcher `Gs-Cyberpunk2077_Optimizer.exe` and artifact `Gs-Cyberpunk2077_Optimizer.zip`. Preserve GCO v1.1.5, **.NET 10 WPF (later explicit user approval)**, one shared private runtime, one canonical `.github/workflows/build-windows.yml`, two pages and one game-relative generated optimization ZIP.
 
 ## Locked Page 1 presentation
 
@@ -18,7 +18,7 @@
 2. **After Start Cyberpunk/Capture:** irregular color glimpses underneath black overlay; include **30 ms** rapid microflashes, sporadic single flashes, short intense multi-flash bursts and **mandatory long completely-dark pauses**. No regular repeating cycle or percentage.
 3. **While Collect Results is actually running:** retain the random glitch behavior and **increase intensity** through potentially long stop/copy/hash/validation work. Stop only after a real terminal collection/verification result; errors must not show false success.
 4. **Qualifying collection completed:** fade away the black top layer, reveal permanent full-color V when verified current-session CET **or** GRSP results make Continue available. The colored state is a *collection* milestone; it is **not** a claim that all original profiler files have already been restored. Restore is mandatory before Page 2.
-5. Original aligned images only. Lightweight WinForms animation; provide reduced-motion/no-flash alternative for accessibility. Do not depend on loading timers to determine capture success.
+5. Original aligned images only. Lightweight WPF animation; provide reduced-motion/no-flash alternative for accessibility. Do not depend on loading timers to determine capture success.
 
 ## Independent CET and REDscript profiler eligibility (mandatory change)
 
@@ -53,8 +53,12 @@
 
 - **`UnifiedProfilerWorkflow.cs`:** remove current `BothInstalled`, `BothCaptured`, `CleanForInstall` and both-required install/collect/restore assumptions. Represent per-domain eligibility/managed state/capture proof, with existing owner APIs and safe recovery.
 - **`CollectedCaptureStore.cs`:** `HasAny` currently includes frame-only PresentMon evidence; do not use this as Continue gate. Require **CET-or-GRSP verified native evidence**, keep frame data independent.
-- **`ProfilerSetupView.cs` + WinForms Page 1:** per-domain prerequisite/install/missing status and correct expected-domain popup, Continue and safe retry, Refresh preserving proof, global effective-owner counts and approved V UI.
+- **`ProfilerSetupView.cs` + WPF Page 1:** per-domain prerequisite/install/missing status and correct expected-domain popup, Continue and safe retry, Refresh preserving proof, global effective-owner counts and approved V UI.
 - **MO2 later:** build on existing `Mo2InstallLocator` and `Mo2SourceInspector`; no duplicate VFS projection or unverified native capture path.
 - **Testing:** extend current `tests/GTotalOptimizer.Core.Tests` and **single existing** CI for CET-only, GRSP-only, both, neither, CET missing 0-Engine, PresentMon-only, partial Return/Continue, retry identities, stale evidence refusal, owner restore failure, Refresh integrity, output and gameplay. No version bump, speculative generator or extra workflow.
 
 **Last verified integrated CI before these decisions:** [run #42148988246](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42148988246) on code `e7b12fb3cc40f9c3e13423ecff5e45bafcd0d41d`, **179/179 passing**. This is NOT validation of the new design or gating rules.
+
+## User-approved UI toolkit supersession — 2026-11-06
+
+The user explicitly chose **native .NET 10 WPF** rather than redesigning WinForms first. The visual and capture-safety criteria above remain binding. [WPF migration handoff](WPF-MIGRATION.md) records the green source/build stage, outstanding exact original image admission and real Windows/gameplay testing.

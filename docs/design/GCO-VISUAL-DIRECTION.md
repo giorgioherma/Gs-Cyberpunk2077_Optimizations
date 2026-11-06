@@ -8,11 +8,11 @@ This is an implementation map, **not** a new app/page/installer architecture. Pr
 - `GCO_Installer_Kit.zip`: `18_sidebar_original_V_278x640.png`, `02_cityline_header.png`, `22_installer_background_clean_860x640.png`, `24_installer_mockup_860x640.png`, `19_divider_transparent_570x16.png`, `20_corner_tech_transparent_110x70.png`, `21_hud_dots_tile_256.png`, `12_gco_wordmark.png`, `13_got_lag_wordmark.png`. Source `README_FOR_AGENT.txt` requires real buttons/text layered over clean backgrounds, >=16px control padding, DPI-aware scaling, aspect-correct portrait and no generated promotional boilerplate.
 - Hybrid icon `GOT_LAG_Hybrid_16-24_brush_32plus_V.ico` has multi-size entries 16, 24, 32, 36, 40, 48, 64, 96, 128 and 256 pixels. It is the single brand icon, **not** the splash art.
 
-## Retain .NET 10 WinForms first
+## Historical WinForms-first guidance (superseded by 2026-11-06 WPF approval)
 
 - Styling may be painted in a thin shared layer: central palette, custom separators, square/cut-corner borders, status chips and a compact stage layout. Do not alter existing native installer/restorer, ETW, capture IDs, or backend/service contracts.
 - WinForms controls remain functional and accessible. Do not represent real buttons, folder paths, state, progress, captured data, selection or error text as pixels in a background PNG. Validate scaling at 100%, 125%, 150% and keyboard focus/contrast; enable responsive minimum widths, not clipped labels. No need for GPU textures/animations in a profiler utility.
-- If a future design truly requires extensive animations/vector manipulation, compare WPF behind the same orchestration/core boundary. **Do not migrate frameworks speculatively.**
+- The user subsequently **explicitly approved WPF** for the current full Page 1 redesign; this older WinForms-first direction is historical. See [WPF migration handoff](WPF-MIGRATION.md).
 
 ## Page 1 — Capture (one game folder, no new onboarding/installer page)
 
@@ -33,7 +33,7 @@ This is an implementation map, **not** a new app/page/installer architecture. Pr
 
 ## Brand icon and release structure
 
-- Commit one master ICO to `assets/brand/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico` before wiring it. Embed that file via Windows `rc.exe` `IDI_ICON1 ICON` in the **public native launcher**, and `<ApplicationIcon>` in the internal WinForms application. Assign `Form.Icon` from the embedded resource; taskbar/title bar/Alt+Tab/Explorer should resolve from the embedded icon. Shortcuts, if added later, should point to the public exe; do not ship copies of the ICO scattered across folders.
+- Commit one master ICO to `assets/brand/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico` before wiring it. Embed that file via Windows `rc.exe` `IDI_ICON1 ICON` in the **public native launcher**, and `<ApplicationIcon>` in the internal WPF application. Assign the WPF `Window.Icon` from the embedded resource; taskbar/title bar/Alt+Tab/Explorer should resolve from the embedded icon. Shortcuts, if added later, should point to the public exe; do not ship copies of the ICO scattered across folders.
 - Artifact `Gs-Cyberpunk2077_Optimizer.zip` (one integrated workflow) layout:
   ```text
   START-HERE.txt
@@ -61,3 +61,7 @@ This is an implementation map, **not** a new app/page/installer architecture. Pr
 **Source contract:** [PAGE1-APPROVED-IMPLEMENTATION-PLAN](PAGE1-APPROVED-IMPLEMENTATION-PLAN.md). Use the user's taller GCO Capture concept with full V black-ink trail and the **BLUE upper-right skyline**; yellow skyline variant is rejected. The exact original hand-edited black/color pair is in `Transition2-more_exact(1).zip` (`GCO_V_original_pixel_locked_silhouette.png` + `Upright_hotka.png`, both 743×2117); assets are user uploads, **not committed to GitHub**. Preserve distressed edges; no regenerated pose or rasterized functional buttons.
 
 V stays black until Start, then makes random irregular color flashes, including **30ms** rapid bursts with mandatory long dark periods. Keep glitches running and **intensify while Collect is actually processing**, then permanently full color **only after verified CET-or-GRSP collection**. No artificial percentage. Refresh belongs at top right of Game Root; CET and REDscript owner counts are **global** for Direct and MO2. Continue with one native source, not PresentMon-only; incomplete expected sources show Return / Continue on Continue press. All source-owner restores still gate Page 2. MO2 custom-folder setup belongs in a later advanced repair dialog, not ordinary Page 1. This is not yet implemented.
+
+## Current WPF status (2026-11-06)
+
+The running GCO frontend is now `MainWindow.xaml(.cs)`, with old WinForms `MainForm.cs` excluded from compilation. [Windows CI #42277190679](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42277190679) passed **179/179** existing core/build/CLI contracts with one runtime; this does not verify the visible WPF window on the user's PC. Original color/hand-painted black V and BLUE skyline images are still **not committed**; do not treat blank placeholders as final approved artwork. Details and gaps: [WPF migration handoff](WPF-MIGRATION.md).

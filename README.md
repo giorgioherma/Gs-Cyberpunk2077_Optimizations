@@ -54,3 +54,7 @@ The old TOTAL Profiler is **historical reference only**, not a migration binary 
 - [CapFrameX](https://github.com/CXWorld/CapFrameX) — optional independent frame-time companion.
 
 **This repository uses `main` for product development and documentation.** CET and GRSP retain their own independent development branches. No separate handoff branch is intended here.
+
+## GCO WPF frontend (November 6, 2026)
+
+The unified GCO two-page GUI now builds with **native WPF on .NET 10** (the CET/GRSP standalone owner managers are unchanged). [Integrated Windows CI #42277190679](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42277190679) succeeded with one private runtime and **179/179** contracts. This is build/CLI verification, not actual WPF gameplay or visual acceptance. [Migration handoff and remaining work](docs/design/WPF-MIGRATION.md). Original user V/silhouette and BLUE skyline image binaries have not yet been committed.

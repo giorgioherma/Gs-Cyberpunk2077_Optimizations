@@ -19,7 +19,7 @@
 ## Remaining work
 
 1. Add **exact**, user-provided original `assets/ui/Upright_hotka.png`, `GCO_V_original_pixel_locked_silhouette.png` (both aligned 743×2117) and `02_cityline_header.png` (BLUE skyline). Their source is the conversation uploads, **NOT yet GitHub**, and substitutions are prohibited. Restore hybrid ICO from user original separately.
-2. Test actual WPF launch, interactive layout, original images, 100/125/150% DPI, USB? (not applicable), keyboard access, reduced motion, focus/background idle CPU/GPU, native capture/restore on Windows. Remove old `MainForm.cs` only after parity is proven.
+2. Test actual WPF launch, interactive layout, original images, 100/125/150% DPI, keyboard access, reduced motion, focus/background idle CPU/GPU, native capture/restore on Windows. Remove old `MainForm.cs` only after parity is proven.
 3. The backend currently still has `UnifiedProfilerWorkflow.BothInstalled`, `CleanForInstall` and frame-inclusive `CollectedCaptureStore.HasAny`; **independent CET-only/GRSP-only** admission and full GCO **0-Engine v0.17.2+** version proof remain pending. WPF UI only blocks PresentMon-only Continue; do not misrepresent the backend as complete. Implement safe Return/retry/owner restore separately.
 4. MO2 stays disabled. GCO unified CET+GRSP analysis and new REDscript Resolver/Generator remain future source-validated milestones.
 

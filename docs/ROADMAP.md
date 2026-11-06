@@ -61,3 +61,9 @@
 2. Refactor per-domain CET/GRSP eligibility/owner install/collect/restore and GCO 0-Engine validation; block PresentMon-only Continue. Add partial expected-results Return/Continue and provenance-safe retry, with verified restoration before Page 2.
 3. Add tests to the **existing** core contract harness and run only the **single** Windows workflow; real CET-only, GRSP-only and both-domain game capture tests required. Keep v1.1.5.
 4. MO2 runtime later: standard one extra folder + automatic INI/profile; exceptional custom source folder repair in advanced window; USVFS/Overwrite/output/restore proof required before enabling.
+
+## User-approved frontend migration — 2026-11-06
+
+- [x] Switch GCO's running two-page GUI to native **.NET 10 WPF** while keeping the old backend and one shared runtime. Main window, real buttons, no replacement app/CI, original headless package verification and PresentMon preserved. **[Integrated Windows CI #42277190679](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42277190679): 179/179 green.**
+- [ ] Commit the exact user V original silhouette/full-color pair and BLUE skyline, embed canonical master ICO, test WPF actual window, 100/125/150% DPI and game-focused animation overhead; confirm Windows capture/recovery behavior.
+- [ ] Complete independently eligible CET-only/GRSP-only backend workflows and exact 0-Engine v0.17.2+ proof; retain original owner restorers and strict native evidence admission. MO2 integration and optimization generators remain separate later milestones.
