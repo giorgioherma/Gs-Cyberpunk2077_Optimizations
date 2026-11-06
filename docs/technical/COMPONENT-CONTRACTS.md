@@ -74,3 +74,7 @@ Optional and independently installed or later safely bundled after rights and by
 - Distinguish ready current capture from stale/partial/missing or mismatched session; synchronized vs unsynchronized optional CapFrameX.
 - Mod inventory source proof for current live CET and REDscript; absent owners cannot appear from old captures.
 - Generated ZIP topology and no forbidden files; per-owner exclusion, source-already/partial detection, unchanged generated second pass.
+
+## 2026-11-06 — GCO independent native capture rule (planned)
+
+The [approved Page 1 handoff](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) supersedes GCO's both-profiler gate. CET-only with GCO-validated 0-Engine and GRSP-only with RED4ext/REDscript-side host must be independently possible; no unnecessary frameworks or absent secondary domain are hard blockers. Standalone CET's optional core-only behavior remains separately true. PresentMon-only never unlocks Continue. After at least one verified CET/GRSP current-session archive, missing **expected** evidence is acknowledged on Continue with Return or Continue; every actually installed original profiler is restored through its **own** source manager before Page 2. These are pending GCO implementation and tests, not alterations to the standalone component contracts.

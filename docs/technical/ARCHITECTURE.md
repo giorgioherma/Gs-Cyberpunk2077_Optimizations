@@ -85,3 +85,9 @@ Collection and restore order must obey each standalone owner's actual contract: 
 The product CI should consume **verified current artifacts**, with upstream repo, actual commit SHA, CI run/artifact ID, SHA-256, version, license and supported API signature in a product component manifest. Do not use snapshots from legacy TOTAL, hardcoded stale artifact IDs, or unverified downloaded payloads. If CapFrameX is bundled, independently verify availability, license/compliance and exact upstream bits; otherwise the app can link the player's copy.
 
 Never promise universal v2.31-only code behavior: game 2.31 is the current test target; other versions or mod formats must be evidence/admission-driven.
+
+## 2026-11-06 — approved future per-profiler state (not yet implemented)
+
+The latest [Page 1 plan](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) explicitly requires CET-only, GRSP-only, or both. GCO CET full route validates 0-Engine; standalone CET core-only can operate without it. GRSP only requires its RED4ext/REDscript-side host, not CET/0-Engine. The present `UnifiedProfilerWorkflow.BothInstalled`/`CleanForInstall` design **does not** satisfy this requirement. `CollectedCaptureStore.HasAny` also admits optional PresentMon-only evidence and **must not** authorize Continue.
+
+A current-session hash-verified CET **or** GRSP owner capture can enable Continue. Missing **expected** domains are acknowledged in a Return/Continue dialog **on Continue**, with Return preserving evidence and safe retry capability. Actual owner restores must complete before Page 2. Visual black/glitch/color states and Refresh are not capture proof. MO2 custom-path/runtime result routing is deferred and must not assume the Overwrite folder is always the output. No current-source changes claimed here.
