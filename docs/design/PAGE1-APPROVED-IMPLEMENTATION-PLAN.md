@@ -66,3 +66,7 @@ The user explicitly chose **native .NET 10 WPF** rather than redesigning WinForm
 ### 2026-11-06 asset provenance clarification
 
 The upper-right **BLUE skyline is a feature of the approved full-composite UI mockup**, not a separate user-owned original image. The file `02_cityline_header.png` (yellow panorama) was an incorrect choice and must not be used in the WPF header. Source-specific solution: display an exact **small blue skyline crop** from `UI_DESIGN-fire.png` at the right, leaving the rest of the WPF header dark. The selected original color/black V pair remains unchanged. See [WPF migration handoff](WPF-MIGRATION.md).
+
+### Superseding user-authoritative header asset — 2026-11-06
+
+The user subsequently created and committed **`assets/ui/TrueHeader_GCO_page1.png`** at [`a241ec2`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/a241ec2485bf5026aa334393de7f35eec3de5216), 2048×682 blue skyline fading left/down to the approved near-black color. **Use this entire wide background**, not the previous 150px crop, and keep controls in WPF on top. WPF should preserve its aspect ratio and scale it with the right panel. The authoritative main/step/path/button backgrounds are **#060D0F / #081012 / #11191A / #151C1C**. WPF handles the separate yellow effect behind V. The smaller crop instructions above are historical, superseded by the new user-owned file.

@@ -3,14 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="G's Cyberpunk 2077 Optimizer" Width="1380" Height="890"
         MinWidth="1020" MinHeight="690" WindowStartupLocation="CenterScreen"
-        Background="#070B0D" Foreground="#F1F5F6" FontFamily="Segoe UI"
+        Background="#060D0F" Foreground="#F1F5F6" FontFamily="Segoe UI"
         Loaded="Window_Loaded" Activated="Window_Activated" Closed="Window_Closed">
     <Window.Resources>
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
         <SolidColorBrush x:Key="Cyan" Color="#00E2F2"/>
         <SolidColorBrush x:Key="Muted" Color="#A7B5BE"/>
         <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Background" Value="#0E171C"/>
+            <Setter Property="Background" Value="#151C1C"/>
             <Setter Property="Foreground" Value="#FFF000"/>
             <Setter Property="BorderBrush" Value="#72712C"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -36,7 +36,7 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#69777A"/>
                                 <Setter TargetName="Chrome" Property="BorderBrush" Value="#303B42"/>
-                                <Setter TargetName="Chrome" Property="Background" Value="#151C20"/>
+                                <Setter TargetName="Chrome" Property="Background" Value="#151C1C"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -49,7 +49,7 @@
             <Setter Property="FontSize" Value="11"/>
         </Style>
         <Style x:Key="PathInput" TargetType="TextBox">
-            <Setter Property="Background" Value="#0C1418"/>
+            <Setter Property="Background" Value="#11191A"/>
             <Setter Property="Foreground" Value="#F5F5ED"/>
             <Setter Property="BorderBrush" Value="#41515A"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -59,7 +59,7 @@
             <Setter Property="CaretBrush" Value="#FFF000"/>
         </Style>
         <Style x:Key="CardPanel" TargetType="Border">
-            <Setter Property="Background" Value="#0C1519"/>
+            <Setter Property="Background" Value="#081012"/>
             <Setter Property="BorderBrush" Value="#394953"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14"/>
@@ -99,26 +99,19 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Column="1">
+        <Grid Grid.Column="1" ClipToBounds="True" Background="#060D0F">
             <Grid.RowDefinitions>
                 <RowDefinition Height="164"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <Grid Grid.Row="0" ClipToBounds="True" Background="#101A20">
-                <!-- The BLUE city is a detail cropped from the approved combined mockup,
-     never a stretched full-width yellow skyline banner. -->
-                <Image x:Name="CityImage" Width="150" Height="160" Stretch="Uniform"
-                       Opacity=".98" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                       Margin="0,0,8,0" />
-                <Rectangle>
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#F0070B0D" Offset="0"/>
-                            <GradientStop Color="#BB070B0D" Offset=".56"/>
-                            <GradientStop Color="#10070B0D" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
+            <!-- Wide user-authored skyline, blue on the right fading into #060D0F.
+                 Spans the header and upper content behind real WPF controls.
+                 Uniform preserves 2048x682 proportions at any DPI/window width. -->
+            <Image x:Name="CityImage" Grid.RowSpan="2"
+                   Stretch="Uniform" StretchDirection="Both"
+                   HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                   IsHitTestVisible="False" SnapsToDevicePixels="True"/>
+            <Grid Grid.Row="0" ClipToBounds="True" Background="Transparent">
                 <Grid Margin="24,12,24,12">
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="G'S CYBERPUNK 2077 OPTIMIZER"

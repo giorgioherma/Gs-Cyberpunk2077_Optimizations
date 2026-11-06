@@ -81,35 +81,30 @@ PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join
 PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
 PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $root 'app')
 
-# The paired V images are supplied by the user, not generated or substituted.
-# Stage only admitted exact-name artwork from this source tree. The first WPF
-# conversion can compile without those binary assets being committed yet.
+# Source-controlled user-approved artwork only. The full 2048x682 blue
+# header supersedes the rejected yellow panorama and temporary 150px crop.
 $uiSource=Join-Path (Get-Location) 'assets/ui'
-$portraitNames=@('Upright_hotka.png','GCO_V_original_pixel_locked_silhouette.png')
-$portraitPresent=@($portraitNames | Where-Object { Test-Path (Join-Path $uiSource $_) })
-$cityName='GCO_approved_blue_skyline_crop.png'
-$cityPresent=Test-Path (Join-Path $uiSource $cityName)
-if ($portraitPresent.Count -gt 0 -and $portraitPresent.Count -ne 2) {
-  throw 'The aligned original full-color / black V pair is incomplete'
-}
-if ($portraitPresent.Count -eq 2 -or $cityPresent) {
-  $uiTarget=Join-Path $root 'assets/ui'
-  New-Item -ItemType Directory -Force $uiTarget | Out-Null
-  foreach ($name in $portraitPresent) {
-    Copy-Item (Join-Path $uiSource $name) (Join-Path $uiTarget $name)
+$uiNames=@(
+  'Upright_hotka.png',
+  'GCO_V_original_pixel_locked_silhouette.png',
+  'TrueHeader_GCO_page1.png'
+)
+foreach ($name in $uiNames) {
+  if (-not (Test-Path -LiteralPath (Join-Path $uiSource $name) -PathType Leaf)) {
+    throw "Required approved WPF artwork missing: $name"
   }
-  if ($cityPresent) {
-    Copy-Item (Join-Path $uiSource $cityName) (Join-Path $uiTarget $cityName)
-    Write-Host 'PASS approved blue skyline crop packaged'
-  } else {
-    Write-Host 'Blue city crop not present in GitHub yet; header renders dark rather than displaying the rejected yellow skyline'
-  }
-  if ($portraitPresent.Count -eq 2) { Write-Host 'PASS original V artwork pair packaged' }
-} else {
-  Write-Host 'WPF artwork not yet admitted; final visual acceptance requires original V pair and approved BLUE skyline'
 }
-# NEVER copy 02_cityline_header.png: it is a different rejected YELLOW design,
-# not the blue skyline integrated in the approved combined Page 1 mockup.
+$uiTarget=Join-Path $root 'assets/ui'
+New-Item -ItemType Directory -Force $uiTarget | Out-Null
+foreach ($name in $uiNames) {
+  Copy-Item -LiteralPath (Join-Path $uiSource $name) -Destination (Join-Path $uiTarget $name)
+  if ((Get-FileHash (Join-Path $uiSource $name) -Algorithm SHA256).Hash -ne
+      (Get-FileHash (Join-Path $uiTarget $name) -Algorithm SHA256).Hash) {
+    throw "Packaged artwork hash mismatch: $name"
+  }
+}
+Write-Host 'PASS exact V portrait pair + new full blue skyline background packaged'
+# Never package 02_cityline_header.png or GCO_approved_blue_skyline_crop.png.
 
 # One private Microsoft .NET 10 Core and WindowsDesktop runtime.
 $runtime=Join-Path $root 'runtime'
