@@ -8,8 +8,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        // Real packaged app self-check. CI executes THIS win-x64 apphost from an
-        // unrelated working directory; no GUI is created and no game is touched.
+        // Keep exact original headless verification and elevated PresentMon
+        // control BEFORE initializing any desktop UI.
         if (args.Length == 1 && args[0] == "--verify-package")
         {
             var root = PortablePackagePaths.CurrentPackageRoot();
@@ -28,8 +28,11 @@ internal static class Program
         if (args.Length == 3 && args[0] == PresentMonCaptureController.CliSwitch)
             return PresentMonCaptureController.ExecuteElevated(args[1], args[2]);
 
-        ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        var app = new System.Windows.Application
+        {
+            ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose
+        };
+        app.Run(new MainWindow());
         return 0;
     }
 }

@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.5') { throw "Unexpected unified app version: $version" }
+$useWpf=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:UseWPF).Trim()
+if ($LASTEXITCODE -ne 0 -or $useWpf -ne 'true') { throw 'Unified GUI must build its native WPF frontend' }
 # Publish into a short stable staging path. The long branded end-user folder
 # must be created only after .NET SDK has finished copying managed payloads.
 $root = if ($Integrated) { Join-Path (Get-Location) 'publish/build' } else { Join-Path (Get-Location) 'triple-test' }
@@ -78,6 +80,22 @@ function PublishManager([string]$Csproj, [string]$Dest) {
 PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join-Path $cet 'app')
 PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
 PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $root 'app')
+
+# The paired V images are supplied by the user, not generated or substituted.
+# Stage only admitted exact-name artwork from this source tree. The first WPF
+# conversion can compile without those binary assets being committed yet.
+$uiSource=Join-Path (Get-Location) 'assets/ui'
+$uiNames=@('Upright_hotka.png','GCO_V_original_pixel_locked_silhouette.png','02_cityline_header.png')
+$uiPresent=@($uiNames | Where-Object { Test-Path (Join-Path $uiSource $_) })
+if ($uiPresent.Count -gt 0) {
+  if ($uiPresent.Count -ne $uiNames.Count) { throw 'Incomplete GCO original artwork pair or skyline' }
+  $uiTarget=Join-Path $root 'assets/ui'
+  New-Item -ItemType Directory -Force $uiTarget | Out-Null
+  foreach ($name in $uiNames) { Copy-Item (Join-Path $uiSource $name) (Join-Path $uiTarget $name) }
+  Write-Host 'PASS exact user-owned V and skyline UI images packaged'
+} else {
+  Write-Host 'WPF layout bundled without uncommitted user-owned artwork. Exact originals required for final visual acceptance.'
+}
 
 # One private Microsoft .NET 10 Core and WindowsDesktop runtime.
 $runtime=Join-Path $root 'runtime'
