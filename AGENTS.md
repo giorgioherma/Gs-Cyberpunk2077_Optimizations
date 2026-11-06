@@ -1,6 +1,6 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
-**Repository:** `giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31`. **Work on `main` only** unless the user explicitly changes that decision. Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
+**Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Work on `main` only** unless the user explicitly changes that decision. Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
 ## Mandatory startup
 
@@ -10,9 +10,10 @@ Read, in order:
 3. `docs/product/CURRENT-DECISIONS.md` (later explicit decisions; only these override the original).
 4. `docs/LATEST-WORK.md` then `docs/ROADMAP.md` (actual completion state / next milestone).
 5. `docs/technical/ARCHITECTURE.md` and `docs/technical/COMPONENT-CONTRACTS.md`.
+6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint:** GCO v1.1.5 integrated CET + GRSP + bundled PresentMon; last verified Windows integrated CI [#42125370146](https://github.com/giorgioherma/Gs-Cyberpunk2077_total_optimization_generator_v2.31/actions/runs/42125370146) passed **153/153 contracts** at code SHA `6b76fe60659bb392319508124f5572dc09bec23d` (artifact `G-Total-Optimizer-v1.1.5-Integrated-win-x64`, ID `13460736516`). PresentMon no-hotkey launch and Button 3 collection have CI/source proof only; real gameplay remains unverified. Always read `docs/LATEST-WORK.md` and inspect newer `main`/CI before relying on this checkpoint.
+**Current checkpoint:** GCO v1.1.5 integrated CET + GRSP + bundled PresentMon; last verified Windows integrated CI [#42125370146](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42125370146) passed **153/153 contracts** at code SHA `6b76fe60659bb392319508124f5572dc09bec23d` (artifact `G-Total-Optimizer-v1.1.5-Integrated-win-x64`, ID `13460736516`). PresentMon no-hotkey launch and Button 3 collection have CI/source proof only; real gameplay remains unverified. Always read `docs/LATEST-WORK.md` and inspect newer `main`/CI before relying on this checkpoint.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 
@@ -62,6 +63,17 @@ Read, in order:
 
 - The root public executable is `Gs-Cyberpunk2077_Optimizer.exe`. The managed `app/G-Total-Optimizer.App.exe` is an **internal implementation detail**, and remains unchanged to avoid new runtime dependencies. Keep `PortablePackagePaths.RootLauncherName`, native launcher resource metadata, integrated builder, tests and workflow synchronized.
 - The **sole integrated workflow** creates a downloadable GitHub Actions ZIP artifact named `Gs-Cyberpunk2077_Optimizer.zip`, containing exactly `START-HERE.txt` beside `G's Cyberpunk 2077 Optimization/` (with launcher/runtime/components/RESULTS inside). The user guide is **not** part of a generated game-install optimization ZIP. No extra setup page or installer wizard.
-- The GitHub repository rename to `giorgioherma/Gs-Cyberpunk2077_Optimizer` is requested; it requires the account owner's GitHub repository Settings rename action. Coordinate references on completion; **never create a second repository or duplicate workflow**. Existing URL redirects are not a replacement for updating documentation and dependencies.
+- **Owner GitHub repository rename COMPLETED and verified:** `giorgioherma/Gs-Cyberpunk2077_Optimizations` (`main`). Public launcher and CI artifact retain their separate `Gs-Cyberpunk2077_Optimizer` names. No duplicate repository or workflow.
 - The user's canonical ICO is `GOT_LAG_Hybrid_16-24_brush_32plus_V.ico`; once committed, keep one master source at `assets/brand/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico`. Both the C native root launcher and managed WinForms app should embed the same image for Explorer/taskbar/titlebar; do not depend on loading an ICO through fragile relative paths at runtime. Decorative art is not the Windows icon and must be treated separately.
 - Design direction: keep .NET 10 WinForms and the existing two-page backend through initial visual refresh. Visually yellow-led (#FFF000), black (#070B0D), cyan (#00E2F2) accent, fixed V art, three obvious stage controls, truthful status and one clearly enabled next action. Move long procedural text into START-HERE.txt and optional in-app Help; retain actionable error/recovery copy. Do not replace functioning controls with raster graphics or claim frame-time data before capture proof. See `docs/design/GCO-VISUAL-DIRECTION.md`.
+
+## Latest approved Page 1 and independent-domain rules — 2026-11-06
+
+**Read [docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md](docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) before editing GCO UI, owner capture flow, or MO2.** It supersedes earlier both-profiler and image proposals without changing the preserved original two-page contract.
+
+- Canonical owner-renamed repo: `giorgioherma/Gs-Cyberpunk2077_Optimizations` on `main`; root launcher and CI artifact retain `Gs-Cyberpunk2077_Optimizer` naming. Do not duplicate repos or workflows.
+- CET-only (GCO verifies 0-Engine), GRSP-only (RED4ext/REDscript side, **not CET-dependent**), and both must be supported. PresentMon-only never grants Continue. Standalone CET core-only can operate without 0-Engine, but GCO's user-approved full CET path must verify it. No unrelated mods/frameworks as universal dependencies.
+- Only **current-session verified CET OR GRSP** evidence qualifies for Continue. Popup naming missing **expected** domains only on Continue; Return stays on Page 1 with valid results/Continue for safe retry. Page 2 requires original-file restore of **every actually installed** profiler and recovery verification.
+- Locked taller Capture design: full-height V + whole black trail, **BLUE** skyline, three real cards, Game Root small Refresh, **global** CET/REDscript owner counts in Direct and MO2. Black before Start, irregular color flashes including 30ms bursts and enforced dark pauses during capture, intensified throughout collection, steady color only after qualifying collection; no fake percent.
+- MO2 remains **disabled/deferred**. Normal future UI game root + one MO2 folder, auto INI/profile/modlist and configured external drives; exceptional custom/category locations in a separate Advanced path-repair dialog with effective-profile proof. Counts are not an assertion all user mods were found.
+- Existing GCO code still assumes both owners (`UnifiedProfilerWorkflow`) and frame-inclusive `HasAny` (`CollectedCaptureStore`); above is **pending implementation**, not achieved CI or game validation. Keep GCO v1.1.5, one Windows pipeline, original source-owner managers.

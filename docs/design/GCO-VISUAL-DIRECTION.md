@@ -55,3 +55,9 @@ This is an implementation map, **not** a new app/page/installer architecture. Pr
 3. **Page 1 read/reflow** — yellow-led palette, compact instructions, 3 stage cards, truthful status, safe operation and recovery, 100–150% DPI screenshots.
 4. **Page 2 results** — only real metrics; preserve disabled optimizer until compile/output proven.
 5. **Manual end-to-end tests** — live game install/capture/collect/restore, missing-domain skips, PresentMon CSV frame proof, partial retry, no stale capture confusion.
+
+## Final user-approved Page 1 reference and V transition — 2026-11-06
+
+**Source contract:** [PAGE1-APPROVED-IMPLEMENTATION-PLAN](PAGE1-APPROVED-IMPLEMENTATION-PLAN.md). Use the user's taller GCO Capture concept with full V black-ink trail and the **BLUE upper-right skyline**; yellow skyline variant is rejected. The exact original hand-edited black/color pair is in `Transition2-more_exact(1).zip` (`GCO_V_original_pixel_locked_silhouette.png` + `Upright_hotka.png`, both 743×2117); assets are user uploads, **not committed to GitHub**. Preserve distressed edges; no regenerated pose or rasterized functional buttons.
+
+V stays black until Start, then makes random irregular color flashes, including **30ms** rapid bursts with mandatory long dark periods. Keep glitches running and **intensify while Collect is actually processing**, then permanently full color **only after verified CET-or-GRSP collection**. No artificial percentage. Refresh belongs at top right of Game Root; CET and REDscript owner counts are **global** for Direct and MO2. Continue with one native source, not PresentMon-only; incomplete expected sources show Return / Continue on Continue press. All source-owner restores still gate Page 2. MO2 custom-folder setup belongs in a later advanced repair dialog, not ordinary Page 1. This is not yet implemented.
