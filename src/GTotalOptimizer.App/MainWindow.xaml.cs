@@ -11,7 +11,7 @@ namespace GTotalOptimizer.App;
 
 // WPF presentation only. All native install/collect/restore transactions stay
 // in the authoritative CET and GRSP owner managers via UnifiedProfilerWorkflow.
-internal partial class MainWindow : Window
+public partial class MainWindow : Window
 {
     private enum PortraitStage { Black, Capturing, Collecting, Collected }
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
@@ -467,9 +467,9 @@ internal partial class MainWindow : Window
             Margin = new Thickness(0, 14, 0, 20),
             TextWrapping = TextWrapping.Wrap
         });
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var back = new Button { Content = "RETURN", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7), Margin = new Thickness(0, 0, 12, 0) };
-        var proceed = new Button { Content = "CONTINUE", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7) };
+        var buttons = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        var back = new System.Windows.Controls.Button { Content = "RETURN", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7), Margin = new Thickness(0, 0, 12, 0) };
+        var proceed = new System.Windows.Controls.Button { Content = "CONTINUE", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7) };
         back.Click += (_, _) => dlg.DialogResult = false;
         proceed.Click += (_, _) => dlg.DialogResult = true;
         buttons.Children.Add(back); buttons.Children.Add(proceed);
