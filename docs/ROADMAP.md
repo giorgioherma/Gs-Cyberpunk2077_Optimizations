@@ -32,15 +32,15 @@
 
 ## Milestone 3 — unified analytics/report + CET Resolver
 
-- [ ] Combine CET + GRSP reports with trusted time alignment and optional CapFrameX frames; display hitch/tail, allocations where measured and source-specific costs. Do not sum overlapping CPU domains.
+- [ ] Implement **one GCO cross-domain analysis and optimization plan** from CET+GRSP measurements, optional PresentMon frame data and verified live sources. Prioritize compatible measured work without double-counting overlapping timing; identify dependencies, already-optimized owners and conflicts.
 - [ ] On Page 2 entry auto-run CET Resolver using collected current evidence and read-only **live** mod sources. Show understandable optimized/already/not-beneficial/unsupported/unsafe statuses and reasons.
-- [ ] Integrate existing CET generated pass unchanged, source-proven, in an app workspace. No new app-owned CET semantic rules.
+- [ ] Integrate the **existing authoritative CET Lua Resolver/Generator** without relocating/reimplementing its rules or G-GC. Source-safe CET candidate/selection integration changes, if truly needed, are implemented in CET at source; preserve fixed generation order.
 - **Acceptance:** one game-root input; accurate current mod inventory; no altered capture attribution; unchanged tested CET output and stage order.
 
 ## Milestone 4 — REDscript generic-first optimizer
 
 - [ ] Audit GRSP full source/callsite CSVs for the **first** generic rule's actual proof requirements; extend GRSP independently only if measured evidence is missing.
-- [ ] Implement separate REDscript source parser/admission/generator library; support original, partial and fully optimized installed source and reject unproven drift.
+- [ ] Implement the **new GCO-owned REDscript Resolver/Generator** using combined CET+GRSP evidence and source-safe REDscript parsing/admission. Support untouched, partially optimized and fully optimized live source; reject unproven drift. GRSP continues to own REDscript instrumentation, not the generator.
 - [ ] Start with a very small number of safe broadly applicable generic transforms; no forced semantic catalog. Preserve public REDscript signatures, call/registration order, lifetimes and game invariants.
 - [ ] Compose and validate **full effective REDscript source stack** through supported compiler and dependency checks; no guessing about optional mods or implicit G-REdruntime dependency.
 - **Acceptance:** real untouched-source one-pass, no errors/changed behavior in regression probes, idempotence, compiler success and matched GRSP performance on selected features. Note gameplay limits honestly.

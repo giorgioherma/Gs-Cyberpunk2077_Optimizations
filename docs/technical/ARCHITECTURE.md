@@ -16,14 +16,16 @@
              synchronized session/correlation
              no invented additive script CPU
                             |
-                Analytics & Pass Generation
+                 GCO combined analysis
+               cross-domain optimization plan
+                 (evidence + live sources)
                        |           |
-             CET Resolver      REDscript backend
-            (CET-owned)        (unified repo)
-              0-Engine          generic-first
-              native/G-GC       .reds proof/compile
-              semantics         optional G-REDruntime
-                       |           |
+              CET Resolver      REDscript Resolver
+              + Generator         + Generator
+              (CET-owned)         (GCO-owned)
+              0-Engine/native     generic-first
+              Lua/G-GC/semantics  .reds proof/compile
+                       |           |  optional G-REDruntime
                        +-----+-----+
                              |
               one verified game-root-relative ZIP
@@ -31,18 +33,20 @@
               (no profilers, docs, reports, PDBs)
 ```
 
-The graphical app owns **coordination, not a second copy of instrumentation or installer internals**. CET and GRSP release artifacts, payloads and restore logic remain independently verifiable. The redscript generator is a new domain-specific library, not a separate ordinary launcher and not an extension of CET Lua syntax.
+GCO owns **one combined analysis/decision plan**, UI, reporting and final ZIP; it does **not** duplicate CET's mature Lua Resolver/Generator or either profiler's install/restore logic. CET retains authoritative source-aware CET code generation and its fixed stages. GCO owns the new REDscript Resolver/Generator, which must use GRSP evidence alongside CET evidence and verify REDscript compilation/source safety. G-REDruntime supplies REDscript services only when an accepted rule needs them. The REDscript backend is a library in GCO, not an additional ordinary launcher.
 
 ## Component responsibilities
 
 | Domain | Source of truth | Owner's work | Unified app's work |
 |---|---|---|---|
 | CET native profiler and .NET manager | CET repo | LuaJIT/CET hooks, 0-Engine scheduler measurements, on-disk transaction and restore, raw archive | Invoke API, show truthful status, correlate copied evidence |
-| CET Resolver | CET repo | Current-source scan, generic/native/final/semantic generation, G-GC, staged idempotence | Invoke existing CLI, present explanation, merge safe game-root files without changing CET semantics |
+| CET Lua Resolver/Generator | CET repo | Existing source-aware decisions, generic 0-Engine/native/final/semantic generation, G-GC, staged idempotence; preserve all current work | Consume CET evidence/output in one combined cross-domain plan, never duplicate CET generation |
 | GRSP native/manager | GRSP repo | RED4ext Rust call-edge hooks, source/callsite/owner evidence, safe install/restore | Invoke API, preserve full raw developer evidence and trust gates |
-| G-REDruntime | Framework repo | REDscript Scheduler, cache, dirty flags, context/input/events/hooks | Verify dependency only for proven REDscript rule families |
-| REDscript generic backend | This repo | Safely parse current effective .reds, discover admissible generic transformations, compile/check, generate changed-file overlays | Same application, clear admission/refusal report |
+| G-REDruntime | Framework repo | Shared framework services **for REDscript**: Scheduler, cache, dirty flags, context/input/events/hooks | Include in final ZIP **only** for accepted optimizations which need those services |
+| GCO unified planning + REDscript Resolver/Generator | This repo | Cross-domain CET+GRSP evidence analysis and one shared plan; parse current effective .reds, select generic-first work, verify lifecycle/source, compile and generate changed-file overlays | Coordinate owner-safe CET results and new REDscript output, validate merged dependencies and assemble one ZIP |
 | CapFrameX | External | Frame-time capture | Optional launch/link, copy-only import, sanity-check synchronization |
+
+**CET profiling admission:** supported GCO CET workflow requires 0-Engine **v0.17.2+**; GRSP-only remains independent. Standalone CET core-only profiling without 0-Engine does not change this GCO requirement.
 
 ## UI contract (do not add more primary pages)
 

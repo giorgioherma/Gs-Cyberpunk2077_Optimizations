@@ -7,7 +7,7 @@
 1. **New repository, `main`.** User created [Gs-Cyberpunk2077_total_optimization_generator_v2.31](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations) on 2026-11-04 and explicitly rejected using its temporary `dev/resolver-profiler-handoff` as the development branch. Keep this product on `main`. This does not change existing CET/GRSP branch choices.
 2. **Current components, not old TOTAL.** The historical TOTAL application was based on completely different, obsolete CET profiler code. It is only a reference for interface and correlation concepts. New product integrates current CET, GRSP and REDscript framework components.
 3. **REDscript generic-first.** The user explicitly **does not intend a large REDscript semantic library**; apply generally safe/reusable generic rules, with rare optional stack-specific semantics only when the user decides. This tightens the October 16 provisional REDscript scope without prohibiting agreed exceptions.
-4. **One user-facing resolver with separate domain-specific generators.** Reuse the existing CET Resolver as the authoritative CET generator; build a REDscript-specific backend with REDscript compiler/source/lifecycle validation. One UI, not two ordinary Resolver launchers. No cross-language parsing or implementation duplication.
+4. **One combined optimization plan with clear ownership.** GCO owns the single user-facing analysis and cross-domain coordination, while **CET retains its existing Lua Resolver/Generator** and GCO develops the **new REDscript Resolver/Generator**. Select compatible work using both profilers' evidence and current live sources. Preserve CET's complete generation order, authority and existing work, plus REDscript compilation/source-safety. Do not duplicate generators or create a second ordinary Resolver UI.
 5. **GRSP can evolve.** Extend existing GRSP native instrumentation/reporting when the REDscript generic backend needs new, provable measurements. Changes stay in the GRSP repository, and standalone GRSP remains functional.
 6. **Documentation first, then app.** User asked to locate and preserve the original design and prepare a complete handoff before writing the unified GUI. Documentation alone does not satisfy app milestones.
 
@@ -207,3 +207,18 @@ User clarified the first-page three-button workflow: bundled optional PresentMon
 - Continue available after at least one verified current-session CET **or** GRSP result. Missing **expected** domains are listed in **Return / Continue popup only on Continue click**, not immediately on collection. Return stays Page 1 with valid proof and Continue for safe retry. Continue accepts partial domain results but must verify all installed profiler original-file restoration before Page 2.
 - MO2 integration **deferred**. Standard future UI needs game root + one MO2 app path; discover portable/LocalAppData INI, profile `modlist.txt`, arbitrary configured Mods/Profiles/Overwrite. If extra external categorized folders exist, offer separate **Custom/Advanced source-path repair window**, prove active profile/priority and show incomplete inventory rather than assuming it sees all user mods. Runtime capture location/USVFS/restore must be proven. Preserve MO2 feature gate disabled.
 - Source work pending: `UnifiedProfilerWorkflow` both-owner assumptions, `CollectedCaptureStore.HasAny` including PresentMon, conditional per-domain prerequisites/partial-retry UI, animation and tests. Keep GCO v1.1.5, sole integrated workflow and owner logic.
+
+
+## 2026-11-06 — User-edited project Rule 4: authoritative component ownership
+
+The user explicitly confirmed the following final ownership wording, including the `0-Engine v0.17.2+` prerequisite and that G-REDruntime's shared services are **for REDscript**. This supersedes any earlier suggestion that the REDscript generator should move into GRSP.
+
+4. **Respect component ownership.**
+
+- **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. CET profiling requires 0-Engine v0.17.2+.
+- **GRSP:** Owns REDscript profiling and instrumentation.
+- **GCO:** Owns unified analysis, cross-domain coordination, new REDscript Resolver/Generator, UI, reporting and final optimization ZIP.
+- **G-REDruntime:** Owns shared framework services for REDscript, included only when required.
+- **One combined optimization plan**, using CET and GRSP evidence and live sources. Preserve CET's authoritative generation pipeline and REDscript compilation/source-safety checks. Never duplicate implementations.
+
+**Implementation interpretation:** GCO is the central **cross-domain decision and plan coordinator**, not a replacement CET Resolver. CET continues its source-owned candidate selection and code generation; any additional CET integration interface must be added at CET's source, not recreated or patched downstream in GCO. GCO owns the NEW REDscript optimizer and full REDscript source safety, optional G-REDruntime dependencies and final package compatibility. Independent CET-only and GRSP-only captures remain valid; PresentMon-only remains insufficient. The supported GCO CET route checks the required 0-Engine version; standalone CET core-only operation without 0-Engine is a separate capability and does not weaken this user-approved GCO requirement. No code changes in this documentation update.

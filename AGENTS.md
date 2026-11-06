@@ -28,12 +28,20 @@ Read, in order:
 
 ## Non-negotiable ownership
 
-- **CET**: `giorgioherma/G-CET_Runtime_Profiler` on `dev/resolver-profiler-handoff` owns native CET profiler, managed install/restore, 0-Engine/native/Lua optimizations, G-GC and all authoritative CET generators. **Never duplicate/rewrite its existing generator in this repo.** For defects, fix the existing owner.
-- **REDscript profiler**: `giorgioherma/GRSP-G-REDscript-Profiler` on its `dev/resolver-profiler-handoff` owns the Rust RED4ext profiler and capture/reporting. Extend missing measurement evidence THERE, not a second copy of the native hooks.
-- **REDscript runtime**: `giorgioherma/G-REDruntime_Framework` owns shared REDscript services. Its framework is not an automatic dependency for an otherwise standalone mod.
-- **Unified app** (THIS repo): friendly launcher/UI, verified component packaging, cross-component orchestration, capture/session manifest, correlation and **new REDscript generic optimization generator/backend**, integration of the existing CET Resolver. One UI, distinct domain-specific generators.
-- **CapFrameX**: third-party tool. Preserve user settings and source captures, check distribution rights before bundling, verify exact downloaded artifacts, never patch its binary.
-- The historical `G-Cyberpunk2077_Total_Profiler` is only a source of design/correlation ideas, not a usable current CET/GRSP baseline.
+4. **Respect component ownership.**
+
+- **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. CET profiling requires 0-Engine v0.17.2+.
+- **GRSP:** Owns REDscript profiling and instrumentation.
+- **GCO:** Owns unified analysis, cross-domain coordination, new REDscript Resolver/Generator, UI, reporting and final optimization ZIP.
+- **G-REDruntime:** Owns shared framework services for REDscript, included only when required.
+- **One combined optimization plan**, using CET and GRSP evidence and live sources. Preserve CET's authoritative generation pipeline and REDscript compilation/source-safety checks. Never duplicate implementations.
+
+- **CET source:** `giorgioherma/G-CET_Runtime_Profiler` on `dev/resolver-profiler-handoff`. Its source-owned installer/restore and CET optimization generation remain authoritative; GCO never replaces or duplicates them. Standalone CET's core-only mode is a documented capability, but the user-approved **GCO CET profiling workflow** validates 0-Engine v0.17.2+.
+- **GRSP source:** `giorgioherma/GRSP-G-REDscript-Profiler` on `dev/resolver-profiler-handoff`. Missing measurement hooks/report fields are fixed THERE, not reimplemented in GCO.
+- **G-REDruntime source:** `giorgioherma/G-REDruntime_Framework` on `main`. Shared REDscript runtime files enter the generated ZIP only for accepted rules which require them; not a universal dependency.
+- **GCO source:** this repo on `main`. One **central cross-domain coordination/optimization plan**, using CET and GRSP evidence and current live mod sources. CET retains its authoritative Resolver/generator decisions and fixed order; GCO owns new REDscript Resolver/Generator. GCO validates compatibility, composes owner outputs and assembles the final ZIP.
+- **PresentMon and any legacy CapFrameX:** independent third-party frame-time sources; preserve user settings/source evidence and verify distribution provenance. Never add overlapping CET+GRSP measurements as total script CPU.
+- The historical `G-Cyberpunk2077_Total_Profiler` is only a source of design/correlation ideas, never a current CET/GRSP binary baseline.
 
 ## Product constraints
 

@@ -12,7 +12,7 @@
 
 ## Scope
 
-Build an **all-in-one, user-oriented app** bundling verified current CET Profiler + current GRSP Profiler + the CET Resolver/generator + optional CapFrameX, with one new **generic-first REDscript Resolver/backend**, combined evidence and one game-root-relative optimization overlay ZIP. The legacy TOTAL Profiler is a historical reference, never a source of current CET/GRSP binaries or installer logic.
+Build an **all-in-one, user-oriented app** bundling verified CET and GRSP profilers, PresentMon, CET's **existing authoritative Lua Resolver/Generator**, and a **new GCO-owned REDscript Resolver/Generator**. GCO owns unified analysis and one combined optimization plan from both profilers and live installed sources, then a single verified game-relative optimization ZIP. Preserve CET's existing work. G-REDruntime provides shared services for REDscript only when accepted optimizations require them. The legacy TOTAL Profiler remains a historical reference, not a source of current binaries.
 
 **Only one game folder** should be asked in normal setup. **Exactly two ordinary pages** and **three first-page actions** from original design; advanced controls must not silently add a new mandatory step. Reliable capture ownership, transactional restoration and a clean Vortex-friendly ZIP are design-critical.
 
@@ -26,7 +26,7 @@ Build an **all-in-one, user-oriented app** bundling verified current CET Profile
 
 ## Strict boundaries and proof
 
-CET generator fixes happen in CET's authoritative generators; GRSP instrumentation fixes happen in GRSP; G-REDruntime internals stay in its repo. New app owns coordination and genuinely new REDscript generic source generation. Never replace standalone transactional lifecycle with an app-owned duplicate implementation. Do not claim all-in-one support before reversible install, real game capture, source/compile validation and recovery tests.
+**Ownership contract (user edited Rule 4, 2026-11-06):** CET owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC; preserve all existing CET work. **CET profiling requires 0-Engine v0.17.2+** in the supported GCO CET route (standalone core-only capability remains separate). GRSP owns REDscript profiling/instrumentation. GCO owns unified analysis, cross-domain coordination, the new REDscript Resolver/Generator, UI, reports and final ZIP. G-REDruntime owns shared **REDscript** framework services; include only if required. One combined optimization plan must use CET and GRSP evidence and live sources, without duplicating owner implementations. CET fixes stay in CET; native GRSP fixes stay in GRSP; REDscript generation remains compiler/source-safe in GCO. Never bypass owner install/restore.
 
 Update [LATEST-WORK](../LATEST-WORK.md) after every substantive milestone, including unverified status.
 

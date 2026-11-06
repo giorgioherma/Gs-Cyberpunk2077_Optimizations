@@ -78,3 +78,12 @@ Optional and independently installed or later safely bundled after rights and by
 ## 2026-11-06 — GCO independent native capture rule (planned)
 
 The [approved Page 1 handoff](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) supersedes GCO's both-profiler gate. CET-only with GCO-validated 0-Engine and GRSP-only with RED4ext/REDscript-side host must be independently possible; no unnecessary frameworks or absent secondary domain are hard blockers. Standalone CET's optional core-only behavior remains separately true. PresentMon-only never unlocks Continue. After at least one verified CET/GRSP current-session archive, missing **expected** evidence is acknowledged on Continue with Return or Continue; every actually installed original profiler is restored through its **own** source manager before Page 2. These are pending GCO implementation and tests, not alterations to the standalone component contracts.
+
+
+## 2026-11-06 — authoritative ownership and combined plan
+
+- **CET owns its existing Lua Resolver/Generator, native optimizations and G-GC.** GCO consumes its authoritative analysis/generation interfaces and does not reproduce CET source transformations or alter its fixed generation sequence.
+- **GRSP owns REDscript profiler instrumentation.** If the combined decision process needs missing REDscript measurements, extend GRSP's evidence source there.
+- **GCO owns the new REDscript Resolver/Generator** as well as a single combined CET+GRSP optimization plan, cross-domain prioritization, reporting, output compatibility validation and final ZIP. REDscript generation must preserve full source/compile safety.
+- **G-REDruntime owns shared services for REDscript**, included in the generated ZIP only where an accepted optimization requires them.
+- **CET profiling requires 0-Engine v0.17.2+** under the user-approved GCO CET route. This is distinct from standalone CET's optional core-only profiler mode. GRSP-only does not require CET/0-Engine. No duplicate owner implementations.
