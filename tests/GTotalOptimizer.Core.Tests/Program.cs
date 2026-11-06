@@ -401,6 +401,40 @@ try
     Require(PresentMonLifecyclePolicy.ValidateOutputCsv(pmRoot, automaticCsv) == automaticCsv &&
         automaticCsv.Contains(Path.Combine("GCO-Capture-" + sessionId, "FrameTime")),
         "fresh PresentMon output lives inside the current GCO capture under RESULTS");
+    // Regression from a real session: GCO's former nested GUID path had
+    // exactly 260 characters. PresentMon 2.6.0's MAX_PATH writer truncated
+    // the extension to "PresentMon.cs" despite capturing valid frame data.
+    var syntheticDeepRoot = @"C:\" + new string('p', 146); // 149 chars
+    var deepSessionId = Guid.NewGuid().ToString("N");
+    var obsoletePath = Path.Combine(
+        CollectedCaptureStore.SessionFolder(syntheticDeepRoot, deepSessionId),
+        "FrameTime", new string('a', 32), "PresentMon.csv");
+    Require(obsoletePath.Length == 260,
+        "reproduce 260-char MAX_PATH that truncated the captured PresentMon.csv extension");
+    var safeDeepCsv = PresentMonLifecyclePolicy.NewSessionCsv(syntheticDeepRoot, deepSessionId);
+    Require(safeDeepCsv.Length <= PresentMonLifecyclePolicy.MaxSafeOutputPathLength &&
+        safeDeepCsv.EndsWith("PresentMon.csv", StringComparison.OrdinalIgnoreCase) &&
+        safeDeepCsv.Contains(Path.Combine("GCO-Capture-" + deepSessionId, "FrameTime")),
+        "source generator uses short unique attempt paths within safe native MAX_PATH budget");
+    Require(PresentMonLifecyclePolicy.NewSessionCsv(syntheticDeepRoot, deepSessionId) != safeDeepCsv,
+        "multiple captures in the same session do not reuse a frame-time output path");
+    var fallbackRoot = @"C:\" + new string('q', 160); // 163 chars
+    var fallbackCsv = PresentMonLifecyclePolicy.NewSessionCsv(fallbackRoot, deepSessionId);
+    Require(fallbackCsv == Path.Combine(
+        CollectedCaptureStore.SessionFolder(fallbackRoot, deepSessionId), "PresentMon.csv"),
+        "long installation paths fall back to session-root CSV rather than truncating");
+    var unsafeCsv = Path.Combine(
+        CollectedCaptureStore.SessionFolder(@"C:\" + new string('r', 185), deepSessionId),
+        "PresentMon.csv");
+    var unsafeRefused = false;
+    try { PresentMonLifecyclePolicy.StartArguments(unsafeCsv); }
+    catch (InvalidDataException) { unsafeRefused = true; }
+    Require(unsafeRefused, "native PresentMon start rejects unsafe long CSV paths before ETW session creation");
+    unsafeRefused = false;
+    try { PresentMonLifecyclePolicy.NewSessionCsv(@"C:\" + new string('s', 185), deepSessionId); }
+    catch (InvalidDataException) { unsafeRefused = true; }
+    Require(unsafeRefused, "unavoidably long path explicitly refuses instead of silently destroying capture filename");
+
     var startArgs = PresentMonLifecyclePolicy.StartArguments(automaticCsv);
     var stopArgs = PresentMonLifecyclePolicy.StopArguments();
     Require(startArgs.Contains("--process_name") &&

@@ -31,6 +31,7 @@ internal static class PresentMonCaptureController
     public static async Task RunAsync(string packageRoot, string csv, bool restart)
     {
         var safeCsv = PresentMonLifecyclePolicy.ValidateOutputCsv(packageRoot, csv);
+        if (restart) PresentMonLifecyclePolicy.RequireWritableCapturePath(safeCsv);
         var resultPath = Path.Combine(Path.GetDirectoryName(safeCsv)!, ResultName);
         if (File.Exists(resultPath)) File.Delete(resultPath);
 
@@ -100,6 +101,7 @@ internal static class PresentMonCaptureController
             Directory.CreateDirectory(Path.GetDirectoryName(csv)!);
             if (action is not ("restart" or "stop"))
                 throw new ArgumentException("Unrecognized PresentMon operation.");
+            if (action == "restart") PresentMonLifecyclePolicy.RequireWritableCapturePath(csv);
             var bundle = ComponentBundleVerifier.Inspect(root);
             if (!bundle.Ready)
                 throw new InvalidDataException("GCO component identity verification failed: " + bundle.Detail);

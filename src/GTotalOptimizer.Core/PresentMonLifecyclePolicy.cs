@@ -5,6 +5,19 @@ namespace GTotalOptimizer.Core;
 public static class PresentMonLifecyclePolicy
 {
     public const string SessionName = "GCO";
+    // PresentMon 2.6.0 uses wchar_t path[MAX_PATH] (260 characters including
+    // NUL) in CsvOutput.cpp. Reject paths before the native writer truncates
+    // the .csv extension. Leave room for Windows and future filename suffixes.
+    public const int MaxSafeOutputPathLength = 240;
+
+    public static string RequireWritableCapturePath(string csv)
+    {
+        if (Path.GetFullPath(csv).Length > MaxSafeOutputPathLength)
+            throw new InvalidDataException(
+                "GCO's PresentMon output path is too long. Extract GCO to a shorter folder " +
+                @"(for example C:\GCO) before recording frames.");
+        return csv;
+    }
 
     public static string Executable(string packageRoot) =>
         Path.GetFullPath(Path.Combine(packageRoot, "components", "presentmon", "PresentMon.exe"));
@@ -28,16 +41,20 @@ public static class PresentMonLifecyclePolicy
 
     // No RegisterHotKey and no extra F11 handler. Recording begins immediately;
     // CET / GRSP timestamps define the useful analysis window later.
-    public static IReadOnlyList<string> StartArguments(string csv) =>
-    [
-        "--process_name", "Cyberpunk2077.exe",
-        "--session_name", SessionName,
-        "--stop_existing_session",
-        "--output_file", csv,
-        "--date_time",
-        "--no_console_stats",
-        "--no_track_input"
-    ];
+    public static IReadOnlyList<string> StartArguments(string csv)
+    {
+        RequireWritableCapturePath(csv);
+        return
+        [
+            "--process_name", "Cyberpunk2077.exe",
+            "--session_name", SessionName,
+            "--stop_existing_session",
+            "--output_file", csv,
+            "--date_time",
+            "--no_console_stats",
+            "--no_track_input"
+        ];
+    }
 
     // Official v2.6.0 CLI operation: gracefully end the named ETW recording,
     // permitting the writer to flush the CSV before verification.
@@ -49,10 +66,31 @@ public static class PresentMonLifecyclePolicy
     public static bool StopExitAccepted(int exitCode, int ownedProcessCount) =>
         exitCode == 0 || (exitCode == 7 && ownedProcessCount == 0);
 
-    public static string NewSessionCsv(string packageRoot, string sessionId) =>
-        ValidateOutputCsv(packageRoot, Path.Combine(
-            CollectedCaptureStore.SessionFolder(packageRoot, sessionId),
-            "FrameTime", Guid.NewGuid().ToString("N"), "PresentMon.csv"));
+    public static string NewSessionCsv(string packageRoot, string sessionId)
+    {
+        var session = CollectedCaptureStore.SessionFolder(packageRoot, sessionId);
+        // Use a short, still-unique attempt ID; the old 32-character nested
+        // folder made a real user's full path exactly 260 characters, and
+        // PresentMon silently wrote "PresentMon.cs" instead of ".csv".
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var path = ValidateOutputCsv(packageRoot, Path.Combine(session,
+                "FrameTime", Guid.NewGuid().ToString("N")[..8], "PresentMon.csv"));
+            if (path.Length > MaxSafeOutputPathLength) break;
+            // Never overwrite evidence from another attempt in this session.
+            if (!Directory.Exists(Path.GetDirectoryName(path)!) && !File.Exists(path))
+                return path;
+        }
+        // Deeply extracted packages can use a flat filename, still scoped to
+        // the same capture session. Refuse any already-existing evidence.
+        var fallback = ValidateOutputCsv(packageRoot, Path.Combine(session, "PresentMon.csv"));
+        RequireWritableCapturePath(fallback);
+        if (File.Exists(fallback))
+            throw new InvalidDataException(
+                "An existing PresentMon CSV belongs to this capture session. Preserve it; " +
+                "do not overwrite previous evidence.");
+        return fallback;
+    }
 
     // Data evidence, not merely a non-empty file: verify a real Cyberpunk
     // frame row and the timestamp column required for later correlation.

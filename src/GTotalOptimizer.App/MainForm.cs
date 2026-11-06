@@ -1225,10 +1225,13 @@ internal sealed class MainForm : Form
                 throw new InvalidOperationException("Combined component provenance is no longer valid.");
             var capture = Workflow.ReadCollected(game) ??
                 throw new InvalidOperationException("GCO capture session identity is unavailable.");
-            var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, capture.SessionId);
             string? frameWarning = null;
             try
             {
+                // PresentMon's native CSV writer uses a MAX_PATH buffer. A
+                // path-length refusal must disable only optional frame timing,
+                // not prevent CET and REDscript from launching the game.
+                var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, capture.SessionId);
                 // PresentMon records from launch without RegisterHotKey.
                 // F11 remains solely CET + REDscript input.
                 await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
