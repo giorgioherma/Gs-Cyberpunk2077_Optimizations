@@ -122,12 +122,27 @@ internal static class Program
             var glowLeft = window.VAtmosphereGlow.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             var portraitRight = portraitTopLeft.X + window.VPortraitHost.ActualWidth;
-            if (Math.Abs((portraitRight - cloudsLeft.X) - 26.0) > 1.5 ||
+            if (Math.Abs((portraitRight - cloudsLeft.X) - 39.0) > 1.5 ||
                 Math.Abs(cloudsLeft.X - glowLeft.X) > .75)
                 throw new InvalidOperationException(
                     $"Atmosphere misaligned with V: portraitRight={portraitRight:0.##}, " +
                     $"cloudLeft={cloudsLeft.X:0.##}, glowLeft={glowLeft.X:0.##}");
-            Console.WriteLine("PASS authored yellow cloud and underglow align with shared V mask");
+            // Regression for the user-reported 142-DIP squeezed cloud strip:
+            // original authored pixel ratio must survive every WPF resize.
+            var cloudPixels = (System.Windows.Media.Imaging.BitmapSource)
+                window.VAtmosphereImage.Source!;
+            var naturalCloudWidth = window.ContentRegion.ActualHeight *
+                cloudPixels.PixelWidth / cloudPixels.PixelHeight;
+            if (window.VAtmosphereImage.Stretch != System.Windows.Media.Stretch.Uniform ||
+                Math.Abs(window.VAtmosphereImage.ActualWidth - naturalCloudWidth) > 1.5 ||
+                naturalCloudWidth <= window.VPortraitHost.ActualWidth * 1.20)
+                throw new InvalidOperationException(
+                    $"Cloud compressed: actual={window.VAtmosphereImage.ActualWidth:0.#}, " +
+                    $"aspect-correct={naturalCloudWidth:0.#}, " +
+                    $"portrait={window.VPortraitHost.ActualWidth:0.#}");
+            Console.WriteLine(
+                $"PASS proportional authored cloud ({naturalCloudWidth:0.#} DIP) " +
+                "flows beyond the 39-DIP shared V overlap");
 
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
@@ -186,6 +201,15 @@ internal static class Program
             smallRoot.Measure(new System.Windows.Size(1080, 600));
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1080, 600));
             smallRoot.UpdateLayout();
+            if (smallWindow.VAtmosphereImage.Source is not System.Windows.Media.Imaging.BitmapSource
+                smallCloud)
+                throw new InvalidOperationException("Small-size cloud bitmap missing");
+            double smallNaturalWidth = smallWindow.ContentRegion.ActualHeight *
+                                       smallCloud.PixelWidth / smallCloud.PixelHeight;
+            if (Math.Abs(smallWindow.VAtmosphereImage.ActualWidth - smallNaturalWidth) > 1.5)
+                throw new InvalidOperationException(
+                    $"Small-size cloud squeezed: {smallWindow.VAtmosphereImage.ActualWidth:0.#} " +
+                    $"instead of {smallNaturalWidth:0.#}");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");
@@ -196,6 +220,13 @@ internal static class Program
             smallRoot.Measure(new System.Windows.Size(1190, 680));
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1190, 680));
             smallRoot.UpdateLayout();
+            double resizedCloudWidth = smallWindow.ContentRegion.ActualHeight *
+                                       smallCloud.PixelWidth / smallCloud.PixelHeight;
+            if (Math.Abs(smallWindow.VAtmosphereImage.ActualWidth - resizedCloudWidth) > 1.5)
+                throw new InvalidOperationException(
+                    $"Cloud did not resize proportionally: {smallWindow.VAtmosphereImage.ActualWidth:0.#} " +
+                    $"instead of {resizedCloudWidth:0.#}");
+            Console.WriteLine("PASS cloud preserves native aspect at normal, minimum and resized layouts");
             if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))
                 throw new InvalidOperationException("Regular border swapped on live window resize");
 
