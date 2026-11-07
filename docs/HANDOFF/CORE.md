@@ -206,3 +206,7 @@ Owner's native magnified screenshot of v1.1.7 establishes prior `PortraitBottomO
 ### 2026-11-07 — Intentional +1 DIP V/outer-frame overlap
 
 Owner clarified that a slight V/border overlap hides a rasterized dark hairline better than exact edge-to-edge positioning. Current GCO v1.1.7 moves V overhang **5→6** DIP by reducing root host bottom margin **24→23**; the existing WPF test checks extension **6**. No new clip, PNG modification, border z-order change, separate image resizing, or version bump. Both original V layers retain their proportional alignment. Validate single Windows workflow and owner screenshot.
+
+### 2026-11-07 — V +1-DIP overlap verified CI
+
+- [Windows CI #42394574929](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42394574929) **SUCCESS**, source `8a745ba571a154b3ff6c9e3db0e36e0fd7109672`; integrated CET/GRSP smoke, **183 installation/CLI/package contracts**, packaged WPF baseline + unchanged Regular bitmap at two sizes PASS. Pixel probes: yellow RGB(254,245,30), cyan RGB(6,167,175). Artifact `Gs-Cyberpunk2077_Optimizer` ID **13582852649**, size **86,599,160 bytes**. The intentional ~1-DIP overlap has been implemented and geometrically validated, but physical Windows screen/DPI appearance still requires the owner's screenshot. Version remains **v1.1.7**.
