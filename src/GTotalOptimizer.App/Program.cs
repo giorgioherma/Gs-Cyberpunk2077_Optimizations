@@ -110,39 +110,30 @@ internal static class Program
                 throw new InvalidOperationException(
                     "V must be a direct root overlay to cross the inner border");
 
-            // The shared portrait mask and cloud+glow must meet at the
-            // SAME responsive seam. This catches the previous 76px strip
-            // accidentally anchored to the wrong content column.
-            if (window.VImageLayers.OpacityMask is not System.Windows.Media.ImageBrush ||
-                window.VAtmosphereImage.Source is not System.Windows.Media.Imaging.BitmapSource)
+            // No cloud image or generated texture. The two original V
+            // images share ONE WPF mask, while a static gradient halo/vignette
+            // bleeds behind the UI without moving portrait geometry.
+            if (window.VImageLayers.OpacityMask is not System.Windows.Media.ImageBrush)
+                throw new InvalidOperationException("V pair must share one opacity mask");
+            var halos = window.VAtmosphereHost.Children
+                .OfType<System.Windows.Shapes.Rectangle>().ToArray();
+            if (halos.Length != 3 ||
+                window.VUpperHalo.Fill is not System.Windows.Media.RadialGradientBrush ||
+                window.VLowerHalo.Fill is not System.Windows.Media.RadialGradientBrush ||
+                window.VDarkVignette.Fill is not System.Windows.Media.LinearGradientBrush)
                 throw new InvalidOperationException(
-                    "Original V pair must share a mask with the real yellow cloud texture");
-            var cloudsLeft = window.VAtmosphereImage.TransformToAncestor(visual)
+                    "Original-concept lighting requires two WPF halos and one dark vignette");
+            var haloLeft = window.VAtmosphereHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            var glowLeft = window.VAtmosphereGlow.TransformToAncestor(visual)
-                .Transform(new System.Windows.Point(0, 0));
-            var portraitRight = portraitTopLeft.X + window.VPortraitHost.ActualWidth;
-            if (Math.Abs((portraitRight - cloudsLeft.X) - 39.0) > 1.5 ||
-                Math.Abs(cloudsLeft.X - glowLeft.X) > .75)
+            double expectedHaloWidth = window.ArtworkColumn.Width.Value + 158.0;
+            if (Math.Abs(haloLeft.X - rootTopLeft.X) > .75 ||
+                Math.Abs(window.VAtmosphereHost.ActualWidth - expectedHaloWidth) > 1.5 ||
+                window.VAtmosphereHost.ActualWidth <= window.VPortraitHost.ActualWidth + 120.0)
                 throw new InvalidOperationException(
-                    $"Atmosphere misaligned with V: portraitRight={portraitRight:0.##}, " +
-                    $"cloudLeft={cloudsLeft.X:0.##}, glowLeft={glowLeft.X:0.##}");
-            // Regression for the user-reported 142-DIP squeezed cloud strip:
-            // original authored pixel ratio must survive every WPF resize.
-            var cloudPixels = (System.Windows.Media.Imaging.BitmapSource)
-                window.VAtmosphereImage.Source!;
-            var naturalCloudWidth = window.ContentRegion.ActualHeight *
-                cloudPixels.PixelWidth / cloudPixels.PixelHeight;
-            if (window.VAtmosphereImage.Stretch != System.Windows.Media.Stretch.Uniform ||
-                Math.Abs(window.VAtmosphereImage.ActualWidth - naturalCloudWidth) > 1.5 ||
-                naturalCloudWidth <= window.VPortraitHost.ActualWidth * 1.20)
-                throw new InvalidOperationException(
-                    $"Cloud compressed: actual={window.VAtmosphereImage.ActualWidth:0.#}, " +
-                    $"aspect-correct={naturalCloudWidth:0.#}, " +
-                    $"portrait={window.VPortraitHost.ActualWidth:0.#}");
-            Console.WriteLine(
-                $"PASS proportional authored cloud ({naturalCloudWidth:0.#} DIP) " +
-                "flows beyond the 39-DIP shared V overlap");
+                    $"Halo placement invalid: left={haloLeft.X:0.#}, " +
+                    $"width={window.VAtmosphereHost.ActualWidth:0.#}, " +
+                    $"expected={expectedHaloWidth:0.#}");
+            Console.WriteLine("PASS shared V mask, static yellow halos and contained dark vignette");
 
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
@@ -201,15 +192,9 @@ internal static class Program
             smallRoot.Measure(new System.Windows.Size(1080, 600));
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1080, 600));
             smallRoot.UpdateLayout();
-            if (smallWindow.VAtmosphereImage.Source is not System.Windows.Media.Imaging.BitmapSource
-                smallCloud)
-                throw new InvalidOperationException("Small-size cloud bitmap missing");
-            double smallNaturalWidth = smallWindow.ContentRegion.ActualHeight *
-                                       smallCloud.PixelWidth / smallCloud.PixelHeight;
-            if (Math.Abs(smallWindow.VAtmosphereImage.ActualWidth - smallNaturalWidth) > 1.5)
-                throw new InvalidOperationException(
-                    $"Small-size cloud squeezed: {smallWindow.VAtmosphereImage.ActualWidth:0.#} " +
-                    $"instead of {smallNaturalWidth:0.#}");
+            if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
+                         smallWindow.ArtworkColumn.Width.Value - 158.0) > 1.5)
+                throw new InvalidOperationException("Halo fails minimum-size layout");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");
@@ -220,13 +205,10 @@ internal static class Program
             smallRoot.Measure(new System.Windows.Size(1190, 680));
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1190, 680));
             smallRoot.UpdateLayout();
-            double resizedCloudWidth = smallWindow.ContentRegion.ActualHeight *
-                                       smallCloud.PixelWidth / smallCloud.PixelHeight;
-            if (Math.Abs(smallWindow.VAtmosphereImage.ActualWidth - resizedCloudWidth) > 1.5)
-                throw new InvalidOperationException(
-                    $"Cloud did not resize proportionally: {smallWindow.VAtmosphereImage.ActualWidth:0.#} " +
-                    $"instead of {resizedCloudWidth:0.#}");
-            Console.WriteLine("PASS cloud preserves native aspect at normal, minimum and resized layouts");
+            if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
+                         smallWindow.ArtworkColumn.Width.Value - 158.0) > 1.5)
+                throw new InvalidOperationException("Halo does not follow live window resize");
+            Console.WriteLine("PASS gradient atmosphere follows portrait at normal, minimum and resized layouts");
             if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))
                 throw new InvalidOperationException("Regular border swapped on live window resize");
 

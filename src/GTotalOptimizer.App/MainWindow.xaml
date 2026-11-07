@@ -247,29 +247,52 @@
                  above the inner outline as a direct root-grid sibling. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
-            <!-- Seam-only gold underglow. The much wider cloud image below
-                 owns the atmospheric shapes; do not squeeze it into this width. -->
-            <Rectangle x:Name="VAtmosphereGlow" Grid.ColumnSpan="2"
-                       Panel.ZIndex="0" HorizontalAlignment="Left"
-                       VerticalAlignment="Stretch" Width="126"
-                       IsHitTestVisible="False">
-                <Rectangle.Fill>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#A8FFF000" Offset="0"/>
-                        <GradientStop Color="#67FFF000" Offset=".30"/>
-                        <GradientStop Color="#20FFF000" Offset=".68"/>
-                        <GradientStop Color="#00FFF000" Offset="1"/>
-                    </LinearGradientBrush>
-                </Rectangle.Fill>
-            </Rectangle>
-            <!-- Full-height yellow cloud in its original 884:1780 proportion.
-                 Dynamic width follows actual ContentRegion height; Uniform
-                 preserves cloud structures (no 142-DIP horizontal squash).
-                 Right-hand live controls can overlap its transparent tail. -->
-            <Image x:Name="VAtmosphereImage" Grid.ColumnSpan="2" Panel.ZIndex="0"
-                   HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                   Stretch="Uniform" IsHitTestVisible="False"
-                   RenderOptions.BitmapScalingMode="HighQuality"/>
+            <!-- Original-key-art atmosphere: static WPF lighting, not smoke.
+                 Two contained yellow halos taper away from V; a dark right
+                 vignette keeps the functional UI near-black. The whole layer
+                 remains behind real controls and does not clip at the V edge. -->
+            <Grid x:Name="VAtmosphereHost" Grid.ColumnSpan="2" Panel.ZIndex="0"
+                  HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                  Width="380" IsHitTestVisible="False">
+                <!-- Stronger around V's upper silhouette and yellow skyline. -->
+                <Rectangle x:Name="VUpperHalo">
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.27,0.32" GradientOrigin="0.27,0.32"
+                                             RadiusX="0.59" RadiusY="0.67">
+                            <GradientStop Color="#B0FFF000" Offset="0"/>
+                            <GradientStop Color="#7AFFF000" Offset=".27"/>
+                            <GradientStop Color="#35FFD400" Offset=".59"/>
+                            <GradientStop Color="#0AF3B900" Offset=".79"/>
+                            <GradientStop Color="#00FFF000" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <!-- Dimmer illumination follows the long black ink trail. -->
+                <Rectangle x:Name="VLowerHalo">
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.24,0.88" GradientOrigin="0.24,0.88"
+                                             RadiusX="0.48" RadiusY="0.38">
+                            <GradientStop Color="#72FFF000" Offset="0"/>
+                            <GradientStop Color="#3CFFE000" Offset=".42"/>
+                            <GradientStop Color="#0AD3A000" Offset=".78"/>
+                            <GradientStop Color="#00FFF000" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <!-- Contain yellow within the artwork: dark atmospheric fade,
+                     no hard yellow rectangle and no overlaid cloud texture. -->
+                <Rectangle x:Name="VDarkVignette">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#00060D0F" Offset="0"/>
+                            <GradientStop Color="#00060D0F" Offset=".39"/>
+                            <GradientStop Color="#48060D0F" Offset=".66"/>
+                            <GradientStop Color="#AD060D0F" Offset=".84"/>
+                            <GradientStop Color="#FF060D0F" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+            </Grid>
 
             <Grid Grid.Column="1" Panel.ZIndex="1" Background="Transparent" ClipToBounds="True">
                 <Grid.RowDefinitions>

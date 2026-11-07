@@ -95,11 +95,6 @@ public partial class MainWindow : Window
         {
             Stretch = Stretch.Fill
         };
-        var committedCloud = ImageFile("images", "yellow.png");
-        if (committedCloud is null)
-            Trace.TraceError("Missing required user-supplied yellow cloud texture.");
-        else
-            VAtmosphereImage.Source = CreatePortraitAtmosphere(committedCloud);
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
         // WPF continuously scales it; never swap BitmapSource on resize.
@@ -140,55 +135,6 @@ public partial class MainWindow : Window
                 pixels[i] = 255;
                 pixels[i + 1] = 255;
                 pixels[i + 2] = 255;
-                pixels[i + 3] = alpha;
-            }
-        }
-        var bitmap = BitmapSource.Create(width, height, 96, 96,
-            System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
-        bitmap.Freeze();
-        return bitmap;
-    }
-
-    // The user-provided yellow.png is an authored yellow-to-black atmosphere,
-    // NOT a clean alpha texture: its dark area is still nearly opaque.
-    // Extract its yellow brightness as density; let the image's actual cloud
-    // forms determine alpha. The WPF underglow fills the portrait fade below.
-    // Conversion happens once at startup, never per-frame. Both original V
-    // source images retain their pixels and use the same shared mask.
-    private static BitmapSource CreatePortraitAtmosphere(BitmapSource cloud)
-    {
-        var input = new FormatConvertedBitmap(
-            cloud, System.Windows.Media.PixelFormats.Bgra32, null, 0.0);
-        int width = input.PixelWidth;
-        int height = input.PixelHeight;
-        int stride = checked(width * 4);
-        var source = new byte[checked(stride * height)];
-        var pixels = new byte[source.Length];
-        input.CopyPixels(source, stride, 0);
-        for (int y = 0; y < height; ++y)
-        {
-            for (int x = 0; x < width; ++x)
-            {
-                int i = y * stride + x * 4;
-                double b = source[i] / 255.0;
-                double g = source[i + 1] / 255.0;
-                double r = source[i + 2] / 255.0;
-                // Painted dark pixels are NOT opaque clouds. Preserve the
-                // user's brighter yellow cloud lobes and varying intensity.
-                double gold = Math.Clamp((.62 * r + .38 * g - .018) / .94, 0.0, 1.0);
-                double authoredAlpha = source[i + 3] / 255.0;
-                double density = Math.Pow(gold, .85) * authoredAlpha;
-                double u = (double)x / (width - 1);
-                // Complete transparency before the far edge. No rectangular
-                // dark background when real controls overlap this texture.
-                double fadeT = Math.Clamp((u - .70) / .29, 0.0, 1.0);
-                double fade = 1.0 - fadeT * fadeT * (3.0 - 2.0 * fadeT);
-                // The full-width cloud overlaps live labels/cards: keep it
-                // atmospheric rather than painting a solid yellow panel.
-                byte alpha = (byte)Math.Round(168.0 * density * fade);
-                pixels[i] = (byte)Math.Round(3.0 * b);     // B
-                pixels[i + 1] = (byte)Math.Round(195.0 + 45.0 * g); // G
-                pixels[i + 2] = (byte)Math.Round(232.0 + 23.0 * r); // R
                 pixels[i + 3] = alpha;
             }
         }
@@ -278,26 +224,11 @@ public partial class MainWindow : Window
         // +3 preserves the previous host width from Margin="-3,0,0,-8".
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageWidth + 3.0;
-        // The 30-50 DIP allowance is overlap INTO the original V edge,
-        // not the width of the cloud artwork. Scale the authored cloud once
-        // to ContentRegion height with the ORIGINAL pixel aspect ratio.
-        // Wider clouds fade underneath the live controls without moving them.
-        var cloudLeft = imageWidth - 39.0;
-        if (VAtmosphereImage?.Source is BitmapSource clouds &&
-            ContentRegion.ActualHeight > 0)
-        {
-            double cloudWidth = ContentRegion.ActualHeight *
-                                clouds.PixelWidth / clouds.PixelHeight;
-            VAtmosphereImage.Width = cloudWidth;
-            VAtmosphereImage.Margin = new Thickness(cloudLeft, 0, 0, 0);
-        }
-        if (VAtmosphereGlow is not null)
-        {
-            // Only the seam requires the stronger underglow; the authored
-            // cloud supplies the broader, irregular atmospheric extension.
-            VAtmosphereGlow.Width = 128.0;
-            VAtmosphereGlow.Margin = new Thickness(cloudLeft, 0, 0, 0);
-        }
+        // Rebuild the original illustration's contained light field with
+        // WPF only. Its width follows V's responsive column plus a short,
+        // soft tail beneath the controls; no bitmap is stretched or cropped.
+        if (VAtmosphereHost is not null)
+            VAtmosphereHost.Width = imageWidth + 158.0;
     }
 
     private void SetActiveTab(bool results)
