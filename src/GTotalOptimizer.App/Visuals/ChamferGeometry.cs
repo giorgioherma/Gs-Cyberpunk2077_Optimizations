@@ -302,358 +302,338 @@ public sealed class TechChassisOutline : FrameworkElement
         holes.Children.Add(route.GetWidenedPathGeometry(pen));
     }
 
-    // Top is composed as several connected but non-repeating circuit regions.
-    // Every bright-to-dark change is a real subtraction from the colored band.
+    // Design the colored chassis by subtracting a FEW linked assemblies,
+    // not dozens of independent glyphs. All coordinates are inside the same
+    // invisible 3.2..19 DIP rails; 45-degree bends are always straight.
     private static void CarveTop(GeometryGroup c, double w, double s, double o, double i)
     {
-        double y = (o + i) / 2;
-        // Left shoulder: unequal ladder, looping trace, full round negative pad.
-        CutTrace(c, 2.1*s, new Point(33*s, y-4*s), new Point(45*s, y+8*s),
-            new Point(88*s, y+8*s), new Point(98*s, y-2*s));
-        CutDot(c, 88*s, y+8*s, 3.2*s);
-        for (var k=0; k<6; k++)
-            CutTrace(c, 1.35*s, new Point((110+6.8*k)*s,o+5*s),
-                new Point((114+6.8*k)*s,o+9*s));
-        CutRect(c, 159*s, o+5*s, 20*s, 3*s);
-        CutShape(c, new Point(191*s,o-3*s),new Point(214*s,o-3*s),
-            new Point(204*s,o+7*s),new Point(191*s,o+7*s));
-        CutTrace(c, 2.1*s, new Point(223*s,o+14*s),new Point(235*s,o+14*s),
-            new Point(244*s,o+5*s),new Point(261*s,o+5*s));
-        CutDot(c, 261*s,o+5*s,3.0*s);
+        // ASSEMBLY 1 / WEST FAN: one shared carved feed, three uneven parallel
+        // traces, each one angular bend and a drilled terminal. The fan reads
+        // as a single PCB component rather than four unrelated marks.
+        var x = w * .052;
+        CutRect(c, x, o + 4*s, 3*s, 11*s);
+        for (var k = 0; k < 3; k++)
+        {
+            var y0 = o + (5 + 4*k)*s;
+            var y1 = o + (10 + (k == 0 ? 0 : k == 1 ? 3 : -3))*s;
+            var bendX = x + (43 + 13*k)*s;
+            var diagonal = Math.Abs(y1 - y0);
+            var endX = x + (125 + 12*k)*s;
+            CutTrace(c, 1.35*s,
+                new Point(x + 3*s, y0),
+                new Point(bendX, y0),
+                new Point(bendX + diagonal, y1),
+                new Point(endX, y1));
+            CutDot(c, endX, y1, (k == 1 ? 2.25 : 2.55)*s);
+        }
+        // One shoulder bite belongs to the fan's feed, not to a separate glyph.
+        CutShape(c, new Point(x - 6*s, o - 2*s),
+            new Point(x + 7*s, o - 2*s), new Point(x + 7*s, o + 3*s),
+            new Point(x + 2*s, o + 8*s), new Point(x - 6*s, o + 8*s));
 
-        // Western bus: broken pads, stair-stepped route and a big negative hole.
-        var a=w*.245;
-        CutShape(c, new Point(a-12*s,i+3*s),new Point(a+17*s,i+3*s),
-            new Point(a+17*s,i-4*s),new Point(a+7*s,i-14*s),
-            new Point(a-4*s,i-14*s),new Point(a-12*s,i-6*s));
-        CutDot(c,a+37*s,y+3*s,4.0*s);
-        CutTrace(c,2.4*s,new Point(a+48*s,o+6*s),new Point(a+61*s,o+6*s),
-            new Point(a+71*s,o+16*s),new Point(a+93*s,o+16*s));
-        CutDot(c,a+93*s,o+16*s,3.1*s);
-        for(var k=0;k<5;k++) CutRect(c,a+(106+7*k)*s,o+5*s,3.6*s,8.7*s);
-        CutTrace(c,1.3*s,new Point(a+156*s,i+3*s),new Point(a+156*s,i-7*s),
-            new Point(a+166*s,i-17*s),new Point(a+176*s,i-17*s));
+        // ASSEMBLY 2 / WEST DRIVE: a long black power body, fat at the front,
+        // narrowing to a hairline tail, followed by slashes and a descending
+        // component ladder. All subordinate markings align with the same bus.
+        x = w * .273;
+        CutShape(c,
+            new Point(x, o + 4*s), new Point(x + 26*s, o + 4*s),
+            new Point(x + 35*s, o + 13*s), new Point(x + 74*s, o + 13*s),
+            new Point(x + 83*s, o + 10*s), new Point(x + 115*s, o + 10*s),
+            new Point(x + 115*s, o + 8.3*s), new Point(x + 81*s, o + 8.3*s),
+            new Point(x + 72*s, o + 6*s), new Point(x + 34*s, o + 6*s),
+            new Point(x + 28*s, o + 2*s), new Point(x, o + 2*s));
+        // The slashes are packed together and have consistent inclination.
+        for (var k = 0; k < 5; k++)
+        {
+            var sx = x + (94 + 7*k)*s;
+            CutTrace(c, 1.45*s,
+                new Point(sx, o + 5*s), new Point(sx + 7*s, o + 12*s));
+        }
+        var widths = new[] { 12.0, 9.3, 6.8, 4.0 };
+        var lx = x + 139*s;
+        for (var k = 0; k < widths.Length; k++)
+        {
+            CutRect(c, lx, o + 8.0*s, widths[k]*s, (5.2 - .6*k)*s);
+            lx += (widths[k] + 4.1)*s;
+        }
 
-        // Offset center: unequal diagonal etchings, a segmented black channel.
-        var m=w*.51;
-        for(var k=0;k<5;k++)
-            CutTrace(c,1.35*s,new Point(m-87*s+(k*9*s),o+5*s),
-                new Point(m-81*s+(k*9*s),o+11*s));
-        // Two long angular legs with a 5-DIP colored bridge preserved
-        // between them. Flat plateaus and 45-degree bends only.
-        CutTrace(c,2.25*s,new Point(m-47*s,o+5*s),
-            new Point(m-37*s,o+15*s),new Point(m-17*s,o+15*s));
-        CutTrace(c,2.25*s,new Point(m-12*s,o+15*s),
-            new Point(m+29*s,o+15*s),new Point(m+39*s,o+5*s));
-        CutDot(c,m+39*s,o+5*s,2.8*s);
-        CutRect(c,m+44*s,o+7*s,7*s,3*s);
-        CutRect(c,m+58*s,o+7*s,3*s,3*s);
-        CutRect(c,m+68*s,o+7*s,12*s,3*s);
-        CutShape(c,new Point(m+93*s,o-3*s),new Point(m+113*s,o-3*s),
-            new Point(m+101*s,o+9*s),new Point(m+93*s,o+9*s));
+        // ASSEMBLY 3 / CENTER HOUSING: a long, wholly enclosed chamfered
+        // window plus its narrow registration rail, then one pointed arrow.
+        // Thin colored walls survive on BOTH sides of the main black cavity.
+        x = w * .515;
+        CutShape(c,
+            new Point(x, o + 4*s), new Point(x + 49*s, o + 4*s),
+            new Point(x + 55*s, o + 10*s), new Point(x + 55*s, i - 3*s),
+            new Point(x + 7*s, i - 3*s), new Point(x, i - 10*s));
+        CutTrace(c, 1.45*s,
+            new Point(x + 66*s, o + 5*s),
+            new Point(x + 105*s, o + 5*s),
+            new Point(x + 114*s, o + 14*s),
+            new Point(x + 150*s, o + 14*s));
+        CutDot(c, x + 150*s, o + 14*s, 2.65*s);
+        CutShape(c,
+            new Point(x + 160*s, o + 6*s),
+            new Point(x + 180*s, o + 6*s),
+            new Point(x + 180*s, o + 3*s),
+            new Point(x + 194*s, o + 10*s),
+            new Point(x + 180*s, o + 17*s),
+            new Point(x + 180*s, o + 14*s),
+            new Point(x + 160*s, o + 14*s));
 
-        // Eastern branch: a different topology; asymmetric terminal routing.
-        var e=w*.76;
-        CutTrace(c,2.4*s,new Point(e-107*s,i+4*s),new Point(e-107*s,i-5*s),
-            new Point(e-96*s,i-16*s),new Point(e-67*s,i-16*s));
-        CutDot(c,e-67*s,i-16*s,3.4*s);
-        for(var k=0;k<6;k++)
-            CutTrace(c,1.5*s,new Point(e-49*s+k*8*s,o+6*s),
-                new Point(e-44*s+k*8*s,o+11*s));
-        CutShape(c,new Point(e+6*s,i+3*s),new Point(e+40*s,i+3*s),
-            new Point(e+40*s,i-5*s),new Point(e+30*s,i-15*s),
-            new Point(e+16*s,i-15*s),new Point(e+6*s,i-5*s));
-        CutRect(c,e+48*s,o+6*s,14*s,3.5*s);
-        CutDot(c,e+75*s,y,4.1*s);
-        CutTrace(c,2*s,new Point(e+92*s,o+14*s),new Point(e+111*s,o+14*s),
-            new Point(e+119*s,o+6*s),new Point(e+136*s,o+6*s));
-        CutDot(c,e+136*s,o+6*s,2.7*s);
-
-        // Short near-corner finish rather than a repeated mirrored module.
-        CutTrace(c,1.3*s,new Point(w-84*s,o+5*s),new Point(w-76*s,o+13*s),
-            new Point(w-63*s,o+13*s));
-        for(var k=0;k<3;k++)
-            CutRect(c,w-(55-7*k)*s,o+6*s,3*s,5*s);
-
-        // Dense but nonuniform inlay in former empty top sections.
-        // These windows are boxed into the band from BOTH sides.
-        var box = w*.405;
-        CutShape(c,new Point(box,o+5*s),new Point(box+29*s,o+5*s),
-            new Point(box+36*s,o+12*s),new Point(box+36*s,i-3*s),
-            new Point(box+6*s,i-3*s),new Point(box,o+11*s));
-        CutDot(c,box+44*s,o+9*s,2.25*s);
-
-        // A noticeably longer /----\ trace. The tiny uncut interval is a
-        // deliberate colored bridge, not a painted-over corrective patch.
-        var run = w*.609;
-        CutTrace(c,1.85*s,new Point(run,o+5*s),
-            new Point(run+8*s,o+13*s),new Point(run+38*s,o+13*s));
-        CutTrace(c,1.85*s,new Point(run+43*s,o+13*s),
-            new Point(run+63*s,o+13*s),new Point(run+71*s,o+5*s));
-        CutDot(c,run+71*s,o+5*s,2.9*s);
-        CutRect(c,run+25*s,o+5*s,8*s,2.4*s);
-
-        // One long, fully enclosed variable-height slot; an exterior edge
-        // notch nearby provides a different silhouette, not another slot.
-        var boxed = w*.883;
-        CutShape(c,new Point(boxed,o+5*s),new Point(boxed+43*s,o+5*s),
-            new Point(boxed+50*s,o+12*s),new Point(boxed+50*s,i-2.7*s),
-            new Point(boxed+12*s,i-2.7*s),new Point(boxed+5*s,o+10*s));
-        CutShape(c,new Point(boxed+56*s,o-3*s),new Point(boxed+68*s,o-3*s),
-            new Point(boxed+62*s,o+5*s),new Point(boxed+56*s,o+5*s));
-        CutRect(c,boxed+71*s,o+8*s,4*s,4*s);
-
+        // ASSEMBLY 4 / EAST TERMINAL: a black bus and a set of unequal
+        // socket pads enclosed in one local system. A narrow color bridge
+        // interrupts the bus by leaving uncut material between two segments.
+        x = w * .788;
+        CutTrace(c, 1.7*s,
+            new Point(x, o + 12*s), new Point(x + 11*s, o + 12*s),
+            new Point(x + 19*s, o + 4*s), new Point(x + 56*s, o + 4*s));
+        CutTrace(c, 1.7*s,
+            new Point(x + 62*s, o + 4*s),
+            new Point(x + 90*s, o + 4*s),
+            new Point(x + 100*s, o + 14*s),
+            new Point(x + 122*s, o + 14*s));
+        CutDot(c, x + 122*s, o + 14*s, 2.65*s);
+        CutShape(c,
+            new Point(x + 26*s, o + 8*s),
+            new Point(x + 41*s, o + 8*s),
+            new Point(x + 47*s, o + 14*s),
+            new Point(x + 47*s, i - 2.5*s),
+            new Point(x + 26*s, i - 2.5*s));
+        for (var k = 0; k < 4; k++)
+            CutRect(c, x + (132 + k*10)*s, o + 5*s,
+                (8.0 - 1.6*k)*s, 5*s);
     }
 
     private static void CarveLeft(GeometryGroup c, double h, double s, double o, double i)
     {
-        double mid=(o+i)/2;
-        // Top-left rail: one long elbow terminating inside the band.
-        var a=h*.12;
-        CutTrace(c,2.2*s,new Point(o+5*s,a),new Point(o+5*s,a+17*s),
-            new Point(o+15*s,a+27*s),new Point(o+15*s,a+61*s));
-        CutDot(c,o+15*s,a+61*s,3.2*s);
-        for(var k=0;k<5;k++)
-            CutTrace(c,1.4*s,new Point(o+4*s,a+(75+7*k)*s),
-                new Point(o+9*s,a+(80+7*k)*s));
+        // ASSEMBLY 1 / UPPER FAN: a single horizontal feeder supplies three
+        // descending conductors. Different bend positions and terminals keep
+        // it grouped but not mechanically repetitive.
+        var y = h * .092;
+        CutRect(c, o + 4*s, y, 11*s, 3*s);
+        for (var k = 0; k < 3; k++)
+        {
+            var x0 = o + (5 + 4*k)*s;
+            var x1 = o + (10 + (k == 0 ? 0 : k == 1 ? 3 : -3))*s;
+            var yBend = y + (29 + k*14)*s;
+            var shift = Math.Abs(x1 - x0);
+            var yEnd = y + (91 + k*11)*s;
+            CutTrace(c, 1.3*s,
+                new Point(x0, y + 3*s),
+                new Point(x0, yBend),
+                new Point(x1, yBend + shift),
+                new Point(x1, yEnd));
+            CutDot(c, x1, yEnd, (k==0 ? 2.7 : 2.3)*s);
+        }
 
-        // Mid-upper: outside bite alternates with a smaller inside bite.
-        var b=h*.295;
-        CutShape(c,new Point(o-5*s,b),new Point(o+12*s,b),
-            new Point(o+12*s,b+12*s),new Point(o+4*s,b+20*s),
-            new Point(o-5*s,b+20*s));
-        CutTrace(c,2.6*s,new Point(mid,b+32*s),new Point(mid,b+53*s),
-            new Point(mid+6*s,b+59*s),new Point(mid+6*s,b+82*s));
-        CutDot(c,mid+6*s,b+82*s,3.6*s);
-        for(var k=0;k<4;k++)
-            CutRect(c,o+5*s,b+(92+7*k)*s,8*s,3.5*s);
+        // ASSEMBLY 2 / CENTRAL POWER BUS: a tall wide entry with stepped
+        // narrowing tail, diagonal hatching and progressively shorter pads.
+        y = h * .39;
+        CutShape(c,
+            new Point(o + 3*s, y), new Point(o + 12*s, y),
+            new Point(o + 15*s, y + 3*s), new Point(o + 15*s, y + 33*s),
+            new Point(o + 10*s, y + 38*s), new Point(o + 10*s, y + 77*s),
+            new Point(o + 8*s, y + 86*s), new Point(o + 8*s, y + 111*s),
+            new Point(o + 6*s, y + 111*s), new Point(o + 6*s, y + 79*s),
+            new Point(o + 4*s, y + 70*s), new Point(o + 4*s, y + 6*s));
+        for (var k = 0; k < 5; k++)
+            CutTrace(c, 1.35*s,
+                new Point(o + 4.5*s, y + (43 + k*7)*s),
+                new Point(o + 10*s, y + (48.5 + k*7)*s));
+        var tallPads = new[] { 12.0, 9.5, 7.0, 4.5 };
+        var py = y + 122*s;
+        foreach (var length in tallPads)
+        {
+            CutRect(c, o + 7*s, py, 6.0*s, length*s);
+            py += (length + 4.5)*s;
+        }
 
-        // Center: zigzag negative channel, dotted split and thick chevron.
-        var d=h*.49;
-        CutTrace(c,2.8*s,new Point(o+5*s,d),new Point(o+5*s,d+16*s),
-            new Point(o+14*s,d+25*s),new Point(o+14*s,d+52*s),
-            new Point(o+6*s,d+60*s),new Point(o+6*s,d+90*s));
-        CutDot(c,o+6*s,d+90*s,4.1*s);
-        CutShape(c,new Point(i+4*s,d+27*s),new Point(i-7*s,d+27*s),
-            new Point(i-14*s,d+34*s),new Point(i-14*s,d+52*s),
-            new Point(i+4*s,d+52*s));
-        for(var k=0;k<5;k++)
-            CutDot(c,o+7*s,d+(102+8*k)*s,1.55*s);
-
-        // Lower: a tall staggered ladder, then two isolated black terminals.
-        var e=h*.73;
-        CutRect(c,o+5*s,e,3.7*s,31*s);
-        for(var k=0;k<8;k++)
-            CutRect(c,o+11*s,e+(7*k)*s,5.5*s,3.3*s);
-        CutShape(c,new Point(i+4*s,e+73*s),new Point(i-5*s,e+73*s),
-            new Point(i-13*s,e+81*s),new Point(i-13*s,e+103*s),
-            new Point(i+4*s,e+103*s));
-        CutDot(c,o+9*s,e+118*s,3.7*s);
-        CutTrace(c,1.3*s,new Point(o+9*s,e+118*s),new Point(o+9*s,e+133*s));
-        CutDot(c,o+9*s,e+133*s,2.5*s);
-
-        // Small enclosed socket near the shoulder and a long staggered
-        // interior channel with a narrow material bridge at mid-height.
-        var first = 37*s;
-        CutShape(c,new Point(o+4*s,first),new Point(i-4*s,first),
-            new Point(i-2.8*s,first+8*s),new Point(i-2.8*s,first+31*s),
-            new Point(o+6*s,first+31*s),new Point(o+4*s,first+27*s));
-        CutDot(c,o+9*s,first+37*s,2.6*s);
-        var longRun = h*.332;
-        CutTrace(c,1.7*s,new Point(o+5*s,longRun),
-            new Point(o+12*s,longRun+7*s),
-            new Point(o+12*s,longRun+44*s));
-        CutTrace(c,1.7*s,new Point(o+12*s,longRun+49*s),
-            new Point(o+12*s,longRun+79*s),
-            new Point(o+6*s,longRun+85*s));
-        CutDot(c,o+6*s,longRun+85*s,2.6*s);
-
-        // Two isolated cutouts, separated by a slim COLOR bridge. Neither
-        // opens to the outer or inner rail; the small split remains solid.
-        var notch = h*.667;
-        CutShape(c,new Point(o+4*s,notch),new Point(i-3*s,notch),
-            new Point(i-3*s,notch+15*s),new Point(o+7*s,notch+20*s),
-            new Point(o+4*s,notch+20*s));
-        CutRect(c,o+4*s,notch+24*s,8.2*s,17*s);
-        CutShape(c,new Point(o-3*s,h*.903),new Point(o+10*s,h*.903),
-            new Point(o+10*s,h*.903+6*s),new Point(o+4*s,h*.903+12*s),
-            new Point(o-3*s,h*.903+12*s));
-
+        // ASSEMBLY 3 / LOWER HOUSING: two enclosed cavities separated by
+        // a small solid bridge, connected visually to one angular long run.
+        y = h * .755;
+        CutShape(c,
+            new Point(o + 4*s, y), new Point(i - 3*s, y),
+            new Point(i - 3*s, y + 43*s),
+            new Point(o + 9*s, y + 50*s),
+            new Point(o + 4*s, y + 50*s));
+        CutRect(c, o + 5*s, y + 54*s, 8*s, 21*s);
+        CutTrace(c, 1.8*s,
+            new Point(o + 7*s, y + 83*s),
+            new Point(o + 7*s, y + 103*s),
+            new Point(o + 13*s, y + 109*s),
+            new Point(o + 13*s, y + 141*s));
+        CutDot(c, o + 13*s, y + 141*s, 2.8*s);
     }
 
     private static void CarveRight(GeometryGroup c, double w, double h,
         double s, double o, double i)
     {
-        double R=w-o;
-        // Upper-right: tapered serpentine and off-center terminal.
-        var a=h*.115;
-        CutTrace(c,2.4*s,new Point(R-6*s,a),new Point(R-6*s,a+22*s),
-            new Point(R-15*s,a+31*s),new Point(R-15*s,a+78*s));
-        CutDot(c,R-15*s,a+78*s,4.2*s);
-        for(var k=0;k<4;k++)
-            CutTrace(c,1.4*s,new Point(R-5*s,a+(92+7*k)*s),
-                new Point(R-10*s,a+(97+7*k)*s));
-        CutShape(c,new Point(R+5*s,a+136*s),new Point(R-10*s,a+136*s),
-            new Point(R-10*s,a+143*s),new Point(R-3*s,a+150*s),
-            new Point(R+5*s,a+150*s));
+        var r = w - o;
+        // ASSEMBLY 1 / UPPER ARMATURE: a chamfered enclosed slot begins
+        // broad, narrows into a long black trace, then enters a shrinking
+        // ladder (a single descending technological silhouette).
+        var y = h * .077;
+        CutShape(c,
+            new Point(r - 14*s, y), new Point(r - 5*s, y),
+            new Point(r - 5*s, y + 41*s),
+            new Point(r - 11*s, y + 47*s),
+            new Point(r - 11*s, y + 91*s),
+            new Point(r - 13*s, y + 91*s),
+            new Point(r - 13*s, y + 47*s),
+            new Point(r - 15*s, y + 45*s));
+        for (var k = 0; k < 6; k++)
+            CutTrace(c, 1.25*s,
+                new Point(r - 15*s, y + (103 + 7*k)*s),
+                new Point(r - 10*s, y + (108 + 7*k)*s));
+        var decreasing = new[] { 12.0, 10.0, 7.5, 5.5 };
+        var stepY = y + 157*s;
+        foreach (var len in decreasing)
+        {
+            CutRect(c, r - 13.5*s, stepY, 7*s, len*s);
+            stepY += (len + 3.9)*s;
+        }
 
-        // Right upper-middle: stacked pads and a discontinuous black bus.
-        var b=h*.35;
-        for(var k=0;k<6;k++)
-            CutRect(c,R-17*s,b+k*7.6*s,6*s,3.5*s);
-        CutTrace(c,2.3*s,new Point(R-6*s,b+9*s),new Point(R-6*s,b+57*s),
-            new Point(R-13*s,b+64*s),new Point(R-13*s,b+86*s));
-        CutDot(c,R-13*s,b+86*s,3.0*s);
-        CutShape(c,new Point(R+4*s,b+105*s),new Point(R-7*s,b+105*s),
-            new Point(R-17*s,b+115*s),new Point(R-17*s,b+127*s),
-            new Point(R+4*s,b+127*s));
+        // ASSEMBLY 2 / CENTRE FAN: shared vertical feed at the outer face
+        // supplies three angular terminal tracks; a big arrow-point cavity
+        // is part of the SAME assembly instead of a detached mark.
+        y = h * .393;
+        CutRect(c, r - 15*s, y, 11*s, 3.2*s);
+        for (var k = 0; k < 3; k++)
+        {
+            var x0 = r - (5 + 4*k)*s;
+            var x1 = r - (10 + (k == 0 ? 0 : k == 1 ? 3 : -3))*s;
+            var bendY = y + (31 + k*15)*s;
+            var bendWidth = Math.Abs(x1 - x0);
+            var yEnd = y + (97 + 11*k)*s;
+            CutTrace(c, 1.3*s,
+                new Point(x0, y + 3.2*s),
+                new Point(x0, bendY),
+                new Point(x1, bendY + bendWidth),
+                new Point(x1, yEnd));
+            CutDot(c, x1, yEnd, (k==0 ? 2.7 : 2.35)*s);
+        }
+        CutShape(c,
+            new Point(r - 15*s, y + 145*s),
+            new Point(r - 5*s, y + 145*s),
+            new Point(r - 5*s, y + 156*s),
+            new Point(r - 3*s, y + 156*s),
+            new Point(r - 10*s, y + 170*s),
+            new Point(r - 17*s, y + 156*s),
+            new Point(r - 15*s, y + 156*s));
 
-        // Central flank: a notched lightning channel, mixed perforations.
-        var d=h*.57;
-        CutShape(c,new Point(R-21*s,d),new Point(R-8*s,d),
-            new Point(R-8*s,d+17*s),new Point(R-16*s,d+25*s),
-            new Point(R-16*s,d+47*s),new Point(R-7*s,d+56*s),
-            new Point(R-7*s,d+65*s),new Point(R-21*s,d+65*s));
-        for(var k=0;k<6;k++)
-            CutDot(c,R-(7+(k%2)*6)*s,d+(75+k*8)*s,(k%3==0?2.8:1.6)*s);
-        CutTrace(c,2.1*s,new Point(R-4*s,d+133*s),
-            new Point(R-13*s,d+142*s),new Point(R-13*s,d+167*s));
-        CutDot(c,R-13*s,d+167*s,3.4*s);
-
-        // Bottom flank: black slash field, three asymmetric tiny sockets.
-        var e=h*.83;
-        for(var k=0;k<7;k++)
-            CutTrace(c,1.35*s,new Point(R-17*s,e+k*6*s),
-                new Point(R-12*s,e+(5+k*6)*s));
-        CutRect(c,R-9*s,e+57*s,3.6*s,24*s);
-        CutDot(c,R-15*s,e+88*s,3.2*s);
-        CutDot(c,R-6*s,e+103*s,2*s);
-        CutDot(c,R-13*s,e+113*s,2.5*s);
-
-        // Two unlike enclosed cavities: one with a chamfer, one bridged.
-        // The two boundary rails remain entirely invisible.
-        var pocket = h*.076;
-        CutShape(c,new Point(R-14*s,pocket),new Point(R-5*s,pocket),
-            new Point(R-5*s,pocket+37*s),new Point(R-10*s,pocket+43*s),
-            new Point(R-14*s,pocket+43*s));
-        CutRect(c,R-14*s,pocket+48*s,8*s,9*s);
-        var longRun = h*.318;
-        CutTrace(c,1.7*s,new Point(R-6*s,longRun),
-            new Point(R-13*s,longRun+7*s),
-            new Point(R-13*s,longRun+59*s));
-        CutTrace(c,1.7*s,new Point(R-13*s,longRun+65*s),
-            new Point(R-13*s,longRun+95*s),
-            new Point(R-6*s,longRun+102*s));
-        CutDot(c,R-6*s,longRun+102*s,2.8*s);
-
-        // Staggered enclosed windows with different depths and a narrow
-        // uncut strip crossing the black channel.
-        var split = h*.705;
-        CutShape(c,new Point(R-15*s,split),new Point(R-5*s,split),
-            new Point(R-5*s,split+27*s),new Point(R-11*s,split+33*s),
-            new Point(R-15*s,split+33*s));
-        CutRect(c,R-15*s,split+36.5*s,8.8*s,20*s);
-        CutDot(c,R-11*s,split+64*s,2.2*s);
-        var low = h*.938;
-        CutShape(c,new Point(R-10*s,low-9*s),new Point(R+3*s,low-9*s),
-            new Point(R+3*s,low),new Point(R-6*s,low),
-            new Point(R-10*s,low-4*s));
-
+        // ASSEMBLY 3 / LOWER NETWORK: two enclosed notched cavities
+        // separated by a thin intact cyan bridge, followed by a long
+        // angular trace. Unlike the left wall, this assembly is more open.
+        y = h * .777;
+        CutShape(c,
+            new Point(r - 14*s, y), new Point(r - 5*s, y),
+            new Point(r - 5*s, y + 39*s),
+            new Point(r - 12*s, y + 46*s),
+            new Point(r - 14*s, y + 46*s));
+        CutRect(c, r - 14*s, y + 51*s, 8.5*s, 22*s);
+        CutTrace(c, 1.75*s,
+            new Point(r - 9*s, y + 82*s),
+            new Point(r - 9*s, y + 102*s),
+            new Point(r - 14*s, y + 107*s),
+            new Point(r - 14*s, y + 125*s));
+        CutDot(c, r - 14*s, y + 125*s, 2.6*s);
     }
 
     private static void CarveBottom(GeometryGroup c, double w, double h,
         double s, double o, double i)
     {
-        double y=h-(o+i)/2, bot=h-o, inner=h-i;
-        // Western broken conductor, unlike the top-left looping route.
-        CutTrace(c,2.2*s,new Point(43*s,y+5*s),new Point(58*s,y-10*s),
-            new Point(90*s,y-10*s),new Point(100*s,y));
-        CutDot(c,90*s,y-10*s,4*s);
-        for(var k=0;k<7;k++)
-            CutRect(c,(117+7.3*k)*s,inner+5*s,3.7*s,8*s);
-        CutShape(c,new Point(184*s,bot+4*s),new Point(207*s,bot+4*s),
-            new Point(207*s,bot-7*s),new Point(196*s,bot-18*s),
-            new Point(184*s,bot-18*s));
-        CutTrace(c,1.7*s,new Point(222*s,y+6*s),new Point(232*s,y-4*s),
-            new Point(260*s,y-4*s));
-        CutDot(c,260*s,y-4*s,3*s);
+        var bot = h - o;
+        var inner = h - i;
 
-        // West-central: nested black offsets and a dotted slash matrix.
-        var a=w*.27;
-        CutTrace(c,2.7*s,new Point(a,bot-6*s),new Point(a+14*s,bot-20*s),
-            new Point(a+51*s,bot-20*s),new Point(a+60*s,bot-11*s));
-        CutDot(c,a+51*s,bot-20*s,3.6*s);
-        for(var k=0;k<6;k++)
-            CutTrace(c,1.3*s,new Point(a+(80+8*k)*s,inner+5*s),
-                new Point(a+(85+8*k)*s,inner+10*s));
-        CutRect(c,a+150*s,bot-11*s,20*s,3*s);
-        CutRect(c,a+178*s,bot-11*s,5*s,3*s);
+        // ASSEMBLY 1 / SOUTHWEST: common feed and three bent terminals.
+        var x = w * .057;
+        CutRect(c, x, inner + 3*s, 3.0*s, 11*s);
+        for (var k = 0; k < 3; k++)
+        {
+            var y0 = bot - (5 + 4*k)*s;
+            var y1 = bot - (10 + (k==0 ? 0 : k==1 ? 3 : -3))*s;
+            var bendX = x + (37 + 14*k)*s;
+            var turn = Math.Abs(y1 - y0);
+            var xEnd = x + (130 + 9*k)*s;
+            CutTrace(c, 1.35*s,
+                new Point(x + 3*s, y0),
+                new Point(bendX, y0),
+                new Point(bendX + turn, y1),
+                new Point(xEnd, y1));
+            CutDot(c, xEnd, y1, (k==1 ? 2.3 : 2.65)*s);
+        }
 
-        // Unequal center bridge and aggressively carved inward step.
-        var mid=w*.505;
-        CutShape(c,new Point(mid-18*s,inner-4*s),
-            new Point(mid+14*s,inner-4*s),new Point(mid+14*s,inner+7*s),
-            new Point(mid+4*s,inner+17*s),new Point(mid-7*s,inner+17*s),
-            new Point(mid-18*s,inner+6*s));
-        CutTrace(c,2.2*s,new Point(mid+29*s,bot-7*s),
-            new Point(mid+45*s,bot-7*s),new Point(mid+55*s,bot-17*s),
-            new Point(mid+78*s,bot-17*s));
-        CutDot(c,mid+78*s,bot-17*s,4*s);
-        for(var k=0;k<5;k++) CutRect(c,mid+(93+8*k)*s,inner+5*s,4*s,5.5*s);
+        // ASSEMBLY 2 / WESTERN HOUSING: fully boxed cavity, wide black
+        // bevel and smaller connected pads that taper toward the center.
+        x = w * .277;
+        CutShape(c,
+            new Point(x, inner + 3.5*s),
+            new Point(x + 63*s, inner + 3.5*s),
+            new Point(x + 71*s, inner + 11.5*s),
+            new Point(x + 71*s, bot - 3.0*s),
+            new Point(x + 7*s, bot - 3.0*s),
+            new Point(x, bot - 10*s));
+        CutTrace(c, 2.0*s,
+            new Point(x + 79*s, bot - 5*s),
+            new Point(x + 92*s, bot - 18*s),
+            new Point(x + 125*s, bot - 18*s),
+            new Point(x + 132*s, bot - 11*s));
+        for (var k = 0; k < 5; k++)
+            CutTrace(c, 1.45*s,
+                new Point(x + (139 + 7*k)*s, inner + 4*s),
+                new Point(x + (145 + 7*k)*s, inner + 10*s));
+        var pads = new[] { 13.0, 9.5, 7.0, 4.0 };
+        var px = x + 181*s;
+        foreach (var len in pads)
+        {
+            CutRect(c, px, inner + 8*s, len*s, 5.0*s);
+            px += (len + 4.4)*s;
+        }
 
-        // South-east, intentionally denser with a curved-feeling stepped bus.
-        var e=w*.79;
-        CutTrace(c,2.5*s,new Point(e-93*s,bot-6*s),
-            new Point(e-80*s,bot-19*s),new Point(e-51*s,bot-19*s),
-            new Point(e-42*s,bot-10*s),new Point(e-10*s,bot-10*s));
-        CutDot(c,e-51*s,bot-19*s,3.1*s);
-        CutShape(c,new Point(e+9*s,inner-4*s),new Point(e+41*s,inner-4*s),
-            new Point(e+41*s,inner+6*s),new Point(e+32*s,inner+15*s),
-            new Point(e+9*s,inner+15*s));
-        for(var k=0;k<8;k++)
-            CutTrace(c,1.2*s,new Point(e+(57+7*k)*s,inner+5*s),
-                new Point(e+(61+7*k)*s,inner+9*s));
-        CutDot(c,e+130*s,y+3*s,4.2*s);
-        CutTrace(c,1.7*s,new Point(e+143*s,y+6*s),
-            new Point(e+153*s,y-4*s),new Point(e+170*s,y-4*s));
-        CutDot(c,e+170*s,y-4*s,2.8*s);
-        CutRect(c,w-79*s,inner+6*s,15*s,3*s);
-        CutDot(c,w-54*s,inner+11*s,3.2*s);
+        // ASSEMBLY 3 / SOUTHEAST DRIVE: a broad tapered leading cut,
+        // two parallel angular followers and an interior arrow.
+        x = w * .566;
+        CutShape(c,
+            new Point(x, bot - 4*s), new Point(x + 31*s, bot - 4*s),
+            new Point(x + 41*s, bot - 14*s),
+            new Point(x + 93*s, bot - 14*s),
+            new Point(x + 101*s, bot - 10*s),
+            new Point(x + 139*s, bot - 10*s),
+            new Point(x + 139*s, bot - 8*s),
+            new Point(x + 98*s, bot - 8*s),
+            new Point(x + 90*s, bot - 6*s),
+            new Point(x + 38*s, bot - 6*s),
+            new Point(x + 29*s, bot + 3*s),
+            new Point(x, bot + 3*s));
+        for (var k = 0; k < 2; k++)
+        {
+            var yy = inner + (4.5 + 3.8*k)*s;
+            CutTrace(c, 1.25*s,
+                new Point(x + (144 + k*10)*s, yy),
+                new Point(x + (173 + k*10)*s, yy),
+                new Point(x + (179 + k*10)*s, yy + 6*s));
+            CutDot(c, x + (179 + k*10)*s, yy + 6*s, 2.15*s);
+        }
 
-        // Hollow panels of different lengths, not just holes cut inward
-        // from a single edge. The small gap between cuts is solid material.
-        var west = w*.218;
-        CutShape(c,new Point(west,inner+4*s),new Point(west+42*s,inner+4*s),
-            new Point(west+50*s,inner+12*s),new Point(west+50*s,bot-4*s),
-            new Point(west+5*s,bot-4*s),new Point(west,bot-9*s));
-        CutRect(c,west+55*s,inner+5*s,4.5*s,8.2*s);
-        var centerWindow = w*.417;
-        CutShape(c,new Point(centerWindow,inner+4*s),
-            new Point(centerWindow+20*s,inner+4*s),
-            new Point(centerWindow+26*s,inner+10*s),
-            new Point(centerWindow+26*s,bot-4*s),
-            new Point(centerWindow+4*s,bot-4*s),
-            new Point(centerWindow,bot-8*s));
-        CutRect(c,centerWindow+31*s,inner+4*s,14*s,4*s);
-
-        // Long /----\ flat-topped conductor and a colored bridge dividing
-        // its black run; the return leg ends in a black drilled terminal.
-        var longRun = w*.628;
-        CutTrace(c,1.9*s,new Point(longRun,bot-5*s),
-            new Point(longRun+10*s,bot-15*s),
-            new Point(longRun+49*s,bot-15*s));
-        CutTrace(c,1.9*s,new Point(longRun+54*s,bot-15*s),
-            new Point(longRun+93*s,bot-15*s),
-            new Point(longRun+103*s,bot-5*s));
-        CutDot(c,longRun+103*s,bot-5*s,3*s);
-
-        // A thin interior slit and one outer-edge interruption intentionally
-        // have different widths, unlike the earlier repeating marks.
-        var east = w*.892;
-        CutRect(c,east,inner+4*s,31*s,2.8*s);
-        CutShape(c,new Point(east+39*s,bot+3*s),new Point(east+52*s,bot+3*s),
-            new Point(east+46*s,bot-4*s),new Point(east+39*s,bot-4*s));
-
+        // ASSEMBLY 4 / EAST ARROW & LADDER: large connected arrow recess,
+        // followed by diminishing black connector pads and a small socket.
+        x = w * .828;
+        CutShape(c,
+            new Point(x, inner + 4*s),
+            new Point(x + 25*s, inner + 4*s),
+            new Point(x + 25*s, inner + 2*s),
+            new Point(x + 43*s, inner + 11*s),
+            new Point(x + 25*s, inner + 20*s),
+            new Point(x + 25*s, inner + 15*s),
+            new Point(x, inner + 15*s));
+        for (var k = 0; k < 5; k++)
+            CutRect(c, x + (56 + 12*k)*s, inner + 5*s,
+                (10.5 - 1.5*k)*s, (7.5 - .6*k)*s);
+        CutTrace(c, 1.5*s,
+            new Point(x + 122*s, bot - 5*s),
+            new Point(x + 143*s, bot - 5*s),
+            new Point(x + 150*s, bot - 12*s));
+        CutDot(c, x + 150*s, bot - 12*s, 2.6*s);
     }
 
     private Size cachedSize = Size.Empty;
