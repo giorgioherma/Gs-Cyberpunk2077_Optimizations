@@ -81,29 +81,31 @@ PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join
 PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
 PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $root 'app')
 
-# Source-controlled user-approved artwork only. The full 2048x682 blue
-# header supersedes the rejected yellow panorama and temporary 150px crop.
+# Copy the original user-owned PNGs from their current source folders.
+# Never flatten paths: the WPF runtime resolves images/ and elements/.
 $uiSource=Join-Path (Get-Location) 'assets/ui'
 $uiNames=@(
-  'Upright_hotka.png',
-  'GCO_V_original_pixel_locked_silhouette.png',
-  'TrueHeader_GCO_page1.png'
+  'images/Upright_hotka.png',
+  'images/GCO_V_original_pixel_locked_silhouette.png',
+  'images/TrueHeader_GCO_page1.png',
+  'elements/GCO_Border_Regular_1280x760_FINAL.png',
+  'elements/GCO_Border_Small_1080x640_FINAL.png'
 )
-foreach ($name in $uiNames) {
-  if (-not (Test-Path -LiteralPath (Join-Path $uiSource $name) -PathType Leaf)) {
-    throw "Required approved WPF artwork missing: $name"
-  }
-}
 $uiTarget=Join-Path $root 'assets/ui'
-New-Item -ItemType Directory -Force $uiTarget | Out-Null
 foreach ($name in $uiNames) {
-  Copy-Item -LiteralPath (Join-Path $uiSource $name) -Destination (Join-Path $uiTarget $name)
-  if ((Get-FileHash (Join-Path $uiSource $name) -Algorithm SHA256).Hash -ne
-      (Get-FileHash (Join-Path $uiTarget $name) -Algorithm SHA256).Hash) {
+  $source=Join-Path $uiSource $name
+  $dest=Join-Path $uiTarget $name
+  if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+    throw "Required user-owned WPF asset missing: $name"
+  }
+  New-Item -ItemType Directory -Force (Split-Path -Parent $dest) | Out-Null
+  Copy-Item -LiteralPath $source -Destination $dest -Force
+  if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne
+      (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash) {
     throw "Packaged artwork hash mismatch: $name"
   }
 }
-Write-Host 'PASS exact V portrait pair + new full blue skyline background packaged'
+Write-Host 'PASS WPF image pair, blue skyline, and both user-painted border canvases'
 
 # Fonts are embedded as WPF assembly resources; ship OFL license notices.
 foreach ($family in @('Rajdhani','Oxanium')) {

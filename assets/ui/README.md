@@ -7,3 +7,10 @@
 This is a wide standalone **background layer**, not a crop from the composite UI mockup. The WPF UI scales it uniformly over the full right panel and lets it extend down from the top header behind real controls. It blends into the approved main surface `#060D0F`; no artificial yellow overlay or hard 150-pixel skyline edge.
 
 The sole Windows builder **requires all three files**, copies them with SHA-256 verification into the package's `assets/ui/`, and intentionally excludes `02_cityline_header.png` (rejected yellow panorama) and the former `GCO_approved_blue_skyline_crop.png` reference. Don't regenerate or replace the originals. The uploaded header is user-owned; WPF drawing/layout and live game validation are still pending.
+
+## Full-size user border art (2026-11-07)
+
+- `assets/ui/elements/GCO_Border_Regular_1280x760_FINAL.png`
+- `assets/ui/elements/GCO_Border_Small_1080x640_FINAL.png`
+
+The original two portraits and skyline are now in `assets/ui/images/`. The canonical integrated builder preserves both `images/` and `elements/` under the portable package's `assets/ui/` directory, checking source/destination SHA-256. WPF selects the nearest border canvas to the client size and perimeter-clips the art to ensure even opaque PNG backgrounds cannot cover buttons. The thin inner frame remains vector. No original PNG is modified; screenshot approval of the final window/resize/DPI is pending.

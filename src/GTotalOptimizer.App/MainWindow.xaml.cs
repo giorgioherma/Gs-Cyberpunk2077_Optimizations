@@ -8,6 +8,7 @@ using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
 using System.Windows.Threading;
 using GTotalOptimizer.Core;
+using GTotalOptimizer.App.Visuals;
 
 namespace GTotalOptimizer.App;
 
@@ -33,6 +34,8 @@ public partial class MainWindow : Window
     private bool initialized;
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
+    private BitmapImage? borderRegular;
+    private BitmapImage? borderSmall;
 
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
     private static bool GameRunning() => Process.GetProcessesByName("Cyberpunk2077").Length != 0;
@@ -57,9 +60,9 @@ public partial class MainWindow : Window
     {
         // Images must remain the two exact aligned originals supplied by the
         // user; there is deliberately no generated replacement/silhouette.
-        BitmapImage? ImageFile(string name)
+        BitmapImage? ImageFile(string folder, string name)
         {
-            var full = Path.Combine(packageRoot, "assets", "ui", name);
+            var full = Path.Combine(packageRoot, "assets", "ui", folder, name);
             if (!File.Exists(full)) return null;
             try
             {
@@ -73,15 +76,51 @@ public partial class MainWindow : Window
             }
             catch { return null; }
         }
-        var colored = ImageFile("Upright_hotka.png");
-        var black = ImageFile("GCO_V_original_pixel_locked_silhouette.png");
+        var colored = ImageFile("images", "Upright_hotka.png");
+        var black = ImageFile("images", "GCO_V_original_pixel_locked_silhouette.png");
         if (colored is not null && black is not null &&
             colored.PixelWidth == black.PixelWidth && colored.PixelHeight == black.PixelHeight)
         {
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
-        CityImage.Source = ImageFile("TrueHeader_GCO_page1.png");
+        CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
+        borderRegular = ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
+        borderSmall = ImageFile("elements", "GCO_Border_Small_1080x640_FINAL.png");
+        UpdateOuterBorderArtwork();
+    }
+
+    // Select the nearest owner-supplied canvas, then prevent any opaque
+    // background inside it from drawing over the application itself.
+    private void OuterBorderArtwork_SizeChanged(object sender,
+        System.Windows.SizeChangedEventArgs e) => UpdateOuterBorderArtwork();
+
+    private void UpdateOuterBorderArtwork()
+    {
+        if (OuterBorderArtwork is null) return;
+        var width = OuterBorderArtwork.ActualWidth;
+        var height = OuterBorderArtwork.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        var regularDistance = Math.Abs(width - 1280.0) / 1280.0
+                            + Math.Abs(height - 760.0) / 760.0;
+        var smallDistance = Math.Abs(width - 1080.0) / 1080.0
+                          + Math.Abs(height - 640.0) / 640.0;
+        var image = smallDistance < regularDistance ? borderSmall : borderRegular;
+        if (!ReferenceEquals(OuterBorderArtwork.Source, image))
+            OuterBorderArtwork.Source = image;
+
+        // Only the perimeter is drawable. This is a safety crop, not
+        // a restored WPF decoration or painted-over generated circuitry.
+        var scale = ChamferGeometry.ScaledCut(OuterBorderArtwork,
+            ChamferGeometry.StandardCut) / ChamferGeometry.StandardCut;
+        var cut = ChamferGeometry.StandardCut * scale;
+        var outside = ChamferGeometry.Create(width, height, cut);
+        var inside = ChamferGeometry.Create(width, height, cut, 33.0 * scale);
+        var perimeter = Geometry.Combine(outside, inside,
+            GeometryCombineMode.Exclude, null);
+        perimeter.Freeze();
+        OuterBorderArtwork.Clip = perimeter;
     }
 
     private void SetPortraitStage(PortraitStage stage)
@@ -169,6 +208,7 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateOuterBorderArtwork();
         UpdatePortraitWidth();
         _ = RefreshSourceAsync();
     }

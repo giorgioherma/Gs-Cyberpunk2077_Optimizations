@@ -900,6 +900,30 @@ if (args.Length > 0)
     Require(File.ReadAllText(Path.Combine(Directory.GetParent(delivered)!.FullName, "START-HERE.txt"))
         .Contains(PortablePackagePaths.RootLauncherName),
         "quick-start document launches the actual public executable");
+    // Validate the exact shipped artwork path and PNG dimensions, not
+    // merely the source filenames or a successful copying command.
+    static (int Width, int Height) PngDimensions(string path)
+    {
+        if (!File.Exists(path)) return (0, 0);
+        var data = File.ReadAllBytes(path);
+        byte[] pngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+        if (data.Length < 26 || !data.AsSpan(0, 8).SequenceEqual(pngSignature))
+            return (0, 0);
+        return (
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(16, 4)),
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(20, 4)));
+    }
+    var borderDir = Path.Combine(delivered, "assets", "ui", "elements");
+    Require(PngDimensions(Path.Combine(borderDir, "GCO_Border_Regular_1280x760_FINAL.png")) ==
+        (1280, 760), "1280x760 full-window border canvas preserved under elements");
+    Require(PngDimensions(Path.Combine(borderDir, "GCO_Border_Small_1080x640_FINAL.png")) ==
+        (1080, 640), "1080x640 full-window border canvas preserved under elements");
+    var imageDir = Path.Combine(delivered, "assets", "ui", "images");
+    Require(PngDimensions(Path.Combine(imageDir, "Upright_hotka.png")) == (743, 2117) &&
+        PngDimensions(Path.Combine(imageDir, "GCO_V_original_pixel_locked_silhouette.png")) == (743, 2117),
+        "original aligned portrait pair shipped under images");
+    Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (2048, 682),
+        "original blue skyline shipped under images");
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +

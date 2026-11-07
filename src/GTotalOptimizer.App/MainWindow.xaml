@@ -600,9 +600,13 @@
         <!-- Black OUTSIDE outer perimeter; thin BLACK channel at its sides and
              base. Inner top rule is the LOWER header divider only. Both strokes
              are neon yellow left and cyan right. -->
-        <fx:TechChassisOutline Grid.RowSpan="2" Margin="6"
-                               Stroke="{StaticResource NeonStroke}"
-                               IsHitTestVisible="False"/>
+        <!-- Full-canvas owner-painted border. Perimeter clipping is in
+             MainWindow.xaml.cs, ensuring opaque backgrounds cannot mask UI. -->
+        <Image x:Name="OuterBorderArtwork" Grid.RowSpan="2"
+               Stretch="Fill" StretchDirection="Both"
+               IsHitTestVisible="False" SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               SizeChanged="OuterBorderArtwork_SizeChanged"/>
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
                                   FrameInset="29" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
