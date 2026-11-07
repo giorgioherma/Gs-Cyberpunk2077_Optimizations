@@ -272,6 +272,13 @@
                     </Rectangle>
                 </Grid>
 
+                <!-- Static irregular yellow atmosphere continues past V's image edge.
+                     Behind real controls, never a hard clipped sidebar overlay. -->
+                <Image x:Name="VAtmosphereImage" Grid.RowSpan="3" Panel.ZIndex="0"
+                       HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                       Width="76" Stretch="Fill" IsHitTestVisible="False"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
+
                 <!-- Two non-navigating status tabs: Page 2 remains restore gated. -->
                 <Grid Grid.Row="0" Margin="16,0,16,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -613,12 +620,16 @@
              bottom inset is 29−6. Neither image is moved or stretched. -->
         <Grid x:Name="VPortraitHost" Grid.Row="1" Panel.ZIndex="20"
               HorizontalAlignment="Left" Margin="26,0,0,23"
-              Width="214" Background="#060D0F" ClipToBounds="True"
+              Width="214" Background="Transparent" ClipToBounds="True"
               fx:ChamferClip.CornerCut="14">
-            <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
-                   HorizontalAlignment="Left" VerticalAlignment="Top"/>
-            <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
-                   HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
+            <!-- One shared mask: the aligned black/color originals receive
+                 exactly the same irregular edge fade, without asset edits. -->
+            <Grid x:Name="VImageLayers">
+                <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
+            </Grid>
             <!-- Only top/side black edges; never draw a dark seam where
                  the portrait's yellow bottom meets the yellow outer border. -->
             <fx:PortraitOutline Panel.ZIndex="1" IsHitTestVisible="False"/>
