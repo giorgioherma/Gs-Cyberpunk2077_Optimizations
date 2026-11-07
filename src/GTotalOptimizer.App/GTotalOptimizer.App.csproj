@@ -16,6 +16,14 @@
   <ItemGroup>
     <!-- Retain legacy form in git for comparison; ship only WPF controls. -->
     <Compile Remove="MainForm.cs" />
+    <!-- OFL-licensed typefaces from the owner's assets, embedded by WPF.
+         Only the weights used in the UI are embedded (no runtime installation). -->
+    <Resource Include="../../assets/ui/fonts/Rajdhani/Rajdhani-Regular.ttf" Link="Fonts/Rajdhani/Rajdhani-Regular.ttf" />
+    <Resource Include="../../assets/ui/fonts/Rajdhani/Rajdhani-SemiBold.ttf" Link="Fonts/Rajdhani/Rajdhani-SemiBold.ttf" />
+    <Resource Include="../../assets/ui/fonts/Rajdhani/Rajdhani-Bold.ttf" Link="Fonts/Rajdhani/Rajdhani-Bold.ttf" />
+    <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Regular.ttf" Link="Fonts/Oxanium/Oxanium-Regular.ttf" />
+    <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-SemiBold.ttf" Link="Fonts/Oxanium/Oxanium-SemiBold.ttf" />
+    <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Bold.ttf" Link="Fonts/Oxanium/Oxanium-Bold.ttf" />
     <ProjectReference Include="../GTotalOptimizer.Core/GTotalOptimizer.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -104,6 +104,16 @@ foreach ($name in $uiNames) {
   }
 }
 Write-Host 'PASS exact V portrait pair + new full blue skyline background packaged'
+
+# Fonts are embedded as WPF assembly resources; ship OFL license notices.
+foreach ($family in @('Rajdhani','Oxanium')) {
+  $license=Join-Path $uiSource "fonts/$family/OFL.txt"
+  if (-not (Test-Path -LiteralPath $license -PathType Leaf)) { throw "Missing OFL license for $family" }
+  $licenseTarget=Join-Path $uiTarget "licenses"
+  New-Item -ItemType Directory -Force $licenseTarget | Out-Null
+  Copy-Item -LiteralPath $license -Destination (Join-Path $licenseTarget "$family-OFL.txt")
+}
+Write-Host 'PASS WPF Rajdhani + Oxanium font licenses bundled'
 # Never package 02_cityline_header.png or GCO_approved_blue_skyline_crop.png.
 
 # One private Microsoft .NET 10 Core and WindowsDesktop runtime.

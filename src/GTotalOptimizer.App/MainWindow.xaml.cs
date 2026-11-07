@@ -139,7 +139,36 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e) => _ = RefreshSourceAsync();
+    // The original portrait aspect ratio is 743/2117. Size the entire left
+    // panel from available client height instead of cropping its sides.
+    private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
+        UpdatePortraitWidth();
+
+    private void UpdatePortraitWidth()
+    {
+        if (ArtworkColumn is null) return;
+        var imageHeight = Math.Max(1, ActualHeight - 68);
+        ArtworkColumn.Width = new GridLength(Math.Clamp(
+            imageHeight * 743.0 / 2117.0, 170.0, 245.0));
+    }
+
+    private void SetActiveTab(bool results)
+    {
+        var active = new SolidColorBrush(Color.FromRgb(255, 240, 0));
+        var inactive = new SolidColorBrush(Color.FromRgb(13, 23, 27));
+        CaptureTabShape.Fill = results ? inactive : active;
+        CaptureTabShape.Stroke = results ? new SolidColorBrush(Color.FromRgb(145, 171, 180)) : active;
+        CaptureTabLabel.Foreground = results ? Brushes.White : new SolidColorBrush(Color.FromRgb(6, 16, 20));
+        AnalyzeTabShape.Fill = results ? active : inactive;
+        AnalyzeTabShape.Stroke = results ? active : new SolidColorBrush(Color.FromRgb(145, 171, 180));
+        AnalyzeTabLabel.Foreground = results ? new SolidColorBrush(Color.FromRgb(6, 16, 20)) : Brushes.White;
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        UpdatePortraitWidth();
+        _ = RefreshSourceAsync();
+    }
 
     private void Window_Activated(object sender, EventArgs e)
     {
@@ -211,6 +240,9 @@ public partial class MainWindow : Window
         savedCapture = null;
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
+        InstallButton.Content = "INSTALL PROFILERS";
+        LaunchButton.Content = "START CYBERPUNK";
+        CollectButton.Content = "COLLECT RESULTS";
         RestoreButton.Visibility = Visibility.Collapsed;
 
         UserSettings.WriteGameRoot(GamePathBox.Text);
@@ -271,6 +303,13 @@ public partial class MainWindow : Window
                 !state.BothCaptured && !captureLaunched && frame is null;
             CollectButton.IsEnabled = readyToCollect;
             ContinueButton.IsEnabled = HasNative(saved);
+            // Adapt the captions to actual verified workflow state. Disabled
+            // controls never suggest an unverified domain is installed.
+            InstallButton.Content = state.CetManaged && state.GrspManaged
+                ? "PROFILERS INSTALLED" : "INSTALL PROFILERS";
+            LaunchButton.Content = running ? "GAME RUNNING"
+                : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
+            CollectButton.Content = HasNative(saved) ? "RESULTS VERIFIED" : "COLLECT RESULTS";
             RestoreButton.Visibility = session && !running ? Visibility.Visible : Visibility.Collapsed;
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
@@ -489,6 +528,7 @@ public partial class MainWindow : Window
             RefreshCompletedWorkspace();
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
+            SetActiveTab(true);
             return;
         }
         var game = inspection.GameRoot;
@@ -524,6 +564,7 @@ public partial class MainWindow : Window
             UpdateResultTexts(saved);
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
+            SetActiveTab(true);
             RefreshCompletedWorkspace();
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
