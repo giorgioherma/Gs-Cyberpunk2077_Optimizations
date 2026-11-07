@@ -146,3 +146,7 @@ Owner screenshot of v1.1.6 proved **no visible outer border**. Exact CI #4236463
 ### 2026-11-07 — Auto-refresh after Cyberpunk process exit
 
 `MainWindow.xaml.cs` now monitors **only Cyberpunk process state transitions** every 2 seconds while the WPF window is loaded. On exit/launch transition, invoke the same authoritative `RefreshSourceAsync` status path, deferred when a source-owner transaction is busy. Addresses the case where `COLLECT RESULTS` remains disabled because the desktop window does not regain activation. Does not shortcut evidence/restore proof, or poll owner CLIs every timer tick. v1.1.6 and original artwork unchanged. CI + native user workflow test pending.
+
+### 2026-11-07 — V photograph lower-edge fill, black 45° outline
+
+The approved original V portrait must NOT be moved. The left artwork host is anchored at the same top/left coordinates and extended **16 DIPs downward** using a negative bottom margin; its width increases proportionally at 743/2117 to prevent stretching. `ContentRegion` stops clipping the extension but the right content grid keeps its own clip. One source-owned `PortraitOutline` overlays a thin black stroke on the exact existing `CreatePortraitClip` geometry (left 45° chamfers, straight right edge), completing the black line around the image. No modification to portrait PNGs, outer border PNGs, CET/GRSP, GCO version or frame logic. `--verify-border-ui` now checks top-left pinning, +16 DIP extension, ratio and border pixels in CI. Real Windows screenshot still required.

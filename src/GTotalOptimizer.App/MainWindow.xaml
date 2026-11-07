@@ -237,21 +237,27 @@
             <!-- The content chassis draws the only header divider. -->
         </Grid>
 
-        <Grid x:Name="ContentRegion" Grid.Row="1" ClipToBounds="True"
+        <!-- Right content remains clipped by its own host. The left V can
+             extend slightly into the decorative lower chassis cutout. -->
+        <Grid x:Name="ContentRegion" Grid.Row="1" ClipToBounds="False"
               Margin="29,0,29,29" SizeChanged="ContentRegion_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- Portrait height is authoritative, fit entire 743x2117 canvas without
-                 crop; no painted GCO text or overlays obscuring the original. -->
-            <!-- V is INSIDE the shared chassis, flush top and left. No frame. -->
-            <Grid Grid.Column="0" Background="#060D0F"
-                  ClipToBounds="True" fx:ChamferClip.CornerCut="14">
+            <!-- Keep V's original TOP/LEFT anchored. The negative bottom
+                 margin extends its UNIFORM-size original portrait 16 DIPs
+                 toward the lower border without shifting or cropping V. -->
+            <Grid x:Name="VPortraitHost" Grid.Column="0" Background="#060D0F"
+                  Margin="0,0,0,-16" ClipToBounds="True"
+                  fx:ChamferClip.CornerCut="14">
                 <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top"/>
                 <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
+                <!-- Uses the SAME 45-degree geometry as the V clip.
+                     No new art, duplicate frame or repositioning. -->
+                <fx:PortraitOutline IsHitTestVisible="False"/>
             </Grid>
 
             <Grid Grid.Column="1" Background="#060D0F" ClipToBounds="True">

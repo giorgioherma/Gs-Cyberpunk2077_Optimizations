@@ -183,8 +183,9 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    // The original V pair is 743x2117. Match the actual content height
-    // so the picture touches the inner chassis top and left without a gutter.
+    // The original V pair is 743x2117. Extend downward ONLY: keep the
+    // top/left coordinates and the original aspect ratio unchanged.
+    private const double PortraitBottomExtension = 16.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
@@ -194,7 +195,8 @@ public partial class MainWindow : Window
     private void UpdatePortraitWidth()
     {
         if (ArtworkColumn is null || ContentRegion is null) return;
-        var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight);
+        var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight)
+                        + PortraitBottomExtension;
         ArtworkColumn.Width = new GridLength(Math.Clamp(
             imageHeight * 743.0 / 2117.0, 170.0, 245.0));
     }

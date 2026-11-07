@@ -67,6 +67,26 @@ internal static class Program
             visual.Arrange(new System.Windows.Rect(0, 0, width, height));
             visual.UpdateLayout();
 
+            // The V art must grow down into the bottom cutout but must
+            // not move its original top/left position or distort the pair.
+            var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            var portraitTopLeft = window.VPortraitHost.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            if (Math.Abs(rootTopLeft.X - portraitTopLeft.X) > 0.5 ||
+                Math.Abs(rootTopLeft.Y - portraitTopLeft.Y) > 0.5)
+                throw new InvalidOperationException(
+                    $"V origin moved: region={rootTopLeft}, V={portraitTopLeft}");
+            var extension = window.VPortraitHost.ActualHeight -
+                            window.ContentRegion.ActualHeight;
+            if (extension < 15.0 || extension > 17.0)
+                throw new InvalidOperationException(
+                    $"V bottom extension should be 16 DIPs, actual={extension:0.###}");
+            // Column scaling must keep the source 743:2117 aspect ratio.
+            var expectedWidth = window.VPortraitHost.ActualHeight * 743.0 / 2117.0;
+            if (Math.Abs(window.VPortraitHost.ActualWidth - expectedWidth) > 1.0)
+                throw new InvalidOperationException("V aspect ratio was altered");
+
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Border Source disappeared after layout");

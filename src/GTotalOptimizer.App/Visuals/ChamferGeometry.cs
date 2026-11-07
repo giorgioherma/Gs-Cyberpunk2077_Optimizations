@@ -215,6 +215,27 @@ public static class ChamferClip
     }
 }
 
+
+/// <summary>
+/// Thin black outline for the actual V silhouette panel. Reuses its existing
+/// left-only, 45-degree portrait clipping path. Does not add a new frame,
+/// chamfer rule, image pass or raster artwork.
+/// </summary>
+public sealed class PortraitOutline : FrameworkElement
+{
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        if (RenderSize.Width < 2 || RenderSize.Height < 2) return;
+        var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
+        var geometry = ChamferGeometry.CreatePortraitClip(
+            RenderSize.Width, RenderSize.Height, cut);
+        var pen = new Pen(Brushes.Black, 1.6);
+        pen.Freeze();
+        dc.DrawGeometry(null, pen, geometry);
+    }
+}
+
 /// <summary>Equal-sized parallelogram tab with a genuine 45-degree slope.</summary>
 public sealed class SlantedTabShape : FrameworkElement
 {
