@@ -90,3 +90,7 @@ The reusable 45° frame + double neon border source from `b53e2c7` failed initia
 ### Slim outer-circuit-frame handoff — 2026-11-07
 
 The latest user screenshot calls for subtle circuit-board detail exclusively on the outermost WPF perimeter, with selective glow and no multiple fat parallel border layers. `TechChassisOutline` owns local tabs, black-slotted cutouts, angular node traces and yellow-to-cyan accents while preserving the inner/header frame and all workflow behavior. See [LATEST-WORK](../LATEST-WORK.md). The new outer render remains pending integrated CI and visual Windows/DPI approval.
+
+### Latest visible outer-chassis iteration — 2026-11-07
+
+User's most recent sketch allows a moderately bolder outermost line with real browser-tab-like steps and black negative circuits/dots; it must NOT become multiple nested thick outlines. `TechChassisOutline` has been revised at source with locally widened yellow/cyan structural tabs on top/bottom/sides, black inset circuitry, selective glow and real-size 45-degree steps. The thinner under-header inner frame, original artwork, controls, profiler owner functionality, v1.1.5 and single .NET10 runtime are unchanged. See [LATEST-WORK](../LATEST-WORK.md). CI and user native screenshot/DPI review remain validation gates.

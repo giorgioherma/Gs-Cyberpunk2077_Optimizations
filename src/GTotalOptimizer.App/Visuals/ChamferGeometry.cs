@@ -243,43 +243,114 @@ public sealed class SlantedTabShape : FrameworkElement
 /// </summary>
 public sealed class TechChassisOutline : FrameworkElement
 {
-    // Small, asymmetric structural tabs directly on the perimeter. No second
-    // full-height line or PNG overlay; all turns are equal X/Y = 45 degrees.
-    private static Geometry Tab(double edge, double y, double inward)
-    {
-        var path = new StreamGeometry();
-        using (var ctx = path.Open())
-        {
-            ctx.BeginFigure(new Point(edge - inward * .5, y), true, true);
-            ctx.LineTo(new Point(edge + inward * 1.65, y + 2.15), true, false);
-            ctx.LineTo(new Point(edge + inward * 1.65, y + 11), true, false);
-            ctx.LineTo(new Point(edge + inward * 5.1, y + 14.45), true, false);
-            ctx.LineTo(new Point(edge + inward * 5.1, y + 27.55), true, false);
-            ctx.LineTo(new Point(edge + inward * 1.65, y + 31), true, false);
-            ctx.LineTo(new Point(edge + inward * 1.65, y + 37), true, false);
-            ctx.LineTo(new Point(edge - inward * .5, y + 37), true, false);
-        }
-        path.Freeze();
-        return path;
-    }
-
-    // A short circuit trace that branches from the EXISTING spine, ending
-    // in a small ring. Remains wholly inside the original 6-DIP edge channel.
-    private static void CircuitNode(DrawingContext dc, Brush color, Brush background,
-        double edge, double y, double inward)
-    {
-        var pen = new Pen(color, 1.0) { LineJoin = PenLineJoin.Miter };
-        var elbow = new Point(edge + inward * 2.7, y + 2.7);
-        var terminal = new Point(edge + inward * 2.7, y + 18);
-        dc.DrawLine(pen, new Point(edge, y), elbow);
-        dc.DrawLine(pen, elbow, terminal);
-        dc.DrawEllipse(background, new Pen(color, 1.2), terminal, 1.7, 1.7);
-    }
-
     public static readonly DependencyProperty StrokeProperty =
         DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(TechChassisOutline),
             new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
+
     public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+
+    // All drawing is scaled from actual RenderSize. The step shoulders use
+    // equal X/Y movements and stay true 45 degrees at any supported DPI.
+    private static Geometry Polygon(params Point[] points)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(points[0], true, true);
+            for (var i = 1; i < points.Length; i++)
+                ctx.LineTo(points[i], true, false);
+        }
+        geometry.Freeze();
+        return geometry;
+    }
+
+    // Browser-tab-like bulge in a HORIZONTAL border, not a parallel border.
+    // inward = +1 at the top, -1 at the bottom.
+    private static Geometry HorizontalStep(double x, double edgeY, double length,
+        double depth, double inward, double scale)
+    {
+        var s = scale;
+        var y = edgeY;
+        return Polygon(
+            new Point(x, y - inward * 2.2 * s),
+            new Point(x + length, y - inward * 2.2 * s),
+            new Point(x + length, y + inward * 1.5 * s),
+            new Point(x + length - 6 * s, y + inward * 7.5 * s),
+            new Point(x + length - 12 * s, y + inward * 7.5 * s),
+            new Point(x + length - (12 * s + depth - 7.5 * s), y + inward * depth),
+            new Point(x + 10 * s + depth - 3 * s, y + inward * depth),
+            new Point(x + 10 * s, y + inward * 3 * s),
+            new Point(x + 10 * s, y + inward * 1.5 * s),
+            new Point(x, y + inward * 1.5 * s));
+    }
+
+    // One local mechanical ledge within the ORIGINAL side border channel.
+    // The inner extent is intentionally < 5 DIPs: the content-frame black
+    // separation is never replaced by a new full-length neon border.
+    private static Geometry VerticalStep(double edgeX, double y, double inward, double s)
+    {
+        return Polygon(
+            new Point(edgeX - inward * 5.0 * s, y),
+            new Point(edgeX + inward * .8 * s, y),
+            new Point(edgeX + inward * .8 * s, y + 8 * s),
+            new Point(edgeX + inward * 4.25 * s, y + 11.45 * s),
+            new Point(edgeX + inward * 4.25 * s, y + 55.55 * s),
+            new Point(edgeX + inward * .8 * s, y + 59 * s),
+            new Point(edgeX + inward * .8 * s, y + 70 * s),
+            new Point(edgeX - inward * 5.0 * s, y + 70 * s));
+    }
+
+    // Cut short circuits as real BACKGROUND-BLACK negative space inside a
+    // thickened section. Dots are holes, not extra color-coded outlines.
+    private static void HorizontalCuts(DrawingContext dc, Brush black,
+        double x, double edgeY, double length, double inward, double s, bool deep)
+    {
+        var slot = new Pen(black, 1.35 * s);
+        if (deep)
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                var px = x + (37 + 8 * i) * s;
+                dc.DrawLine(slot,
+                    new Point(px, edgeY + inward * 6 * s),
+                    new Point(px + 4 * s, edgeY + inward * 10 * s));
+            }
+        }
+        var center = new Point(x + length - 35 * s, edgeY + inward * (deep ? 8.2 : 5) * s);
+        dc.DrawLine(new Pen(black, 1.65 * s),
+            new Point(center.X - 17 * s, center.Y),
+            new Point(center.X - 4 * s, center.Y));
+        dc.DrawEllipse(black, null, center, 2.9 * s, 2.9 * s);
+    }
+
+    private static void VerticalCuts(DrawingContext dc, Brush black,
+        double edgeX, double y, double inward, double s)
+    {
+        var pen = new Pen(black, 1.15 * s);
+        for (var i = 0; i < 5; ++i)
+        {
+            var cy = y + (20 + 5.25 * i) * s;
+            dc.DrawLine(pen,
+                new Point(edgeX - inward * 2.7 * s, cy),
+                new Point(edgeX + inward * 1.1 * s, cy + 3.8 * s));
+        }
+        var center = new Point(edgeX - inward * 1.1 * s, y + 48 * s);
+        dc.DrawLine(new Pen(black, 1.3 * s),
+            new Point(center.X, center.Y - 8 * s),
+            new Point(center.X, center.Y - 3 * s));
+        dc.DrawEllipse(black, null, center, 2.45 * s, 2.45 * s);
+    }
+
+    private static void Node(DrawingContext dc, Brush line, Brush black,
+        double x, double y, double inward, double s)
+    {
+        var pen = new Pen(line, 1.25 * s) { LineJoin = PenLineJoin.Miter };
+        var bend = new Point(x + inward * 2.7 * s, y + 2.7 * s);
+        var end = new Point(bend.X, y + 21 * s);
+        dc.DrawLine(pen, new Point(x, y), bend);
+        dc.DrawLine(pen, bend, end);
+        dc.DrawEllipse(black, new Pen(line, 1.4 * s), end, 2.6 * s, 2.6 * s);
+    }
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -287,11 +358,16 @@ public sealed class TechChassisOutline : FrameworkElement
         var w = RenderSize.Width;
         var h = RenderSize.Height;
         if (w < 90 || h < 90) return;
-        const double thickness = 2.35;
-        var inset = thickness / 2 + .5;
+
+        var s = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut) /
+                ChamferGeometry.StandardCut;
+        // Core perimeter is still ONE line. Thick parts are local silhouettes,
+        // not parallel, full-length layers stacked around the content.
+        var thickness = 3.0 * s;
+        var inset = thickness / 2 + .45;
         var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
-        dc.DrawGeometry(null, new Pen(Stroke, thickness) { LineJoin = PenLineJoin.Miter },
-            ChamferGeometry.Create(w, h, cut, inset));
+        var edge = ChamferGeometry.Create(w, h, cut, inset);
+        dc.DrawGeometry(null, new Pen(Stroke, thickness) { LineJoin = PenLineJoin.Miter }, edge);
 
         var left = inset;
         var right = w - inset;
@@ -300,64 +376,62 @@ public sealed class TechChassisOutline : FrameworkElement
         var yellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
         var cyan = new SolidColorBrush(Color.FromRgb(0, 226, 242));
         var black = new SolidColorBrush(Color.FromRgb(6, 13, 15));
-        var warmGlow = new SolidColorBrush(Color.FromArgb(44, 255, 240, 0));
-        var coolGlow = new SolidColorBrush(Color.FromArgb(44, 0, 226, 242));
+        var warmGlow = new SolidColorBrush(Color.FromArgb(62, 255, 240, 0));
+        var coolGlow = new SolidColorBrush(Color.FromArgb(62, 0, 226, 242));
 
-        // Small colored halos ONLY for a pair of intentional thick accents,
-        // not along the entire frame or across its black channel.
-        var a = new Point(left + cut + 15, top);
-        var b = new Point(Math.Min(w * .23, left + cut + 142), top);
-        dc.DrawLine(new Pen(warmGlow, 6.5), a, b);
-        dc.DrawLine(new Pen(yellow, 4.25), a, b);
-        a = new Point(Math.Max(w * .74, right - cut - 140), bottom);
-        b = new Point(right - cut - 15, bottom);
-        dc.DrawLine(new Pen(coolGlow, 6.5), a, b);
-        dc.DrawLine(new Pen(cyan, 4.25), a, b);
+        // Two top and two bottom browser-style steps. The lower ones are
+        // deliberately shallower to protect the pinned footer/Continue area.
+        var topLength = 152 * s;
+        var bottomLength = 114 * s;
+        var topGoldX = w * .24;
+        var topCyanX = w * .72;
+        var bottomGoldX = w * .30;
+        var bottomCyanX = w * .76;
+        var topGold = HorizontalStep(topGoldX, top, topLength, 13.0 * s, +1, s);
+        var topCyan = HorizontalStep(topCyanX, top, topLength * .88, 13.0 * s, +1, s);
+        var bottomGold = HorizontalStep(bottomGoldX, bottom, bottomLength, 8.5 * s, -1, s);
+        var bottomCyan = HorizontalStep(bottomCyanX, bottom, bottomLength * 1.05, 8.5 * s, -1, s);
 
-        // Variable line weights, technical ticks and black interruptions.
-        dc.DrawLine(new Pen(yellow, 3.4),
-            new Point(left, h * .52), new Point(left, h * .57));
-        dc.DrawLine(new Pen(cyan, 3.4),
-            new Point(right, h * .20), new Point(right, h * .25));
-        dc.DrawLine(new Pen(yellow, 2.5),
-            new Point(left + cut + 5, top + 4), new Point(left + cut + 52, top + 4));
-        dc.DrawLine(new Pen(cyan, 2.5),
-            new Point(right - cut - 62, bottom - 4), new Point(right - cut - 10, bottom - 4));
-        dc.DrawLine(new Pen(black, 5),
-            new Point(w * .29, top), new Point(w * .29 + 10, top));
-        dc.DrawLine(new Pen(black, 5),
-            new Point(w * .69, bottom), new Point(w * .69 + 11, bottom));
-        dc.DrawLine(new Pen(black, 5),
-            new Point(right, h * .59), new Point(right, h * .59 + 8));
-        dc.DrawLine(new Pen(black, 5),
-            new Point(left, h * .26), new Point(left, h * .26 + 7));
+        // Targeted glow only around the tabs, without lighting the black
+        // gap all along the rest of the chassis.
+        dc.DrawGeometry(null, new Pen(warmGlow, 4.5 * s), topGold);
+        dc.DrawGeometry(null, new Pen(coolGlow, 4.5 * s), topCyan);
+        dc.DrawGeometry(null, new Pen(warmGlow, 3.0 * s), bottomGold);
+        dc.DrawGeometry(null, new Pen(coolGlow, 3.0 * s), bottomCyan);
+        dc.DrawGeometry(yellow, null, topGold);
+        dc.DrawGeometry(cyan, null, topCyan);
+        dc.DrawGeometry(yellow, null, bottomGold);
+        dc.DrawGeometry(cyan, null, bottomCyan);
 
-        // Reference-inspired circuit detail: slim flanges, black-slotted
-        // negative space, and a few terminal dots. Keep the inner chassis
-        // and its unpainted separator completely free of this decoration.
-        var leftY = h * .44;
-        var rightY = h * .55;
-        var leftTab = Tab(left, leftY, +1.0);
-        var rightTab = Tab(right, rightY, -1.0);
-        dc.DrawGeometry(null, new Pen(warmGlow, 2.7), leftTab);
+        HorizontalCuts(dc, black, topGoldX, top, topLength, +1, s, true);
+        HorizontalCuts(dc, black, topCyanX, top, topLength * .88, +1, s, true);
+        HorizontalCuts(dc, black, bottomGoldX, bottom, bottomLength, -1, s, false);
+        HorizontalCuts(dc, black, bottomCyanX, bottom, bottomLength * 1.05, -1, s, false);
+
+        // Stronger vertical tabs, still below the inner content frame's side
+        // line and leaving a visible dark gutter between the two structures.
+        var leftY = h * .40;
+        var rightY = h * .56;
+        var leftTab = VerticalStep(left, leftY, +1, s);
+        var rightTab = VerticalStep(right, rightY, -1, s);
         dc.DrawGeometry(yellow, null, leftTab);
-        dc.DrawGeometry(null, new Pen(coolGlow, 2.7), rightTab);
         dc.DrawGeometry(cyan, null, rightTab);
+        VerticalCuts(dc, black, left, leftY, +1, s);
+        VerticalCuts(dc, black, right, rightY, -1, s);
 
-        for (var i = 0; i < 3; ++i)
-        {
-            var y1 = 17.0 + i * 3.1;
-            dc.DrawLine(new Pen(black, .9),
-                new Point(left + 2.7, leftY + y1),
-                new Point(left + 4.2, leftY + y1 + 1.5));
-            dc.DrawLine(new Pen(black, .9),
-                new Point(right - 2.7, rightY + y1),
-                new Point(right - 4.2, rightY + y1 + 1.5));
-        }
+        // Discrete circuit-node branches; never another continuous rail.
+        Node(dc, yellow, black, left, h * .18, +1, s);
+        Node(dc, cyan, black, right, h * .28, -1, s);
+        Node(dc, yellow, black, left, h * .77, +1, s);
+        Node(dc, cyan, black, right, h * .80, -1, s);
 
-        CircuitNode(dc, yellow, black, left, h * .19, +1.0);
-        CircuitNode(dc, cyan, black, right, h * .31, -1.0);
-        CircuitNode(dc, yellow, black, left, h * .76, +1.0);
+        // A couple of hard-edged discontinuities retain the sketched
+        // broken-tech rhythm without weakening the chamfered corners.
+        var negativeBreak = new Pen(black, thickness + 1.6 * s);
+        dc.DrawLine(negativeBreak,
+            new Point(w * .54, top), new Point(w * .54 + 7 * s, top));
+        dc.DrawLine(negativeBreak,
+            new Point(w * .51, bottom), new Point(w * .51 + 8 * s, bottom));
     }
 }
 
