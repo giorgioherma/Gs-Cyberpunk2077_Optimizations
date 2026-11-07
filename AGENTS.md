@@ -99,3 +99,8 @@ Read, in order:
 - **Rajdhani** for ordinary text, **Oxanium** for labels/buttons/tabs; owner committed both with OFL licences. Embed only used styles with WPF Resource paths; include OFL notices, not a system-wide installer.
 - Exact existing full V source must use `Stretch=Uniform` and proportional sidebar width (not cropping `UniformToFill`). Place top brand/logo gap across app; drop skyline below it. Big central parallelogram tabs; title `GOT LAG?`; one Game Root panel; three tall cards with real in-card controls; console and special Continue at bottom. No duplicate instructions/status box. Yellow-to-cyan clipped vectors and cyan slash motifs are **WPF geometry**, not PNG overlays.
 - The first-pass visual changes are not proof of real gameplay or independent CET-only/GRSP-only backend support. Keep one existing main CI workflow and v1.1.5.
+
+## 2026-11-07 compact WPF verification
+
+- [Single integrated Windows CI #42325021822](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42325021822) **SUCCESS, 179/179 contracts**, source `a1c2a547d2a5c6a60e596bdb7bdd655af107a29f`. Bundles exact full V pair, full user blue skyline and WPF Rajdhani/Oxanium embedded fonts (OFL licences) with **one .NET10 private runtime**. This supersedes older last-green references for WPF.
+- Page 2 is source-layered to keep the tabs visible and cover the Capture footer; active tab styling follows verified restore. **No Windows visual/DPI or gameplay test yet.** Do not conflate CI with end-to-end validation or completed CET-only/GRSP-only backend admission.
