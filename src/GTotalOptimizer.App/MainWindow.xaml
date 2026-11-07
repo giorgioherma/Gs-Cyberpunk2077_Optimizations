@@ -277,28 +277,30 @@
             <Grid x:Name="VAtmosphereHost" Grid.ColumnSpan="2" Panel.ZIndex="1"
                   HorizontalAlignment="Left" VerticalAlignment="Stretch"
                   Width="380" IsHitTestVisible="False">
-                <!-- Stronger around V's upper silhouette and yellow skyline. -->
+                <!-- Localized head/skyline halo: bright inside the artwork,
+                     narrow falloff immediately beside V, not a uniform strip. -->
                 <Rectangle x:Name="VUpperHalo">
                     <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.52,0.23" GradientOrigin="0.52,0.23"
-                                             RadiusX="0.48" RadiusY="0.43">
-                            <GradientStop Color="#D8FFF000" Offset="0"/>
-                            <GradientStop Color="#A0FFF000" Offset=".30"/>
-                            <GradientStop Color="#55FFE100" Offset=".58"/>
-                            <GradientStop Color="#16FFD000" Offset=".81"/>
+                        <RadialGradientBrush Center="0.42,0.22" GradientOrigin="0.42,0.22"
+                                             RadiusX="0.37" RadiusY="0.29">
+                            <GradientStop Color="#98FFF000" Offset="0"/>
+                            <GradientStop Color="#60FFF000" Offset=".29"/>
+                            <GradientStop Color="#24FFE100" Offset=".58"/>
+                            <GradientStop Color="#06FFD000" Offset=".80"/>
                             <GradientStop Color="#00FFF000" Offset="1"/>
                         </RadialGradientBrush>
                     </Rectangle.Fill>
                 </Rectangle>
-                <!-- Dimmer illumination follows the long black ink trail. -->
+                <!-- Smaller, dimmer lower halo follows V's trailing ink
+                     while leaving the center/right interface near-black. -->
                 <Rectangle x:Name="VLowerHalo">
                     <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.51,0.89" GradientOrigin="0.51,0.89"
-                                             RadiusX="0.45" RadiusY="0.47">
-                            <GradientStop Color="#C8FFF000" Offset="0"/>
-                            <GradientStop Color="#86FFE600" Offset=".31"/>
-                            <GradientStop Color="#40FFE000" Offset=".62"/>
-                            <GradientStop Color="#0BE6B700" Offset=".84"/>
+                        <RadialGradientBrush Center="0.40,0.88" GradientOrigin="0.40,0.88"
+                                             RadiusX="0.34" RadiusY="0.19">
+                            <GradientStop Color="#7AFFE700" Offset="0"/>
+                            <GradientStop Color="#48FFE000" Offset=".28"/>
+                            <GradientStop Color="#18FFD100" Offset=".56"/>
+                            <GradientStop Color="#04D6AA00" Offset=".82"/>
                             <GradientStop Color="#00FFF000" Offset="1"/>
                         </RadialGradientBrush>
                     </Rectangle.Fill>
@@ -309,9 +311,10 @@
                     <Rectangle.Fill>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                             <GradientStop Color="#00060D0F" Offset="0"/>
-                            <GradientStop Color="#00060D0F" Offset=".53"/>
-                            <GradientStop Color="#18060D0F" Offset=".69"/>
-                            <GradientStop Color="#82060D0F" Offset=".87"/>
+                            <GradientStop Color="#00060D0F" Offset=".49"/>
+                            <GradientStop Color="#32060D0F" Offset=".65"/>
+                            <GradientStop Color="#B8060D0F" Offset=".82"/>
+                            <GradientStop Color="#FF060D0F" Offset=".96"/>
                             <GradientStop Color="#FF060D0F" Offset="1"/>
                         </LinearGradientBrush>
                     </Rectangle.Fill>

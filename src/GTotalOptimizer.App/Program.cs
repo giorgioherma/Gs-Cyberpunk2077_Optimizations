@@ -185,16 +185,30 @@ internal static class Program
                                         window.ContentRegion.ActualHeight * .24), 0, height - 1);
             int probeBottomY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
                                            window.ContentRegion.ActualHeight * .87), 0, height - 1);
+            int probeMidY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
+                                        window.ContentRegion.ActualHeight * .55), 0, height - 1);
             int upperGain = RgbAt(probeX, probeTopY)[0] -
                             RedWithoutHalo(probeX, probeTopY);
             int lowerGain = RgbAt(probeX, probeBottomY)[0] -
                             RedWithoutHalo(probeX, probeBottomY);
-            Console.WriteLine($"Actual WPF halo red gains upper={upperGain}, lower={lowerGain}");
-            if (upperGain < 35 || lowerGain < 30)
+            int middleGain = RgbAt(probeX, probeMidY)[0] -
+                             RedWithoutHalo(probeX, probeMidY);
+            Console.WriteLine($"Actual WPF halo red gains upper={upperGain}, " +
+                              $"middle={middleGain}, lower={lowerGain}");
+            if (upperGain < 35 || lowerGain < 25)
                 throw new InvalidOperationException(
-                    $"Halo visually obscured at x={probeX}: " +
-                    $"upper={upperGain} lower={lowerGain}. Check compositing.");
-            Console.WriteLine("PASS halo visibly brightens pixels beyond V in both light zones");
+                    $"Halo visibly missing at x={probeX}: " +
+                    $"upper={upperGain} lower={lowerGain}");
+            // An upper/lower halo separated by a dark middle is the core
+            // visual requirement. The earlier round rendered a uniformly
+            // bright column despite all structural checks passing.
+            if (middleGain > 24 ||
+                upperGain - middleGain < 25 ||
+                lowerGain - middleGain < 18)
+                throw new InvalidOperationException(
+                    $"Halo reverted to a uniform wash at x={probeX}: " +
+                    $"upper={upperGain}, middle={middleGain}, lower={lowerGain}");
+            Console.WriteLine("PASS distinct upper/lower halos and contained dark middle");
 
             // Verify the ACTUAL painted bottom stroke instead of inspecting
             // an unfilled StreamGeometry through GetFlattenedPathGeometry:
