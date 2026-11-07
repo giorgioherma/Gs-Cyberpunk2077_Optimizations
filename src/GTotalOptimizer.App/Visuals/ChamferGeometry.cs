@@ -243,6 +243,39 @@ public sealed class SlantedTabShape : FrameworkElement
 /// </summary>
 public sealed class TechChassisOutline : FrameworkElement
 {
+    // Small, asymmetric structural tabs directly on the perimeter. No second
+    // full-height line or PNG overlay; all turns are equal X/Y = 45 degrees.
+    private static Geometry Tab(double edge, double y, double inward)
+    {
+        var path = new StreamGeometry();
+        using (var ctx = path.Open())
+        {
+            ctx.BeginFigure(new Point(edge - inward * .5, y), true, true);
+            ctx.LineTo(new Point(edge + inward * 1.65, y + 2.15), true, false);
+            ctx.LineTo(new Point(edge + inward * 1.65, y + 11), true, false);
+            ctx.LineTo(new Point(edge + inward * 5.1, y + 14.45), true, false);
+            ctx.LineTo(new Point(edge + inward * 5.1, y + 27.55), true, false);
+            ctx.LineTo(new Point(edge + inward * 1.65, y + 31), true, false);
+            ctx.LineTo(new Point(edge + inward * 1.65, y + 37), true, false);
+            ctx.LineTo(new Point(edge - inward * .5, y + 37), true, false);
+        }
+        path.Freeze();
+        return path;
+    }
+
+    // A short circuit trace that branches from the EXISTING spine, ending
+    // in a small ring. Remains wholly inside the original 6-DIP edge channel.
+    private static void CircuitNode(DrawingContext dc, Brush color, Brush background,
+        double edge, double y, double inward)
+    {
+        var pen = new Pen(color, 1.0) { LineJoin = PenLineJoin.Miter };
+        var elbow = new Point(edge + inward * 2.7, y + 2.7);
+        var terminal = new Point(edge + inward * 2.7, y + 18);
+        dc.DrawLine(pen, new Point(edge, y), elbow);
+        dc.DrawLine(pen, elbow, terminal);
+        dc.DrawEllipse(background, new Pen(color, 1.2), terminal, 1.7, 1.7);
+    }
+
     public static readonly DependencyProperty StrokeProperty =
         DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(TechChassisOutline),
             new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -282,10 +315,10 @@ public sealed class TechChassisOutline : FrameworkElement
         dc.DrawLine(new Pen(cyan, 4.25), a, b);
 
         // Variable line weights, technical ticks and black interruptions.
-        dc.DrawLine(new Pen(yellow, 4.2),
-            new Point(left, h * .52), new Point(left, h * .66));
-        dc.DrawLine(new Pen(cyan, 4.2),
-            new Point(right, h * .20), new Point(right, h * .34));
+        dc.DrawLine(new Pen(yellow, 3.4),
+            new Point(left, h * .52), new Point(left, h * .57));
+        dc.DrawLine(new Pen(cyan, 3.4),
+            new Point(right, h * .20), new Point(right, h * .25));
         dc.DrawLine(new Pen(yellow, 2.5),
             new Point(left + cut + 5, top + 4), new Point(left + cut + 52, top + 4));
         dc.DrawLine(new Pen(cyan, 2.5),
@@ -298,6 +331,33 @@ public sealed class TechChassisOutline : FrameworkElement
             new Point(right, h * .59), new Point(right, h * .59 + 8));
         dc.DrawLine(new Pen(black, 5),
             new Point(left, h * .26), new Point(left, h * .26 + 7));
+
+        // Reference-inspired circuit detail: slim flanges, black-slotted
+        // negative space, and a few terminal dots. Keep the inner chassis
+        // and its unpainted separator completely free of this decoration.
+        var leftY = h * .44;
+        var rightY = h * .55;
+        var leftTab = Tab(left, leftY, +1.0);
+        var rightTab = Tab(right, rightY, -1.0);
+        dc.DrawGeometry(null, new Pen(warmGlow, 2.7), leftTab);
+        dc.DrawGeometry(yellow, null, leftTab);
+        dc.DrawGeometry(null, new Pen(coolGlow, 2.7), rightTab);
+        dc.DrawGeometry(cyan, null, rightTab);
+
+        for (var i = 0; i < 3; ++i)
+        {
+            var y1 = 17.0 + i * 3.1;
+            dc.DrawLine(new Pen(black, .9),
+                new Point(left + 2.7, leftY + y1),
+                new Point(left + 4.2, leftY + y1 + 1.5));
+            dc.DrawLine(new Pen(black, .9),
+                new Point(right - 2.7, rightY + y1),
+                new Point(right - 4.2, rightY + y1 + 1.5));
+        }
+
+        CircuitNode(dc, yellow, black, left, h * .19, +1.0);
+        CircuitNode(dc, cyan, black, right, h * .31, -1.0);
+        CircuitNode(dc, yellow, black, left, h * .76, +1.0);
     }
 }
 
