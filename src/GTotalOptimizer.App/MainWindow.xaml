@@ -247,25 +247,28 @@
                  above the inner outline as a direct root-grid sibling. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
-            <!-- One continuous golden underglow fills the portrait's fade,
-                 while the real authored yellow clouds provide the irregular edge.
-                 Both stay beneath live controls, and end in full transparency. -->
+            <!-- Seam-only gold underglow. The much wider cloud image below
+                 owns the atmospheric shapes; do not squeeze it into this width. -->
             <Rectangle x:Name="VAtmosphereGlow" Grid.ColumnSpan="2"
                        Panel.ZIndex="0" HorizontalAlignment="Left"
-                       VerticalAlignment="Stretch" Width="142"
+                       VerticalAlignment="Stretch" Width="126"
                        IsHitTestVisible="False">
                 <Rectangle.Fill>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#C0FFF000" Offset="0"/>
-                        <GradientStop Color="#78FFF000" Offset=".29"/>
-                        <GradientStop Color="#26FFF000" Offset=".64"/>
+                        <GradientStop Color="#A8FFF000" Offset="0"/>
+                        <GradientStop Color="#67FFF000" Offset=".30"/>
+                        <GradientStop Color="#20FFF000" Offset=".68"/>
                         <GradientStop Color="#00FFF000" Offset="1"/>
                     </LinearGradientBrush>
                 </Rectangle.Fill>
             </Rectangle>
+            <!-- Full-height yellow cloud in its original 884:1780 proportion.
+                 Dynamic width follows actual ContentRegion height; Uniform
+                 preserves cloud structures (no 142-DIP horizontal squash).
+                 Right-hand live controls can overlap its transparent tail. -->
             <Image x:Name="VAtmosphereImage" Grid.ColumnSpan="2" Panel.ZIndex="0"
                    HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                   Width="142" Stretch="Fill" IsHitTestVisible="False"
+                   Stretch="Uniform" IsHitTestVisible="False"
                    RenderOptions.BitmapScalingMode="HighQuality"/>
 
             <Grid Grid.Column="1" Panel.ZIndex="1" Background="Transparent" ClipToBounds="True">
