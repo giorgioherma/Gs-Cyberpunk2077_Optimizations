@@ -63,3 +63,7 @@ At the normal size, all primary controls are intended to be available without ve
 - **Portrait:** original 743×2117 paired images inset by several DIPs and clipped with same chamfer outline, so it fits neatly between the frames; do not redraw or change the image files.
 - **Tabs:** both **246×44 DIP**, steep 45° real parallelograms; labels **CAPTURE** and **ANALYZE**. Existing Page 2 gate remains. User visual review should focus on glow intensity, border line joins and the black gap against the original V art and blue header.
 - [Source commit](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/b53e2c728a20ef039cd62ab7d62ad7c46baf416e); [Windows CI #42331860013](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42331860013) pending at writing. Actual screenshots, 100/125/150% DPI and gameplay must still be checked.
+
+### Source/build status — user double-frame variant
+
+- Actual-size 45° geometry first source `b53e2c7` required one WinForms/WPF type-alias correction at source (`c478f9d`). First CI #42331860013 failed WPF compilation; **[new CI #42332115489](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42332115489) SUCCESS 179/179**. Artifact **13557508098**, 86,547,719 bytes. User visual feedback on the new outer/inner double frame, 45° cut consistency and tab size remains required; do not infer final rendering success from green compilation.
