@@ -176,3 +176,7 @@ Actual root WPF order must be **owner outer PNG > single V portrait > thin inner
 ### 2026-11-07 — Single border asset
 
 The sole active master canvas is `assets/ui/elements/GCO_Border_Regular_1280x760_FINAL.png`. Owner replaces artwork under same name/path and removes Small. WPF loads the Regular source once for all resolutions; removed automatic image substitution on size changes. Package builder and tests no longer require or ship the Small raster and test unchanged source reference during resize. Original PNG assets are not modified by this commit. Preserve all profiler ownership, version 1.1.6, V portrait and inner outline. Validate canonical integrated CI and subsequent user asset replacement.
+
+### 2026-11-07 — Single Regular border CI verified
+
+[CI #42377895908](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42377895908) SUCCESS at `ce838d9`: 183 contracts, CET/GRSP smoke, both-size WPF rendering without source switching and single-asset package proof. Artifact ID 13576457299. **This CI uses the previous Regular PNG**; after owner uploads corrected artwork, new build and native screenshot check are still required. No version change.
