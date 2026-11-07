@@ -626,3 +626,8 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Owner committed the corrected single Regular 1280×760 PNG as `b8e5abb`. No PNG changes in this code commit.
 - Portrait-only finish: `PortraitBottomOverhang` **8→10 DIPs**, matching root V host bottom margin **21→19**. Left and top remain fixed, both original 743:2117 color/black V image layers retain identical Uniform scale, growing +2 DIPs down and approximately +0.7 DIPs right. Inner frame and outer master PNG remain untouched.
 - Update existing packaged WPF visual regression's host-height assertion to 10 DIPs. Run the canonical `build-windows.yml` and record its actual CI result. Keep product v1.1.6 and profiler owners unchanged.
+
+## 2026-11-07 — Final V portrait +5-DIP proportional fit
+
+- Owner's native screenshot of the corrected Regular border shows the V portrait image ending approximately **5 px above** the solid outer-border yellow, with a few stray raster dots beneath it. Apply a single **+5-DIP increase** to the existing proportional portrait size: `MainWindow.xaml` root-level `VPortraitHost` bottom margin **19→14** (left 26/top zero unchanged); `MainWindow.xaml.cs` `PortraitBottomOverhang` **10→15**; and the existing packaged WPF geometry assertion **10→15**. Both V PNGs remain original, same host, `Stretch=Uniform`, aspect 743:2117; width grows automatically by approximately 1.75 DIPs. No separate reposition/crop, no frame/artwork/other layout change.
+- Run the canonical `build-windows.yml` CI on main and record actual outcome; a native Windows screenshot is still the visual acceptance gate. Product remains v1.1.6.

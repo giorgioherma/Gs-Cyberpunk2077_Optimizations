@@ -184,3 +184,7 @@ The sole active master canvas is `assets/ui/elements/GCO_Border_Regular_1280x760
 ### 2026-11-07 — Proportional V +2 DIP on corrected Regular master
 
 Owner updated the sole Regular border PNG in commit `b8e5abb`. V host overhang is now 10 DIPs (`MainWindow.xaml` bottom margin 19, `PortraitBottomOverhang=10`, packaged WPF assertion 10), versus 8 DIPs before. Top/left placement, color/black image overlap, aspect 743:2117, inner border geometry, border art, version v1.1.6 and CET/GRSP binaries stay unchanged. Verify canonical CI and actual native screenshot.
+
+### 2026-11-07 — V lower edge +5-DIP proportional resize
+
+Owner approved a final +5 DIP proportional growth on the corrected single Regular master PNG. `VPortraitHost` bottom margin 19→14, `PortraitBottomOverhang` 10→15, packaged WPF regression 10→15. Same top-left x=26, same pair of `Stretch=Uniform` original V images; width automatically increases by ~1.75 DIPs; border source, layer order, inner frame and app v1.1.6 unchanged. Verify canonical CI and user screenshot.
