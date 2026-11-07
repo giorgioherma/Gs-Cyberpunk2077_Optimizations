@@ -234,3 +234,9 @@ The user explicitly confirmed the following final ownership wording, including t
 - **WPF normal window 1220×680 DIPs; minimum 1040×600 DIPs.** Smaller usable content scrolls; keep console/Continue visible, full portrait width and aligned original color/black V images. Final size may be refined following actual screenshots.
 - **Rajdhani** body/instructions/status, **Oxanium** title/tabs/buttons, both OFL-licensed and embedded into GCO without a second runtime; original full blue-to-dark skyline retained and lowered below reserved main logo title band.
 - Section order: center sloped tabs → GOT LAG? headline/subtitle → Game Root/readiness/counts → CAPTURE WORKFLOW label → three tall image/title/instruction/interactive-button cards → concise bottom console and distinctive cut-corner yellow Continue. Remove duplicate instructions/status boxes; WPF Path + gradient brushes provide irregular cut-corner borders and three cyan slashes (no PNG border requirement). No non-visual backend behavior changed by this decision.
+
+## 2026-11-07 — Current WPF sizing and typography status (supersedes prototype sizes)
+
+- User selected **1280×760 DIPs normal**, **1080×640 DIPs minimum** for enough room; replaces 1220×680 and 1040×600 historical design/prototype values.
+- Source fix: explicitly bound Game Root to its contents (108 DIPs; decorative Path must not expand the StackPanel); separate larger WHITE `/// GAME ROOT / CYBERPUNK 2077` above border; align frame with end of blue header. Bigger yellow **GOT LAG?**, more spacing, remove tab 1/2, steep angled tabs, center all three workflow icons, tighten cyan ///, dark background/yellow-line scrollbar. Buttons remain inside their cards, Continue remains distinct. GCO frontend only; no source-owner backend workflow changes.
+- Font experiment continues: Rajdhani body and Oxanium headings/buttons stay temporarily; the user has **not finalized typography**.
