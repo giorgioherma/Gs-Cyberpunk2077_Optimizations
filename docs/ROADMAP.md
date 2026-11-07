@@ -67,3 +67,9 @@
 - [x] Switch GCO's running two-page GUI to native **.NET 10 WPF** while keeping the old backend and one shared runtime. Main window, real buttons, no replacement app/CI, original headless package verification and PresentMon preserved. **[Integrated Windows CI #42277190679](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42277190679): 179/179 green.**
 - [ ] Commit the exact user V original silhouette/full-color pair and BLUE skyline, embed canonical master ICO, test WPF actual window, 100/125/150% DPI and game-focused animation overhead; confirm Windows capture/recovery behavior.
 - [ ] Complete independently eligible CET-only/GRSP-only backend workflows and exact 0-Engine v0.17.2+ proof; retain original owner restorers and strict native evidence admission. MO2 integration and optimization generators remain separate later milestones.
+
+## 2026-11-07 — Compact Capture UI progress
+
+- [x] First-pass source implementation of compact **1220×680 DIP** WPF window, **1040×600 DIP min**, Rajdhani/Oxanium, whole-width V, lowered true blue skyline, centered parallelogram tabs, GOT LAG? headline, three enlarged in-card workflow controls, console and vector special Continue. See [layout contract](design/PAGE1-COMPACT-WPF-LAYOUT.md).
+- [ ] Finish integrated Windows build [#42324708424](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42324708424), inspect actual 100/125/150% DPI screenshots, verify font rendering, scrolling, no cut content, frame overhead and real CET/GRSP capture/restore. Geometry/style code has not yet been user visually approved.
+- [ ] Continue independent CET-only/GRSP-only backend gating and precise 0-Engine v0.17.2+ admission separately, without duplicating owner managers.

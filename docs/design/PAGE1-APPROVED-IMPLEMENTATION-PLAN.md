@@ -70,3 +70,7 @@ The upper-right **BLUE skyline is a feature of the approved full-composite UI mo
 ### Superseding user-authoritative header asset — 2026-11-06
 
 The user subsequently created and committed **`assets/ui/TrueHeader_GCO_page1.png`** at [`a241ec2`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/a241ec2485bf5026aa334393de7f35eec3de5216), 2048×682 blue skyline fading left/down to the approved near-black color. **Use this entire wide background**, not the previous 150px crop, and keep controls in WPF on top. WPF should preserve its aspect ratio and scale it with the right panel. The authoritative main/step/path/button backgrounds are **#060D0F / #081012 / #11191A / #151C1C**. WPF handles the separate yellow effect behind V. The smaller crop instructions above are historical, superseded by the new user-owned file.
+
+### 2026-11-07 compact layout follow-up
+
+Actual first-pass WPF implementation now follows [PAGE1-COMPACT-WPF-LAYOUT](PAGE1-COMPACT-WPF-LAYOUT.md): user-provided fonts, 1220×680 normal / 1040×600 minimum window, full-width preserved left V, logo placeholder band, bigger centered angled tabs and GOT LAG? headline, stripped redundant instruction/status cards, bigger in-card step buttons and pinned console/Continue. Cut corners and cyan/yellow border effects use vector WPF geometry. CI, real screenshots and gameplay acceptance remain separate checks.
