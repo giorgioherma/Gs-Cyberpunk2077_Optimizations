@@ -102,3 +102,7 @@ The correct GitHub owner/repo is `giorgioherma/Gs-Cyberpunk2077_Optimizations`, 
 ### Carved-band chassis handoff — 2026-11-07
 
 The user explicitly rejected a central spine with added modules. Correct model: **one continuous WPF gradient band with material removed by boolean geometry**, no visible guide rails. Current `TechChassisOutline` computes a 3.2–22.8 DIP envelope, subtracts distinct black circuit patterns on each side and caches the resulting frozen WPF geometry; it does not draw colored terminal traces. `MainWindow.xaml` now aligns the thinner inner frame and actual content to 35-DIP margins, preserving black separation and the shared under-header top divider. CI and Windows/DPI acceptance remain mandatory. See [LATEST-WORK](../LATEST-WORK.md).
+
+### 2026-11-07 — Latest carved-band CI fix and width correction
+
+The last carved-band run [#42347339591](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42347339591) **failed compilation only** on ambiguous WPF/WinForms `Size`; current source explicitly aliases `System.Windows.Size`. Per user's latest design adjustment, the inner frame and content returned to **29 DIP** (not 35), and the original subtractive WPF band width reduced by moving its invisible inner limit to **19.0 DIP** (outer remains 3.2). The user asked for a slightly thinner band and no more inward drift of inner frame. Do not change profiler workflow or add painted guide rails. Verify integrated Windows CI and user screenshots.

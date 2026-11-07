@@ -6,6 +6,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using Pen = System.Windows.Media.Pen;
 using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 
 namespace GTotalOptimizer.App.Visuals;
 
@@ -255,7 +256,7 @@ public sealed class TechChassisOutline : FrameworkElement
     private static Geometry CreateBand(double width, double height, double scale, double cut)
     {
         var outside = ChamferGeometry.Create(width, height, cut, 3.2 * scale);
-        var inside = ChamferGeometry.Create(width, height, cut, 22.8 * scale);
+        var inside = ChamferGeometry.Create(width, height, cut, 19.0 * scale);
         return Geometry.Combine(outside, inside, GeometryCombineMode.Exclude, null);
     }
 
@@ -548,7 +549,7 @@ public sealed class TechChassisOutline : FrameworkElement
             var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
             var band = CreateBand(width, height, scale, cut);
             var outer = 3.2 * scale;
-            var inner = 22.8 * scale;
+            var inner = 19.0 * scale;
             var holes = new GeometryGroup { FillRule = FillRule.Nonzero };
             CarveTop(holes, width, scale, outer, inner);
             CarveLeft(holes, height, scale, outer, inner);

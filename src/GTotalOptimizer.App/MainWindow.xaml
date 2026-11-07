@@ -227,7 +227,7 @@
         </Grid>
 
         <Grid x:Name="ContentRegion" Grid.Row="1" ClipToBounds="True"
-              Margin="35,0,35,35" SizeChanged="ContentRegion_SizeChanged">
+              Margin="29,0,29,29" SizeChanged="ContentRegion_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
@@ -604,7 +604,7 @@
                                Stroke="{StaticResource NeonStroke}"
                                IsHitTestVisible="False"/>
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
-                                  FrameInset="35" Stroke="{StaticResource NeonStroke}"
+                                  FrameInset="29" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
     </Grid>
 </Window>
