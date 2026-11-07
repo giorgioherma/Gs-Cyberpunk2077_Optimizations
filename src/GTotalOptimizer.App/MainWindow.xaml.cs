@@ -183,11 +183,11 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    // The original V pair is 743x2117. The inner frame bottom is
-    // 27 DIPs inset with a 3-DIP continuous raised baseline. Content is
-    // 29 DIPs inset, so a +1 bottom margin aligns V to that baseline.
-    // The source images still resize uniformly, as one aligned pair.
-    private const double PortraitBottomInset = 1.0;
+    // Both exact 743x2117 V images resize together from the same TOP/LEFT.
+    // Eight DIPs below the content host meets the outer border's upper
+    // horizontal line without entering its lower decorative dent.
+    // The separately owned WPF inner border is not changed.
+    private const double PortraitBottomOverhang = 8.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
@@ -198,7 +198,7 @@ public partial class MainWindow : Window
     {
         if (ArtworkColumn is null || ContentRegion is null) return;
         var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight
-                                             - PortraitBottomInset);
+                                             + PortraitBottomOverhang);
         ArtworkColumn.Width = new GridLength(Math.Clamp(
             imageHeight * 743.0 / 2117.0, 170.0, 245.0));
     }

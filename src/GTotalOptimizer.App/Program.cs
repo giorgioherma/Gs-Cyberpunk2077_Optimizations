@@ -67,8 +67,10 @@ internal static class Program
             visual.Arrange(new System.Windows.Rect(0, 0, width, height));
             visual.UpdateLayout();
 
-            // V moves LEFT by precisely 3 DIPs, never vertically. Its
-            // bottom must end at the now-straight inner border baseline.
+            // V remains 3 DIPs left with identical top. It now grows 9
+            // DIPs DOWN/RIGHT compared to the previous screenshot, stopping
+            // above the outer bottom band's decorative dent. The inner
+            // chassis frame has not been modified.
             var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             var portraitTopLeft = window.VPortraitHost.TransformToAncestor(visual)
@@ -79,9 +81,9 @@ internal static class Program
                     $"V left/top anchor incorrect: region={rootTopLeft}, V={portraitTopLeft}");
             var extension = window.VPortraitHost.ActualHeight -
                             window.ContentRegion.ActualHeight;
-            if (Math.Abs(extension + 1.0) > 0.5)
+            if (Math.Abs(extension - 8.0) > 0.5)
                 throw new InvalidOperationException(
-                    $"V must end on raised inner frame; host delta={extension:0.###}");
+                    $"V must stop at upper outer-border line; host delta={extension:0.###}");
             // Negative left margin enlarges the *host* by 3 DIPs, but the
             // Image's Uniform render preserves source pixels' 743:2117 ratio.
             var expectedWidth = window.VPortraitHost.ActualHeight * 743.0 / 2117.0;

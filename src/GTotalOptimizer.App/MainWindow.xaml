@@ -246,12 +246,12 @@
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- Align V to the left inner frame (3 DIPs left of its previous
-                 position). Its top is fixed; its bottom ends on the straight
-                 inner-outline baseline. The photo retains its bottom-left
-                 pixels beneath the outline instead of clipping them away. -->
+            <!-- V is still pinned 3 DIPs left and at its original top.
+                 Grow the ORIGINAL portrait uniformly DOWN and RIGHT only.
+                 Stop at the straight top edge of the outer bottom PNG band,
+                 never in its lower decorative dent; leave inner frame alone. -->
             <Grid x:Name="VPortraitHost" Grid.Column="0" Background="#060D0F"
-                  Margin="-3,0,0,1" ClipToBounds="True"
+                  Margin="-3,0,0,-8" ClipToBounds="True"
                   fx:ChamferClip.CornerCut="14">
                 <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top"/>

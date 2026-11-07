@@ -162,3 +162,7 @@ CI #42372818627 built and smoked successfully (183 contracts) but its newly adde
 ### 2026-11-07 — Final verified CI after V lower-edge and inner-outline correction
 
 Latest [Windows CI #42373161499](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42373161499) **SUCCESS**, source `b876c61`, **183/183 package/CLI contracts**, CET/GRSP smoke, actual WPF rendered inner baseline PASS and yellow/cyan painted raster pixels PASS. Artifact `Gs-Cyberpunk2077_Optimizer` ID **13574358681**. Initial #42372818627 failed only because test queried `.Figures[0]` on unfilled WPF geometry; fixed to pixel-level check at four x coordinates. Visual approval on user's native Windows screenshot remains a separate pending gate; v1.1.6, assets and profilers unchanged.
+
+### 2026-11-07 — Portrait meets top of outer decorative bottom band, inner frame frozen
+
+Latest owner screenshot supersedes the previous portrait stop at raised INNER line. Portrait host now has **`Margin="-3,0,0,-8"`**: same upper-left origin, image resized 9 DIPs larger than prior build in height and approximately 3.16 DIPs in proportional width (two original aligned layers, 743:2117). Its bottom meets the UPPER line of the outer PNG bottom border, not the decorative dent below. **Do not touch the inner frame** (`ContentChassisOutline` / `CreateContentFrame`), original PNG assets, outline Z-order or version v1.1.6. The packaged WPF check asserts host overhang +8 relative to content and original geometry checks still apply. Await actual CI and Windows visual confirmation.
