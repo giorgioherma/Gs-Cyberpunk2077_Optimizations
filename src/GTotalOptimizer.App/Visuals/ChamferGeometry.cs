@@ -1,6 +1,11 @@
 using System;
 using System.Windows;
 using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+using Pen = System.Windows.Media.Pen;
+using Point = System.Windows.Point;
 
 namespace GTotalOptimizer.App.Visuals;
 
