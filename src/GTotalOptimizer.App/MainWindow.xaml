@@ -198,6 +198,7 @@
              supplied art has an opaque #060D0F background. No safety crop
              can silently erase the actual border design. -->
         <Image x:Name="OuterBorderArtwork" Grid.RowSpan="2"
+               Panel.ZIndex="10"
                Stretch="Fill" StretchDirection="Both"
                IsHitTestVisible="False" SnapsToDevicePixels="True"
                RenderOptions.BitmapScalingMode="HighQuality"
@@ -245,19 +246,20 @@
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- Keep V's original TOP/LEFT anchored. The negative bottom
-                 margin extends its UNIFORM-size original portrait 16 DIPs
-                 toward the lower border without shifting or cropping V. -->
+            <!-- Align V to the left inner frame (3 DIPs left of its previous
+                 position). Its top is fixed; its bottom ends on the straight
+                 inner-outline baseline. The photo retains its bottom-left
+                 pixels beneath the outline instead of clipping them away. -->
             <Grid x:Name="VPortraitHost" Grid.Column="0" Background="#060D0F"
-                  Margin="0,0,0,-16" ClipToBounds="True"
+                  Margin="-3,0,0,1" ClipToBounds="True"
                   fx:ChamferClip.CornerCut="14">
                 <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top"/>
                 <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
-                <!-- Uses the SAME 45-degree geometry as the V clip.
-                     No new art, duplicate frame or repositioning. -->
-                <fx:PortraitOutline IsHitTestVisible="False"/>
+                <!-- Black outline retains the 45-degree lower-left chamfer,
+                     but the original image pixels are NOT cut there. -->
+                <fx:PortraitOutline Panel.ZIndex="1" IsHitTestVisible="False"/>
             </Grid>
 
             <Grid Grid.Column="1" Background="#060D0F" ClipToBounds="True">
@@ -614,9 +616,10 @@
             </Grid>
         </Grid>
 
-        <!-- Thin INNER WPF frame: 27-DIP straight sides and bottom, 68-DIP header clearance. -->
+        <!-- Thin INNER WPF frame: straight uninterrupted raised bottom line
+             and 68-DIP header clearance. Always wins over raster overlaps. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
-                                  FrameInset="27" Stroke="{StaticResource NeonStroke}"
+                                  Panel.ZIndex="11" FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
     </Grid>
 </Window>

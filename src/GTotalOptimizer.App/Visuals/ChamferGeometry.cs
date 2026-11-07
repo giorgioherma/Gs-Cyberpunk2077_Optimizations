@@ -62,14 +62,12 @@ public static class ChamferGeometry
         var bottom = Math.Max(top, height - inset);
         cut = Math.Clamp(cut, 0, Math.Min(right - left, bottom - top) / 3.0);
 
-        // The decorative bottom-corner fins project farther inward than
-        // the straight PNG border. Keep the corner 3 DIPs above the bottom
-        // run, with a straight 45-degree chamfer and short safety run-out;
-        // do not trace the artwork's ornamental dents.
+        // One straight inner baseline at the original raised corner height.
+        // The previous 3-DIP drop/run-out created an unwanted step on both
+        // sides. Do not trace the outer PNG's decorative dents.
         const double cornerRelief = 3.0;
         var lowerCut = Math.Max(cut, 17.0);
-        var runout = Math.Max(54.0, lowerCut + 20.0);
-        var lowerCornerY = bottom - cornerRelief;
+        var bottomLine = bottom - cornerRelief;
 
         var path = new StreamGeometry();
         using (var ctx = path.Open())
@@ -77,23 +75,21 @@ public static class ChamferGeometry
             ctx.BeginFigure(new Point(left + cut, top), false, true);
             ctx.LineTo(new Point(right - cut, top), true, false);
             ctx.LineTo(new Point(right, top + cut), true, false);
-            ctx.LineTo(new Point(right, lowerCornerY - lowerCut), true, false);
-            ctx.LineTo(new Point(right - lowerCut, lowerCornerY), true, false);
-            ctx.LineTo(new Point(right - runout, lowerCornerY), true, false);
-            ctx.LineTo(new Point(right - runout - cornerRelief, bottom), true, false);
-            ctx.LineTo(new Point(left + runout + cornerRelief, bottom), true, false);
-            ctx.LineTo(new Point(left + runout, lowerCornerY), true, false);
-            ctx.LineTo(new Point(left + lowerCut, lowerCornerY), true, false);
-            ctx.LineTo(new Point(left, lowerCornerY - lowerCut), true, false);
+            ctx.LineTo(new Point(right, bottomLine - lowerCut), true, false);
+            ctx.LineTo(new Point(right - lowerCut, bottomLine), true, false);
+            ctx.LineTo(new Point(left + lowerCut, bottomLine), true, false);
+            ctx.LineTo(new Point(left, bottomLine - lowerCut), true, false);
             ctx.LineTo(new Point(left, top + cut), true, false);
         }
         path.Freeze();
         return path;
     }
 
-    // Portrait shares the chassis LEFT corners only; no independent image
-    // frame or diagonals on its right side.
-    public static Geometry CreatePortraitClip(double width, double height, double cut)
+    // One owner geometry for the portrait's left corners. The PHOTO uses
+    // clipLowerLeft=false to preserve its original square bottom-left pixels;
+    // the topmost black OUTLINE uses true for the crisp 45-degree lower edge.
+    public static Geometry CreatePortraitClip(double width, double height,
+        double cut, bool clipLowerLeft = true)
     {
         cut = Math.Clamp(cut, 0, Math.Min(width, height) / 3.0);
         var path = new StreamGeometry();
@@ -102,8 +98,13 @@ public static class ChamferGeometry
             ctx.BeginFigure(new Point(cut, 0), true, true);
             ctx.LineTo(new Point(width, 0), true, false);
             ctx.LineTo(new Point(width, height), true, false);
-            ctx.LineTo(new Point(cut, height), true, false);
-            ctx.LineTo(new Point(0, height - cut), true, false);
+            if (clipLowerLeft)
+            {
+                ctx.LineTo(new Point(cut, height), true, false);
+                ctx.LineTo(new Point(0, height - cut), true, false);
+            }
+            else
+                ctx.LineTo(new Point(0, height), true, false);
             ctx.LineTo(new Point(0, cut), true, false);
         }
         path.Freeze();
@@ -211,7 +212,8 @@ public static class ChamferClip
     {
         if (e.ActualWidth < 1 || e.ActualHeight < 1) return;
         var cut = ChamferGeometry.ScaledCut(e, GetCornerCut(e));
-        e.Clip = ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight, cut);
+        e.Clip = ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight,
+            cut, clipLowerLeft: false);
     }
 }
 

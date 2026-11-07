@@ -183,9 +183,11 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    // The original V pair is 743x2117. Extend downward ONLY: keep the
-    // top/left coordinates and the original aspect ratio unchanged.
-    private const double PortraitBottomExtension = 16.0;
+    // The original V pair is 743x2117. The inner frame bottom is
+    // 27 DIPs inset with a 3-DIP continuous raised baseline. Content is
+    // 29 DIPs inset, so a +1 bottom margin aligns V to that baseline.
+    // The source images still resize uniformly, as one aligned pair.
+    private const double PortraitBottomInset = 1.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
@@ -195,8 +197,8 @@ public partial class MainWindow : Window
     private void UpdatePortraitWidth()
     {
         if (ArtworkColumn is null || ContentRegion is null) return;
-        var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight)
-                        + PortraitBottomExtension;
+        var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight
+                                             - PortraitBottomInset);
         ArtworkColumn.Width = new GridLength(Math.Clamp(
             imageHeight * 743.0 / 2117.0, 170.0, 245.0));
     }

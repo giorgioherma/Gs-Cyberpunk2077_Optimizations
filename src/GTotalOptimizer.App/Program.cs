@@ -67,25 +67,52 @@ internal static class Program
             visual.Arrange(new System.Windows.Rect(0, 0, width, height));
             visual.UpdateLayout();
 
-            // The V art must grow down into the bottom cutout but must
-            // not move its original top/left position or distort the pair.
+            // V moves LEFT by precisely 3 DIPs, never vertically. Its
+            // bottom must end at the now-straight inner border baseline.
             var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             var portraitTopLeft = window.VPortraitHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            if (Math.Abs(rootTopLeft.X - portraitTopLeft.X) > 0.5 ||
+            if (Math.Abs(rootTopLeft.X - portraitTopLeft.X - 3) > 0.5 ||
                 Math.Abs(rootTopLeft.Y - portraitTopLeft.Y) > 0.5)
                 throw new InvalidOperationException(
-                    $"V origin moved: region={rootTopLeft}, V={portraitTopLeft}");
+                    $"V left/top anchor incorrect: region={rootTopLeft}, V={portraitTopLeft}");
             var extension = window.VPortraitHost.ActualHeight -
                             window.ContentRegion.ActualHeight;
-            if (extension < 15.0 || extension > 17.0)
+            if (Math.Abs(extension + 1.0) > 0.5)
                 throw new InvalidOperationException(
-                    $"V bottom extension should be 16 DIPs, actual={extension:0.###}");
-            // Column scaling must keep the source 743:2117 aspect ratio.
+                    $"V must end on raised inner frame; host delta={extension:0.###}");
+            // Negative left margin enlarges the *host* by 3 DIPs, but the
+            // Image's Uniform render preserves source pixels' 743:2117 ratio.
             var expectedWidth = window.VPortraitHost.ActualHeight * 743.0 / 2117.0;
-            if (Math.Abs(window.VPortraitHost.ActualWidth - expectedWidth) > 1.0)
-                throw new InvalidOperationException("V aspect ratio was altered");
+            if (Math.Abs(window.VPortraitHost.ActualWidth - expectedWidth - 3) > 1.0)
+                throw new InvalidOperationException("V proportional content width changed");
+            var photoClip = window.VPortraitHost.Clip ??
+                throw new InvalidOperationException("V portrait has no clipping geometry");
+            if (!photoClip.FillContains(new System.Windows.Point(
+                    1, window.VPortraitHost.ActualHeight - 1)) ||
+                photoClip.FillContains(new System.Windows.Point(1, 1)))
+                throw new InvalidOperationException(
+                    "V must retain bottom-left photo pixels and clip only top-left");
+            if (System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork) <= 0)
+                throw new InvalidOperationException("Owner outer PNG is not above V");
+            var chassis = ((System.Windows.Controls.Grid)visual).Children
+                .OfType<GTotalOptimizer.App.Visuals.ContentChassisOutline>().Single();
+            if (System.Windows.Controls.Panel.GetZIndex(chassis) <=
+                System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork))
+                throw new InvalidOperationException("Inner outline must win raster overlaps");
+
+            var bottomPath = GTotalOptimizer.App.Visuals.ChamferGeometry
+                .CreateContentFrame(width, height, 68, 27, 14)
+                .GetFlattenedPathGeometry().Figures[0];
+            var bottomSegments = bottomPath.Segments
+                .OfType<System.Windows.Media.LineSegment>().ToArray();
+            var baseline = height - 30.0; // 27-DIP inset + 3-DIP raise
+            if (bottomSegments.Length != 7 ||
+                Math.Abs(bottomSegments[3].Point.Y - baseline) > 0.01 ||
+                Math.Abs(bottomSegments[4].Point.Y - baseline) > 0.01)
+                throw new InvalidOperationException(
+                    "Inner chassis bottom must be a single straight, raised line");
 
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
