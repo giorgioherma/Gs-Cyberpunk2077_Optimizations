@@ -247,11 +247,25 @@
                  above the inner outline as a direct root-grid sibling. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
-            <!-- Atmosphere starts beneath the shared portrait fade and flows
-                 freely under the live right-side panels. No column-edge cutoff. -->
+            <!-- One continuous golden underglow fills the portrait's fade,
+                 while the real authored yellow clouds provide the irregular edge.
+                 Both stay beneath live controls, and end in full transparency. -->
+            <Rectangle x:Name="VAtmosphereGlow" Grid.ColumnSpan="2"
+                       Panel.ZIndex="0" HorizontalAlignment="Left"
+                       VerticalAlignment="Stretch" Width="142"
+                       IsHitTestVisible="False">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#C0FFF000" Offset="0"/>
+                        <GradientStop Color="#78FFF000" Offset=".29"/>
+                        <GradientStop Color="#26FFF000" Offset=".64"/>
+                        <GradientStop Color="#00FFF000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
             <Image x:Name="VAtmosphereImage" Grid.ColumnSpan="2" Panel.ZIndex="0"
                    HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                   Width="110" Stretch="Fill" IsHitTestVisible="False"
+                   Width="142" Stretch="Fill" IsHitTestVisible="False"
                    RenderOptions.BitmapScalingMode="HighQuality"/>
 
             <Grid Grid.Column="1" Panel.ZIndex="1" Background="Transparent" ClipToBounds="True">
