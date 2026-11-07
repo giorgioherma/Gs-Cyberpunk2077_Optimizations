@@ -264,6 +264,15 @@ public partial class MainWindow : Window
         // +3 preserves the previous host width from Margin="-3,0,0,-8".
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageWidth + 3.0;
+        // Place the atmosphere relative to the portrait edge, not the left
+        // edge of the full content region. It overlaps the fading ~30 DIPs
+        // and extends into the right-side layout without cropping at the
+        // old sidebar column boundary. The source images do not move.
+        if (VAtmosphereImage is not null)
+        {
+            VAtmosphereImage.Width = 122.0;
+            VAtmosphereImage.Margin = new Thickness(imageWidth - 37.0, 0, 0, 0);
+        }
     }
 
     private void SetActiveTab(bool results)
