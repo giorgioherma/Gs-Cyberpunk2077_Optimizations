@@ -193,8 +193,19 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Reserved title/logo band; replace placeholder when user supplies it. -->
-        <Grid Grid.Row="0" Background="#060D0F" Margin="10,6,10,0">
+        <!-- Render the owner's COMPLETE PNG canvas as the backmost layer.
+             All functional surfaces and text remain ABOVE it, even if the
+             supplied art has an opaque #060D0F background. No safety crop
+             can silently erase the actual border design. -->
+        <Image x:Name="OuterBorderArtwork" Grid.RowSpan="2"
+               Stretch="Fill" StretchDirection="Both"
+               IsHitTestVisible="False" SnapsToDevicePixels="True"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               SizeChanged="OuterBorderArtwork_SizeChanged"/>
+
+        <!-- Keep the title/header TRANSPARENT so the artwork's TOP border
+             remains visible beneath it. Other UI stays unchanged. -->
+        <Grid Grid.Row="0" Background="Transparent" Margin="10,6,10,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="165"/>
                 <ColumnDefinition Width="*"/>
@@ -597,16 +608,7 @@
             </Grid>
         </Grid>
 
-        <!-- Black OUTSIDE outer perimeter; thin BLACK channel at its sides and
-             base. Inner top rule is the LOWER header divider only. Both strokes
-             are neon yellow left and cyan right. -->
-        <!-- Full-canvas owner-painted border. Perimeter clipping is in
-             MainWindow.xaml.cs, ensuring opaque backgrounds cannot mask UI. -->
-        <Image x:Name="OuterBorderArtwork" Grid.RowSpan="2"
-               Stretch="Fill" StretchDirection="Both"
-               IsHitTestVisible="False" SnapsToDevicePixels="True"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               SizeChanged="OuterBorderArtwork_SizeChanged"/>
+        <!-- Thin INNER WPF frame stays above the owner-painted PNG. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
                                   FrameInset="29" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>

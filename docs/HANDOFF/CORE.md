@@ -130,3 +130,7 @@ Owner placed `GCO_Border_Regular_1280x760_FINAL.png` and `GCO_Border_Small_1080x
 ### 2026-11-07 — PNG skyline test correction
 
 Following the PNG border relocation, CI #42362905376 **failed after assembly and smoke tests**, at a brittle final-artwork skyline assertion expecting an older documented exact PNG resolution. The packaged image is always copied from the owner's `assets/ui/images/TrueHeader_GCO_page1.png` with SHA-256 identity verification at source; test that it is a valid PNG with real positive dimensions rather than imposing an obsolete resolution. Keep the exact two border sizes and 743×2117 portrait pair checks. Validate the subsequent full CI run.
+
+### 2026-11-07 — Border PNG visibility fix (native screenshot evidence)
+
+Although first PNG build succeeded (#42363519634), the user's actual 1280-DIP Windows screenshot showed **no outer border**. The preceding foreground `OuterBorderArtwork` used a guessed 33-DIP perimeter clip, potentially erasing user-painted image parts. The correct rendering is to place the COMPLETE PNG as the **first child of the root Grid**, behind all actual WPF controls; make only the header Grid background transparent so the PNG top side is not hidden. Remove the image clip entirely; preserve the existing 2-image nearest-size selection and the WPF inner border. The root background and content backgrounds still protect layout, and the source artwork stays exact. CI and native screenshot acceptance are distinct.

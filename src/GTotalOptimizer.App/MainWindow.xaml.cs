@@ -8,7 +8,6 @@ using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
 using System.Windows.Threading;
 using GTotalOptimizer.Core;
-using GTotalOptimizer.App.Visuals;
 
 namespace GTotalOptimizer.App;
 
@@ -90,8 +89,9 @@ public partial class MainWindow : Window
         UpdateOuterBorderArtwork();
     }
 
-    // Select the nearest owner-supplied canvas, then prevent any opaque
-    // background inside it from drawing over the application itself.
+    // Select the nearest owner-supplied full-canvas image. It is drawn
+    // BEHIND the page, so even nontransparent artwork backgrounds cannot
+    // hide controls and the original painted perimeter is never cropped.
     private void OuterBorderArtwork_SizeChanged(object sender,
         System.Windows.SizeChangedEventArgs e) => UpdateOuterBorderArtwork();
 
@@ -110,17 +110,6 @@ public partial class MainWindow : Window
         if (!ReferenceEquals(OuterBorderArtwork.Source, image))
             OuterBorderArtwork.Source = image;
 
-        // Only the perimeter is drawable. This is a safety crop, not
-        // a restored WPF decoration or painted-over generated circuitry.
-        var scale = ChamferGeometry.ScaledCut(OuterBorderArtwork,
-            ChamferGeometry.StandardCut) / ChamferGeometry.StandardCut;
-        var cut = ChamferGeometry.StandardCut * scale;
-        var outside = ChamferGeometry.Create(width, height, cut);
-        var inside = ChamferGeometry.Create(width, height, cut, 33.0 * scale);
-        var perimeter = Geometry.Combine(outside, inside,
-            GeometryCombineMode.Exclude, null);
-        perimeter.Freeze();
-        OuterBorderArtwork.Clip = perimeter;
     }
 
     private void SetPortraitStage(PortraitStage stage)
