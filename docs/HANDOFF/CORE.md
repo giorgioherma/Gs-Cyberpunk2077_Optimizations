@@ -158,3 +158,7 @@ User annotations override the previous +16-DIP V extension: V should move **3 DI
 ### 2026-11-07 — Correct faulty line-path CI introspection
 
 CI #42372818627 built and smoked successfully (183 contracts) but its newly added WPF geometry assertion incorrectly indexed `GetFlattenedPathGeometry().Figures[0]` on an unfilled `StreamGeometry`, causing an out-of-range exception. That says nothing about border visibility. Replaced the test in the existing app's `--verify-border-ui` with real composed-raster samples along four positions at the desired single raised bottom y. UI geometry, PNGs and product version unchanged. New CI needed.
+
+### 2026-11-07 — Final verified CI after V lower-edge and inner-outline correction
+
+Latest [Windows CI #42373161499](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42373161499) **SUCCESS**, source `b876c61`, **183/183 package/CLI contracts**, CET/GRSP smoke, actual WPF rendered inner baseline PASS and yellow/cyan painted raster pixels PASS. Artifact `Gs-Cyberpunk2077_Optimizer` ID **13574358681**. Initial #42372818627 failed only because test queried `.Figures[0]` on unfilled WPF geometry; fixed to pixel-level check at four x coordinates. Visual approval on user's native Windows screenshot remains a separate pending gate; v1.1.6, assets and profilers unchanged.
