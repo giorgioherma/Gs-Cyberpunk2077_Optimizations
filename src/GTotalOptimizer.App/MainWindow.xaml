@@ -439,7 +439,7 @@
                             IsEnabled="False"/>
                 </Grid>
 
-                <Grid x:Name="ResultsPage" Grid.RowSpan="2" Visibility="Collapsed"
+                <Grid x:Name="ResultsPage" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed"
                       Background="#060D0F">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="18,16">
