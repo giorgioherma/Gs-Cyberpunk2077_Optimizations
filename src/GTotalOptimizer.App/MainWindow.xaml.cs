@@ -18,6 +18,10 @@ public partial class MainWindow : Window
     private enum PortraitStage { Black, Capturing, Collecting, Collected }
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private readonly DispatcherTimer glitchTimer = new();
+    // Game exit is not guaranteed to re-activate the WPF window (e.g. a
+    // second monitor). A cheap transition-only timer refreshes owner status.
+    private readonly DispatcherTimer gameStateTimer = new()
+        { Interval = TimeSpan.FromSeconds(2) };
     private readonly Random glitchRandom = new();
     private CancellationTokenSource? refreshCancellation;
     private GameInspection inspection = GameInspector.Inspect(null);
@@ -28,6 +32,9 @@ public partial class MainWindow : Window
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
     private bool captureLaunched;
+    private bool? lastGameRunning;
+    private bool pendingGameStateRefresh;
+    private bool gameStateRefreshInFlight;
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
@@ -48,6 +55,7 @@ public partial class MainWindow : Window
         initialized = true;
         Title = "G's Cyberpunk 2077 Optimizer — v1.1.6";
         glitchTimer.Tick += GlitchTick;
+        gameStateTimer.Tick += GameStateTimer_Tick;
         LoadOriginalArtwork();
         pathUpdate = true;
         GamePathBox.Text = UserSettings.ReadGameRoot();
@@ -207,7 +215,29 @@ public partial class MainWindow : Window
     {
         UpdateOuterBorderArtwork();
         UpdatePortraitWidth();
+        lastGameRunning = GameRunning();
+        gameStateTimer.Start();
         _ = RefreshSourceAsync();
+    }
+
+    // Trigger CLI status checks only on Cyberpunk process transitions, never
+    // every timer tick. Preserve the pending refresh if an install/collect/
+    // restore transaction owns the UI when the process closes.
+    private async void GameStateTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!initialized || !IsLoaded) return;
+        var running = GameRunning();
+        if (lastGameRunning is bool prior && prior != running)
+            pendingGameStateRefresh = true;
+        lastGameRunning = running;
+
+        if (!pendingGameStateRefresh || busy || gameStateRefreshInFlight ||
+            !inspection.IsValidGame) return;
+        pendingGameStateRefresh = false;
+        gameStateRefreshInFlight = true;
+        try { await RefreshSourceAsync(); }
+        catch (Exception ex) { Trace.TraceError("Process transition refresh: " + ex); }
+        finally { gameStateRefreshInFlight = false; }
     }
 
     private void Window_Activated(object sender, EventArgs e)
@@ -220,6 +250,7 @@ public partial class MainWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        gameStateTimer.Stop();
         glitchTimer.Stop();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
