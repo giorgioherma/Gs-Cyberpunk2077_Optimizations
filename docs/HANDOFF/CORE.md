@@ -110,3 +110,7 @@ The last carved-band run [#42347339591](https://github.com/giorgioherma/Gs-Cyber
 ### Current denser/carved wiring UI iteration — 2026-11-07
 
 User confirmed the current **15.8-DIP subtractive band thickness** on a native screenshot and requested more variation, including much longer black wires that bend back, cross and sometimes run in parallel. `TechChassisOutline` now combines a small `CutCurve` cubic Bezier-to-negative-geometry helper with its existing `CutTrace` and hand-authored top/left/right/bottom Boolean cuts. Maintain invisible 3.2–19.0 DIP band limits and existing 29-DIP inner frame/content margins; don't drift inward or add centered spines. Build and real screenshot acceptance remain pending.
+
+### 2026-11-07 — Current angular-carving direction after visual rejection
+
+The previous attempt to add *Bézier* wiring (`f0864bd`) compiled but was explicitly rejected by the user. Current source is rebuilt from the earlier visually accepted `bf7afe2` carve-only renderer. New longer `CutTrace` paths use **straight plateaus and 45-degree bends only**, with broken segments to leave colored material bridges. Add more varied fully enclosed cutouts (thin yellow/cyan rims remain on both sides), asymmetrical edge openings, different cavity lengths and drilled terminals. Do not add smooth curves, symmetric attached modules, central spine or painted-over corrective layers. Keep the 15.8-DIP colored envelope (`3.2..19.0` scale DIPs), 29-DIP inner frame and all UI/backend behavior intact. New Windows CI and native screenshot approval required.
