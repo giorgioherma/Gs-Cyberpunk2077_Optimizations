@@ -89,6 +89,13 @@ public partial class MainWindow : Window
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
+        // Generate one static alpha map for both registered V images. The
+        // colored and black image pixels, scale and animations remain unchanged.
+        VImageLayers.OpacityMask = new ImageBrush(CreatePortraitEdgeMask())
+        {
+            Stretch = Stretch.Fill
+        };
+        VAtmosphereImage.Source = CreatePortraitAtmosphere();
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
         // WPF continuously scales it; never swap BitmapSource on resize.
@@ -96,6 +103,85 @@ public partial class MainWindow : Window
             ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
         if (OuterBorderArtwork.Source is null)
             Trace.TraceError("Missing/undecodable Regular border PNG in assets/ui/elements.");
+    }
+
+    // Deterministic, one-time WPF textures: no disk assets, runtime shader,
+    // animation loop, or bitmap manipulation of the two original V images.
+    // Low-frequency variations make the fade slightly dirty rather than a
+    // geometric straight line; the full body and most of the ink stay opaque.
+    private static BitmapSource CreatePortraitEdgeMask()
+    {
+        const int width = 192;
+        const int height = 512;
+        const int stride = width * 4;
+        var pixels = new byte[stride * height];
+        for (int y = 0; y < height; ++y)
+        {
+            double v = (double)y / (height - 1);
+            // The lower painted ink and its border overlap must remain crisp.
+            double strength = v > .87 ? .09 : v > .71 ? .40 : 1.0;
+            double sway = .013 * Math.Sin(v * 21.0)
+                        + .009 * Math.Sin(v * 57.0 + 1.7)
+                        + .004 * Math.Sin(v * 121.0 + 2.3);
+            double start = .875 + sway + (1.0 - strength) * .105;
+            for (int x = 0; x < width; ++x)
+            {
+                double u = (double)x / (width - 1);
+                double rough = .014 * Math.Sin(u * 83.0 + v * 31.0)
+                             * Math.Sin(v * 46.0 - u * 18.0);
+                double t = Math.Clamp((u - start + rough) / Math.Max(.012, 1.0 - start), 0.0, 1.0);
+                double smooth = t * t * (3.0 - 2.0 * t);
+                byte alpha = (byte)Math.Round(255.0 * (1.0 - smooth));
+                int i = y * stride + x * 4;
+                pixels[i] = 255;
+                pixels[i + 1] = 255;
+                pixels[i + 2] = 255;
+                pixels[i + 3] = alpha;
+            }
+        }
+        var bitmap = BitmapSource.Create(width, height, 96, 96,
+            System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    // Yellow haze lives INSIDE the right content background, behind the
+    // interactive text and cards. The right edge always reaches zero alpha,
+    // so layout can move through the blend without a visible cut line.
+    private static BitmapSource CreatePortraitAtmosphere()
+    {
+        const int width = 128;
+        const int height = 512;
+        const int stride = width * 4;
+        var pixels = new byte[stride * height];
+        for (int y = 0; y < height; ++y)
+        {
+            double v = (double)y / (height - 1);
+            double cloud = .68 + .18 * Math.Sin(v * 18.0 + .7)
+                               + .12 * Math.Sin(v * 43.0 + 1.4)
+                               + .07 * Math.Sin(v * 103.0);
+            for (int x = 0; x < width; ++x)
+            {
+                double u = (double)x / (width - 1);
+                double irregular = .075 * Math.Sin(13.0 * v + 7.0 * u)
+                                 + .045 * Math.Sin(37.0 * v - 15.0 * u)
+                                 + .025 * Math.Sin(92.0 * v + 29.0 * u);
+                double distance = Math.Clamp((u + irregular * (1.0 - u)) / .91, 0.0, 1.0);
+                double fade = 1.0 - distance * distance * (3.0 - 2.0 * distance);
+                double grain = .91 + .09 * Math.Sin(x * .61 + y * .27)
+                                   * Math.Sin(x * .18 - y * .43);
+                double alpha = Math.Clamp(175.0 * cloud * grain * fade, 0.0, 255.0);
+                int i = y * stride + x * 4;
+                pixels[i] = (byte)(7 + 3 * (1.0 - distance)); // blue
+                pixels[i + 1] = (byte)(208 + 22 * (1.0 - distance)); // green
+                pixels[i + 2] = 255; // red: yellow in BGRA
+                pixels[i + 3] = (byte)Math.Round(alpha);
+            }
+        }
+        var bitmap = BitmapSource.Create(width, height, 96, 96,
+            System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+        bitmap.Freeze();
+        return bitmap;
     }
 
     private void SetPortraitStage(PortraitStage stage)
