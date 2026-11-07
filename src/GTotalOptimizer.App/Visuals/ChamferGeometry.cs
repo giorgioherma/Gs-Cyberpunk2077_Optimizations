@@ -302,6 +302,32 @@ public sealed class TechChassisOutline : FrameworkElement
         holes.Children.Add(route.GetWidenedPathGeometry(pen));
     }
 
+    // A cut can bend smoothly, turn back, overlap another cut, or run beside
+    // a second conductor. Widening its path makes it true transparent negative
+    // geometry; the enclosing ring subtraction strictly clips every segment.
+    private static void CutCurve(GeometryGroup holes, double thickness,
+        Point start, params Point[] cubicTriples)
+    {
+        if (cubicTriples.Length % 3 != 0)
+            throw new ArgumentException("Each cubic curve requires two controls and an endpoint.");
+        var route = new StreamGeometry();
+        using (var ctx = route.Open())
+        {
+            ctx.BeginFigure(start, false, false);
+            for (var j = 0; j < cubicTriples.Length; j += 3)
+                ctx.BezierTo(cubicTriples[j], cubicTriples[j + 1],
+                    cubicTriples[j + 2], true, false);
+        }
+        route.Freeze();
+        var pen = new Pen(Brushes.Black, thickness)
+        {
+            LineJoin = PenLineJoin.Miter,
+            StartLineCap = PenLineCap.Flat,
+            EndLineCap = PenLineCap.Flat
+        };
+        holes.Children.Add(route.GetWidenedPathGeometry(pen));
+    }
+
     // Top is composed as several connected but non-repeating circuit regions.
     // Every bright-to-dark change is a real subtraction from the colored band.
     private static void CarveTop(GeometryGroup c, double w, double s, double o, double i)
@@ -371,6 +397,51 @@ public sealed class TechChassisOutline : FrameworkElement
             new Point(w-63*s,o+13*s));
         for(var k=0;k<3;k++)
             CutRect(c,w-(55-7*k)*s,o+6*s,3*s,5*s);
+
+        // West-central relief: offset black cuts instead of another cloned tab.
+        var westGap = w * .413;
+        CutShape(c, new Point(westGap-23*s,o-3*s),new Point(westGap-10*s,o-3*s),
+            new Point(westGap-10*s,o+5*s),new Point(westGap-17*s,o+12*s),
+            new Point(westGap-23*s,o+12*s));
+        CutTrace(c,1.7*s,new Point(westGap-5*s,o+14*s),
+            new Point(westGap+8*s,o+14*s),new Point(westGap+14*s,o+8*s));
+        CutDot(c,westGap+14*s,o+8*s,2.5*s);
+        CutRect(c,westGap+23*s,o+6*s,7*s,2.2*s);
+
+        // Two longer routed wires: one bends around and returns alongside
+        // itself; another enters diagonally and crosses its outgoing route.
+        var loop = w*.59;
+        CutCurve(c,1.45*s,new Point(loop-67*s,o+5*s),
+            new Point(loop-39*s,o+5*s),new Point(loop-24*s,o+5*s),
+                new Point(loop-8*s,o+6*s),
+            new Point(loop+5*s,o+7*s),new Point(loop+6*s,o+15*s),
+                new Point(loop-4*s,o+15*s),
+            new Point(loop-16*s,o+15*s),new Point(loop-36*s,o+13*s),
+                new Point(loop-46*s,o+13*s));
+        CutDot(c,loop-46*s,o+13*s,2.1*s);
+        CutCurve(c,1.15*s,new Point(loop-29*s,o+16*s),
+            new Point(loop-15*s,o+16*s),new Point(loop-17*s,o+5*s),
+                new Point(loop+1*s,o+5*s),
+            new Point(loop+14*s,o+5*s),new Point(loop+23*s,o+6*s),
+                new Point(loop+36*s,o+6*s));
+        CutDot(c,loop+36*s,o+6*s,2.8*s);
+        for(var k=0;k<4;k++)
+            CutTrace(c,1.15*s,new Point(loop+(48+6.5*k)*s,o+5*s),
+                new Point(loop+(52+6.5*k)*s,o+9*s));
+
+        // Irregular eastern inset/notches and a second separated return arc.
+        var eastGap = w*.875;
+        CutShape(c,new Point(eastGap-7*s,i+3*s),
+            new Point(eastGap+14*s,i+3*s),new Point(eastGap+14*s,i-5*s),
+            new Point(eastGap+6*s,i-13*s),new Point(eastGap-7*s,i-13*s));
+        CutCurve(c,1.4*s,new Point(eastGap+23*s,o+6*s),
+            new Point(eastGap+42*s,o+5*s),new Point(eastGap+58*s,o+5*s),
+                new Point(eastGap+65*s,o+10*s),
+            new Point(eastGap+72*s,o+16*s),new Point(eastGap+61*s,o+15*s),
+                new Point(eastGap+52*s,o+15*s));
+        CutDot(c,eastGap+52*s,o+15*s,2.4*s);
+        CutRect(c,eastGap+81*s,o+5*s,3*s,8*s);
+
     }
 
     private static void CarveLeft(GeometryGroup c, double h, double s, double o, double i)
@@ -419,6 +490,49 @@ public sealed class TechChassisOutline : FrameworkElement
         CutDot(c,o+9*s,e+118*s,3.7*s);
         CutTrace(c,1.3*s,new Point(o+9*s,e+118*s),new Point(o+9*s,e+133*s));
         CutDot(c,o+9*s,e+133*s,2.5*s);
+
+        // A long paired black conductor runs down the wall, loops inward and
+        // doubles back. A second wire crosses near the return instead of
+        // matching its route point-for-point.
+        var sweep = h*.345;
+        CutCurve(c,1.4*s,new Point(o+5*s,sweep-16*s),
+            new Point(o+5*s,sweep+8*s),new Point(o+6*s,sweep+42*s),
+                new Point(o+6*s,sweep+61*s),
+            new Point(o+6*s,sweep+73*s),new Point(o+15*s,sweep+76*s),
+                new Point(o+15*s,sweep+66*s),
+            new Point(o+15*s,sweep+50*s),new Point(o+14*s,sweep+34*s),
+                new Point(o+14*s,sweep+21*s));
+        CutDot(c,o+14*s,sweep+21*s,2.2*s);
+        CutCurve(c,1.15*s,new Point(o+14*s,sweep-11*s),
+            new Point(o+14*s,sweep+9*s),new Point(o+11*s,sweep+28*s),
+                new Point(o+8*s,sweep+40*s),
+            new Point(o+5*s,sweep+53*s),new Point(o+11*s,sweep+69*s),
+                new Point(o+11*s,sweep+89*s));
+        CutDot(c,o+11*s,sweep+89*s,2.8*s);
+
+        // Three nonmatching short details interrupt the otherwise wide fields.
+        var upperEtch = h*.21;
+        CutShape(c,new Point(i+3*s,upperEtch-9*s),
+            new Point(i-5*s,upperEtch-9*s),new Point(i-13*s,upperEtch-s),
+            new Point(i-13*s,upperEtch+7*s),new Point(i+3*s,upperEtch+7*s));
+        CutRect(c,o+5*s,upperEtch+17*s,3.2*s,11*s);
+        CutDot(c,o+12*s,upperEtch+32*s,2.25*s);
+
+        var lowEtch = h*.685;
+        CutTrace(c,1.3*s,new Point(o+5*s,lowEtch),
+            new Point(o+12*s,lowEtch+7*s),new Point(o+12*s,lowEtch+24*s));
+        CutDot(c,o+12*s,lowEtch+24*s,2.5*s);
+        for(var k=0;k<4;k++)
+            CutRect(c,o+5*s,lowEtch+(33+k*6)*s,6.5*s,2*s);
+        CutShape(c,new Point(o-3*s,lowEtch+64*s),
+            new Point(o+9*s,lowEtch+64*s),new Point(o+9*s,lowEtch+71*s),
+            new Point(o+4*s,lowEtch+76*s),new Point(o-3*s,lowEtch+76*s));
+        var foot = h*.919;
+        CutCurve(c,1.1*s,new Point(o+6*s,foot-13*s),
+            new Point(o+6*s,foot-1*s),new Point(o+12*s,foot+2*s),
+                new Point(o+12*s,foot+13*s));
+        CutDot(c,o+12*s,foot+13*s,2.25*s);
+
     }
 
     private static void CarveRight(GeometryGroup c, double w, double h,
@@ -469,6 +583,43 @@ public sealed class TechChassisOutline : FrameworkElement
         CutDot(c,R-15*s,e+88*s,3.2*s);
         CutDot(c,R-6*s,e+103*s,2*s);
         CutDot(c,R-13*s,e+113*s,2.5*s);
+
+        // Right-side wiring deliberately differs from the left: a long
+        // serpentine doubles back, with a parallel inner conductor that
+        // crosses it once at an offset shoulder.
+        var drop = h*.318;
+        CutCurve(c,1.45*s,new Point(R-6*s,drop-18*s),
+            new Point(R-6*s,drop+7*s),new Point(R-7*s,drop+33*s),
+                new Point(R-7*s,drop+62*s),
+            new Point(R-7*s,drop+77*s),new Point(R-15*s,drop+80*s),
+                new Point(R-15*s,drop+64*s),
+            new Point(R-15*s,drop+47*s),new Point(R-14*s,drop+30*s),
+                new Point(R-14*s,drop+17*s));
+        CutDot(c,R-14*s,drop+17*s,2.5*s);
+        CutCurve(c,1.15*s,new Point(R-14*s,drop-11*s),
+            new Point(R-14*s,drop+14*s),new Point(R-10*s,drop+30*s),
+                new Point(R-8*s,drop+42*s),
+            new Point(R-5*s,drop+53*s),new Point(R-12*s,drop+77*s),
+                new Point(R-12*s,drop+100*s));
+        CutDot(c,R-12*s,drop+100*s,2.9*s);
+
+        // Short cuts in the quieter top and bottom thirds are not mirrored.
+        var upper = h*.235;
+        CutRect(c,R-11*s,upper-6*s,7*s,2.2*s);
+        CutTrace(c,1.25*s,new Point(R-5*s,upper+6*s),
+            new Point(R-13*s,upper+14*s),new Point(R-13*s,upper+30*s));
+        CutDot(c,R-13*s,upper+30*s,2.2*s);
+        var lower = h*.734;
+        CutShape(c,new Point(R+3*s,lower-12*s),
+            new Point(R-10*s,lower-12*s),new Point(R-16*s,lower-6*s),
+            new Point(R-16*s,lower+5*s),new Point(R+3*s,lower+5*s));
+        CutTrace(c,1.65*s,new Point(R-15*s,lower+18*s),
+            new Point(R-7*s,lower+26*s),new Point(R-7*s,lower+41*s));
+        CutDot(c,R-7*s,lower+41*s,2.3*s);
+        for(var k=0;k<5;k++)
+            CutTrace(c,1.1*s,new Point(R-16*s,lower+(51+k*5)*s),
+                new Point(R-12*s,lower+(55+k*5)*s));
+
     }
 
     private static void CarveBottom(GeometryGroup c, double w, double h,
@@ -529,6 +680,48 @@ public sealed class TechChassisOutline : FrameworkElement
         CutDot(c,e+170*s,y-4*s,2.8*s);
         CutRect(c,w-79*s,inner+6*s,15*s,3*s);
         CutDot(c,w-54*s,inner+11*s,3.2*s);
+
+        // Southern border gets a longer pair of curved return wires and a
+        // crossing route, balanced by short offset notches and black sockets.
+        var westFill = w*.185;
+        CutTrace(c,1.3*s,new Point(westFill-16*s,bot-7*s),
+            new Point(westFill-8*s,bot-15*s),new Point(westFill+9*s,bot-15*s));
+        CutDot(c,westFill+9*s,bot-15*s,2.5*s);
+        CutRect(c,westFill+18*s,inner+5*s,11*s,2.2*s);
+
+        var sweep = w*.45;
+        CutCurve(c,1.45*s,new Point(sweep-61*s,bot-6*s),
+            new Point(sweep-35*s,bot-6*s),new Point(sweep-17*s,bot-7*s),
+                new Point(sweep+3*s,bot-7*s),
+            new Point(sweep+16*s,bot-7*s),new Point(sweep+18*s,bot-17*s),
+                new Point(sweep+7*s,bot-17*s),
+            new Point(sweep-7*s,bot-17*s),new Point(sweep-24*s,bot-15*s),
+                new Point(sweep-37*s,bot-15*s));
+        CutDot(c,sweep-37*s,bot-15*s,2.65*s);
+        CutCurve(c,1.15*s,new Point(sweep-24*s,inner+4*s),
+            new Point(sweep-7*s,inner+4*s),new Point(sweep-9*s,bot-7*s),
+                new Point(sweep+11*s,bot-7*s),
+            new Point(sweep+27*s,bot-7*s),new Point(sweep+40*s,bot-9*s),
+                new Point(sweep+56*s,bot-9*s));
+        CutDot(c,sweep+56*s,bot-9*s,3.1*s);
+        for(var k=0;k<4;k++) CutRect(c,sweep+(69+7*k)*s,inner+5*s,3.3*s,5*s);
+
+        var eastFill = w*.686;
+        CutShape(c,new Point(eastFill-17*s,inner-3*s),
+            new Point(eastFill+6*s,inner-3*s),
+            new Point(eastFill+6*s,inner+5*s),
+            new Point(eastFill-3*s,inner+14*s),
+            new Point(eastFill-17*s,inner+14*s));
+        CutCurve(c,1.25*s,new Point(eastFill+18*s,bot-7*s),
+            new Point(eastFill+44*s,bot-7*s),new Point(eastFill+65*s,bot-7*s),
+                new Point(eastFill+75*s,bot-13*s),
+            new Point(eastFill+85*s,bot-20*s),new Point(eastFill+70*s,bot-16*s),
+                new Point(eastFill+58*s,bot-16*s));
+        CutDot(c,eastFill+58*s,bot-16*s,2.5*s);
+        for(var k=0;k<5;k++)
+            CutTrace(c,1.1*s,new Point(eastFill+(90+k*6.7)*s,inner+5*s),
+                new Point(eastFill+(94+k*6.7)*s,inner+9*s));
+
     }
 
     private Size cachedSize = Size.Empty;

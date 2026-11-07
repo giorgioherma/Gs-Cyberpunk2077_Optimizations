@@ -106,3 +106,7 @@ The user explicitly rejected a central spine with added modules. Correct model: 
 ### 2026-11-07 — Latest carved-band CI fix and width correction
 
 The last carved-band run [#42347339591](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42347339591) **failed compilation only** on ambiguous WPF/WinForms `Size`; current source explicitly aliases `System.Windows.Size`. Per user's latest design adjustment, the inner frame and content returned to **29 DIP** (not 35), and the original subtractive WPF band width reduced by moving its invisible inner limit to **19.0 DIP** (outer remains 3.2). The user asked for a slightly thinner band and no more inward drift of inner frame. Do not change profiler workflow or add painted guide rails. Verify integrated Windows CI and user screenshots.
+
+### Current denser/carved wiring UI iteration — 2026-11-07
+
+User confirmed the current **15.8-DIP subtractive band thickness** on a native screenshot and requested more variation, including much longer black wires that bend back, cross and sometimes run in parallel. `TechChassisOutline` now combines a small `CutCurve` cubic Bezier-to-negative-geometry helper with its existing `CutTrace` and hand-authored top/left/right/bottom Boolean cuts. Maintain invisible 3.2–19.0 DIP band limits and existing 29-DIP inner frame/content margins; don't drift inward or add centered spines. Build and real screenshot acceptance remain pending.
