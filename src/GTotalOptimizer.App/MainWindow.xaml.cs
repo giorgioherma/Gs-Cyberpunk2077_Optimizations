@@ -199,8 +199,15 @@ public partial class MainWindow : Window
         if (ArtworkColumn is null || ContentRegion is null) return;
         var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight
                                              + PortraitBottomOverhang);
-        ArtworkColumn.Width = new GridLength(Math.Clamp(
-            imageHeight * 743.0 / 2117.0, 170.0, 245.0));
+        var imageWidth = Math.Clamp(
+            imageHeight * 743.0 / 2117.0, 170.0, 245.0);
+        ArtworkColumn.Width = new GridLength(imageWidth);
+        // V is a root-level overlay, so the thin inner chassis can stay
+        // untouched behind it while the original two image layers still
+        // render in exactly the same host with identical Uniform scaling.
+        // +3 preserves the previous host width from Margin="-3,0,0,-8".
+        if (VPortraitHost is not null)
+            VPortraitHost.Width = imageWidth + 3.0;
     }
 
     private void SetActiveTab(bool results)

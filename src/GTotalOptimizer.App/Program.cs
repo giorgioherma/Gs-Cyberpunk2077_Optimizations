@@ -91,18 +91,25 @@ internal static class Program
                 throw new InvalidOperationException("V proportional content width changed");
             var photoClip = window.VPortraitHost.Clip ??
                 throw new InvalidOperationException("V portrait has no clipping geometry");
-            if (!photoClip.FillContains(new System.Windows.Point(
+            if (photoClip.FillContains(new System.Windows.Point(
                     1, window.VPortraitHost.ActualHeight - 1)) ||
-                photoClip.FillContains(new System.Windows.Point(1, 1)))
+                photoClip.FillContains(new System.Windows.Point(1, 1)) ||
+                !photoClip.FillContains(new System.Windows.Point(
+                    16, window.VPortraitHost.ActualHeight - 1)))
                 throw new InvalidOperationException(
-                    "V must retain bottom-left photo pixels and clip only top-left");
-            if (System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork) <= 0)
-                throw new InvalidOperationException("Owner outer PNG is not above V");
-            var chassis = ((System.Windows.Controls.Grid)visual).Children
+                    "V must crop only its two true corner wedges after uniform resize");
+            var rootGrid = (System.Windows.Controls.Grid)visual;
+            var chassis = rootGrid.Children
                 .OfType<GTotalOptimizer.App.Visuals.ContentChassisOutline>().Single();
-            if (System.Windows.Controls.Panel.GetZIndex(chassis) <=
-                System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork))
-                throw new InvalidOperationException("Inner outline must win raster overlaps");
+            var zOuter = System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork);
+            var zPortrait = System.Windows.Controls.Panel.GetZIndex(window.VPortraitHost);
+            var zInner = System.Windows.Controls.Panel.GetZIndex(chassis);
+            if (!(zOuter > zPortrait && zPortrait > zInner))
+                throw new InvalidOperationException(
+                    $"Wrong WPF compositing priority: outer={zOuter}, V={zPortrait}, inner={zInner}");
+            if (!rootGrid.Children.Contains(window.VPortraitHost))
+                throw new InvalidOperationException(
+                    "V must be a direct root overlay to cross the inner border");
 
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource

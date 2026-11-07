@@ -193,12 +193,10 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Render the owner's COMPLETE PNG canvas as the backmost layer.
-             All functional surfaces and text remain ABOVE it, even if the
-             supplied art has an opaque #060D0F background. No safety crop
-             can silently erase the actual border design. -->
+        <!-- The original alpha PNG is the final/frontmost perimeter;
+             its painted corners always cover the portrait and the inner line. -->
         <Image x:Name="OuterBorderArtwork" Grid.RowSpan="2"
-               Panel.ZIndex="10"
+               Panel.ZIndex="30"
                Stretch="Fill" StretchDirection="Both"
                IsHitTestVisible="False" SnapsToDevicePixels="True"
                RenderOptions.BitmapScalingMode="HighQuality"
@@ -246,21 +244,9 @@
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- V is still pinned 3 DIPs left and at its original top.
-                 Grow the ORIGINAL portrait uniformly DOWN and RIGHT only.
-                 Stop at the straight top edge of the outer bottom PNG band,
-                 never in its lower decorative dent; leave inner frame alone. -->
-            <Grid x:Name="VPortraitHost" Grid.Column="0" Background="#060D0F"
-                  Margin="-3,0,0,-8" ClipToBounds="True"
-                  fx:ChamferClip.CornerCut="14">
-                <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
-                       HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
-                <!-- Black outline retains the 45-degree lower-left chamfer,
-                     but the original image pixels are NOT cut there. -->
-                <fx:PortraitOutline Panel.ZIndex="1" IsHitTestVisible="False"/>
-            </Grid>
+            <!-- Width is reserved for V; the actual ONE V host renders
+                 above the inner outline as a direct root-grid sibling. -->
+            <Grid Grid.Column="0" Background="Transparent"/>
 
             <Grid Grid.Column="1" Background="#060D0F" ClipToBounds="True">
                 <Grid.RowDefinitions>
@@ -616,10 +602,27 @@
             </Grid>
         </Grid>
 
-        <!-- Thin INNER WPF frame: straight uninterrupted raised bottom line
-             and 68-DIP header clearance. Always wins over raster overlaps. -->
+        <!-- Inner frame shape is unchanged. It renders behind V at the left,
+             not over the painted portrait. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
-                                  Panel.ZIndex="11" FrameInset="27" Stroke="{StaticResource NeonStroke}"
+                                  Panel.ZIndex="10" FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
+
+        <!-- A single portrait host sits in the root row, directly over the
+             left part of the inner stroke. Root row1 starts at the SAME top
+             as ContentRegion. The 26-DIP left margin is 29−3, the 21-DIP
+             bottom inset is 29−8. Neither image is moved or stretched. -->
+        <Grid x:Name="VPortraitHost" Grid.Row="1" Panel.ZIndex="20"
+              HorizontalAlignment="Left" Margin="26,0,0,21"
+              Width="214" Background="#060D0F" ClipToBounds="True"
+              fx:ChamferClip.CornerCut="14">
+            <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
+                   HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
+                   HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
+            <!-- Only top/side black edges; never draw a dark seam where
+                 the portrait's yellow bottom meets the yellow outer border. -->
+            <fx:PortraitOutline Panel.ZIndex="1" IsHitTestVisible="False"/>
+        </Grid>
     </Grid>
 </Window>

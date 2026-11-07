@@ -85,9 +85,10 @@ public static class ChamferGeometry
         return path;
     }
 
-    // One owner geometry for the portrait's left corners. The PHOTO uses
-    // clipLowerLeft=false to preserve its original square bottom-left pixels;
-    // the topmost black OUTLINE uses true for the crisp 45-degree lower edge.
+    // One owner geometry for both left corners. The full-resolution portrait
+    // is resized first; its tiny lower-left wedge is clipped only where it
+    // meets the decorative outer border (which paints above the portrait).
+    // This keeps the portrait out from under the chassis' bent corner.
     public static Geometry CreatePortraitClip(double width, double height,
         double cut, bool clipLowerLeft = true)
     {
@@ -213,28 +214,41 @@ public static class ChamferClip
         if (e.ActualWidth < 1 || e.ActualHeight < 1) return;
         var cut = ChamferGeometry.ScaledCut(e, GetCornerCut(e));
         e.Clip = ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight,
-            cut, clipLowerLeft: false);
+            cut, clipLowerLeft: true);
     }
 }
 
 
 /// <summary>
-/// Thin black outline for the actual V silhouette panel. Reuses its existing
-/// left-only, 45-degree portrait clipping path. Does not add a new frame,
-/// chamfer rule, image pass or raster artwork.
+/// Open upper/side portrait outline. It deliberately has NO lower edge or
+/// lower-left diagonal stroke: yellow portrait and yellow outer border meet
+/// without the former black seam. The image itself is clipped separately by
+/// the authoritative CreatePortraitClip at its actual rendered size.
 /// </summary>
 public sealed class PortraitOutline : FrameworkElement
 {
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        if (RenderSize.Width < 2 || RenderSize.Height < 2) return;
-        var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
-        var geometry = ChamferGeometry.CreatePortraitClip(
-            RenderSize.Width, RenderSize.Height, cut);
-        var pen = new Pen(Brushes.Black, 1.6);
+        var width = RenderSize.Width;
+        var height = RenderSize.Height;
+        if (width < 2 || height < 2) return;
+        var cut = Math.Clamp(ChamferGeometry.ScaledCut(this,
+            ChamferGeometry.StandardCut), 0, Math.Min(width, height) / 3.0);
+        var outline = new StreamGeometry();
+        using (var ctx = outline.Open())
+        {
+            ctx.BeginFigure(new Point(0, height - cut), false, false);
+            ctx.LineTo(new Point(0, cut), true, false);
+            ctx.LineTo(new Point(cut, 0), true, false);
+            ctx.LineTo(new Point(width, 0), true, false);
+            ctx.LineTo(new Point(width, height - cut), true, false);
+        }
+        outline.Freeze();
+        var pen = new Pen(Brushes.Black, 1.6)
+        { LineJoin = PenLineJoin.Miter };
         pen.Freeze();
-        dc.DrawGeometry(null, pen, geometry);
+        dc.DrawGeometry(null, pen, outline);
     }
 }
 
