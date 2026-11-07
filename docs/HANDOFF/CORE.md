@@ -126,3 +126,7 @@ The user's latest visual rejection of `0781e5d` is not a compilation issue (Wind
 ### 2026-11-07 — Full-canvas owner-painted PNG border and relocated assets
 
 Owner placed `GCO_Border_Regular_1280x760_FINAL.png` and `GCO_Border_Small_1080x640_FINAL.png` in `assets/ui/elements/`, and original V/skyline in `assets/ui/images/`. Procedural `TechChassisOutline` was replaced *at the WPF composition point* by an image-backed outer perimeter, selected by nearest client size. A WPF perimeter clip prevents any nontransparent image background overpainting the application. The 29-DIP inner frame remains generated WPF; no changes to profiler workflows/restore. Builder now copies original five PNGs preserving `images/` and `elements/` with SHA-256, and package contracts check PNG signatures/sizes. Do not claim visual approval until actual Windows screenshots, including scaling, are reviewed.
+
+### 2026-11-07 — PNG skyline test correction
+
+Following the PNG border relocation, CI #42362905376 **failed after assembly and smoke tests**, at a brittle final-artwork skyline assertion expecting an older documented exact PNG resolution. The packaged image is always copied from the owner's `assets/ui/images/TrueHeader_GCO_page1.png` with SHA-256 identity verification at source; test that it is a valid PNG with real positive dimensions rather than imposing an obsolete resolution. Keep the exact two border sizes and 743×2117 portrait pair checks. Validate the subsequent full CI run.
