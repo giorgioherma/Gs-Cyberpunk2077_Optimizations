@@ -183,7 +183,9 @@ public partial class MainWindow : Window
                 // dark background when real controls overlap this texture.
                 double fadeT = Math.Clamp((u - .70) / .29, 0.0, 1.0);
                 double fade = 1.0 - fadeT * fadeT * (3.0 - 2.0 * fadeT);
-                byte alpha = (byte)Math.Round(222.0 * density * fade);
+                // The full-width cloud overlaps live labels/cards: keep it
+                // atmospheric rather than painting a solid yellow panel.
+                byte alpha = (byte)Math.Round(168.0 * density * fade);
                 pixels[i] = (byte)Math.Round(3.0 * b);     // B
                 pixels[i + 1] = (byte)Math.Round(195.0 + 45.0 * g); // G
                 pixels[i + 2] = (byte)Math.Round(232.0 + 23.0 * r); // R
@@ -276,19 +278,25 @@ public partial class MainWindow : Window
         // +3 preserves the previous host width from Margin="-3,0,0,-8".
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageWidth + 3.0;
-        // One position for the authored clouds and their underglow. Both
-        // begin within V's masked edge, then taper into the right-side UI.
-        // No element or native source image is moved or enlarged.
-        var cloudLeft = imageWidth - 26.0;
+        // The 30-50 DIP allowance is overlap INTO the original V edge,
+        // not the width of the cloud artwork. Scale the authored cloud once
+        // to ContentRegion height with the ORIGINAL pixel aspect ratio.
+        // Wider clouds fade underneath the live controls without moving them.
+        var cloudLeft = imageWidth - 39.0;
+        if (VAtmosphereImage?.Source is BitmapSource clouds &&
+            ContentRegion.ActualHeight > 0)
+        {
+            double cloudWidth = ContentRegion.ActualHeight *
+                                clouds.PixelWidth / clouds.PixelHeight;
+            VAtmosphereImage.Width = cloudWidth;
+            VAtmosphereImage.Margin = new Thickness(cloudLeft, 0, 0, 0);
+        }
         if (VAtmosphereGlow is not null)
         {
-            VAtmosphereGlow.Width = 142.0;
+            // Only the seam requires the stronger underglow; the authored
+            // cloud supplies the broader, irregular atmospheric extension.
+            VAtmosphereGlow.Width = 128.0;
             VAtmosphereGlow.Margin = new Thickness(cloudLeft, 0, 0, 0);
-        }
-        if (VAtmosphereImage is not null)
-        {
-            VAtmosphereImage.Width = 142.0;
-            VAtmosphereImage.Margin = new Thickness(cloudLeft, 0, 0, 0);
         }
     }
 
