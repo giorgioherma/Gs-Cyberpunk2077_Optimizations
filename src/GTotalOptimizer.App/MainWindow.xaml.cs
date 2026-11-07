@@ -95,9 +95,9 @@ public partial class MainWindow : Window
         {
             Stretch = Stretch.Fill
         };
-        var committedCloud = ImageFile("images", "toi background thick.png");
+        var committedCloud = ImageFile("images", "yellow.png");
         if (committedCloud is null)
-            Trace.TraceError("Missing required user-selected thick cloud texture.");
+            Trace.TraceError("Missing required user-supplied yellow cloud texture.");
         else
             VAtmosphereImage.Source = CreatePortraitAtmosphere(committedCloud);
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
@@ -123,11 +123,11 @@ public partial class MainWindow : Window
         {
             double v = (double)y / (height - 1);
             // The lower painted ink and its border overlap must remain crisp.
-            double strength = v > .87 ? .09 : v > .71 ? .40 : 1.0;
+            double strength = v > .86 ? .05 : v > .70 ? .35 : 1.0;
             double sway = .013 * Math.Sin(v * 21.0)
                         + .009 * Math.Sin(v * 57.0 + 1.7)
                         + .004 * Math.Sin(v * 121.0 + 2.3);
-            double start = .875 + sway + (1.0 - strength) * .105;
+            double start = .912 + sway * .65 + (1.0 - strength) * .072;
             for (int x = 0; x < width; ++x)
             {
                 double u = (double)x / (width - 1);
@@ -149,11 +149,12 @@ public partial class MainWindow : Window
         return bitmap;
     }
 
-    // User-selected 'toi background thick.png' is a fully opaque RGB painting.
-    // Convert its LIGHTNESS to transparency and tint the resulting clouds yellow.
-    // Never draw the RGB image directly: its dark pixels would obscure the UI.
-    // The conversion runs once during window initialization, not per frame.
-    // Both V source images retain their original pixels and ONE shared mask.
+    // The user-provided yellow.png is an authored yellow-to-black atmosphere,
+    // NOT a clean alpha texture: its dark area is still nearly opaque.
+    // Extract its yellow brightness as density; let the image's actual cloud
+    // forms determine alpha. The WPF underglow fills the portrait fade below.
+    // Conversion happens once at startup, never per-frame. Both original V
+    // source images retain their pixels and use the same shared mask.
     private static BitmapSource CreatePortraitAtmosphere(BitmapSource cloud)
     {
         var input = new FormatConvertedBitmap(
@@ -172,20 +173,20 @@ public partial class MainWindow : Window
                 double b = source[i] / 255.0;
                 double g = source[i + 1] / 255.0;
                 double r = source[i + 2] / 255.0;
-                // Subtract the painted near-black background. Preserve the
-                // thick asset's natural uneven wisps, ridges and empty areas.
-                double lightness = .0722 * b + .7152 * g + .2126 * r;
-                double density = Math.Pow(
-                    Math.Clamp((lightness - .035) / .86, 0.0, 1.0), .83);
+                // Painted dark pixels are NOT opaque clouds. Preserve the
+                // user's brighter yellow cloud lobes and varying intensity.
+                double gold = Math.Clamp((.62 * r + .38 * g - .018) / .94, 0.0, 1.0);
+                double authoredAlpha = source[i + 3] / 255.0;
+                double density = Math.Pow(gold, .85) * authoredAlpha;
                 double u = (double)x / (width - 1);
-                // Last section becomes completely transparent with no visible
-                // cutoff, even when the functional cards move over the cloud.
-                double fadeT = Math.Clamp((u - .72) / .27, 0.0, 1.0);
+                // Complete transparency before the far edge. No rectangular
+                // dark background when real controls overlap this texture.
+                double fadeT = Math.Clamp((u - .70) / .29, 0.0, 1.0);
                 double fade = 1.0 - fadeT * fadeT * (3.0 - 2.0 * fadeT);
-                byte alpha = (byte)Math.Round(205.0 * density * fade);
-                pixels[i] = 3;      // B
-                pixels[i + 1] = 233; // G
-                pixels[i + 2] = 255; // R
+                byte alpha = (byte)Math.Round(222.0 * density * fade);
+                pixels[i] = (byte)Math.Round(3.0 * b);     // B
+                pixels[i + 1] = (byte)Math.Round(195.0 + 45.0 * g); // G
+                pixels[i + 2] = (byte)Math.Round(232.0 + 23.0 * r); // R
                 pixels[i + 3] = alpha;
             }
         }
@@ -275,14 +276,19 @@ public partial class MainWindow : Window
         // +3 preserves the previous host width from Margin="-3,0,0,-8".
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageWidth + 3.0;
-        // Place the atmosphere relative to the portrait edge, not the left
-        // edge of the full content region. It overlaps the fading ~30 DIPs
-        // and extends into the right-side layout without cropping at the
-        // old sidebar column boundary. The source images do not move.
+        // One position for the authored clouds and their underglow. Both
+        // begin within V's masked edge, then taper into the right-side UI.
+        // No element or native source image is moved or enlarged.
+        var cloudLeft = imageWidth - 26.0;
+        if (VAtmosphereGlow is not null)
+        {
+            VAtmosphereGlow.Width = 142.0;
+            VAtmosphereGlow.Margin = new Thickness(cloudLeft, 0, 0, 0);
+        }
         if (VAtmosphereImage is not null)
         {
-            VAtmosphereImage.Width = 122.0;
-            VAtmosphereImage.Margin = new Thickness(imageWidth - 37.0, 0, 0, 0);
+            VAtmosphereImage.Width = 142.0;
+            VAtmosphereImage.Margin = new Thickness(cloudLeft, 0, 0, 0);
         }
     }
 
