@@ -130,8 +130,11 @@ internal static class Program
                 for (var y = innerY - 1; y <= innerY + 1; y++)
                 {
                     var rgb = RgbAt(x, y);
-                    if (rgb[0] > 75 && rgb[1] > 70 &&
-                        (rgb[0] - rgb[2] > 20 || rgb[2] - rgb[0] > 20))
+                    var yellowLine = rgb[0] > 90 && rgb[1] > 90 &&
+                                     rgb[0] - rgb[2] > 25;
+                    var cyanLine = rgb[1] > 85 && rgb[2] > 90 &&
+                                   rgb[2] - rgb[0] > 25;
+                    if (yellowLine || cyanLine)
                         lineVisible = true;
                 }
                 if (!lineVisible)
