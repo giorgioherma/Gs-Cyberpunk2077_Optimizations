@@ -88,8 +88,7 @@ $uiNames=@(
   'images/Upright_hotka.png',
   'images/GCO_V_original_pixel_locked_silhouette.png',
   'images/TrueHeader_GCO_page1.png',
-  'elements/GCO_Border_Regular_1280x760_FINAL.png',
-  'elements/GCO_Border_Small_1080x640_FINAL.png'
+  'elements/GCO_Border_Regular_1280x760_FINAL.png'
 )
 $uiTarget=Join-Path $root 'assets/ui'
 foreach ($name in $uiNames) {
@@ -105,7 +104,7 @@ foreach ($name in $uiNames) {
     throw "Packaged artwork hash mismatch: $name"
   }
 }
-Write-Host 'PASS WPF image pair, blue skyline, and both user-painted border canvases'
+Write-Host 'PASS WPF image pair, skyline, and one Regular border canvas'
 
 # Fonts are embedded as WPF assembly resources; ship OFL license notices.
 foreach ($family in @('Rajdhani','Oxanium')) {

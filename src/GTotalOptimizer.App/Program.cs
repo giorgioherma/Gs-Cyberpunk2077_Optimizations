@@ -114,8 +114,9 @@ internal static class Program
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Border Source disappeared after layout");
-            if (regular.PixelWidth != 1280 || regular.PixelHeight != 760)
-                throw new InvalidOperationException("Regular border wasn't selected");
+            if (regular.PixelWidth != 1280 || regular.PixelHeight != 760 ||
+                !ReferenceEquals(regular, first))
+                throw new InvalidOperationException("Regular border must remain the same bitmap after layout");
 
             var screenshot = new System.Windows.Media.Imaging.RenderTargetBitmap(
                 width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -169,12 +170,18 @@ internal static class Program
             smallRoot.UpdateLayout();
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
-                ?? throw new InvalidOperationException("Small border Source was null");
-            if (small.PixelWidth != 1080 || small.PixelHeight != 640)
+                ?? throw new InvalidOperationException("Small-window border Source is null");
+            if (small.PixelWidth != 1280 || small.PixelHeight != 760)
                 throw new InvalidOperationException(
-                    $"Small border not selected: {small.PixelWidth}x{small.PixelHeight}");
+                    $"Small-window raster must be Regular 1280x760, got {small.PixelWidth}x{small.PixelHeight}");
+            // Re-layout an existing window at a different size: never swap Source.
+            smallRoot.Measure(new System.Windows.Size(1190, 680));
+            smallRoot.Arrange(new System.Windows.Rect(0, 0, 1190, 680));
+            smallRoot.UpdateLayout();
+            if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))
+                throw new InvalidOperationException("Regular border swapped on live window resize");
 
-            Console.WriteLine("PASS original border pixels rendered; regular and small image sources selected");
+            Console.WriteLine("PASS Regular border bitmap rendered at both sizes without source switching");
             app.Shutdown();
             return 0;
         }

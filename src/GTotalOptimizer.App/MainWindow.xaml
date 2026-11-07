@@ -199,8 +199,7 @@
                Panel.ZIndex="30"
                Stretch="Fill" StretchDirection="Both"
                IsHitTestVisible="False" SnapsToDevicePixels="True"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               SizeChanged="OuterBorderArtwork_SizeChanged"/>
+               RenderOptions.BitmapScalingMode="HighQuality"/>
 
         <!-- Keep the title/header TRANSPARENT so the artwork's TOP border
              remains visible beneath it. Other UI stays unchanged. -->

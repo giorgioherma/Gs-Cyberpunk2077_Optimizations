@@ -40,8 +40,6 @@ public partial class MainWindow : Window
     private bool initialized;
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
-    private BitmapImage? borderRegular;
-    private BitmapImage? borderSmall;
 
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
     private static bool GameRunning() => Process.GetProcessesByName("Cyberpunk2077").Length != 0;
@@ -92,40 +90,12 @@ public partial class MainWindow : Window
             VBlackImage.Source = black;
         }
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
-        borderRegular = ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
-        borderSmall = ImageFile("elements", "GCO_Border_Small_1080x640_FINAL.png");
-
-        // A sourceless WPF Image can measure as zero. Assign its first
-        // raster BEFORE consulting ActualWidth/ActualHeight or layout events.
-        // Otherwise source assignment can get stuck waiting on zero size.
-        OuterBorderArtwork.Source = borderRegular ?? borderSmall;
-        if (borderRegular is null || borderSmall is null)
-            Trace.TraceError("Missing/undecodable owner border in assets/ui/elements.");
-        UpdateOuterBorderArtwork();
-    }
-
-    // Select the nearest owner-supplied full-canvas image. It is drawn
-    // BEHIND the page, so even nontransparent artwork backgrounds cannot
-    // hide controls and the original painted perimeter is never cropped.
-    private void OuterBorderArtwork_SizeChanged(object sender,
-        System.Windows.SizeChangedEventArgs e) => UpdateOuterBorderArtwork();
-
-    private void UpdateOuterBorderArtwork()
-    {
-        if (OuterBorderArtwork is null) return;
-        var width = OuterBorderArtwork.ActualWidth;
-        var height = OuterBorderArtwork.ActualHeight;
-        if (width <= 0 || height <= 0) return;
-
-        var regularDistance = Math.Abs(width - 1280.0) / 1280.0
-                            + Math.Abs(height - 760.0) / 760.0;
-        var smallDistance = Math.Abs(width - 1080.0) / 1080.0
-                          + Math.Abs(height - 640.0) / 640.0;
-        var image = (smallDistance < regularDistance ? borderSmall : borderRegular)
-                    ?? borderRegular ?? borderSmall;
-        if (image is not null && !ReferenceEquals(OuterBorderArtwork.Source, image))
-            OuterBorderArtwork.Source = image;
-
+        // Use one immutable master for the lifetime of this window.
+        // WPF continuously scales it; never swap BitmapSource on resize.
+        OuterBorderArtwork.Source =
+            ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
+        if (OuterBorderArtwork.Source is null)
+            Trace.TraceError("Missing/undecodable Regular border PNG in assets/ui/elements.");
     }
 
     private void SetPortraitStage(PortraitStage stage)
@@ -224,7 +194,6 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        UpdateOuterBorderArtwork();
         UpdatePortraitWidth();
         lastGameRunning = GameRunning();
         gameStateTimer.Start();

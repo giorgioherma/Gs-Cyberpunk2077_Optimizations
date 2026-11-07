@@ -916,8 +916,8 @@ if (args.Length > 0)
     var borderDir = Path.Combine(delivered, "assets", "ui", "elements");
     Require(PngDimensions(Path.Combine(borderDir, "GCO_Border_Regular_1280x760_FINAL.png")) ==
         (1280, 760), "1280x760 full-window border canvas preserved under elements");
-    Require(PngDimensions(Path.Combine(borderDir, "GCO_Border_Small_1080x640_FINAL.png")) ==
-        (1080, 640), "1080x640 full-window border canvas preserved under elements");
+    Require(!File.Exists(Path.Combine(borderDir, "GCO_Border_Small_1080x640_FINAL.png")),
+        "unused Small border must not ship in the single-canvas package");
     var imageDir = Path.Combine(delivered, "assets", "ui", "images");
     Require(PngDimensions(Path.Combine(imageDir, "Upright_hotka.png")) == (743, 2117) &&
         PngDimensions(Path.Combine(imageDir, "GCO_V_original_pixel_locked_silhouette.png")) == (743, 2117),
