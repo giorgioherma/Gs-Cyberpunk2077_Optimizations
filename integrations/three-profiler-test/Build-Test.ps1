@@ -2,7 +2,7 @@ param([switch]$Integrated)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.6') { throw "Unexpected unified app version: $version" }
+if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.7') { throw "Unexpected unified app version: $version" }
 $useWpf=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:UseWPF).Trim()
 if ($LASTEXITCODE -ne 0 -or $useWpf -ne 'true') { throw 'Unified GUI must build its native WPF frontend' }
 # Publish into a short stable staging path. The long branded end-user folder
@@ -260,7 +260,7 @@ IMPORTANT
 - The optimization generator/combined ZIP feature is not yet enabled.
 - Your captured data is under the app folder's RESULTS directory.
 
-VERSION 1.1.6 (portable build). No system .NET installation required.
+VERSION 1.1.7 (portable build). No system .NET installation required.
 '@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
   Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
   Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'

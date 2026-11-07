@@ -256,3 +256,7 @@ The user explicitly confirmed the following final ownership wording, including t
 ## 2026-11-07 — Single border canvas / no resize flicker
 
 Owner selected the Regular 1280×760 PNG as the only full-window master at all sizes, continuing to use `assets/ui/elements/GCO_Border_Regular_1280x760_FINAL.png`. The owner will replace this file with corrected art and remove Small. The app must not switch raster sources while resizing; use the single image loaded at startup with high-quality `Stretch=Fill`, accepting the negligible aspect ratio difference. The Small PNG is not packaged. Preserve app v1.1.6 and all other visuals/native functionality.
+
+## 2026-11-07 — Explicit unified package v1.1.7
+
+The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1.1.7`; no unrelated fixes or design changes authorized. Maintain single .NET10 runtime, current V geometry, sole Regular PNG, independent CET/GRSP version ownership and one Windows CI workflow. A browser malware warning on the ZIP prompted the request, but bumping the version alone cannot prove the binary safe or clear a security detection.

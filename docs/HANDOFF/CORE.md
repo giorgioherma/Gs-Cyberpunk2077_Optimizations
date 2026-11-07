@@ -188,3 +188,7 @@ Owner updated the sole Regular border PNG in commit `b8e5abb`. V host overhang i
 ### 2026-11-07 — V lower edge +5-DIP proportional resize
 
 Owner approved a final +5 DIP proportional growth on the corrected single Regular master PNG. `VPortraitHost` bottom margin 19→14, `PortraitBottomOverhang` 10→15, packaged WPF regression 10→15. Same top-left x=26, same pair of `Stretch=Uniform` original V images; width automatically increases by ~1.75 DIPs; border source, layer order, inner frame and app v1.1.6 unchanged. Verify canonical CI and user screenshot.
+
+### 2026-11-07 — GCO v1.1.7 version bump (owner requested)
+
+The owner requested a fresh build and one version bump following a download browser security flag. Update **only unified GCO package version** to `1.1.7` (assembly/file `1.1.7.0`) across `Directory.Build.props`, WPF title/header, integrated builder package/version messages and sole Windows workflow's version contracts; do not change CET/GRSP/PresentMon binaries, game installations, V geometry/PNG or .NET10. Version change does not establish malware detection as false positive or resolve a reputation flag. Verify new CI and separately investigate any repeated detection. Pre-bump [CI #42386209903](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42386209903) succeeded on v1.1.6.
