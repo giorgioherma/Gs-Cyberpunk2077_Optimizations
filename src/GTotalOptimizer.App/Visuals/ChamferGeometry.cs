@@ -345,18 +345,18 @@ public sealed class TechChassisOutline : FrameworkElement
         // Three neighboring engravings are in one organized stripe cluster.
         x = w * .365;
         CutShape(c,
-            new Point(x, o + 3.5*s),
-            new Point(x + 45*s, o + 3.5*s),
-            new Point(x + 53*s, o + 11.5*s),
-            new Point(x + 117*s, o + 11.5*s),
-            new Point(x + 124*s, o + 8*s),
-            new Point(x + 166*s, o + 8*s),
-            new Point(x + 166*s, o + 6.5*s),
-            new Point(x + 121*s, o + 6.5*s),
-            new Point(x + 114*s, o + 8*s),
-            new Point(x + 56*s, o + 8*s),
-            new Point(x + 49*s, o + 1*s),
-            new Point(x, o + 1*s));
+            new Point(x, o + 4*s),
+            new Point(x + 43*s, o + 4*s),
+            new Point(x + 49*s, o + 10*s),
+            new Point(x + 107*s, o + 10*s),
+            new Point(x + 109*s, o + 10*s),
+            new Point(x + 166*s, o + 10*s),
+            new Point(x + 166*s, o + 12*s),
+            new Point(x + 109*s, o + 12*s),
+            new Point(x + 107*s, o + 14*s),
+            new Point(x + 49*s, o + 14*s),
+            new Point(x + 43*s, o + 14*s),
+            new Point(x, o + 14*s));
         // The long body is followed by a single coherent cross-hatched
         // cluster and a diminishing ladder, instead of scattered dashes.
         for (var n = 0; n < 6; n++)
@@ -534,18 +534,18 @@ public sealed class TechChassisOutline : FrameworkElement
         // and its own hatch field. This is the rotated spirit of reference 3.
         var x = w * .084;
         CutShape(c,
-            new Point(x, bottom - 4*s),
-            new Point(x + 43*s, bottom - 4*s),
-            new Point(x + 50*s, bottom - 11*s),
+            new Point(x, bottom - 15*s),
+            new Point(x + 43*s, bottom - 15*s),
+            new Point(x + 47*s, bottom - 11*s),
             new Point(x + 105*s, bottom - 11*s),
-            new Point(x + 113*s, bottom - 7*s),
-            new Point(x + 167*s, bottom - 7*s),
-            new Point(x + 167*s, bottom - 5*s),
-            new Point(x + 111*s, bottom - 5*s),
-            new Point(x + 103*s, bottom - 8*s),
-            new Point(x + 53*s, bottom - 8*s),
-            new Point(x + 46*s, bottom + 2*s),
-            new Point(x, bottom + 2*s));
+            new Point(x + 108*s, bottom - 10*s),
+            new Point(x + 167*s, bottom - 10*s),
+            new Point(x + 167*s, bottom - 8*s),
+            new Point(x + 108*s, bottom - 8*s),
+            new Point(x + 105*s, bottom - 6*s),
+            new Point(x + 47*s, bottom - 6*s),
+            new Point(x + 43*s, bottom - 5*s),
+            new Point(x, bottom - 5*s));
         for (var n = 0; n < 6; n++)
         {
             var ax = x + (180 + n*7)*s;
@@ -582,18 +582,18 @@ public sealed class TechChassisOutline : FrameworkElement
         // into a narrow tail, followed by a decreasing socket array.
         x = w * .760;
         CutShape(c,
-            new Point(x, inner + 4*s),
-            new Point(x + 51*s, inner + 4*s),
-            new Point(x + 59*s, inner + 12*s),
-            new Point(x + 104*s, inner + 12*s),
-            new Point(x + 111*s, inner + 9*s),
-            new Point(x + 150*s, inner + 9*s),
-            new Point(x + 150*s, inner + 6*s),
-            new Point(x + 109*s, inner + 6*s),
-            new Point(x + 101*s, inner + 8*s),
-            new Point(x + 63*s, inner + 8*s),
-            new Point(x + 55*s, inner + 1*s),
-            new Point(x, inner + 1*s));
+            new Point(x, inner + 3*s),
+            new Point(x + 49*s, inner + 3*s),
+            new Point(x + 53*s, inner + 7*s),
+            new Point(x + 105*s, inner + 7*s),
+            new Point(x + 108*s, inner + 8*s),
+            new Point(x + 150*s, inner + 8*s),
+            new Point(x + 150*s, inner + 10*s),
+            new Point(x + 108*s, inner + 10*s),
+            new Point(x + 105*s, inner + 12*s),
+            new Point(x + 53*s, inner + 12*s),
+            new Point(x + 49*s, inner + 13*s),
+            new Point(x, inner + 13*s));
         CutRect(c, x + 158*s, inner + 5*s, 20*s, 5*s);
         CutRect(c, x + 183*s, inner + 5*s, 10*s, 5*s);
         CutRect(c, x + 199*s, inner + 5*s, 5*s, 5*s);
