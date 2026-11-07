@@ -249,345 +249,338 @@ public sealed class TechChassisOutline : FrameworkElement
 
     public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
 
-    // The heavy parts of the chassis are authored shapes, NOT repeated
-    // generic tabs. Their positions scale against the actual window size.
-    // The shared base perimeter and its chamfers are still computed once.
-    private static Geometry Plate(params Point[] points)
+    // The two outlines here are INVISIBLE DESIGN LIMITS, not painted rails.
+    // The filled band is their difference. All circuitry is cut OUT of that
+    // band, so no ornament can drift beyond either hard limit.
+    private static Geometry CreateBand(double width, double height, double scale, double cut)
+    {
+        var outside = ChamferGeometry.Create(width, height, cut, 3.2 * scale);
+        var inside = ChamferGeometry.Create(width, height, cut, 22.8 * scale);
+        return Geometry.Combine(outside, inside, GeometryCombineMode.Exclude, null);
+    }
+
+    private static void CutRect(GeometryGroup holes, double x, double y, double width, double height)
+    {
+        holes.Children.Add(new RectangleGeometry(new Rect(x, y, width, height)));
+    }
+
+    private static void CutDot(GeometryGroup holes, double x, double y, double radius)
+    {
+        holes.Children.Add(new EllipseGeometry(new Point(x, y), radius, radius));
+    }
+
+    private static void CutShape(GeometryGroup holes, params Point[] points)
     {
         var path = new StreamGeometry();
-        using (var context = path.Open())
+        using (var ctx = path.Open())
         {
-            context.BeginFigure(points[0], true, true);
+            ctx.BeginFigure(points[0], true, true);
             for (var i = 1; i < points.Length; i++)
-                context.LineTo(points[i], true, false);
+                ctx.LineTo(points[i], true, false);
         }
         path.Freeze();
-        return path;
+        holes.Children.Add(path);
     }
 
-    private static void Rail(DrawingContext dc, Brush brush, double weight, params Point[] points)
+    private static void CutTrace(GeometryGroup holes, double thickness, params Point[] points)
     {
-        var pen = new Pen(brush, weight) { LineJoin = PenLineJoin.Miter };
-        for (var i = 1; i < points.Length; ++i)
-            dc.DrawLine(pen, points[i - 1], points[i]);
+        var route = new StreamGeometry();
+        using (var ctx = route.Open())
+        {
+            ctx.BeginFigure(points[0], false, false);
+            for (var i = 1; i < points.Length; i++)
+                ctx.LineTo(points[i], true, false);
+        }
+        route.Freeze();
+        var pen = new Pen(Brushes.Black, thickness)
+        {
+            LineJoin = PenLineJoin.Miter,
+            StartLineCap = PenLineCap.Flat,
+            EndLineCap = PenLineCap.Flat
+        };
+        holes.Children.Add(route.GetWidenedPathGeometry(pen));
     }
 
-    private static void Hole(DrawingContext dc, Brush negative, double x, double y, double radius)
+    // Top is composed as several connected but non-repeating circuit regions.
+    // Every bright-to-dark change is a real subtraction from the colored band.
+    private static void CarveTop(GeometryGroup c, double w, double s, double o, double i)
     {
-        dc.DrawEllipse(negative, null, new Point(x, y), radius, radius);
+        double y = (o + i) / 2;
+        // Left shoulder: unequal ladder, looping trace, full round negative pad.
+        CutTrace(c, 2.1*s, new Point(33*s, y-4*s), new Point(45*s, y+8*s),
+            new Point(88*s, y+8*s), new Point(98*s, y-2*s));
+        CutDot(c, 88*s, y+8*s, 3.2*s);
+        for (var k=0; k<6; k++)
+            CutTrace(c, 1.35*s, new Point((110+6.8*k)*s,o+5*s),
+                new Point((114+6.8*k)*s,o+9*s));
+        CutRect(c, 159*s, o+5*s, 20*s, 3*s);
+        CutShape(c, new Point(191*s,o-3*s),new Point(214*s,o-3*s),
+            new Point(204*s,o+7*s),new Point(191*s,o+7*s));
+        CutTrace(c, 2.1*s, new Point(223*s,o+14*s),new Point(235*s,o+14*s),
+            new Point(244*s,o+5*s),new Point(261*s,o+5*s));
+        CutDot(c, 261*s,o+5*s,3.0*s);
+
+        // Western bus: broken pads, stair-stepped route and a big negative hole.
+        var a=w*.245;
+        CutShape(c, new Point(a-12*s,i+3*s),new Point(a+17*s,i+3*s),
+            new Point(a+17*s,i-4*s),new Point(a+7*s,i-14*s),
+            new Point(a-4*s,i-14*s),new Point(a-12*s,i-6*s));
+        CutDot(c,a+37*s,y+3*s,4.0*s);
+        CutTrace(c,2.4*s,new Point(a+48*s,o+6*s),new Point(a+61*s,o+6*s),
+            new Point(a+71*s,o+16*s),new Point(a+93*s,o+16*s));
+        CutDot(c,a+93*s,o+16*s,3.1*s);
+        for(var k=0;k<5;k++) CutRect(c,a+(106+7*k)*s,o+5*s,3.6*s,8.7*s);
+        CutTrace(c,1.3*s,new Point(a+156*s,i+3*s),new Point(a+156*s,i-7*s),
+            new Point(a+166*s,i-17*s),new Point(a+176*s,i-17*s));
+
+        // Offset center: unequal diagonal etchings, a segmented black channel.
+        var m=w*.51;
+        for(var k=0;k<5;k++)
+            CutTrace(c,1.35*s,new Point(m-87*s+(k*9*s),o+5*s),
+                new Point(m-81*s+(k*9*s),o+11*s));
+        CutTrace(c,2.5*s,new Point(m-34*s,o+9*s),new Point(m-22*s,o+9*s),
+            new Point(m-12*s,o+19*s),new Point(m+16*s,o+19*s),
+            new Point(m+27*s,o+8*s));
+        CutDot(c,m+17*s,o+19*s,3*s);
+        CutRect(c,m+44*s,o+7*s,7*s,3*s);
+        CutRect(c,m+58*s,o+7*s,3*s,3*s);
+        CutRect(c,m+68*s,o+7*s,12*s,3*s);
+        CutShape(c,new Point(m+93*s,o-3*s),new Point(m+113*s,o-3*s),
+            new Point(m+101*s,o+9*s),new Point(m+93*s,o+9*s));
+
+        // Eastern branch: a different topology; asymmetric terminal routing.
+        var e=w*.76;
+        CutTrace(c,2.4*s,new Point(e-107*s,i+4*s),new Point(e-107*s,i-5*s),
+            new Point(e-96*s,i-16*s),new Point(e-67*s,i-16*s));
+        CutDot(c,e-67*s,i-16*s,3.4*s);
+        for(var k=0;k<6;k++)
+            CutTrace(c,1.5*s,new Point(e-49*s+k*8*s,o+6*s),
+                new Point(e-44*s+k*8*s,o+11*s));
+        CutShape(c,new Point(e+6*s,i+3*s),new Point(e+40*s,i+3*s),
+            new Point(e+40*s,i-5*s),new Point(e+30*s,i-15*s),
+            new Point(e+16*s,i-15*s),new Point(e+6*s,i-5*s));
+        CutRect(c,e+48*s,o+6*s,14*s,3.5*s);
+        CutDot(c,e+75*s,y,4.1*s);
+        CutTrace(c,2*s,new Point(e+92*s,o+14*s),new Point(e+111*s,o+14*s),
+            new Point(e+119*s,o+6*s),new Point(e+136*s,o+6*s));
+        CutDot(c,e+136*s,o+6*s,2.7*s);
+
+        // Short near-corner finish rather than a repeated mirrored module.
+        CutTrace(c,1.3*s,new Point(w-84*s,o+5*s),new Point(w-76*s,o+13*s),
+            new Point(w-63*s,o+13*s));
+        for(var k=0;k<3;k++)
+            CutRect(c,w-(55-7*k)*s,o+6*s,3*s,5*s);
     }
 
-    private static void Terminal(DrawingContext dc, Brush color, Brush negative, double x, double y,
-        double radius = 2.3)
+    private static void CarveLeft(GeometryGroup c, double h, double s, double o, double i)
     {
-        dc.DrawEllipse(negative, new Pen(color, 1.35), new Point(x, y), radius, radius);
+        double mid=(o+i)/2;
+        // Top-left rail: one long elbow terminating inside the band.
+        var a=h*.12;
+        CutTrace(c,2.2*s,new Point(o+5*s,a),new Point(o+5*s,a+17*s),
+            new Point(o+15*s,a+27*s),new Point(o+15*s,a+61*s));
+        CutDot(c,o+15*s,a+61*s,3.2*s);
+        for(var k=0;k<5;k++)
+            CutTrace(c,1.4*s,new Point(o+4*s,a+(75+7*k)*s),
+                new Point(o+9*s,a+(80+7*k)*s));
+
+        // Mid-upper: outside bite alternates with a smaller inside bite.
+        var b=h*.295;
+        CutShape(c,new Point(o-5*s,b),new Point(o+12*s,b),
+            new Point(o+12*s,b+12*s),new Point(o+4*s,b+20*s),
+            new Point(o-5*s,b+20*s));
+        CutTrace(c,2.6*s,new Point(mid,b+32*s),new Point(mid,b+53*s),
+            new Point(mid+6*s,b+59*s),new Point(mid+6*s,b+82*s));
+        CutDot(c,mid+6*s,b+82*s,3.6*s);
+        for(var k=0;k<4;k++)
+            CutRect(c,o+5*s,b+(92+7*k)*s,8*s,3.5*s);
+
+        // Center: zigzag negative channel, dotted split and thick chevron.
+        var d=h*.49;
+        CutTrace(c,2.8*s,new Point(o+5*s,d),new Point(o+5*s,d+16*s),
+            new Point(o+14*s,d+25*s),new Point(o+14*s,d+52*s),
+            new Point(o+6*s,d+60*s),new Point(o+6*s,d+90*s));
+        CutDot(c,o+6*s,d+90*s,4.1*s);
+        CutShape(c,new Point(i+4*s,d+27*s),new Point(i-7*s,d+27*s),
+            new Point(i-14*s,d+34*s),new Point(i-14*s,d+52*s),
+            new Point(i+4*s,d+52*s));
+        for(var k=0;k<5;k++)
+            CutDot(c,o+7*s,d+(102+8*k)*s,1.55*s);
+
+        // Lower: a tall staggered ladder, then two isolated black terminals.
+        var e=h*.73;
+        CutRect(c,o+5*s,e,3.7*s,31*s);
+        for(var k=0;k<8;k++)
+            CutRect(c,o+11*s,e+(7*k)*s,5.5*s,3.3*s);
+        CutShape(c,new Point(i+4*s,e+73*s),new Point(i-5*s,e+73*s),
+            new Point(i-13*s,e+81*s),new Point(i-13*s,e+103*s),
+            new Point(i+4*s,e+103*s));
+        CutDot(c,o+9*s,e+118*s,3.7*s);
+        CutTrace(c,1.3*s,new Point(o+9*s,e+118*s),new Point(o+9*s,e+133*s));
+        CutDot(c,o+9*s,e+133*s,2.5*s);
     }
 
-    private static void FillPanel(DrawingContext dc, Brush fill, Brush glow,
-        bool emphasize, params Point[] points)
+    private static void CarveRight(GeometryGroup c, double w, double h,
+        double s, double o, double i)
     {
-        var panel = Plate(points);
-        if (emphasize)
-            dc.DrawGeometry(null, new Pen(glow, 4.0), panel);
-        dc.DrawGeometry(fill, null, panel);
+        double R=w-o;
+        // Upper-right: tapered serpentine and off-center terminal.
+        var a=h*.115;
+        CutTrace(c,2.4*s,new Point(R-6*s,a),new Point(R-6*s,a+22*s),
+            new Point(R-15*s,a+31*s),new Point(R-15*s,a+78*s));
+        CutDot(c,R-15*s,a+78*s,4.2*s);
+        for(var k=0;k<4;k++)
+            CutTrace(c,1.4*s,new Point(R-5*s,a+(92+7*k)*s),
+                new Point(R-10*s,a+(97+7*k)*s));
+        CutShape(c,new Point(R+5*s,a+136*s),new Point(R-10*s,a+136*s),
+            new Point(R-10*s,a+143*s),new Point(R-3*s,a+150*s),
+            new Point(R+5*s,a+150*s));
+
+        // Right upper-middle: stacked pads and a discontinuous black bus.
+        var b=h*.35;
+        for(var k=0;k<6;k++)
+            CutRect(c,R-17*s,b+k*7.6*s,6*s,3.5*s);
+        CutTrace(c,2.3*s,new Point(R-6*s,b+9*s),new Point(R-6*s,b+57*s),
+            new Point(R-13*s,b+64*s),new Point(R-13*s,b+86*s));
+        CutDot(c,R-13*s,b+86*s,3.0*s);
+        CutShape(c,new Point(R+4*s,b+105*s),new Point(R-7*s,b+105*s),
+            new Point(R-17*s,b+115*s),new Point(R-17*s,b+127*s),
+            new Point(R+4*s,b+127*s));
+
+        // Central flank: a notched lightning channel, mixed perforations.
+        var d=h*.57;
+        CutShape(c,new Point(R-21*s,d),new Point(R-8*s,d),
+            new Point(R-8*s,d+17*s),new Point(R-16*s,d+25*s),
+            new Point(R-16*s,d+47*s),new Point(R-7*s,d+56*s),
+            new Point(R-7*s,d+65*s),new Point(R-21*s,d+65*s));
+        for(var k=0;k<6;k++)
+            CutDot(c,R-(7+(k%2)*6)*s,d+(75+k*8)*s,(k%3==0?2.8:1.6)*s);
+        CutTrace(c,2.1*s,new Point(R-4*s,d+133*s),
+            new Point(R-13*s,d+142*s),new Point(R-13*s,d+167*s));
+        CutDot(c,R-13*s,d+167*s,3.4*s);
+
+        // Bottom flank: black slash field, three asymmetric tiny sockets.
+        var e=h*.83;
+        for(var k=0;k<7;k++)
+            CutTrace(c,1.35*s,new Point(R-17*s,e+k*6*s),
+                new Point(R-12*s,e+(5+k*6)*s));
+        CutRect(c,R-9*s,e+57*s,3.6*s,24*s);
+        CutDot(c,R-15*s,e+88*s,3.2*s);
+        CutDot(c,R-6*s,e+103*s,2*s);
+        CutDot(c,R-13*s,e+113*s,2.5*s);
     }
+
+    private static void CarveBottom(GeometryGroup c, double w, double h,
+        double s, double o, double i)
+    {
+        double y=h-(o+i)/2, bot=h-o, inner=h-i;
+        // Western broken conductor, unlike the top-left looping route.
+        CutTrace(c,2.2*s,new Point(43*s,y+5*s),new Point(58*s,y-10*s),
+            new Point(90*s,y-10*s),new Point(100*s,y));
+        CutDot(c,90*s,y-10*s,4*s);
+        for(var k=0;k<7;k++)
+            CutRect(c,(117+7.3*k)*s,inner+5*s,3.7*s,8*s);
+        CutShape(c,new Point(184*s,bot+4*s),new Point(207*s,bot+4*s),
+            new Point(207*s,bot-7*s),new Point(196*s,bot-18*s),
+            new Point(184*s,bot-18*s));
+        CutTrace(c,1.7*s,new Point(222*s,y+6*s),new Point(232*s,y-4*s),
+            new Point(260*s,y-4*s));
+        CutDot(c,260*s,y-4*s,3*s);
+
+        // West-central: nested black offsets and a dotted slash matrix.
+        var a=w*.27;
+        CutTrace(c,2.7*s,new Point(a,bot-6*s),new Point(a+14*s,bot-20*s),
+            new Point(a+51*s,bot-20*s),new Point(a+60*s,bot-11*s));
+        CutDot(c,a+51*s,bot-20*s,3.6*s);
+        for(var k=0;k<6;k++)
+            CutTrace(c,1.3*s,new Point(a+(80+8*k)*s,inner+5*s),
+                new Point(a+(85+8*k)*s,inner+10*s));
+        CutRect(c,a+150*s,bot-11*s,20*s,3*s);
+        CutRect(c,a+178*s,bot-11*s,5*s,3*s);
+
+        // Unequal center bridge and aggressively carved inward step.
+        var mid=w*.505;
+        CutShape(c,new Point(mid-18*s,inner-4*s),
+            new Point(mid+14*s,inner-4*s),new Point(mid+14*s,inner+7*s),
+            new Point(mid+4*s,inner+17*s),new Point(mid-7*s,inner+17*s),
+            new Point(mid-18*s,inner+6*s));
+        CutTrace(c,2.2*s,new Point(mid+29*s,bot-7*s),
+            new Point(mid+45*s,bot-7*s),new Point(mid+55*s,bot-17*s),
+            new Point(mid+78*s,bot-17*s));
+        CutDot(c,mid+78*s,bot-17*s,4*s);
+        for(var k=0;k<5;k++) CutRect(c,mid+(93+8*k)*s,inner+5*s,4*s,5.5*s);
+
+        // South-east, intentionally denser with a curved-feeling stepped bus.
+        var e=w*.79;
+        CutTrace(c,2.5*s,new Point(e-93*s,bot-6*s),
+            new Point(e-80*s,bot-19*s),new Point(e-51*s,bot-19*s),
+            new Point(e-42*s,bot-10*s),new Point(e-10*s,bot-10*s));
+        CutDot(c,e-51*s,bot-19*s,3.1*s);
+        CutShape(c,new Point(e+9*s,inner-4*s),new Point(e+41*s,inner-4*s),
+            new Point(e+41*s,inner+6*s),new Point(e+32*s,inner+15*s),
+            new Point(e+9*s,inner+15*s));
+        for(var k=0;k<8;k++)
+            CutTrace(c,1.2*s,new Point(e+(57+7*k)*s,inner+5*s),
+                new Point(e+(61+7*k)*s,inner+9*s));
+        CutDot(c,e+130*s,y+3*s,4.2*s);
+        CutTrace(c,1.7*s,new Point(e+143*s,y+6*s),
+            new Point(e+153*s,y-4*s),new Point(e+170*s,y-4*s));
+        CutDot(c,e+170*s,y-4*s,2.8*s);
+        CutRect(c,w-79*s,inner+6*s,15*s,3*s);
+        CutDot(c,w-54*s,inner+11*s,3.2*s);
+    }
+
+    private Size cachedSize = Size.Empty;
+    private double cachedScale = -1;
+    private Geometry? cachedCarving;
 
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        var w = RenderSize.Width;
-        var h = RenderSize.Height;
-        if (w < 230 || h < 260) return;
+        var width = RenderSize.Width;
+        var height = RenderSize.Height;
+        if (width < 300 || height < 300) return;
 
         var scale = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut) /
                     ChamferGeometry.StandardCut;
-        var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
-        // ONE continuous stroke beneath the locally carved structural plates.
-        // Its stroke is not surrounded by a second parallel frame.
-        var half = 2.2 * scale;
-        var e = half + .35;
-        dc.DrawGeometry(null,
-            new Pen(Stroke, 4.4 * scale) { LineJoin = PenLineJoin.Miter },
-            ChamferGeometry.Create(w, h, cut, e));
+        if (cachedCarving is null || cachedSize != RenderSize || cachedScale != scale)
+        {
+            var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
+            var band = CreateBand(width, height, scale, cut);
+            var outer = 3.2 * scale;
+            var inner = 22.8 * scale;
+            var holes = new GeometryGroup { FillRule = FillRule.Nonzero };
+            CarveTop(holes, width, scale, outer, inner);
+            CarveLeft(holes, height, scale, outer, inner);
+            CarveRight(holes, width, height, scale, outer, inner);
+            CarveBottom(holes, width, height, scale, outer, inner);
+            // True subtraction keeps holes transparent and clips even the
+            // longest groove strictly between the two invisible guide rails.
+            cachedCarving = Geometry.Combine(band, holes, GeometryCombineMode.Exclude, null);
+            cachedCarving.Freeze();
+            cachedSize = RenderSize;
+            cachedScale = scale;
+        }
 
-        var l = e;
-        var r = w - e;
-        var t = e;
-        var b = h - e;
-        var s = scale;
-        var yellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
-        var cyan = new SolidColorBrush(Color.FromRgb(0, 226, 242));
-        var black = new SolidColorBrush(Color.FromRgb(6, 13, 15));
-        var warm = new SolidColorBrush(Color.FromArgb(56, 255, 240, 0));
-        var cool = new SolidColorBrush(Color.FromArgb(56, 0, 226, 242));
+        // One colored shape with carved-out empty channels: no central spine,
+        // no symmetric modules attached to a line, no painted guide rails.
+        dc.DrawGeometry(Stroke, null, cachedCarving);
 
-        // TOP WEST: stepped overhang with two circuit-track branches,
-        // short engraved ladder and a large black terminal.
-        var tx = w * .145;
-        FillPanel(dc, yellow, warm, true,
-            new Point(tx, t - 2*s), new Point(tx + 158*s, t - 2*s),
-            new Point(tx + 158*s, t + 3*s), new Point(tx + 151*s, t + 10*s),
-            new Point(tx + 112*s, t + 10*s), new Point(tx + 104*s, t + 18*s),
-            new Point(tx + 24*s, t + 18*s), new Point(tx + 14*s, t + 8*s),
-            new Point(tx + 14*s, t + 3*s), new Point(tx, t + 3*s));
-        Hole(dc, black, tx + 131*s, t + 5*s, 3.8*s);
-        Rail(dc, black, 2.0*s, new Point(tx + 96*s, t + 7*s),
-            new Point(tx + 111*s, t + 7*s), new Point(tx + 116*s, t + 12*s));
-        for (var i = 0; i < 6; ++i)
-            Rail(dc, black, 1.3*s,
-                new Point(tx + (30 + i*8)*s, t + 5*s),
-                new Point(tx + (35 + i*8)*s, t + 10*s));
-        Terminal(dc, yellow, black, tx + 172*s, t + 13*s, 2.4*s);
-        Rail(dc, yellow, 1.25*s,
-            new Point(tx + 155*s, t + 5*s),
-            new Point(tx + 164*s, t + 5*s),
-            new Point(tx + 172*s, t + 13*s));
-
-        // TOP EAST: a separate angular circuit bus with hollow dots,
-        // a black split channel, and unequal line engravings.
-        var ex = w * .695;
-        FillPanel(dc, cyan, cool, true,
-            new Point(ex, t - 2*s), new Point(ex + 165*s, t - 2*s),
-            new Point(ex + 165*s, t + 3*s), new Point(ex + 146*s, t + 3*s),
-            new Point(ex + 137*s, t + 12*s), new Point(ex + 76*s, t + 12*s),
-            new Point(ex + 68*s, t + 20*s), new Point(ex + 33*s, t + 20*s),
-            new Point(ex + 25*s, t + 12*s), new Point(ex + 17*s, t + 12*s),
-            new Point(ex + 9*s, t + 4*s), new Point(ex, t + 4*s));
-        Rail(dc, black, 2.2*s,
-            new Point(ex + 43*s, t + 8*s), new Point(ex + 78*s, t + 8*s),
-            new Point(ex + 84*s, t + 14*s));
-        Hole(dc, black, ex + 100*s, t + 7*s, 3.8*s);
-        for (var i = 0; i < 5; ++i)
-            Rail(dc, black, 1.5*s,
-                new Point(ex + (18 + 8*i)*s, t + 5*s),
-                new Point(ex + (21 + 8*i)*s, t + 8*s));
-        Rail(dc, cyan, 1.3*s,
-            new Point(ex + 150*s, t + 5*s),
-            new Point(ex + 155*s, t + 10*s),
-            new Point(ex + 155*s, t + 17*s));
-        Terminal(dc, cyan, black, ex + 155*s, t + 17*s);
-
-        // TOP CENTER: fragmented connection with deliberately varied pitch,
-        // not another painted thick bar.
-        var mx = w * .51;
-        Rail(dc, yellow, 1.35*s,
-            new Point(mx - 34*s, t + 2*s),
-            new Point(mx - 23*s, t + 13*s),
-            new Point(mx - 7*s, t + 13*s));
-        Terminal(dc, yellow, black, mx - 7*s, t + 13*s, 2*s);
-        Rail(dc, cyan, 1.35*s,
-            new Point(mx + 23*s, t + 2*s),
-            new Point(mx + 34*s, t + 13*s),
-            new Point(mx + 47*s, t + 13*s));
-        Hole(dc, black, mx + 47*s, t + 13*s, 2.7*s);
-
-        // LEFT UPPER: fine etched conductors transition to a heavy
-        // shoulder; dot sizes and track lengths deliberately differ.
-        var ya = h * .19;
-        FillPanel(dc, yellow, warm, false,
-            new Point(l - 2.7*s, ya),
-            new Point(l + 4*s, ya),
-            new Point(l + 4*s, ya + 14*s),
-            new Point(l + 11*s, ya + 21*s),
-            new Point(l + 11*s, ya + 66*s),
-            new Point(l + 5*s, ya + 72*s),
-            new Point(l + 5*s, ya + 91*s),
-            new Point(l - 2.7*s, ya + 91*s));
-        Rail(dc, black, 2.3*s,
-            new Point(l + 7*s, ya + 28*s),
-            new Point(l + 7*s, ya + 61*s));
-        for (var i = 0; i < 4; ++i)
-            Rail(dc, black, 1.5*s,
-                new Point(l + 2*s, ya + (17 + 8*i)*s),
-                new Point(l + 6*s, ya + (21 + 8*i)*s));
-        Hole(dc, black, l + 5*s, ya + 78*s, 2.7*s);
-        Rail(dc, yellow, 1.3*s,
-            new Point(l + 4*s, ya + 90*s),
-            new Point(l + 11*s, ya + 97*s),
-            new Point(l + 11*s, ya + 114*s));
-        Terminal(dc, yellow, black, l + 11*s, ya + 114*s);
-
-        // LEFT MIDDLE: broad mechanical shoulder with an asymmetric black
-        // lightning-channel, diagonal hatching and stacked negative pads.
-        var yl = h * .43;
-        FillPanel(dc, yellow, warm, true,
-            new Point(l - 2.7*s, yl),
-            new Point(l + 4*s, yl),
-            new Point(l + 4*s, yl + 10*s),
-            new Point(l + 15*s, yl + 21*s),
-            new Point(l + 15*s, yl + 72*s),
-            new Point(l + 8*s, yl + 79*s),
-            new Point(l + 8*s, yl + 101*s),
-            new Point(l - 2.7*s, yl + 101*s));
-        dc.DrawGeometry(black, null, Plate(
-            new Point(l + 3*s, yl + 18*s),
-            new Point(l + 8*s, yl + 23*s),
-            new Point(l + 8*s, yl + 63*s),
-            new Point(l + 11*s, yl + 66*s),
-            new Point(l + 11*s, yl + 78*s),
-            new Point(l + 6*s, yl + 73*s),
-            new Point(l + 6*s, yl + 26*s),
-            new Point(l + 3*s, yl + 23*s)));
-        for (var i = 0; i < 6; ++i)
-            Rail(dc, black, 1.25*s,
-                new Point(l + 10*s, yl + (31 + i*6)*s),
-                new Point(l + 14*s, yl + (35 + i*6)*s));
-        Hole(dc, black, l + 4*s, yl + 88*s, 3.3*s);
-
-        // LEFT LOWER: a PCB-style bus and black segmented ladder with
-        // staggered round nodes, not a copy of the top motif.
-        var yl2 = h * .705;
-        FillPanel(dc, yellow, warm, false,
-            new Point(l - 2*s, yl2), new Point(l + 7*s, yl2),
-            new Point(l + 7*s, yl2 + 11*s),
-            new Point(l + 13*s, yl2 + 17*s),
-            new Point(l + 13*s, yl2 + 80*s),
-            new Point(l + 6*s, yl2 + 87*s),
-            new Point(l + 6*s, yl2 + 107*s),
-            new Point(l - 2*s, yl2 + 107*s));
-        for (var i = 0; i < 7; ++i)
-            dc.DrawRectangle(black, null,
-                new Rect(l + 6*s, yl2 + (24 + i*7)*s, 5.2*s, 3.7*s));
-        Hole(dc, black, l + 4*s, yl2 + 10*s, 3.1*s);
-        Rail(dc, yellow, 1.3*s,
-            new Point(l + 8*s, yl2 + 90*s),
-            new Point(l + 13*s, yl2 + 95*s),
-            new Point(l + 13*s, yl2 + 111*s));
-        Terminal(dc, yellow, black, l + 13*s, yl2 + 111*s, 2.6*s);
-
-        // RIGHT UPPER: angular bus and paired hollow circuit terminals.
-        var yr = h * .205;
-        FillPanel(dc, cyan, cool, false,
-            new Point(r + 2.7*s, yr),
-            new Point(r - 4*s, yr),
-            new Point(r - 4*s, yr + 14*s),
-            new Point(r - 12*s, yr + 22*s),
-            new Point(r - 12*s, yr + 83*s),
-            new Point(r - 6*s, yr + 89*s),
-            new Point(r - 6*s, yr + 105*s),
-            new Point(r + 2.7*s, yr + 105*s));
-        Rail(dc, black, 2.4*s,
-            new Point(r - 8*s, yr + 30*s),
-            new Point(r - 8*s, yr + 69*s),
-            new Point(r - 5*s, yr + 72*s));
-        for (var i = 0; i < 5; ++i)
-            Rail(dc, black, 1.3*s,
-                new Point(r - 3*s, yr + (33 + i*8)*s),
-                new Point(r - 6.6*s, yr + (36.6 + i*8)*s));
-        Rail(dc, cyan, 1.2*s,
-            new Point(r - 6*s, yr + 87*s),
-            new Point(r - 13*s, yr + 94*s),
-            new Point(r - 13*s, yr + 112*s));
-        Terminal(dc, cyan, black, r - 13*s, yr + 112*s);
-
-        // RIGHT CENTER: a tall, hard-edged flanged spine, a large carved
-        // chevron and dotted broken conductor. Unlike the left it tapers.
-        var yr2 = h * .47;
-        FillPanel(dc, cyan, cool, true,
-            new Point(r + 2.7*s, yr2),
-            new Point(r - 7*s, yr2),
-            new Point(r - 7*s, yr2 + 16*s),
-            new Point(r - 15*s, yr2 + 24*s),
-            new Point(r - 15*s, yr2 + 65*s),
-            new Point(r - 9*s, yr2 + 71*s),
-            new Point(r - 9*s, yr2 + 91*s),
-            new Point(r + 2.7*s, yr2 + 91*s));
-        dc.DrawGeometry(black, null, Plate(
-            new Point(r - 4*s, yr2 + 22*s),
-            new Point(r - 11*s, yr2 + 29*s),
-            new Point(r - 11*s, yr2 + 49*s),
-            new Point(r - 7*s, yr2 + 53*s),
-            new Point(r - 7*s, yr2 + 69*s),
-            new Point(r - 3*s, yr2 + 65*s),
-            new Point(r - 3*s, yr2 + 26*s)));
-        for (var i = 0; i < 5; ++i)
-            Hole(dc, black, r - 12*s, yr2 + (36 + 6*i)*s, 1.15*s);
-        Hole(dc, black, r - 5*s, yr2 + 80*s, 3.5*s);
-
-        // RIGHT LOWER: diagonal stencil and sparse black perforations.
-        var yr3 = h * .72;
-        FillPanel(dc, cyan, cool, false,
-            new Point(r + 2*s, yr3),
-            new Point(r - 3*s, yr3),
-            new Point(r - 3*s, yr3 + 10*s),
-            new Point(r - 12*s, yr3 + 19*s),
-            new Point(r - 12*s, yr3 + 67*s),
-            new Point(r - 5*s, yr3 + 74*s),
-            new Point(r - 5*s, yr3 + 95*s),
-            new Point(r + 2*s, yr3 + 95*s));
-        for (var i = 0; i < 7; ++i)
-            Rail(dc, black, 1.4*s,
-                new Point(r - 11*s, yr3 + (23 + i*5.3)*s),
-                new Point(r - 6*s, yr3 + (28 + i*5.3)*s));
-        for (var i = 0; i < 3; ++i)
-            Hole(dc, black, r - 7*s, yr3 + (69 + i*8)*s, 2.0*s);
-
-        // BOTTOM WEST: wider black diagonal fissure and incomplete box cuts.
-        var bx = w * .17;
-        FillPanel(dc, yellow, warm, true,
-            new Point(bx, b + 2*s), new Point(bx + 169*s, b + 2*s),
-            new Point(bx + 169*s, b - 4*s), new Point(bx + 143*s, b - 4*s),
-            new Point(bx + 133*s, b - 14*s), new Point(bx + 71*s, b - 14*s),
-            new Point(bx + 63*s, b - 22*s), new Point(bx + 25*s, b - 22*s),
-            new Point(bx + 15*s, b - 12*s), new Point(bx + 15*s, b - 4*s),
-            new Point(bx, b - 4*s));
-        dc.DrawGeometry(black, null, Plate(
-            new Point(bx + 32*s, b - 6*s),
-            new Point(bx + 43*s, b - 17*s),
-            new Point(bx + 57*s, b - 17*s),
-            new Point(bx + 46*s, b - 6*s)));
-        for (var i = 0; i < 6; ++i)
-            Rail(dc, black, 1.2*s,
-                new Point(bx + (70 + 8*i)*s, b - 5*s),
-                new Point(bx + (74 + 8*i)*s, b - 9*s));
-        Hole(dc, black, bx + 145*s, b - 6*s, 3.4*s);
-
-        // BOTTOM CENTER: two split traces with different endings.
-        var bc = w * .51;
-        Rail(dc, cyan, 1.5*s,
-            new Point(bc + 9*s, b), new Point(bc + 19*s, b - 10*s),
-            new Point(bc + 38*s, b - 10*s));
-        Terminal(dc, cyan, black, bc + 38*s, b - 10*s, 2.8*s);
-        Rail(dc, yellow, 1.5*s,
-            new Point(bc - 44*s, b), new Point(bc - 36*s, b - 8*s),
-            new Point(bc - 23*s, b - 8*s));
-        Hole(dc, black, bc - 23*s, b - 8*s, 2.3*s);
-
-        // BOTTOM EAST: three-layer stepped plate with a ladder that turns
-        // into a routed trace, finished by a small terminal ring.
-        var bx2 = w * .745;
-        FillPanel(dc, cyan, cool, true,
-            new Point(bx2, b + 2*s), new Point(bx2 + 192*s, b + 2*s),
-            new Point(bx2 + 192*s, b - 4*s),
-            new Point(bx2 + 170*s, b - 4*s),
-            new Point(bx2 + 158*s, b - 16*s),
-            new Point(bx2 + 92*s, b - 16*s),
-            new Point(bx2 + 84*s, b - 24*s),
-            new Point(bx2 + 38*s, b - 24*s),
-            new Point(bx2 + 27*s, b - 13*s),
-            new Point(bx2 + 27*s, b - 4*s),
-            new Point(bx2, b - 4*s));
-        for (var i = 0; i < 7; ++i)
-            dc.DrawRectangle(black, null,
-                new Rect(bx2 + (49 + 8*i)*s, b - 13*s, 4.4*s, 3.3*s));
-        Rail(dc, black, 2.0*s,
-            new Point(bx2 + 119*s, b - 5*s),
-            new Point(bx2 + 140*s, b - 5*s),
-            new Point(bx2 + 149*s, b - 14*s));
-        Hole(dc, black, bx2 + 171*s, b - 6*s, 3.6*s);
-        Terminal(dc, cyan, black, bx2 + 205*s, b - 16*s, 2.4*s);
-        Rail(dc, cyan, 1.25*s,
-            new Point(bx2 + 189*s, b - 3*s),
-            new Point(bx2 + 192*s, b - 6*s),
-            new Point(bx2 + 192*s, b - 12*s),
-            new Point(bx2 + 196*s, b - 16*s),
-            new Point(bx2 + 205*s, b - 16*s));
-
-        // Two very small interruptions stop the baseline feeling like a
-        // monotonous neon rectangle while respecting the 45-degree corners.
-        var gap = new Pen(black, 5.3*s);
-        dc.DrawLine(gap, new Point(w*.45, t), new Point(w*.45 + 9*s, t));
-        dc.DrawLine(gap, new Point(w*.64, b), new Point(w*.64 + 11*s, b));
+        // Tiny static luminous highlights stay INSIDE the surviving material,
+        // leaving the exterior black and the inner separator unwashed.
+        dc.PushClip(cachedCarving);
+        var soft = new SolidColorBrush(Color.FromArgb(67, 255, 255, 255));
+        var glint = new Pen(soft, 3.0 * scale);
+        var middleY = 12.7 * scale;
+        dc.DrawLine(glint, new Point(width*.18, middleY),
+            new Point(width*.225, middleY));
+        dc.DrawLine(glint, new Point(width*.82, middleY),
+            new Point(width*.895, middleY));
+        dc.DrawLine(glint, new Point(12.7*scale, height*.47),
+            new Point(12.7*scale, height*.51));
+        dc.DrawLine(glint, new Point(width-12.7*scale, height*.63),
+            new Point(width-12.7*scale, height*.69));
+        dc.Pop();
     }
 }
 
