@@ -2,7 +2,7 @@
 
 **Current milestone: integrated CET + REDscript profiler workflow, not a stable optimizer release.** The normal two-page GUI now packages and coordinates the authoritative CET v1.3.4 and GRSP v1.0.0 managers, with PresentMon 2.6.0 for frametimes. All managed applications run on **one private .NET 10 Core + Windows Desktop Runtime**. Source-owned native profiler DLLs remain unchanged. Direct physical game installations only; MO2 is disabled.
 
-**GCO v1.1.7 rebuild:** Owner-ordered, CI verification pending. Last verified baseline: [v1.1.6 Windows CI #42386209903](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42386209903), source `d994486`, **SUCCESS**, including WPF rendering and packaged contracts. **Never bump GCO's version without an explicit user request.**
+**[Download GCO v1.1.7 Integrated](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42390727451/artifacts/13581730772)** · [Windows CI #42390727451](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42390727451) **SUCCESS**, build SHA `d095c7b89c69333c58aa0b26a058eba00ccc0b73`, **183 passing installation/CLI/package contracts**, CET/GRSP smoke, real packaged WPF border checks and version-info validation. **A successful CI build is not an antivirus scan or guarantee against browser security detection. Never bump GCO's version without an explicit user request.**
 
 ## Integrated package and initial gameplay test
 
