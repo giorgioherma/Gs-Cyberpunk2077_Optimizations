@@ -608,9 +608,9 @@
             </Grid>
         </Grid>
 
-        <!-- Thin INNER WPF frame stays above the owner-painted PNG. -->
+        <!-- Thin INNER WPF frame: 27-DIP straight sides and bottom, 68-DIP header clearance. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
-                                  FrameInset="29" Stroke="{StaticResource NeonStroke}"
+                                  FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
     </Grid>
 </Window>

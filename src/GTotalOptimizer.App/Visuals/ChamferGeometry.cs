@@ -52,6 +52,7 @@ public static class ChamferGeometry
 
     // The INNER top is the one line BELOW the logo/header, NOT a parallel
     // duplicate of the outer top perimeter.
+    // Straight inset runs ignore the decorative raster's circuit dents.
     public static Geometry CreateContentFrame(double width, double height,
         double headerTop, double inset, double cut)
     {
@@ -60,16 +61,30 @@ public static class ChamferGeometry
         var top = Math.Clamp(headerTop, inset, Math.Max(inset, height - inset));
         var bottom = Math.Max(top, height - inset);
         cut = Math.Clamp(cut, 0, Math.Min(right - left, bottom - top) / 3.0);
+
+        // The decorative bottom-corner fins project farther inward than
+        // the straight PNG border. Keep the corner 3 DIPs above the bottom
+        // run, with a straight 45-degree chamfer and short safety run-out;
+        // do not trace the artwork's ornamental dents.
+        const double cornerRelief = 3.0;
+        var lowerCut = Math.Max(cut, 17.0);
+        var runout = Math.Max(54.0, lowerCut + 20.0);
+        var lowerCornerY = bottom - cornerRelief;
+
         var path = new StreamGeometry();
         using (var ctx = path.Open())
         {
             ctx.BeginFigure(new Point(left + cut, top), false, true);
             ctx.LineTo(new Point(right - cut, top), true, false);
             ctx.LineTo(new Point(right, top + cut), true, false);
-            ctx.LineTo(new Point(right, bottom - cut), true, false);
-            ctx.LineTo(new Point(right - cut, bottom), true, false);
-            ctx.LineTo(new Point(left + cut, bottom), true, false);
-            ctx.LineTo(new Point(left, bottom - cut), true, false);
+            ctx.LineTo(new Point(right, lowerCornerY - lowerCut), true, false);
+            ctx.LineTo(new Point(right - lowerCut, lowerCornerY), true, false);
+            ctx.LineTo(new Point(right - runout, lowerCornerY), true, false);
+            ctx.LineTo(new Point(right - runout - cornerRelief, bottom), true, false);
+            ctx.LineTo(new Point(left + runout + cornerRelief, bottom), true, false);
+            ctx.LineTo(new Point(left + runout, lowerCornerY), true, false);
+            ctx.LineTo(new Point(left + lowerCut, lowerCornerY), true, false);
+            ctx.LineTo(new Point(left, lowerCornerY - lowerCut), true, false);
             ctx.LineTo(new Point(left, top + cut), true, false);
         }
         path.Freeze();
