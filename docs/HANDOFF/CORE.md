@@ -202,3 +202,7 @@ The owner requested a fresh build and one version bump following a download brow
 ### 2026-11-07 — V bottom overshoot correction (-10 DIP)
 
 Owner's native magnified screenshot of v1.1.7 establishes prior `PortraitBottomOverhang=15` is too large by about 10 pixels. Apply -10 DIP consistently: root `VPortraitHost` bottom margin 14→24 (same left=26 and top=0), proportionally constrained `PortraitBottomOverhang=15→5`, and packaged WPF assertion 15→5. No art edit, no frame change, no profiling change, no version bump. Validate full Windows CI; actual seam still needs owner acceptance.
+
+### 2026-11-07 — Intentional +1 DIP V/outer-frame overlap
+
+Owner clarified that a slight V/border overlap hides a rasterized dark hairline better than exact edge-to-edge positioning. Current GCO v1.1.7 moves V overhang **5→6** DIP by reducing root host bottom margin **24→23**; the existing WPF test checks extension **6**. No new clip, PNG modification, border z-order change, separate image resizing, or version bump. Both original V layers retain their proportional alignment. Validate single Windows workflow and owner screenshot.

@@ -68,7 +68,7 @@ internal static class Program
             visual.UpdateLayout();
 
             // V remains 3 DIPs left and pinned to the same top. After the
-            // corrected outer border was uploaded, V now ends 5 DIPs
+            // corrected outer border was uploaded, V now ends 6 DIPs
             // below ContentRegion, with the inner frame unchanged.
             var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
@@ -80,7 +80,7 @@ internal static class Program
                     $"V left/top anchor incorrect: region={rootTopLeft}, V={portraitTopLeft}");
             var extension = window.VPortraitHost.ActualHeight -
                             window.ContentRegion.ActualHeight;
-            if (Math.Abs(extension - 5.0) > 0.5)
+            if (Math.Abs(extension - 6.0) > 0.5)
                 throw new InvalidOperationException(
                     $"V must stop at upper outer-border line; host delta={extension:0.###}");
             // Negative left margin enlarges the *host* by 3 DIPs, but the

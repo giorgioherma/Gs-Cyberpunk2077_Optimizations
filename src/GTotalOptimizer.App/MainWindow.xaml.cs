@@ -154,10 +154,10 @@ public partial class MainWindow : Window
     }
 
     // Both exact 743x2117 V images resize together from the same TOP/LEFT.
-    // Five DIPs beyond the content region keeps the portrait's lower
-    // edge above the corrected yellow border while preserving proportions.
+    // Six DIPs beyond the content region gives the corrected yellow
+    // border a ~1-DIP visual overlap rather than a dark hairline seam.
     // The separately owned WPF inner border is not changed.
-    private const double PortraitBottomOverhang = 5.0;
+    private const double PortraitBottomOverhang = 6.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
