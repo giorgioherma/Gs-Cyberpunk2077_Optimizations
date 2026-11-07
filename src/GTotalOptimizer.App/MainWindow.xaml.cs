@@ -95,7 +95,11 @@ public partial class MainWindow : Window
         {
             Stretch = Stretch.Fill
         };
-        VAtmosphereImage.Source = CreatePortraitAtmosphere();
+        var committedCloud = ImageFile("images", "toi background thick.png");
+        if (committedCloud is null)
+            Trace.TraceError("Missing required user-selected thick cloud texture.");
+        else
+            VAtmosphereImage.Source = CreatePortraitAtmosphere(committedCloud);
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
         // WPF continuously scales it; never swap BitmapSource on resize.
@@ -145,37 +149,44 @@ public partial class MainWindow : Window
         return bitmap;
     }
 
-    // Yellow haze lives INSIDE the right content background, behind the
-    // interactive text and cards. The right edge always reaches zero alpha,
-    // so layout can move through the blend without a visible cut line.
-    private static BitmapSource CreatePortraitAtmosphere()
+    // User-selected 'toi background thick.png' is a fully opaque RGB painting.
+    // Convert its LIGHTNESS to transparency and tint the resulting clouds yellow.
+    // Never draw the RGB image directly: its dark pixels would obscure the UI.
+    // The conversion runs once during window initialization, not per frame.
+    // Both V source images retain their original pixels and ONE shared mask.
+    private static BitmapSource CreatePortraitAtmosphere(BitmapSource cloud)
     {
-        const int width = 128;
-        const int height = 512;
-        const int stride = width * 4;
-        var pixels = new byte[stride * height];
+        var input = new FormatConvertedBitmap(
+            cloud, System.Windows.Media.PixelFormats.Bgra32, null, 0.0);
+        int width = input.PixelWidth;
+        int height = input.PixelHeight;
+        int stride = checked(width * 4);
+        var source = new byte[checked(stride * height)];
+        var pixels = new byte[source.Length];
+        input.CopyPixels(source, stride, 0);
         for (int y = 0; y < height; ++y)
         {
-            double v = (double)y / (height - 1);
-            double cloud = .68 + .18 * Math.Sin(v * 18.0 + .7)
-                               + .12 * Math.Sin(v * 43.0 + 1.4)
-                               + .07 * Math.Sin(v * 103.0);
             for (int x = 0; x < width; ++x)
             {
-                double u = (double)x / (width - 1);
-                double irregular = .075 * Math.Sin(13.0 * v + 7.0 * u)
-                                 + .045 * Math.Sin(37.0 * v - 15.0 * u)
-                                 + .025 * Math.Sin(92.0 * v + 29.0 * u);
-                double distance = Math.Clamp((u + irregular * (1.0 - u)) / .91, 0.0, 1.0);
-                double fade = 1.0 - distance * distance * (3.0 - 2.0 * distance);
-                double grain = .91 + .09 * Math.Sin(x * .61 + y * .27)
-                                   * Math.Sin(x * .18 - y * .43);
-                double alpha = Math.Clamp(175.0 * cloud * grain * fade, 0.0, 255.0);
                 int i = y * stride + x * 4;
-                pixels[i] = (byte)(7 + 3 * (1.0 - distance)); // blue
-                pixels[i + 1] = (byte)(208 + 22 * (1.0 - distance)); // green
-                pixels[i + 2] = 255; // red: yellow in BGRA
-                pixels[i + 3] = (byte)Math.Round(alpha);
+                double b = source[i] / 255.0;
+                double g = source[i + 1] / 255.0;
+                double r = source[i + 2] / 255.0;
+                // Subtract the painted near-black background. Preserve the
+                // thick asset's natural uneven wisps, ridges and empty areas.
+                double lightness = .0722 * b + .7152 * g + .2126 * r;
+                double density = Math.Pow(
+                    Math.Clamp((lightness - .035) / .86, 0.0, 1.0), .83);
+                double u = (double)x / (width - 1);
+                // Last section becomes completely transparent with no visible
+                // cutoff, even when the functional cards move over the cloud.
+                double fadeT = Math.Clamp((u - .72) / .27, 0.0, 1.0);
+                double fade = 1.0 - fadeT * fadeT * (3.0 - 2.0 * fadeT);
+                byte alpha = (byte)Math.Round(205.0 * density * fade);
+                pixels[i] = 3;      // B
+                pixels[i + 1] = 233; // G
+                pixels[i + 2] = 255; // R
+                pixels[i + 3] = alpha;
             }
         }
         var bitmap = BitmapSource.Create(width, height, 96, 96,
