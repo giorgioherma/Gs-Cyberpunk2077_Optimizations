@@ -110,6 +110,25 @@ internal static class Program
                 throw new InvalidOperationException(
                     "V must be a direct root overlay to cross the inner border");
 
+            // The shared portrait mask and cloud+glow must meet at the
+            // SAME responsive seam. This catches the previous 76px strip
+            // accidentally anchored to the wrong content column.
+            if (window.VImageLayers.OpacityMask is not System.Windows.Media.ImageBrush ||
+                window.VAtmosphereImage.Source is not System.Windows.Media.Imaging.BitmapSource)
+                throw new InvalidOperationException(
+                    "Original V pair must share a mask with the real yellow cloud texture");
+            var cloudsLeft = window.VAtmosphereImage.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            var glowLeft = window.VAtmosphereGlow.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            var portraitRight = portraitTopLeft.X + window.VPortraitHost.ActualWidth;
+            if (Math.Abs((portraitRight - cloudsLeft.X) - 26.0) > 1.5 ||
+                Math.Abs(cloudsLeft.X - glowLeft.X) > .75)
+                throw new InvalidOperationException(
+                    $"Atmosphere misaligned with V: portraitRight={portraitRight:0.##}, " +
+                    $"cloudLeft={cloudsLeft.X:0.##}, glowLeft={glowLeft.X:0.##}");
+            Console.WriteLine("PASS authored yellow cloud and underglow align with shared V mask");
+
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Border Source disappeared after layout");
