@@ -45,7 +45,7 @@ Update [LATEST-WORK](../LATEST-WORK.md) after every substantive milestone, inclu
 
 ## Current handoff — 2026-11-06 owner-renamed repository and approved Page 1
 
-**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations` `main`; verified owner rename. The public EXE and artifact remain `Gs-Cyberpunk2077_Optimizer.exe` / `Gs-Cyberpunk2077_Optimizer.zip`. Product v1.1.5, one shared .NET10 runtime/WinForms app, only `.github/workflows/build-windows.yml`.
+**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations` `main`; verified owner rename. The public EXE and artifact remain `Gs-Cyberpunk2077_Optimizer.exe` / `Gs-Cyberpunk2077_Optimizer.zip`. Product v1.1.6, one shared .NET10 runtime/WPF app, only `.github/workflows/build-windows.yml`.
 
 Latest verified integrated Windows CI [#42148988246](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42148988246): code `e7b12fb3cc40f9c3e13423ecff5e45bafcd0d41d`, **SUCCESS 179/179**; historical v1.1.1/v1.1.2 sections above are no longer current. New user requirements are **not** source/CI/gameplay-verified.
 
@@ -134,3 +134,7 @@ Following the PNG border relocation, CI #42362905376 **failed after assembly and
 ### 2026-11-07 — Border PNG visibility fix (native screenshot evidence)
 
 Although first PNG build succeeded (#42363519634), the user's actual 1280-DIP Windows screenshot showed **no outer border**. The preceding foreground `OuterBorderArtwork` used a guessed 33-DIP perimeter clip, potentially erasing user-painted image parts. The correct rendering is to place the COMPLETE PNG as the **first child of the root Grid**, behind all actual WPF controls; make only the header Grid background transparent so the PNG top side is not hidden. Remove the image clip entirely; preserve the existing 2-image nearest-size selection and the WPF inner border. The root background and content backgrounds still protect layout, and the source artwork stays exact. CI and native screenshot acceptance are distinct.
+
+### 2026-11-07 — Active product version GCO v1.1.6
+
+Explicit owner command advances the **unified GCO package only** from `1.1.5` to `1.1.6`. Current version source of truth: root `Directory.Build.props`; synchronize WPF window title/header, CI package assertions, native launcher version-info resources (substituted by `Build-Test.ps1`), root `VERSION.txt` and adjacent `START-HERE.txt`. Historical handoff paragraphs mentioning 1.1.5 refer to past baselines and do not override the new version. CET, GRSP and PresentMon retain independent exact versions and binaries. Last verified pre-bump CI #42364084944 SUCCESS; run new integrated CI and report separately. Border PNG artwork remains subject to Windows visual acceptance.

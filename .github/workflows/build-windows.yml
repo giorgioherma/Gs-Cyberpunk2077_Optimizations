@@ -90,7 +90,7 @@ jobs:
             if ($exit -ne 0) { throw "CLI $executable $arguments exit=$exit stderr=$stderr stdout=$stdout" }
             return $stdout
           }
-          $version='1.1.5'
+          $version='1.1.6'
           if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) { throw 'Integrated package version mismatch' }
           $cet=Join-Path $root 'components/cet/G-CET-Runtime-Profiler.exe'
           $grsp=Join-Path $root 'components/grsp/G-REDscript-Profiler.exe'
@@ -131,7 +131,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.5') { throw 'Unexpected GCO package version' }
+          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.6') { throw 'Unexpected GCO package version' }
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
@@ -139,11 +139,11 @@ jobs:
             (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
             (Join-Path $root 'app/G-Total-Optimizer.App.exe')
           )) {
-            if ((Get-Item $exe).VersionInfo.FileVersion -ne '1.1.5.0') {
+            if ((Get-Item $exe).VersionInfo.FileVersion -ne '1.1.6.0') {
               throw "GCO executable version mismatch: $exe"
             }
           }
-          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne '1.1.5') {
+          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne '1.1.6') {
             throw 'VERSION.txt mismatch'
           }
           if ((Get-ChildItem $root -Filter coreclr.dll -File -Recurse).Count -ne 1) {

@@ -59,7 +59,7 @@
 
 1. Build [approved Page 1](design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) for Direct installations: full V trail, BLUE skyline, Game Root Refresh, global source-owner counts and 3-stage glitch visual.
 2. Refactor per-domain CET/GRSP eligibility/owner install/collect/restore and GCO 0-Engine validation; block PresentMon-only Continue. Add partial expected-results Return/Continue and provenance-safe retry, with verified restoration before Page 2.
-3. Add tests to the **existing** core contract harness and run only the **single** Windows workflow; real CET-only, GRSP-only and both-domain game capture tests required. Keep v1.1.5.
+3. Add tests to the **existing** core contract harness and run only the **single** Windows workflow; real CET-only, GRSP-only and both-domain game capture tests required. Keep v1.1.6.
 4. MO2 runtime later: standard one extra folder + automatic INI/profile; exceptional custom source folder repair in advanced window; USVFS/Overwrite/output/restore proof required before enabling.
 
 ## User-approved frontend migration — 2026-11-06

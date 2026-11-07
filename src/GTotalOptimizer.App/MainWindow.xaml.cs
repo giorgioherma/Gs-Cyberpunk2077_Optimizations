@@ -46,7 +46,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         initialized = true;
-        Title = "G's Cyberpunk 2077 Optimizer — v1.1.5";
+        Title = "G's Cyberpunk 2077 Optimizer — v1.1.6";
         glitchTimer.Tick += GlitchTick;
         LoadOriginalArtwork();
         pathUpdate = true;

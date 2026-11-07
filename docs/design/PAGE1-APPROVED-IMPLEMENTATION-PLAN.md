@@ -2,7 +2,7 @@
 
 **Approved design; NOT YET IMPLEMENTED.** This document is the latest explicit update to [the original unchanged two-page specification](../product/UNIFIED-TWO-PAGE-WORKFLOW.md). See [current decisions](../product/CURRENT-DECISIONS.md) and [latest work](../LATEST-WORK.md).
 
-**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`, `main` (owner-renamed, verified). **Public filename is different:** keep launcher `Gs-Cyberpunk2077_Optimizer.exe` and artifact `Gs-Cyberpunk2077_Optimizer.zip`. Preserve GCO v1.1.5, **.NET 10 WPF (later explicit user approval)**, one shared private runtime, one canonical `.github/workflows/build-windows.yml`, two pages and one game-relative generated optimization ZIP.
+**Canonical repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`, `main` (owner-renamed, verified). **Public filename is different:** keep launcher `Gs-Cyberpunk2077_Optimizer.exe` and artifact `Gs-Cyberpunk2077_Optimizer.zip`. Preserve GCO v1.1.6, **.NET 10 WPF (later explicit user approval)**, one shared private runtime, one canonical `.github/workflows/build-windows.yml`, two pages and one game-relative generated optimization ZIP.
 
 ## Locked Page 1 presentation
 
