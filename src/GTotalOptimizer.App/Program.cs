@@ -179,6 +179,7 @@ internal static class Program
                 unlit.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), px, 4, 0);
                 return px[2];
             }
+            double portraitRight = portraitTopLeft.X + window.VPortraitHost.ActualWidth;
             int probeX = Math.Clamp((int)Math.Round(portraitRight + 9), 0, width - 1);
             int probeTopY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
                                         window.ContentRegion.ActualHeight * .24), 0, height - 1);
