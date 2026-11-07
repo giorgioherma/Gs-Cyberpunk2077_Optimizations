@@ -125,14 +125,25 @@ internal static class Program
                     "Original-concept lighting requires two WPF halos and one dark vignette");
             var haloLeft = window.VAtmosphereHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            double expectedHaloWidth = window.ArtworkColumn.Width.Value + 158.0;
+            double expectedHaloWidth = window.ArtworkColumn.Width.Value + 185.0;
             if (Math.Abs(haloLeft.X - rootTopLeft.X) > .75 ||
                 Math.Abs(window.VAtmosphereHost.ActualWidth - expectedHaloWidth) > 1.5 ||
-                window.VAtmosphereHost.ActualWidth <= window.VPortraitHost.ActualWidth + 120.0)
+                window.VAtmosphereHost.ActualWidth <= window.VPortraitHost.ActualWidth + 160.0)
                 throw new InvalidOperationException(
                     $"Halo placement invalid: left={haloLeft.X:0.#}, " +
                     $"width={window.VAtmosphereHost.ActualWidth:0.#}, " +
                     $"expected={expectedHaloWidth:0.#}");
+            // The blue skyline background needs to be behind the halo,
+            // while the live content panel must render above the atmosphere.
+            var skylineZ = System.Windows.Controls.Panel.GetZIndex(window.SkylineHost);
+            var haloZ = System.Windows.Controls.Panel.GetZIndex(window.VAtmosphereHost);
+            var controls = (System.Windows.Controls.Grid)System.Windows.Media.VisualTreeHelper
+                .GetParent(window.CapturePage);
+            var contentZ = System.Windows.Controls.Panel.GetZIndex(controls);
+            if (!(skylineZ < haloZ && haloZ < contentZ))
+                throw new InvalidOperationException(
+                    $"Incorrect skyline/halo/controls layering: {skylineZ}/{haloZ}/{contentZ}");
+            Console.WriteLine("PASS skyline behind visible WPF halo; controls remain in front");
             Console.WriteLine("PASS shared V mask, static yellow halos and contained dark vignette");
 
             var regular = window.OuterBorderArtwork.Source
@@ -152,6 +163,38 @@ internal static class Program
                     bgra, 4, 0);
                 return [bgra[2], bgra[1], bgra[0]];
             }
+            // Compare actual rendered pixels with the halo hidden. A gradient
+            // object existing in the tree is not proof that it can be seen.
+            // Probe just beyond V's right edge at upper and lower locations,
+            // away from opaque card panels. This fails if another background
+            // layer obscures the halo as in the owner screenshot.
+            window.VAtmosphereHost.Visibility = System.Windows.Visibility.Hidden;
+            var unlit = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            unlit.Render(visual);
+            window.VAtmosphereHost.Visibility = System.Windows.Visibility.Visible;
+            int RedWithoutHalo(int x, int y)
+            {
+                var px = new byte[4];
+                unlit.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), px, 4, 0);
+                return px[2];
+            }
+            int probeX = Math.Clamp((int)Math.Round(portraitRight + 9), 0, width - 1);
+            int probeTopY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
+                                        window.ContentRegion.ActualHeight * .24), 0, height - 1);
+            int probeBottomY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
+                                           window.ContentRegion.ActualHeight * .87), 0, height - 1);
+            int upperGain = RgbAt(probeX, probeTopY)[0] -
+                            RedWithoutHalo(probeX, probeTopY);
+            int lowerGain = RgbAt(probeX, probeBottomY)[0] -
+                            RedWithoutHalo(probeX, probeBottomY);
+            Console.WriteLine($"Actual WPF halo red gains upper={upperGain}, lower={lowerGain}");
+            if (upperGain < 35 || lowerGain < 30)
+                throw new InvalidOperationException(
+                    $"Halo visually obscured at x={probeX}: " +
+                    $"upper={upperGain} lower={lowerGain}. Check compositing.");
+            Console.WriteLine("PASS halo visibly brightens pixels beyond V in both light zones");
+
             // Verify the ACTUAL painted bottom stroke instead of inspecting
             // an unfilled StreamGeometry through GetFlattenedPathGeometry:
             // WPF may expose zero filled PathFigures for an open outline.
@@ -193,7 +236,7 @@ internal static class Program
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1080, 600));
             smallRoot.UpdateLayout();
             if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
-                         smallWindow.ArtworkColumn.Width.Value - 158.0) > 1.5)
+                         smallWindow.ArtworkColumn.Width.Value - 185.0) > 1.5)
                 throw new InvalidOperationException("Halo fails minimum-size layout");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
@@ -206,7 +249,7 @@ internal static class Program
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1190, 680));
             smallRoot.UpdateLayout();
             if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
-                         smallWindow.ArtworkColumn.Width.Value - 158.0) > 1.5)
+                         smallWindow.ArtworkColumn.Width.Value - 185.0) > 1.5)
                 throw new InvalidOperationException("Halo does not follow live window resize");
             Console.WriteLine("PASS gradient atmosphere follows portrait at normal, minimum and resized layouts");
             if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))

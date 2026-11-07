@@ -228,7 +228,7 @@ public partial class MainWindow : Window
         // WPF only. Its width follows V's responsive column plus a short,
         // soft tail beneath the controls; no bitmap is stretched or cropped.
         if (VAtmosphereHost is not null)
-            VAtmosphereHost.Width = imageWidth + 158.0;
+            VAtmosphereHost.Width = imageWidth + 185.0;
     }
 
     private void SetActiveTab(bool results)

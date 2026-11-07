@@ -247,62 +247,12 @@
                  above the inner outline as a direct root-grid sibling. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
-            <!-- Original-key-art atmosphere: static WPF lighting, not smoke.
-                 Two contained yellow halos taper away from V; a dark right
-                 vignette keeps the functional UI near-black. The whole layer
-                 remains behind real controls and does not clip at the V edge. -->
-            <Grid x:Name="VAtmosphereHost" Grid.ColumnSpan="2" Panel.ZIndex="0"
-                  HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                  Width="380" IsHitTestVisible="False">
-                <!-- Stronger around V's upper silhouette and yellow skyline. -->
-                <Rectangle x:Name="VUpperHalo">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.27,0.32" GradientOrigin="0.27,0.32"
-                                             RadiusX="0.59" RadiusY="0.67">
-                            <GradientStop Color="#B0FFF000" Offset="0"/>
-                            <GradientStop Color="#7AFFF000" Offset=".27"/>
-                            <GradientStop Color="#35FFD400" Offset=".59"/>
-                            <GradientStop Color="#0AF3B900" Offset=".79"/>
-                            <GradientStop Color="#00FFF000" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Dimmer illumination follows the long black ink trail. -->
-                <Rectangle x:Name="VLowerHalo">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.24,0.88" GradientOrigin="0.24,0.88"
-                                             RadiusX="0.48" RadiusY="0.38">
-                            <GradientStop Color="#72FFF000" Offset="0"/>
-                            <GradientStop Color="#3CFFE000" Offset=".42"/>
-                            <GradientStop Color="#0AD3A000" Offset=".78"/>
-                            <GradientStop Color="#00FFF000" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Contain yellow within the artwork: dark atmospheric fade,
-                     no hard yellow rectangle and no overlaid cloud texture. -->
-                <Rectangle x:Name="VDarkVignette">
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#00060D0F" Offset="0"/>
-                            <GradientStop Color="#00060D0F" Offset=".39"/>
-                            <GradientStop Color="#48060D0F" Offset=".66"/>
-                            <GradientStop Color="#AD060D0F" Offset=".84"/>
-                            <GradientStop Color="#FF060D0F" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-            </Grid>
-
-            <Grid Grid.Column="1" Panel.ZIndex="1" Background="Transparent" ClipToBounds="True">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="54"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="63"/>
-                </Grid.RowDefinitions>
+            <!-- Skyline must sit BEHIND the atmosphere. When it was nested
+                 above the halo it painted its dark left-side pixels over the
+                 yellow glow and made the effect almost invisible. -->
                 <!-- Original user full-width 2048x682 skyline, below the title gap.
                      The alpha/dark blue is composited without rectangular borders. -->
-                <Grid x:Name="SkylineHost" Grid.RowSpan="2" Height="174"
+            <Grid x:Name="SkylineHost" Grid.Column="1" Panel.ZIndex="0" Height="174"
                       VerticalAlignment="Top" ClipToBounds="True" IsHitTestVisible="False">
                     <Image x:Name="CityImage"
                            Width="{Binding ActualWidth, ElementName=SkylineHost}"
@@ -319,6 +269,61 @@
                     </Rectangle>
                 </Grid>
 
+
+            <!-- Original-key-art atmosphere: static WPF lighting, not smoke.
+                 Two contained yellow halos taper away from V; a dark right
+                 vignette keeps the functional UI near-black. The whole layer
+                 remains behind real controls and does not clip at the V edge. -->
+            <Grid x:Name="VAtmosphereHost" Grid.ColumnSpan="2" Panel.ZIndex="1"
+                  HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                  Width="380" IsHitTestVisible="False">
+                <!-- Stronger around V's upper silhouette and yellow skyline. -->
+                <Rectangle x:Name="VUpperHalo">
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.52,0.23" GradientOrigin="0.52,0.23"
+                                             RadiusX="0.48" RadiusY="0.43">
+                            <GradientStop Color="#D8FFF000" Offset="0"/>
+                            <GradientStop Color="#A0FFF000" Offset=".30"/>
+                            <GradientStop Color="#55FFE100" Offset=".58"/>
+                            <GradientStop Color="#16FFD000" Offset=".81"/>
+                            <GradientStop Color="#00FFF000" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <!-- Dimmer illumination follows the long black ink trail. -->
+                <Rectangle x:Name="VLowerHalo">
+                    <Rectangle.Fill>
+                        <RadialGradientBrush Center="0.51,0.89" GradientOrigin="0.51,0.89"
+                                             RadiusX="0.45" RadiusY="0.47">
+                            <GradientStop Color="#C8FFF000" Offset="0"/>
+                            <GradientStop Color="#86FFE600" Offset=".31"/>
+                            <GradientStop Color="#40FFE000" Offset=".62"/>
+                            <GradientStop Color="#0BE6B700" Offset=".84"/>
+                            <GradientStop Color="#00FFF000" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <!-- Contain yellow within the artwork: dark atmospheric fade,
+                     no hard yellow rectangle and no overlaid cloud texture. -->
+                <Rectangle x:Name="VDarkVignette">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#00060D0F" Offset="0"/>
+                            <GradientStop Color="#00060D0F" Offset=".53"/>
+                            <GradientStop Color="#18060D0F" Offset=".69"/>
+                            <GradientStop Color="#82060D0F" Offset=".87"/>
+                            <GradientStop Color="#FF060D0F" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+            </Grid>
+
+            <Grid Grid.Column="1" Panel.ZIndex="2" Background="Transparent" ClipToBounds="True">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="54"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="63"/>
+                </Grid.RowDefinitions>
                 <!-- Two non-navigating status tabs: Page 2 remains restore gated. -->
                 <Grid Grid.Row="0" Margin="16,0,16,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
