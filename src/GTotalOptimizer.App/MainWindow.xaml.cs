@@ -86,6 +86,13 @@ public partial class MainWindow : Window
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         borderRegular = ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
         borderSmall = ImageFile("elements", "GCO_Border_Small_1080x640_FINAL.png");
+
+        // A sourceless WPF Image can measure as zero. Assign its first
+        // raster BEFORE consulting ActualWidth/ActualHeight or layout events.
+        // Otherwise source assignment can get stuck waiting on zero size.
+        OuterBorderArtwork.Source = borderRegular ?? borderSmall;
+        if (borderRegular is null || borderSmall is null)
+            Trace.TraceError("Missing/undecodable owner border in assets/ui/elements.");
         UpdateOuterBorderArtwork();
     }
 
@@ -106,8 +113,9 @@ public partial class MainWindow : Window
                             + Math.Abs(height - 760.0) / 760.0;
         var smallDistance = Math.Abs(width - 1080.0) / 1080.0
                           + Math.Abs(height - 640.0) / 640.0;
-        var image = smallDistance < regularDistance ? borderSmall : borderRegular;
-        if (!ReferenceEquals(OuterBorderArtwork.Source, image))
+        var image = (smallDistance < regularDistance ? borderSmall : borderRegular)
+                    ?? borderRegular ?? borderSmall;
+        if (image is not null && !ReferenceEquals(OuterBorderArtwork.Source, image))
             OuterBorderArtwork.Source = image;
 
     }

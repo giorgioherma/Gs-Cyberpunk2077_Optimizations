@@ -176,6 +176,33 @@ jobs:
             throw "GCO process resolved the wrong package root: $out"
           }
           Write-Host 'PASS actual shipped GUI host detects verified component manifest from unrelated CWD'
+
+          # Offscreen WPF rendering regression: image presence in the ZIP is
+          # insufficient. The actual UI must paint bright border pixels.
+          $visual=New-Object System.Diagnostics.ProcessStartInfo
+          $visual.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
+          $visual.ArgumentList.Add('--verify-border-ui')
+          $visual.WorkingDirectory=$env:RUNNER_TEMP
+          $visual.UseShellExecute=$false
+          $visual.CreateNoWindow=$true
+          $visual.RedirectStandardOutput=$true
+          $visual.RedirectStandardError=$true
+          $wpfCheck=New-Object System.Diagnostics.Process
+          $wpfCheck.StartInfo=$visual
+          if (!$wpfCheck.Start()) { throw 'Could not run WPF outer-border regression' }
+          $wpfOutTask=$wpfCheck.StandardOutput.ReadToEndAsync()
+          $wpfErrTask=$wpfCheck.StandardError.ReadToEndAsync()
+          if (!$wpfCheck.WaitForExit(60000)) {
+            $wpfCheck.Kill()
+            throw 'WPF outer-border visual regression timed out'
+          }
+          $wpfOut=$wpfOutTask.GetAwaiter().GetResult()
+          $wpfErr=$wpfErrTask.GetAwaiter().GetResult()
+          if ($wpfCheck.ExitCode -ne 0) {
+            throw "WPF border pixels not verified: $wpfErr $wpfOut"
+          }
+          Write-Host $wpfOut
+
           # The native launcher now forwards headless control arguments and
           # provides the bundled private .NET10 runtime, including under UAC.
           # This headless path does not request elevation or modify the game.
