@@ -154,10 +154,10 @@ public partial class MainWindow : Window
     }
 
     // Both exact 743x2117 V images resize together from the same TOP/LEFT.
-    // Eight DIPs below the content host meets the outer border's upper
-    // horizontal line without entering its lower decorative dent.
+    // Ten DIPs below the content host meets the corrected yellow border's
+    // top edge while retaining the pair's exact proportional scale.
     // The separately owned WPF inner border is not changed.
-    private const double PortraitBottomOverhang = 8.0;
+    private const double PortraitBottomOverhang = 10.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 

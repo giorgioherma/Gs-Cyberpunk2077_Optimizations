@@ -67,10 +67,9 @@ internal static class Program
             visual.Arrange(new System.Windows.Rect(0, 0, width, height));
             visual.UpdateLayout();
 
-            // V remains 3 DIPs left with identical top. It now grows 9
-            // DIPs DOWN/RIGHT compared to the previous screenshot, stopping
-            // above the outer bottom band's decorative dent. The inner
-            // chassis frame has not been modified.
+            // V remains 3 DIPs left and pinned to the same top. After the
+            // corrected outer border was uploaded, V now ends 10 DIPs
+            // below ContentRegion, with the inner frame unchanged.
             var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             var portraitTopLeft = window.VPortraitHost.TransformToAncestor(visual)
@@ -81,7 +80,7 @@ internal static class Program
                     $"V left/top anchor incorrect: region={rootTopLeft}, V={portraitTopLeft}");
             var extension = window.VPortraitHost.ActualHeight -
                             window.ContentRegion.ActualHeight;
-            if (Math.Abs(extension - 8.0) > 0.5)
+            if (Math.Abs(extension - 10.0) > 0.5)
                 throw new InvalidOperationException(
                     $"V must stop at upper outer-border line; host delta={extension:0.###}");
             // Negative left margin enlarges the *host* by 3 DIPs, but the

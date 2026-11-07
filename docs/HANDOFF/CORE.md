@@ -180,3 +180,7 @@ The sole active master canvas is `assets/ui/elements/GCO_Border_Regular_1280x760
 ### 2026-11-07 — Single Regular border CI verified
 
 [CI #42377895908](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42377895908) SUCCESS at `ce838d9`: 183 contracts, CET/GRSP smoke, both-size WPF rendering without source switching and single-asset package proof. Artifact ID 13576457299. **This CI uses the previous Regular PNG**; after owner uploads corrected artwork, new build and native screenshot check are still required. No version change.
+
+### 2026-11-07 — Proportional V +2 DIP on corrected Regular master
+
+Owner updated the sole Regular border PNG in commit `b8e5abb`. V host overhang is now 10 DIPs (`MainWindow.xaml` bottom margin 19, `PortraitBottomOverhang=10`, packaged WPF assertion 10), versus 8 DIPs before. Top/left placement, color/black image overlap, aspect 743:2117, inner border geometry, border art, version v1.1.6 and CET/GRSP binaries stay unchanged. Verify canonical CI and actual native screenshot.

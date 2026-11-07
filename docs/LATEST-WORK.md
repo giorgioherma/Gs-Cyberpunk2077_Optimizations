@@ -620,3 +620,9 @@ When implementation starts, append exact commits, build jobs, test output and ga
 ### Canonical CI result — single Regular border
 
 - **[Windows CI #42377895908](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42377895908) SUCCESS** at source `ce838d9aee77cd4e92488970a84675177226bec8`. Integrated .NET10 build, CET/GRSP install/restore smoke and **183 package/CLI contracts passed**. Source → package SHA-256 copy of the sole Regular border verified; the Small PNG is excluded from the release. The shipped WPF regression logs **PASS Regular border bitmap rendered at both sizes without source switching**; original border pixel samples remain yellow RGB(240,225,1), cyan RGB(6,167,175), and the straight inner frame test passed. Artifact `Gs-Cyberpunk2077_Optimizer` ID **13576457299**, **86,664,105 bytes**. **The owner-supplied corrected Regular PNG has NOT yet been included in this run**; after the owner uploads it under the same path, verify that new CI independently. Product remains v1.1.6.
+
+## 2026-11-07 — Owner master PNG correction: +2-DIP proportional V finish
+
+- Owner committed the corrected single Regular 1280×760 PNG as `b8e5abb`. No PNG changes in this code commit.
+- Portrait-only finish: `PortraitBottomOverhang` **8→10 DIPs**, matching root V host bottom margin **21→19**. Left and top remain fixed, both original 743:2117 color/black V image layers retain identical Uniform scale, growing +2 DIPs down and approximately +0.7 DIPs right. Inner frame and outer master PNG remain untouched.
+- Update existing packaged WPF visual regression's host-height assertion to 10 DIPs. Run the canonical `build-windows.yml` and record its actual CI result. Keep product v1.1.6 and profiler owners unchanged.
