@@ -154,3 +154,7 @@ The approved original V portrait must NOT be moved. The left artwork host is anc
 ### 2026-11-07 — Owner corrected portrait/border overlap requirement
 
 User annotations override the previous +16-DIP V extension: V should move **3 DIPs LEFT**, top unchanged, and end flush at the INNER raised 27-DIP+3-DIP baseline, not continue into the chipped OUTER border. Photo retains original lower-left pixels; `CreatePortraitClip(clipLowerLeft:false)` clips only upper-left for image host while `PortraitOutline` draws black 45° around it. Original 743:2117 color/black portrait pairing and transitions remain aligned. Root owner border PNG overlays image raster; WPF inner outline is higher z-order and wins overlaps. `CreateContentFrame` bottom has ONE straight run at first chamfer height (no 3-DIP downward jogs). Existing `--verify-border-ui` checks geometry/layout. No PNG rebuild, new version or game backend changes.
+
+### 2026-11-07 — Correct faulty line-path CI introspection
+
+CI #42372818627 built and smoked successfully (183 contracts) but its newly added WPF geometry assertion incorrectly indexed `GetFlattenedPathGeometry().Figures[0]` on an unfilled `StreamGeometry`, causing an out-of-range exception. That says nothing about border visibility. Replaced the test in the existing app's `--verify-border-ui` with real composed-raster samples along four positions at the desired single raised bottom y. UI geometry, PNGs and product version unchanged. New CI needed.

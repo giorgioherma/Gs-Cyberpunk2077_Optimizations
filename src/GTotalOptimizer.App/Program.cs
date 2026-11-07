@@ -102,18 +102,6 @@ internal static class Program
                 System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork))
                 throw new InvalidOperationException("Inner outline must win raster overlaps");
 
-            var bottomPath = GTotalOptimizer.App.Visuals.ChamferGeometry
-                .CreateContentFrame(width, height, 68, 27, 14)
-                .GetFlattenedPathGeometry().Figures[0];
-            var bottomSegments = bottomPath.Segments
-                .OfType<System.Windows.Media.LineSegment>().ToArray();
-            var baseline = height - 30.0; // 27-DIP inset + 3-DIP raise
-            if (bottomSegments.Length != 7 ||
-                Math.Abs(bottomSegments[3].Point.Y - baseline) > 0.01 ||
-                Math.Abs(bottomSegments[4].Point.Y - baseline) > 0.01)
-                throw new InvalidOperationException(
-                    "Inner chassis bottom must be a single straight, raised line");
-
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Border Source disappeared after layout");
@@ -130,6 +118,28 @@ internal static class Program
                     bgra, 4, 0);
                 return [bgra[2], bgra[1], bgra[0]];
             }
+            // Verify the ACTUAL painted bottom stroke instead of inspecting
+            // an unfilled StreamGeometry through GetFlattenedPathGeometry:
+            // WPF may expose zero filled PathFigures for an open outline.
+            // A downward jog would place the central and right spans 3 DIPs
+            // BELOW this common raised baseline, so these probes would fail.
+            const int innerY = height - 30; // 27-DIP inset, 3-DIP raise
+            foreach (var x in new[] { 330, 600, 950, 1110 })
+            {
+                var lineVisible = false;
+                for (var y = innerY - 1; y <= innerY + 1; y++)
+                {
+                    var rgb = RgbAt(x, y);
+                    if (rgb[0] > 75 && rgb[1] > 70 &&
+                        (rgb[0] - rgb[2] > 20 || rgb[2] - rgb[0] > 20))
+                        lineVisible = true;
+                }
+                if (!lineVisible)
+                    throw new InvalidOperationException(
+                        $"Raised inner border has a gap/step at x={x}, y={innerY}");
+            }
+            Console.WriteLine("PASS WPF raised inner border has one straight painted baseline");
+
             var yellow = RgbAt(307, 9);
             var cyan = RgbAt(1024, 9);
             Console.WriteLine($"Real WPF border pixels: yellow={string.Join(',', yellow)}, " +
