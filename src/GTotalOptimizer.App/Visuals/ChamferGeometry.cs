@@ -48,6 +48,51 @@ public static class ChamferGeometry
         path.Freeze();
         return path;
     }
+
+    // The INNER top is the one line BELOW the logo/header, NOT a parallel
+    // duplicate of the outer top perimeter.
+    public static Geometry CreateContentFrame(double width, double height,
+        double headerTop, double inset, double cut)
+    {
+        var left = inset;
+        var right = Math.Max(left, width - inset);
+        var top = Math.Clamp(headerTop, inset, Math.Max(inset, height - inset));
+        var bottom = Math.Max(top, height - inset);
+        cut = Math.Clamp(cut, 0, Math.Min(right - left, bottom - top) / 3.0);
+        var path = new StreamGeometry();
+        using (var ctx = path.Open())
+        {
+            ctx.BeginFigure(new Point(left + cut, top), false, true);
+            ctx.LineTo(new Point(right - cut, top), true, false);
+            ctx.LineTo(new Point(right, top + cut), true, false);
+            ctx.LineTo(new Point(right, bottom - cut), true, false);
+            ctx.LineTo(new Point(right - cut, bottom), true, false);
+            ctx.LineTo(new Point(left + cut, bottom), true, false);
+            ctx.LineTo(new Point(left, bottom - cut), true, false);
+            ctx.LineTo(new Point(left, top + cut), true, false);
+        }
+        path.Freeze();
+        return path;
+    }
+
+    // Portrait shares the chassis LEFT corners only; no independent image
+    // frame or diagonals on its right side.
+    public static Geometry CreatePortraitClip(double width, double height, double cut)
+    {
+        cut = Math.Clamp(cut, 0, Math.Min(width, height) / 3.0);
+        var path = new StreamGeometry();
+        using (var ctx = path.Open())
+        {
+            ctx.BeginFigure(new Point(cut, 0), true, true);
+            ctx.LineTo(new Point(width, 0), true, false);
+            ctx.LineTo(new Point(width, height), true, false);
+            ctx.LineTo(new Point(cut, height), true, false);
+            ctx.LineTo(new Point(0, height - cut), true, false);
+            ctx.LineTo(new Point(0, cut), true, false);
+        }
+        path.Freeze();
+        return path;
+    }
 }
 
 /// <summary>
@@ -121,7 +166,7 @@ public sealed class ChamferOutline : FrameworkElement
     }
 }
 
-/// <summary>Clips portrait/image contents to the exact same 45-degree chamfer.</summary>
+/// <summary>Portrait clipping follows the content chassis left corner only.</summary>
 public static class ChamferClip
 {
     public static readonly DependencyProperty CornerCutProperty =
@@ -150,7 +195,7 @@ public static class ChamferClip
     {
         if (e.ActualWidth < 1 || e.ActualHeight < 1) return;
         var cut = ChamferGeometry.ScaledCut(e, GetCornerCut(e));
-        e.Clip = ChamferGeometry.Create(e.ActualWidth, e.ActualHeight, cut);
+        e.Clip = ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight, cut);
     }
 }
 
@@ -189,5 +234,99 @@ public sealed class SlantedTabShape : FrameworkElement
         }
         geometry.Freeze();
         dc.DrawGeometry(Fill, new Pen(Stroke, StrokeThickness), geometry);
+    }
+}
+
+/// <summary>
+/// One bright yellow-left / cyan-right OUTER chassis. Black exists outside
+/// the spine and in the inside channel; no broad grey border wash.
+/// </summary>
+public sealed class TechChassisOutline : FrameworkElement
+{
+    public static readonly DependencyProperty StrokeProperty =
+        DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(TechChassisOutline),
+            new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        var w = RenderSize.Width;
+        var h = RenderSize.Height;
+        if (w < 90 || h < 90) return;
+        const double thickness = 2.35;
+        var inset = thickness / 2 + .5;
+        var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
+        dc.DrawGeometry(null, new Pen(Stroke, thickness) { LineJoin = PenLineJoin.Miter },
+            ChamferGeometry.Create(w, h, cut, inset));
+
+        var left = inset;
+        var right = w - inset;
+        var top = inset;
+        var bottom = h - inset;
+        var yellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
+        var cyan = new SolidColorBrush(Color.FromRgb(0, 226, 242));
+        var black = new SolidColorBrush(Color.FromRgb(6, 13, 15));
+        var warmGlow = new SolidColorBrush(Color.FromArgb(44, 255, 240, 0));
+        var coolGlow = new SolidColorBrush(Color.FromArgb(44, 0, 226, 242));
+
+        // Small colored halos ONLY for a pair of intentional thick accents,
+        // not along the entire frame or across its black channel.
+        var a = new Point(left + cut + 15, top);
+        var b = new Point(Math.Min(w * .23, left + cut + 142), top);
+        dc.DrawLine(new Pen(warmGlow, 6.5), a, b);
+        dc.DrawLine(new Pen(yellow, 4.25), a, b);
+        a = new Point(Math.Max(w * .74, right - cut - 140), bottom);
+        b = new Point(right - cut - 15, bottom);
+        dc.DrawLine(new Pen(coolGlow, 6.5), a, b);
+        dc.DrawLine(new Pen(cyan, 4.25), a, b);
+
+        // Variable line weights, technical ticks and black interruptions.
+        dc.DrawLine(new Pen(yellow, 4.2),
+            new Point(left, h * .52), new Point(left, h * .66));
+        dc.DrawLine(new Pen(cyan, 4.2),
+            new Point(right, h * .20), new Point(right, h * .34));
+        dc.DrawLine(new Pen(yellow, 2.5),
+            new Point(left + cut + 5, top + 4), new Point(left + cut + 52, top + 4));
+        dc.DrawLine(new Pen(cyan, 2.5),
+            new Point(right - cut - 62, bottom - 4), new Point(right - cut - 10, bottom - 4));
+        dc.DrawLine(new Pen(black, 5),
+            new Point(w * .29, top), new Point(w * .29 + 10, top));
+        dc.DrawLine(new Pen(black, 5),
+            new Point(w * .69, bottom), new Point(w * .69 + 11, bottom));
+        dc.DrawLine(new Pen(black, 5),
+            new Point(right, h * .59), new Point(right, h * .59 + 8));
+        dc.DrawLine(new Pen(black, 5),
+            new Point(left, h * .26), new Point(left, h * .26 + 7));
+    }
+}
+
+/// <summary>
+/// The thin INNER content frame: same neon left/right colors but its TOP is
+/// the lower GCO header division. V and the tabs are flush against that line.
+/// </summary>
+public sealed class ContentChassisOutline : FrameworkElement
+{
+    public static readonly DependencyProperty StrokeProperty =
+        DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(ContentChassisOutline),
+            new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty HeaderHeightProperty =
+        DependencyProperty.Register(nameof(HeaderHeight), typeof(double), typeof(ContentChassisOutline),
+            new FrameworkPropertyMetadata(68.0, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty FrameInsetProperty =
+        DependencyProperty.Register(nameof(FrameInset), typeof(double), typeof(ContentChassisOutline),
+            new FrameworkPropertyMetadata(14.0, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+    public double HeaderHeight { get => (double)GetValue(HeaderHeightProperty); set => SetValue(HeaderHeightProperty, value); }
+    public double FrameInset { get => (double)GetValue(FrameInsetProperty); set => SetValue(FrameInsetProperty, value); }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        if (RenderSize.Width < 90 || RenderSize.Height < HeaderHeight + 50) return;
+        var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
+        dc.DrawGeometry(null, new Pen(Stroke, 1.15) { LineJoin = PenLineJoin.Miter },
+            ChamferGeometry.CreateContentFrame(RenderSize.Width, RenderSize.Height,
+                HeaderHeight, FrameInset, cut));
     }
 }

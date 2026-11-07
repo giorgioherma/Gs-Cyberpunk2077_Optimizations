@@ -139,15 +139,18 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    // The original portrait aspect ratio is 743/2117. Size the entire left
-    // panel from available client height instead of cropping its sides.
+    // The original V pair is 743x2117. Match the actual content height
+    // so the picture touches the inner chassis top and left without a gutter.
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
+        UpdatePortraitWidth();
+
+    private void ContentRegion_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
     private void UpdatePortraitWidth()
     {
-        if (ArtworkColumn is null) return;
-        var imageHeight = Math.Max(1, ActualHeight - 68);
+        if (ArtworkColumn is null || ContentRegion is null) return;
+        var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight);
         ArtworkColumn.Width = new GridLength(Math.Clamp(
             imageHeight * 743.0 / 2117.0, 170.0, 245.0));
     }
