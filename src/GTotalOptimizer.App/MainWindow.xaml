@@ -609,10 +609,10 @@
 
         <!-- A single portrait host sits in the root row, directly over the
              left part of the inner stroke. Root row1 starts at the SAME top
-             as ContentRegion. The 26-DIP left margin is 29−3, the 14-DIP
-             bottom inset is 29−15. Neither image is moved or stretched. -->
+             as ContentRegion. The 26-DIP left margin is 29−3, the 24-DIP
+             bottom inset is 29−5. Neither image is moved or stretched. -->
         <Grid x:Name="VPortraitHost" Grid.Row="1" Panel.ZIndex="20"
-              HorizontalAlignment="Left" Margin="26,0,0,14"
+              HorizontalAlignment="Left" Margin="26,0,0,24"
               Width="214" Background="#060D0F" ClipToBounds="True"
               fx:ChamferClip.CornerCut="14">
             <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
