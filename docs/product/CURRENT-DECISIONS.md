@@ -260,3 +260,9 @@ Owner selected the Regular 1280×760 PNG as the only full-window master at all s
 ## 2026-11-07 — Explicit unified package v1.1.7
 
 The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1.1.7`; no unrelated fixes or design changes authorized. Maintain single .NET10 runtime, current V geometry, sole Regular PNG, independent CET/GRSP version ownership and one Windows CI workflow. A browser malware warning on the ZIP prompted the request, but bumping the version alone cannot prove the binary safe or clear a security detection.
+
+## 2026-11-08 — Explicit unified package v1.1.8
+
+- Owner ordered one version increment `v1.1.7 → v1.1.8`. This authorizes a GCO product/package metadata change only; it does not authorize image/layout or profiler behavior changes.
+- Keep product, assembly, file and informational versions, WPF title and header, Windows CI checks, builder and generated `VERSION.txt` / `START-HERE.txt` aligned. Preserve `Gs-Cyberpunk2077_Optimizer` package and launcher filenames, one .NET10 runtime and one canonical Windows workflow. CET v1.3.4, GRSP v1.0.0 and PresentMon v2.6.0 are independently owned and unchanged.
+- Pre-bump v1.1.7 CI [#42438748376](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42438748376) SUCCESS; new v1.1.8 CI must be checked independently. Do not bump again without the next explicit request.

@@ -225,7 +225,7 @@
                            Foreground="#00D9F5" FontWeight="SemiBold" FontSize="11" Margin="1,1,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
-                <TextBlock Text="v1.1.7" Foreground="#87999F"
+                <TextBlock Text="v1.1.8" Foreground="#87999F"
                            HorizontalAlignment="Right" FontFamily="{StaticResource Oxanium}"
                            FontSize="10"/>
                 <CheckBox x:Name="ReduceMotionCheck" Content="Reduce flashing"
