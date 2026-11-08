@@ -224,11 +224,10 @@ public partial class MainWindow : Window
         // +3 preserves the previous host width from Margin="-3,0,0,-8".
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageWidth + 3.0;
-        // Rebuild the original illustration's contained light field with
-        // WPF only. Its width follows V's responsive column plus a short,
-        // soft tail beneath the controls; no bitmap is stretched or cropped.
+        // The outward glow needs room for its elliptical arch and skirt:
+        // size it from the original portrait without moving/cropping V.
         if (VAtmosphereHost is not null)
-            VAtmosphereHost.Width = imageWidth + 185.0;
+            VAtmosphereHost.Width = imageWidth + 245.0;
     }
 
     private void SetActiveTab(bool results)

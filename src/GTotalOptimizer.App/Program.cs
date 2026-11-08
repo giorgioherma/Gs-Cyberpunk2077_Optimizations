@@ -110,31 +110,33 @@ internal static class Program
                 throw new InvalidOperationException(
                     "V must be a direct root overlay to cross the inner border");
 
-            // No cloud image or generated texture. The two original V
-            // images share ONE WPF mask, while a static gradient halo/vignette
-            // bleeds behind the UI without moving portrait geometry.
+            // Round 6 keeps the exact shared portrait mask and uses five
+            // radial/elliptical WPF lighting layers + one gentle right fade.
             if (window.VImageLayers.OpacityMask is not System.Windows.Media.ImageBrush)
                 throw new InvalidOperationException("V pair must share one opacity mask");
-            var halos = window.VAtmosphereHost.Children
+            var lightingLayers = window.VAtmosphereHost.Children
                 .OfType<System.Windows.Shapes.Rectangle>().ToArray();
-            if (halos.Length != 3 ||
+            if (lightingLayers.Length != 6 ||
+                window.VMainGlow.Fill is not System.Windows.Media.RadialGradientBrush ||
                 window.VUpperHalo.Fill is not System.Windows.Media.RadialGradientBrush ||
                 window.VLowerHalo.Fill is not System.Windows.Media.RadialGradientBrush ||
-                window.VDarkVignette.Fill is not System.Windows.Media.LinearGradientBrush)
+                window.VTopArch.Fill is not System.Windows.Media.RadialGradientBrush ||
+                window.VBottomSkirt.Fill is not System.Windows.Media.RadialGradientBrush ||
+                window.VRightFade.Fill is not System.Windows.Media.LinearGradientBrush)
                 throw new InvalidOperationException(
-                    "Original-concept lighting requires two WPF halos and one dark vignette");
+                    "Round-6 WPF atmosphere requires outward light, top arch, lower skirt and subtle side fade");
             var haloLeft = window.VAtmosphereHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            double expectedHaloWidth = window.ArtworkColumn.Width.Value + 185.0;
+            double expectedHaloWidth = window.ArtworkColumn.Width.Value + 245.0;
             if (Math.Abs(haloLeft.X - rootTopLeft.X) > .75 ||
                 Math.Abs(window.VAtmosphereHost.ActualWidth - expectedHaloWidth) > 1.5 ||
-                window.VAtmosphereHost.ActualWidth <= window.VPortraitHost.ActualWidth + 160.0)
+                window.VAtmosphereHost.ActualWidth <= window.VPortraitHost.ActualWidth + 220.0)
                 throw new InvalidOperationException(
                     $"Halo placement invalid: left={haloLeft.X:0.#}, " +
                     $"width={window.VAtmosphereHost.ActualWidth:0.#}, " +
                     $"expected={expectedHaloWidth:0.#}");
-            // The blue skyline background needs to be behind the halo,
-            // while the live content panel must render above the atmosphere.
+            // Skyline behind illumination, controls in front. The portrait
+            // pair's own host geometry remains unchanged.
             var skylineZ = System.Windows.Controls.Panel.GetZIndex(window.SkylineHost);
             var haloZ = System.Windows.Controls.Panel.GetZIndex(window.VAtmosphereHost);
             var controls = (System.Windows.Controls.Grid)System.Windows.Media.VisualTreeHelper
@@ -143,8 +145,9 @@ internal static class Program
             if (!(skylineZ < haloZ && haloZ < contentZ))
                 throw new InvalidOperationException(
                     $"Incorrect skyline/halo/controls layering: {skylineZ}/{haloZ}/{contentZ}");
-            Console.WriteLine("PASS skyline behind visible WPF halo; controls remain in front");
-            Console.WriteLine("PASS shared V mask, static yellow halos and contained dark vignette");
+            Console.WriteLine("PASS skyline behind V-origin WPF glow; controls remain in front");
+            Console.WriteLine("PASS shared V mask and separate top arch / bottom skirt shaping");
+
 
             var regular = window.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
@@ -163,11 +166,8 @@ internal static class Program
                     bgra, 4, 0);
                 return [bgra[2], bgra[1], bgra[0]];
             }
-            // Compare actual rendered pixels with the halo hidden. A gradient
-            // object existing in the tree is not proof that it can be seen.
-            // Probe just beyond V's right edge at upper and lower locations,
-            // away from opaque card panels. This fails if another background
-            // layer obscures the halo as in the owner screenshot.
+            // Prove the light is actually composited into the real window,
+            // not simply present as XAML objects hidden by skyline/control art.
             window.VAtmosphereHost.Visibility = System.Windows.Visibility.Hidden;
             var unlit = new System.Windows.Media.Imaging.RenderTargetBitmap(
                 width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
@@ -181,34 +181,43 @@ internal static class Program
             }
             double portraitRight = portraitTopLeft.X + window.VPortraitHost.ActualWidth;
             int probeX = Math.Clamp((int)Math.Round(portraitRight + 9), 0, width - 1);
-            int probeTopY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
-                                        window.ContentRegion.ActualHeight * .24), 0, height - 1);
-            int probeBottomY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
-                                           window.ContentRegion.ActualHeight * .87), 0, height - 1);
-            int probeMidY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
-                                        window.ContentRegion.ActualHeight * .55), 0, height - 1);
-            int upperGain = RgbAt(probeX, probeTopY)[0] -
-                            RedWithoutHalo(probeX, probeTopY);
-            int lowerGain = RgbAt(probeX, probeBottomY)[0] -
-                            RedWithoutHalo(probeX, probeBottomY);
-            int middleGain = RgbAt(probeX, probeMidY)[0] -
-                             RedWithoutHalo(probeX, probeMidY);
-            Console.WriteLine($"Actual WPF halo red gains upper={upperGain}, " +
-                              $"middle={middleGain}, lower={lowerGain}");
-            if (upperGain < 35 || lowerGain < 25)
+            int midY = Math.Clamp((int)Math.Round(rootTopLeft.Y +
+                                  window.ContentRegion.ActualHeight * .50), 0, height - 1);
+            int midGain = RgbAt(probeX, midY)[0] - RedWithoutHalo(probeX, midY);
+            if (midGain < 25)
                 throw new InvalidOperationException(
-                    $"Halo visibly missing at x={probeX}: " +
-                    $"upper={upperGain} lower={lowerGain}");
-            // An upper/lower halo separated by a dark middle is the core
-            // visual requirement. The earlier round rendered a uniformly
-            // bright column despite all structural checks passing.
-            if (middleGain > 24 ||
-                upperGain - middleGain < 25 ||
-                lowerGain - middleGain < 18)
+                    $"Round-6 V-origin light isn't visible outside V: red gain={midGain}");
+            Console.WriteLine($"PASS outward V-origin glow visible in real WPF UI, middle red gain={midGain}");
+
+            // Separately render the light field to prove its spatial SHAPE:
+            // left-to-right illumination, dark arch UP TOP and skirt BELOW.
+            // This avoids opaque card panels corrupting the contour probes.
+            int fieldW = Math.Max(1, (int)Math.Round(window.VAtmosphereHost.ActualWidth));
+            int fieldH = Math.Max(1, (int)Math.Round(window.VAtmosphereHost.ActualHeight));
+            var field = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                fieldW, fieldH, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            field.Render(window.VAtmosphereHost);
+            int FieldRed(double rx, double ry)
+            {
+                var px = new byte[4];
+                int xx = Math.Clamp((int)Math.Round((fieldW - 1) * rx), 0, fieldW - 1);
+                int yy = Math.Clamp((int)Math.Round((fieldH - 1) * ry), 0, fieldH - 1);
+                field.CopyPixels(new System.Windows.Int32Rect(xx, yy, 1, 1), px, 4, 0);
+                return px[2];
+            }
+            int near = FieldRed(.42, .52);
+            int far = FieldRed(.86, .52);
+            int archedTop = FieldRed(.69, .07);
+            int openCenter = FieldRed(.69, .49);
+            int skirtBottom = FieldRed(.69, .94);
+            Console.WriteLine($"Round-6 shape red: near={near}, far={far}, " +
+                              $"topArch={archedTop}, center={openCenter}, lowerSkirt={skirtBottom}");
+            if (near < far + 20 || openCenter < archedTop + 15 ||
+                openCenter < skirtBottom + 15)
                 throw new InvalidOperationException(
-                    $"Halo reverted to a uniform wash at x={probeX}: " +
-                    $"upper={upperGain}, middle={middleGain}, lower={lowerGain}");
-            Console.WriteLine("PASS distinct upper/lower halos and contained dark middle");
+                    "Round-6 light field lost its V-origin falloff, top arch or bottom skirt");
+            Console.WriteLine("PASS shaped V-outward light, dark top arch and lower skirt");
+
 
             // Verify the ACTUAL painted bottom stroke instead of inspecting
             // an unfilled StreamGeometry through GetFlattenedPathGeometry:
