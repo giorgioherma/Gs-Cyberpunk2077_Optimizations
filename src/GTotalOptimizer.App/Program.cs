@@ -260,7 +260,7 @@ internal static class Program
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1080, 600));
             smallRoot.UpdateLayout();
             if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
-                         smallWindow.ArtworkColumn.Width.Value - 185.0) > 1.5)
+                         smallWindow.ArtworkColumn.Width.Value - 245.0) > 1.5)
                 throw new InvalidOperationException("Halo fails minimum-size layout");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
@@ -273,7 +273,7 @@ internal static class Program
             smallRoot.Arrange(new System.Windows.Rect(0, 0, 1190, 680));
             smallRoot.UpdateLayout();
             if (Math.Abs(smallWindow.VAtmosphereHost.ActualWidth -
-                         smallWindow.ArtworkColumn.Width.Value - 185.0) > 1.5)
+                         smallWindow.ArtworkColumn.Width.Value - 245.0) > 1.5)
                 throw new InvalidOperationException("Halo does not follow live window resize");
             Console.WriteLine("PASS gradient atmosphere follows portrait at normal, minimum and resized layouts");
             if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))
