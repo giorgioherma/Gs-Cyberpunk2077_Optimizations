@@ -53,6 +53,13 @@ internal static class Program
                 ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
             };
             var window = new MainWindow();
+            // The owner ICO must be present in the actual WPF window, not
+            // merely in the EXE metadata: titlebar/Alt-Tab use Window.Icon.
+            if (window.Icon is not System.Windows.Media.Imaging.BitmapSource appIcon ||
+                appIcon.PixelWidth < 16 || appIcon.PixelHeight < 16)
+                throw new InvalidOperationException(
+                    "Canonical GOT LAG WPF window icon not embedded or decodable");
+            Console.WriteLine("PASS canonical GOT LAG icon loaded by actual WPF window");
             var visual = window.Content as System.Windows.FrameworkElement
                 ?? throw new InvalidOperationException("Missing root WPF visual");
             var first = window.OuterBorderArtwork.Source

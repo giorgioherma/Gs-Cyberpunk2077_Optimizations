@@ -1,5 +1,8 @@
 #include <windows.h>
 
+// Explorer and the native root launcher use the owner's single hybrid ICO.
+1 ICON "@ICON_PATH@"
+
 1 VERSIONINFO
  FILEVERSION @VERSION_COMMAS@,0
  PRODUCTVERSION @VERSION_COMMAS@,0

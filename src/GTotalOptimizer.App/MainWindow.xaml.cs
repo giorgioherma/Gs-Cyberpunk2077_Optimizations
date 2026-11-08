@@ -587,6 +587,7 @@ public partial class MainWindow : Window
         var dlg = new Window
         {
             Title = "Incomplete capture evidence",
+            Icon = Icon,
             Owner = this,
             Width = 520,
             Height = 250,

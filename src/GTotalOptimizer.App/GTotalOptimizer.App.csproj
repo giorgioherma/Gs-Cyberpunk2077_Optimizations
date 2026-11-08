@@ -11,11 +11,16 @@
     <PublishSingleFile>false</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
     <AssemblyName>G-Total-Optimizer.App</AssemblyName>
+    <!-- One owner-supplied hybrid ICO also embedded by the native launcher. -->
+    <ApplicationIcon>../../assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico</ApplicationIcon>
     <RootNamespace>GTotalOptimizer.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <!-- Retain legacy form in git for comparison; ship only WPF controls. -->
     <Compile Remove="MainForm.cs" />
+    <!-- Win32 EXE icon covers Explorer; WPF pack resource covers the
+         titlebar, taskbar, and owned dialogs without runtime file paths. -->
+    <Resource Include="../../assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico" Link="Icons/GOT_LAG.ico" />
     <!-- OFL-licensed typefaces from the owner's assets, embedded by WPF.
          Only the weights used in the UI are embedded (no runtime installation). -->
     <Resource Include="../../assets/ui/fonts/Rajdhani/Rajdhani-Regular.ttf" Link="Fonts/Rajdhani/Rajdhani-Regular.ttf" />

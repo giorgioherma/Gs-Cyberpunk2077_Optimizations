@@ -79,6 +79,23 @@ function PublishManager([string]$Csproj, [string]$Dest) {
 }
 PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join-Path $cet 'app')
 PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
+# Source of truth for both Windows executables and WPF windows.
+# Keep the owner-provided multi-resolution ICO intact (no resampling).
+$iconSource=(Resolve-Path 'assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico' -ErrorAction Stop).Path
+$iconBytes=[IO.File]::ReadAllBytes($iconSource)
+$iconSizes=@(16,24,32,36,40,48,64,96,128,256)
+if ($iconBytes.Length -lt 100 -or [BitConverter]::ToUInt16($iconBytes,0) -ne 0 -or
+    [BitConverter]::ToUInt16($iconBytes,2) -ne 1 -or
+    [BitConverter]::ToUInt16($iconBytes,4) -ne $iconSizes.Count) {
+  throw 'Canonical GOT LAG ICO header or multi-size directory invalid'
+}
+for ($i=0; $i -lt $iconSizes.Count; $i++) {
+  $entrySize=if ($iconSizes[$i] -eq 256) { 0 } else { $iconSizes[$i] }
+  if ($iconBytes[6+16*$i] -ne $entrySize -or $iconBytes[7+16*$i] -ne $entrySize) {
+    throw "GOT LAG ICO frame $i does not match approved size $($iconSizes[$i])"
+  }
+}
+Write-Host 'PASS owner hybrid ICO 16/24/32/36/40/48/64/96/128/256 frames'
 PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $root 'app')
 
 # Copy the original user-owned PNGs from their current source folders.
@@ -135,7 +152,7 @@ $vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.V
 if (-not $vs) { throw 'Required x64 compiler missing on runner' }
 $vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
 $rcPath=Join-Path $temp 'launcher.rc'
-$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version)
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version).Replace('@ICON_PATH@',$iconSource.Replace('\','\\'))
 Set-Content $rcPath $rcTxt -Encoding ascii
 $nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
 $nativeRes=Join-Path $temp 'launcher.res'
@@ -160,6 +177,35 @@ foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))
   if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") { throw "Unified executable version mismatch: $exe" }
 }
 
+# Verify Windows Explorer would extract the exact same owner ICO from both
+# the public native launcher and the internal managed WPF application.
+Add-Type -AssemblyName System.Drawing
+$expectedIcon=[System.Drawing.Icon]::new($iconSource,[System.Drawing.Size]::new(32,32))
+try {
+  $expectedBitmap=$expectedIcon.ToBitmap()
+  try {
+    foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+      $actualIcon=[System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+      if ($null -eq $actualIcon) { throw "Windows icon missing from $exe" }
+      try {
+        $bitmap=$actualIcon.ToBitmap()
+        try {
+          if ($bitmap.Width -ne $expectedBitmap.Width -or $bitmap.Height -ne $expectedBitmap.Height) {
+            throw "Windows icon dimensions differ from owner ICO for $exe"
+          }
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              if ($bitmap.GetPixel($x,$y).ToArgb() -ne $expectedBitmap.GetPixel($x,$y).ToArgb()) {
+                throw "Windows icon pixel mismatch at ($x,$y) in $exe"
+              }
+            }
+          }
+        } finally { $bitmap.Dispose() }
+      } finally { $actualIcon.Dispose() }
+    }
+  } finally { $expectedBitmap.Dispose() }
+} finally { $expectedIcon.Dispose() }
+Write-Host 'PASS both packaged EXEs expose the exact owner GOT LAG 32px icon'
 # Native PresentMon CLI, exact release digest. No 160 MB MSI.
 $pm=Join-Path $components 'presentmon'
 New-Item -ItemType Directory -Force $pm | Out-Null

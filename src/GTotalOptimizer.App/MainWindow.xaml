@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fx="clr-namespace:GTotalOptimizer.App.Visuals"
         Title="G's Cyberpunk 2077 Optimizer"
+        Icon="pack://application:,,,/Icons/GOT_LAG.ico"
         Width="1280" Height="760" MinWidth="1080" MinHeight="640"
         WindowStartupLocation="CenterScreen"
         Background="#060D0F" Foreground="#F1F5F6"
