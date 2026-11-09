@@ -104,6 +104,7 @@ $uiSource=Join-Path (Get-Location) 'assets/ui'
 $uiNames=@(
   'images/V_background_1_color.png',
   'images/V_background_1_black.png',
+  'images/The overflow.png',
   'images/TrueHeader_GCO_page1.png',
   'elements/GCO_Border_Regular_1280x760_FINAL.png'
 )
@@ -121,7 +122,7 @@ foreach ($name in $uiNames) {
     throw "Packaged artwork hash mismatch: $name"
   }
 }
-Write-Host 'PASS new owner V pair, updated true-black BLUE skyline and Regular border canvas'
+Write-Host 'PASS V pair, owner transparent puddle strip, true-black BLUE skyline and Regular border canvas'
 
 # Fonts are embedded as WPF assembly resources; ship OFL license notices.
 foreach ($family in @('Rajdhani','Oxanium')) {

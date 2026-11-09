@@ -74,14 +74,12 @@ internal static class Program
             visual.Arrange(new System.Windows.Rect(0, 0, width, height));
             visual.UpdateLayout();
 
-            // V remains 3 DIPs left and pinned to the same top. After the
-            // corrected outer border was uploaded, V now ends 6 DIPs
-            // below ContentRegion, with the inner frame unchanged.
+            // V starts one DIP right of the thin inner border; same top and height.
             var rootTopLeft = window.ContentRegion.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             var portraitTopLeft = window.VPortraitHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            if (Math.Abs(rootTopLeft.X - portraitTopLeft.X - 3) > 0.5 ||
+            if (Math.Abs(rootTopLeft.X - portraitTopLeft.X - 1) > 0.5 ||
                 Math.Abs(rootTopLeft.Y - portraitTopLeft.Y) > 0.5)
                 throw new InvalidOperationException(
                     $"V left/top anchor incorrect: region={rootTopLeft}, V={portraitTopLeft}");
@@ -119,14 +117,27 @@ internal static class Program
             var zControls = System.Windows.Controls.Panel.GetZIndex(contentGrid);
             var zContent = System.Windows.Controls.Panel.GetZIndex(window.ContentRegion);
             var zTabs = System.Windows.Controls.Panel.GetZIndex(window.TopTabsHost);
-            if (!(zOuter > zTabs && zTabs > zContent && zContent > zInner &&
-                  zSky < zPortrait && zPortrait < zControls) ||
-                !window.ContentRegion.Children.Contains(window.VPortraitHost))
+            var zSpill = System.Windows.Controls.Panel.GetZIndex(window.PuddleOverflowHost);
+            if (!(zOuter > zTabs && zTabs > zSpill && zSpill > zInner &&
+                  zInner > zContent && zSky < zPortrait && zPortrait < zControls) ||
+                !window.ContentRegion.Children.Contains(window.VPortraitHost) ||
+                !rootGrid.Children.Contains(window.PuddleOverflowHost) ||
+                window.PuddleOverflowHost.IsHitTestVisible)
                 throw new InvalidOperationException(
-                    $"V must cover inner line but not outer, tabs or right UI: " +
-                    $"outer={zOuter}, tabs={zTabs}, content={zContent}, " +
-                    $"inner={zInner}, sky={zSky}, V={zPortrait}, UI={zControls}");
-            Console.WriteLine("PASS owner V spills across thin inner border only; outer border remains on top");
+                    $"Only puddle crop can cross inner frame: outer={zOuter}, " +
+                    $"tabs={zTabs}, spill={zSpill}, inner={zInner}, " +
+                    $"content={zContent}, sky={zSky}, V={zPortrait}, UI={zControls}");
+            var spillTopLeft = window.PuddleOverflowHost.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            double scale = window.VPortraitHost.ActualHeight / 928.0;
+            if (Math.Abs(spillTopLeft.X - portraitTopLeft.X) > 0.5 ||
+                Math.Abs(spillTopLeft.Y + window.PuddleOverflowHost.ActualHeight -
+                         portraitTopLeft.Y - window.VPortraitHost.ActualHeight) > 0.75 ||
+                Math.Abs(window.PuddleOverflowHost.ActualWidth - 365.0 * scale) > 0.75 ||
+                Math.Abs(window.PuddleOverflowHost.ActualHeight - 49.0 * scale) > 0.75)
+                throw new InvalidOperationException(
+                    $"Owner crop offset/scale differs from V: base={portraitTopLeft}, spill={spillTopLeft}");
+            Console.WriteLine("PASS V starts after left inner line; only owner puddle crop covers thin frame");
 
             // Tabs are in the upper band, outside the inner content frame.
             var tabTop = window.TopTabsHost.TransformToAncestor(visual)
@@ -162,6 +173,11 @@ internal static class Program
                 window.VColorImage.Stretch != System.Windows.Media.Stretch.Uniform ||
                 window.VBlackImage.Stretch != System.Windows.Media.Stretch.Uniform)
                 throw new InvalidOperationException("V owner PNG pair/mask/scale mismatch");
+            var spill = window.PuddleOverflowImage.Source as System.Windows.Media.Imaging.BitmapSource
+                ?? throw new InvalidOperationException("Owner bottom puddle strip missing");
+            if (spill.PixelWidth != 365 || spill.PixelHeight != 49 ||
+                window.PuddleOverflowImage.Stretch != System.Windows.Media.Stretch.Uniform)
+                throw new InvalidOperationException("Owner 365x49 RGBA strip incorrectly loaded");
             var sky = window.CityImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Owner header missing");
             if (sky.PixelWidth != 1870 || sky.PixelHeight != 652 ||
@@ -276,6 +292,16 @@ internal static class Program
             if (smallTabTop.Y + smallWindow.TopTabsHost.ActualHeight > 65 ||
                 smallTabTop.X < 310)
                 throw new InvalidOperationException("Responsive tabs overlap small window title");
+            var smallV = smallWindow.VPortraitHost.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0));
+            var smallSpill = smallWindow.PuddleOverflowHost.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0));
+            if (Math.Abs(smallV.X - smallSpill.X) > 0.75 ||
+                Math.Abs(smallWindow.PuddleOverflowHost.ActualWidth -
+                         smallWindow.VPortraitHost.ActualHeight * 365.0 / 928.0) > 0.75 ||
+                Math.Abs(smallWindow.PuddleOverflowHost.ActualHeight -
+                         smallWindow.VPortraitHost.ActualHeight * 49.0 / 928.0) > 0.75)
+                throw new InvalidOperationException("Owner crop must follow V at minimum size");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");
@@ -290,6 +316,11 @@ internal static class Program
                          (smallWindow.VPortraitHost.ActualHeight * 482.0 / 928.0 + 3.0)) > 1.5 ||
                 smallWindow.VPortraitHost.ActualWidth < smallWindow.ArtworkColumn.Width.Value + 60.0)
                 throw new InvalidOperationException("New owner art fails live window resize");
+            if (Math.Abs(smallWindow.PuddleOverflowHost.ActualWidth -
+                         smallWindow.VPortraitHost.ActualHeight * 365.0 / 928.0) > 0.75 ||
+                Math.Abs(smallWindow.PuddleOverflowHost.ActualHeight -
+                         smallWindow.VPortraitHost.ActualHeight * 49.0 / 928.0) > 0.75)
+                throw new InvalidOperationException("Owner crop did not follow live resize");
             Console.WriteLine("PASS new V painted transition follows normal, minimum and resized layouts");
             if (!ReferenceEquals(smallWindow.OuterBorderArtwork.Source, small))
                 throw new InvalidOperationException("Regular border swapped on live window resize");

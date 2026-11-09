@@ -89,6 +89,7 @@ public partial class MainWindow : Window
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
+        PuddleOverflowImage.Source = ImageFile("images", "The overflow.png");
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
         // WPF continuously scales it; never swap BitmapSource on resize.
@@ -194,10 +195,18 @@ public partial class MainWindow : Window
         var reservedWidth = Math.Clamp(
             imageHeight * ReservedVAspect, 170.0, 245.0);
         ArtworkColumn.Width = new GridLength(reservedWidth);
-        // Two equally sized, Uniform-stretched owner PNGs; no right crop.
-        // The +3-DIP host adjustment retains the previous left overlap.
+        // Two registered 482:928 V layers stay at their previous height.
+        // Moving the content-local margin -3 to -1 exposes the X27 frame
+        // line, leaving V at X28 without moving the right-hand controls.
         if (VPortraitHost is not null)
             VPortraitHost.Width = imageHeight * NewVAspect + 3.0;
+        // Crop x=0..365, y=879..928 of the 482x928 source: align using
+        // the exact SAME height-derived scale and the same bottom/left.
+        if (PuddleOverflowHost is not null)
+        {
+            PuddleOverflowHost.Width = imageHeight * 365.0 / 928.0;
+            PuddleOverflowHost.Height = imageHeight * 49.0 / 928.0;
+        }
     }
 
     private void SetActiveTab(bool results)

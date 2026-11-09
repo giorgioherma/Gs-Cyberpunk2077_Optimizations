@@ -922,6 +922,8 @@ if (args.Length > 0)
     Require(PngDimensions(Path.Combine(imageDir, "V_background_1_color.png")) == (482, 928) &&
         PngDimensions(Path.Combine(imageDir, "V_background_1_black.png")) == (482, 928),
         "new owner-painted 482x928 color/black V pair shipped under images");
+    Require(PngDimensions(Path.Combine(imageDir, "The overflow.png")) == (365, 49),
+        "owner transparent 365x49 bottom puddle strip shipped intact");
     Require(!File.Exists(Path.Combine(imageDir, "Upright_hotka.png")) &&
         !File.Exists(Path.Combine(imageDir, "GCO_V_original_pixel_locked_silhouette.png")),
         "obsolete V PNGs must not be shipped with the new background");
