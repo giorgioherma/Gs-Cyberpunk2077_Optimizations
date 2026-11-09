@@ -122,3 +122,8 @@ Read, in order:
 ### Verified frame-system build — 2026-11-07
 
 - [Integrated Windows CI #42332115489](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42332115489) on code `c478f9da3ee29c43107be3402bd7132c8006981e` **SUCCESS, 179/179 contracts**; artifact `Gs-Cyberpunk2077_Optimizer` ID **13557508098**, **86,547,719 bytes**. Original V pair, full blue header, embedded OFL fonts, CET/GRSP owner managers, PresentMon and single .NET 10 private runtime all packaged. First attempt [#42331860013](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42331860013) **FAILED frontend compilation only** from WinForms/System.Drawing vs WPF Brush type ambiguity; fixed at source in `c478f9d` using explicit WPF drawing aliases. **No Windows screenshot, visual glow/DPI or gameplay claims from CI.**
+
+## Distribution identity / download warnings (2026-11-09)
+
+- Keep the GCO version on `Directory.Build.props` until owner explicitly changes it. `START-HERE.txt` is generated from the canonical MSBuild version; include `BUILD-INFO.json` in the app root to identify the exact GitHub commit, run and attempt. The **GitHub artifact filename** must include GCO version and run/attempt; avoid same-named ZIP confusion and do not wrap the GitHub Actions ZIP in another ZIP. The public executable name remains `Gs-Cyberpunk2077_Optimizer.exe`.
+- Never treat 183 passing source contracts, clean archive CRCs, or matching source manifest hashes as malware scans. Preserve evidence of Firefox/Nexus classification and vendor reports. No silent AV bypass, deleting profiler binaries to reduce detection, or speculative hashing/version churn to chase download reputation.

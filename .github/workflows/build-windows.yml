@@ -126,6 +126,7 @@ jobs:
           if (!(Test-Path $env:DOTNET_HOST_TRACEFILE)) { throw 'Private .NET10 host trace missing' }
           Write-Host 'PASS CET+GRSP private .NET10 headless CLI launches and GRSP owned install/restore.'
       - name: Test source contracts and verify the final downloadable package
+        id: verify_package
         shell: pwsh
         working-directory: unified
         run: |
@@ -143,9 +144,22 @@ jobs:
               throw "GCO executable version mismatch: $exe"
             }
           }
-          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne '1.1.8') {
+          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) {
             throw 'VERSION.txt mismatch'
           }
+          # Prove the source/run identity is packaged, not merely shown by CI.
+          $buildInfo=Get-Content (Join-Path $root 'BUILD-INFO.json') -Raw | ConvertFrom-Json
+          if ($buildInfo.version -ne $version -or
+              $buildInfo.sourceCommit -ne $env:GITHUB_SHA -or
+              $buildInfo.githubRunId -ne $env:GITHUB_RUN_ID -or
+              $buildInfo.githubRunAttempt -ne $env:GITHUB_RUN_ATTEMPT) {
+            throw 'Packaged build metadata disagrees with GitHub source/run/attempt'
+          }
+          $guide=Get-Content (Join-Path (Split-Path $root -Parent) 'START-HERE.txt') -Raw
+          if ($guide -notmatch [regex]::Escape("Optimizer v$version")) {
+            throw 'Visible guide version disagrees with package version'
+          }
+          Write-Host "PASS versioned guide and source/run/attempt build provenance"
           if ((Get-ChildItem $root -Filter coreclr.dll -File -Recurse).Count -ne 1) {
             throw 'Integrated package must bundle exactly one CLR'
           }
@@ -238,8 +252,11 @@ jobs:
           }
           Write-Host 'PASS delivery: sibling START-HERE.txt + Gs-Cyberpunk2077_Optimizer.exe'
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
-          name: Gs-Cyberpunk2077_Optimizer
+          # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
+          # Run/attempt distinguishes rebuilt archives without bumping GCO.
+          name: Gs-Cyberpunk2077_Optimizer-v${{ steps.verify_package.outputs.version }}-run${{ github.run_number }}-a${{ github.run_attempt }}
           path: unified/publish/release/
           if-no-files-found: error

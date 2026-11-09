@@ -210,3 +210,7 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-07 — V +1-DIP overlap verified CI
 
 - [Windows CI #42394574929](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42394574929) **SUCCESS**, source `8a745ba571a154b3ff6c9e3db0e36e0fd7109672`; integrated CET/GRSP smoke, **183 installation/CLI/package contracts**, packaged WPF baseline + unchanged Regular bitmap at two sizes PASS. Pixel probes: yellow RGB(254,245,30), cyan RGB(6,167,175). Artifact `Gs-Cyberpunk2077_Optimizer` ID **13582852649**, size **86,599,160 bytes**. The intentional ~1-DIP overlap has been implemented and geometrically validated, but physical Windows screen/DPI appearance still requires the owner's screenshot. Version remains **v1.1.7**.
+
+### 2026-11-09 — Versioned download artifacts, unchanged product v1.1.8
+
+- GitHub Actions used a generic artifact filename, so different builds downloaded as `Gs-Cyberpunk2077_Optimizer.zip` despite embedded `VERSION.txt`. Offline inspection of user's upload confirmed it was v1.1.7. New existing-workflow upload name includes v1.1.8 and source run/attempt; `BUILD-INFO.json` records commit/run/attempt and the guide states current version in the first line. Same portable root launcher/folder and component payload. Run integrated CI before claiming completion. The ZIP warning remains unclassified without Firefox's precise explanation or a vendor detection report.

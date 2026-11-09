@@ -279,8 +279,10 @@ if ($Integrated) {
   if (Test-Path $finalApp) { throw 'Existing final app folder would be overwritten' }
   Move-Item -LiteralPath $root -Destination $finalApp
   $root=$finalApp
-  @'
-GOT LAG? - G's Cyberpunk 2077 Optimizer
+  # Generate the visible version directly from the canonical MSBuild value.
+  # Keep this alongside the app, not inside the game's optimization output.
+  @"
+GOT LAG? - G's Cyberpunk 2077 Optimizer v$version
 =======================================
 
 QUICK START
@@ -306,8 +308,17 @@ IMPORTANT
 - The optimization generator/combined ZIP feature is not yet enabled.
 - Your captured data is under the app folder's RESULTS directory.
 
-VERSION 1.1.8 (portable build). No system .NET installation required.
-'@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+VERSION $version (portable build). No system .NET installation required.
+"@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  # Per-build provenance: same version can have multiple CI attempts with
+  # different ZIP SHA-256 hashes. Do not infer a unique hash from a version.
+  [ordered]@{
+    product='Gs-Cyberpunk2077_Optimizer'
+    version=$version
+    sourceCommit=[string]$env:GITHUB_SHA
+    githubRunId=[string]$env:GITHUB_RUN_ID
+    githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
+  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
   Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
   Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
 } else {
