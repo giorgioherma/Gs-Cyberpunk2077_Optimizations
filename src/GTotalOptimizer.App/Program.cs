@@ -241,11 +241,11 @@ internal static class Program
                 cardTitles.Any(t => t.TextAlignment != System.Windows.TextAlignment.Center))
                 throw new InvalidOperationException(
                     "All neon UI boxes must use the source-anchored spatial field; card titles centered");
-            var first = cardBorders[0];
+            var firstCard = cardBorders[0];
             var middle = cardBorders[1];
             var last = cardBorders[2];
             double t1 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
-                first, new System.Windows.Point(first.ActualWidth / 2, first.ActualHeight / 2));
+                firstCard, new System.Windows.Point(firstCard.ActualWidth / 2, firstCard.ActualHeight / 2));
             double t2 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
                 middle, new System.Windows.Point(middle.ActualWidth / 2, middle.ActualHeight / 2));
             double t3 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
@@ -264,7 +264,7 @@ internal static class Program
                         "Card border must become more cyan at its upper/right corner");
             }
             var spatialBrush = GTotalOptimizer.App.Visuals.SpatialNeonField.Create(
-                first, System.Windows.Media.Brushes.White) as System.Windows.Media.LinearGradientBrush;
+                firstCard, System.Windows.Media.Brushes.White) as System.Windows.Media.LinearGradientBrush;
             if (spatialBrush?.MappingMode != System.Windows.Media.BrushMappingMode.Absolute)
                 throw new InvalidOperationException("Neon field must map from shared screen coordinates");
             Console.WriteLine(
