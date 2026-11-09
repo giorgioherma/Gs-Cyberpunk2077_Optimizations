@@ -178,6 +178,28 @@ internal static class Program
             if (spill.PixelWidth != 365 || spill.PixelHeight != 49 ||
                 window.PuddleOverflowImage.Stretch != System.Windows.Media.Stretch.Uniform)
                 throw new InvalidOperationException("Owner 365x49 RGBA strip incorrectly loaded");
+            // This is not a rectangular photo pasted over the border:
+            // validate the actual owner PNG alpha, not just its dimensions.
+            var stripPixels = new byte[365 * 49 * 4];
+            var rgbaStrip = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                spill, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            rgbaStrip.CopyPixels(stripPixels, 365 * 4, 0);
+            int transparentPixels = 0, blackPixels = 0;
+            for (int k = 0; k < stripPixels.Length; k += 4)
+            {
+                if (stripPixels[k + 3] == 0)
+                    transparentPixels++;
+                else if (stripPixels[k] < 75 &&
+                         stripPixels[k + 1] < 75 &&
+                         stripPixels[k + 2] < 75)
+                    blackPixels++;
+            }
+            if (transparentPixels < 3000 || blackPixels < 7000)
+                throw new InvalidOperationException(
+                    $"Owner strip must be actual transparent black puddle art: " +
+                    $"transparent={transparentPixels}, black={blackPixels}");
+            Console.WriteLine($"PASS owner RGBA puddle crop transparent={transparentPixels}, black={blackPixels}");
+
             var sky = window.CityImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Owner header missing");
             if (sky.PixelWidth != 1870 || sky.PixelHeight != 652 ||
@@ -214,13 +236,48 @@ internal static class Program
                     bgra, 4, 0);
                 return [bgra[2], bgra[1], bgra[0]];
             }
+            // Real rendered frame: the new strip must darken PART of the
+            // yellow inner bottom line; elsewhere the line remains visible.
+            // Compare one frame with and one without just the owner crop.
+            var ownerStripVisible = window.PuddleOverflowHost.Visibility;
+            window.PuddleOverflowHost.Visibility = System.Windows.Visibility.Hidden;
+            var noSpillBitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            noSpillBitmap.Render(visual);
+            window.PuddleOverflowHost.Visibility = ownerStripVisible;
+            int obscuredLinePixels = 0;
+            var baseline = new byte[4];
+            for (int xx = 44; xx <= 270; xx++)
+                for (int yy = 689; yy <= 691; yy++)
+                {
+                    noSpillBitmap.CopyPixels(new System.Windows.Int32Rect(xx, yy, 1, 1),
+                        baseline, 4, 0);
+                    var visible = RgbAt(xx, yy);
+                    int baselineBrightness = baseline[2] + baseline[1] + baseline[0];
+                    int currentBrightness = visible[0] + visible[1] + visible[2];
+                    if (baselineBrightness - currentBrightness > 90)
+                        obscuredLinePixels++;
+                }
+            if (obscuredLinePixels < 18)
+                throw new InvalidOperationException(
+                    $"Owner puddle crop does not actually overpaint the yellow inner line: " +
+                    $"darkened border pixels={obscuredLinePixels}");
+            var exposedLeftLine = RgbAt(27, 360);
+            if (exposedLeftLine[0] < 100 || exposedLeftLine[1] < 100)
+                throw new InvalidOperationException(
+                    $"V still hides the left inner line at x27: " +
+                    $"{string.Join(',', exposedLeftLine)}");
+            Console.WriteLine(
+                $"PASS real puddle-only overpaint darkens {obscuredLinePixels} inner-line pixels; " +
+                $"x27 left line remains yellow");
+
             // Verify the ACTUAL painted bottom stroke instead of inspecting
             // an unfilled StreamGeometry through GetFlattenedPathGeometry:
             // WPF may expose zero filled PathFigures for an open outline.
             // A downward jog would place the central and right spans 3 DIPs
             // BELOW this common raised baseline, so these probes would fail.
             const int innerY = height - 30; // 27-DIP inset, 3-DIP raise
-            foreach (var x in new[] { 420, 600, 950, 1110 })
+            foreach (var x in new[] { 310, 420, 600, 950, 1110 })
             {
                 var lineVisible = false;
                 for (var y = innerY - 1; y <= innerY + 1; y++)
