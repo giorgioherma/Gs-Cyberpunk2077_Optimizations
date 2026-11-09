@@ -236,9 +236,36 @@
             <!-- The content chassis draws the only header divider. -->
         </Grid>
 
+        <!-- Page indicators float in the clear band ABOVE the thin inner box.
+             Kept separate from the scrollable Capture/Analyze content. -->
+        <Grid x:Name="TopTabsHost" Grid.Row="0" Panel.ZIndex="22"
+              VerticalAlignment="Bottom" Height="44"
+              Margin="250,0,29,5" IsHitTestVisible="False">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <Grid Width="246" Height="44" Margin="0,0,12,0">
+                <fx:SlantedTabShape x:Name="CaptureTabShape"
+                                    Fill="#FFF000" Stroke="#FFF000"
+                                    StrokeThickness="1.8" IsHitTestVisible="False"/>
+                <TextBlock x:Name="CaptureTabLabel" Text="CAPTURE" Foreground="#061014"
+                           FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
+                           FontSize="18" HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Grid>
+            <Grid Width="246" Height="44">
+                <fx:SlantedTabShape x:Name="AnalyzeTabShape"
+                                    Fill="#0D171B" Stroke="#91ABB4"
+                                    StrokeThickness="1.8" IsHitTestVisible="False"/>
+                <TextBlock x:Name="AnalyzeTabLabel" Text="ANALYZE" Foreground="#D8E2E6"
+                           FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
+                           FontSize="18" HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Grid>
+                    </StackPanel>
+        </Grid>
+
         <!-- Right content remains clipped by its own host. The left V can
              extend slightly into the decorative lower chassis cutout. -->
-        <Grid x:Name="ContentRegion" Grid.Row="1" ClipToBounds="False"
+        <Grid x:Name="ContentRegion" Grid.Row="1" Panel.ZIndex="12" ClipToBounds="False"
               Margin="29,0,29,29" SizeChanged="ContentRegion_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
@@ -291,35 +318,10 @@
 
             <Grid Grid.Column="1" Panel.ZIndex="2" Background="Transparent" ClipToBounds="True">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="54"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="63"/>
                 </Grid.RowDefinitions>
-                <!-- Two non-navigating status tabs: Page 2 remains restore gated. -->
-                <Grid Grid.Row="0" Margin="16,0,16,0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Grid Width="246" Height="44" Margin="0,0,12,0">
-                            <fx:SlantedTabShape x:Name="CaptureTabShape"
-                                                Fill="#FFF000" Stroke="#FFF000"
-                                                StrokeThickness="1.8" IsHitTestVisible="False"/>
-                            <TextBlock x:Name="CaptureTabLabel" Text="CAPTURE" Foreground="#061014"
-                                       FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
-                                       FontSize="18" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Grid>
-                        <Grid Width="246" Height="44">
-                            <fx:SlantedTabShape x:Name="AnalyzeTabShape"
-                                                Fill="#0D171B" Stroke="#91ABB4"
-                                                StrokeThickness="1.8" IsHitTestVisible="False"/>
-                            <TextBlock x:Name="AnalyzeTabLabel" Text="ANALYZE" Foreground="#D8E2E6"
-                                       FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
-                                       FontSize="18" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Grid>
-                    </StackPanel>
-                </Grid>
-
-                <ScrollViewer x:Name="CapturePage" Grid.Row="1"
+                <ScrollViewer x:Name="CapturePage" Grid.Row="0"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <ScrollViewer.Resources>
@@ -328,7 +330,7 @@
                     </ScrollViewer.Resources>
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
-                        <StackPanel Margin="0,7,0,11">
+                        <StackPanel Margin="0,3,0,12">
                             <TextBlock FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
                                 <Run Text="GOT LAG? " FontSize="28" FontWeight="ExtraBold"
@@ -342,7 +344,7 @@
                         </StackPanel>
 
                         <!-- White heading outside a height-constrained Game Root box. -->
-                        <StackPanel Margin="0,0,0,9">
+                        <StackPanel Margin="-11,1,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
@@ -524,41 +526,36 @@
                 </ScrollViewer>
 
                 <!-- Console and recovery never hide behind scrolling content. -->
-                <Grid Grid.Row="2" Margin="14,6,14,8">
+                <Grid Grid.Row="1" Margin="14,6,14,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="188"/>
                     </Grid.ColumnDefinitions>
-                    <Grid Grid.Column="0" Margin="0,0,9,0">
-                        <fx:ChamferOutline Fill="#081012"
-                                           Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
-                                           CornerCut="14" IsHitTestVisible="False"/>
-                        <Grid Margin="12,6,12,5">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="20"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Path Grid.Column="0" Data="M 1,16 L 5,1 M 7,16 L 11,1 M 13,16 L 17,1"
-                                  Stroke="#00E2F2" StrokeThickness="2.4"
-                                  Width="18" Height="18" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusText" Grid.Column="1"
-                                       Foreground="#BFE0E6" FontSize="12.5"
-                                       VerticalAlignment="Center" TextWrapping="Wrap"
-                                       Text="Select the Cyberpunk 2077 game folder."
-                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                            <Button x:Name="RestoreButton" Grid.Column="2"
-                                    Content="RESTORE" Margin="5,0,0,0"
-                                    Style="{StaticResource MinorButton}" Visibility="Collapsed"
-                                    Click="Restore_Click"/>
-                        </Grid>
+                    <!-- No panel fill/border or second slash: the original V
+                         already has a cyan slash here. Keep status/RESTORE alive. -->
+                    <Grid x:Name="ConsoleTextHost" Grid.Column="0"
+                          Margin="-7,-30,9,19" Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="StatusText" Grid.Column="0"
+                                   Margin="25,0,0,0"
+                                   Foreground="#BFE0E6" FontSize="12.5"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Text="Select the Cyberpunk 2077 game folder."
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                        <Button x:Name="RestoreButton" Grid.Column="1"
+                                Content="RESTORE" Margin="5,0,0,0"
+                                Style="{StaticResource MinorButton}" Visibility="Collapsed"
+                                Click="Restore_Click"/>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
                             Style="{StaticResource ContinueStyle}" Click="Continue_Click"
                             IsEnabled="False"/>
                 </Grid>
 
-                <Grid x:Name="ResultsPage" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed"
+                <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
                       Background="#000000">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
@@ -624,8 +621,9 @@
             </Grid>
         </Grid>
 
-        <!-- Inner chassis remains the root-level frame above the content;
-             the owner artwork remains untouched below UI and border. -->
+        <!-- Intentionally UNDER the portrait/content region (Z=12), so V's
+             black ink crosses only this thin inner line. The outer border
+             bitmap (Z=30) remains above V and every other control. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
                                   Panel.ZIndex="10" FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>

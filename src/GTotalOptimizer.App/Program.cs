@@ -117,11 +117,40 @@ internal static class Program
             var contentGrid = (System.Windows.Controls.Grid)System.Windows.Media.VisualTreeHelper
                 .GetParent(window.CapturePage);
             var zControls = System.Windows.Controls.Panel.GetZIndex(contentGrid);
-            if (!(zOuter > zInner && zSky < zPortrait && zPortrait < zControls) ||
+            var zContent = System.Windows.Controls.Panel.GetZIndex(window.ContentRegion);
+            var zTabs = System.Windows.Controls.Panel.GetZIndex(window.TopTabsHost);
+            if (!(zOuter > zTabs && zTabs > zContent && zContent > zInner &&
+                  zSky < zPortrait && zPortrait < zControls) ||
                 !window.ContentRegion.Children.Contains(window.VPortraitHost))
                 throw new InvalidOperationException(
-                    $"V must extend behind controls and above skyline: " +
-                    $"outer={zOuter}, inner={zInner}, sky={zSky}, V={zPortrait}, UI={zControls}");
+                    $"V must cover inner line but not outer, tabs or right UI: " +
+                    $"outer={zOuter}, tabs={zTabs}, content={zContent}, " +
+                    $"inner={zInner}, sky={zSky}, V={zPortrait}, UI={zControls}");
+            Console.WriteLine("PASS owner V spills across thin inner border only; outer border remains on top");
+
+            // Tabs are in the upper band, outside the inner content frame.
+            var tabTop = window.TopTabsHost.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            if (tabTop.Y < 7 || tabTop.Y + window.TopTabsHost.ActualHeight > 65 ||
+                tabTop.X < 220 || window.TopTabsHost.ActualWidth < 800)
+                throw new InvalidOperationException(
+                    $"Tabs are not inside header margin: {tabTop} " +
+                    $"size={window.TopTabsHost.ActualWidth}x{window.TopTabsHost.ActualHeight}");
+            if (System.Windows.Controls.Grid.GetRow(window.CapturePage) != 0 ||
+                System.Windows.Controls.Grid.GetRow(window.ResultsPage) != 0)
+                throw new InvalidOperationException("GOT LAG content must start directly at inner frame");
+            if (window.ConsoleTextHost.Children.OfType<GTotalOptimizer.App.Visuals.ChamferOutline>().Any() ||
+                window.ConsoleTextHost.Children.OfType<System.Windows.Shapes.Path>().Any() ||
+                window.ConsoleTextHost.Background is not System.Windows.Media.SolidColorBrush consoleBrush ||
+                consoleBrush.Color.A != 0)
+                throw new InvalidOperationException("Status console must be unboxed and slash-free");
+            var rootLeft = window.GameRootPanel.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var rightStart = window.SkylineHost.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            if (!(rootLeft < rightStart + 10.0))
+                throw new InvalidOperationException("Game Root was not nudged toward V");
+            Console.WriteLine("PASS tabs in upper margin, GOT LAG raised, Game Root shifted toward V and console unboxed");
 
             var colored = window.VColorImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("New V color art missing");
@@ -213,6 +242,11 @@ internal static class Program
                          (smallWindow.VPortraitHost.ActualHeight * 482.0 / 928.0 + 3.0)) > 1.5 ||
                 smallWindow.VPortraitHost.ActualWidth < smallWindow.ArtworkColumn.Width.Value + 60.0)
                 throw new InvalidOperationException("New owner art fails minimum-size layout");
+            var smallTabTop = smallWindow.TopTabsHost.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0));
+            if (smallTabTop.Y + smallWindow.TopTabsHost.ActualHeight > 65 ||
+                smallTabTop.X < 310)
+                throw new InvalidOperationException("Responsive tabs overlap small window title");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");

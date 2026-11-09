@@ -276,7 +276,7 @@ public sealed class SlantedTabShape : FrameworkElement
         var h = RenderSize.Height;
         if (w < h * 2 || h < 4) return;
         var inset = StrokeThickness / 2 + .25;
-        var shift = h - 2 * inset; // equal delta-X/delta-Y => exact 45°.
+        var shift = (h - 2 * inset) * 0.92; // ~47.5°, just steeper than 45°.
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
