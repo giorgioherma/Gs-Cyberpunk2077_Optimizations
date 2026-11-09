@@ -556,7 +556,7 @@
                 </Grid>
 
                 <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
-                      Background="#000000">
+                      Background="#000000" Margin="0,3,0,3">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="{x:Type ScrollBar}"

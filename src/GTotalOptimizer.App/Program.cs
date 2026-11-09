@@ -232,6 +232,35 @@ internal static class Program
                 throw new InvalidOperationException(
                     "Owner border PNG is NOT visible in the composed WPF window");
 
+            // Raising V above the thin inner chassis must not make Page 2's
+            // opaque results panel erase the remaining horizontal frame.
+            if (window.ResultsPage.Margin.Top < 2 || window.ResultsPage.Margin.Bottom < 2)
+                throw new InvalidOperationException(
+                    "Opaque Analyze page must be inset from the thin inner outline");
+            window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
+            visual.UpdateLayout();
+            var resultFrame = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+            resultFrame.Render(visual);
+            bool upperLineVisible = false;
+            var buffer = new byte[4];
+            foreach (var tx in new[] { 450, 600, 780, 1000 })
+            {
+                for (var ty = 67; ty <= 69; ++ty)
+                {
+                    resultFrame.CopyPixels(new System.Windows.Int32Rect(tx, ty, 1, 1),
+                        buffer, 4, 0);
+                    if (buffer[0] + buffer[1] + buffer[2] > 290)
+                        upperLineVisible = true;
+                }
+            }
+            if (!upperLineVisible)
+                throw new InvalidOperationException(
+                    "Analyze page erased the upper inner chassis line");
+            window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
+            visual.UpdateLayout();
+            Console.WriteLine("PASS Analyze page retains thin inner chassis above its opaque content");
+
             var smallWindow = new MainWindow { Width = 1080, Height = 640 };
             var smallRoot = smallWindow.Content as System.Windows.FrameworkElement
                 ?? throw new InvalidOperationException("Missing small WPF root");
