@@ -244,8 +244,8 @@
                 <ColumnDefinition x:Name="ArtworkColumn" Width="210"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- Width is reserved for V; the actual ONE V host renders
-                 above the inner outline as a direct root-grid sibling. -->
+            <!-- Keep the original narrow reserved column; the wider portrait
+                 is a separate background layer behind the actual controls. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
             <!-- Updated owner skyline is already balanced to pure black. -->
@@ -270,6 +270,24 @@
 
             <!-- Owner-painted V alpha now provides the whole yellow-to-black
                  transition. Never add a competing synthetic WPF atmosphere. -->
+
+            <!-- Owner-painted transition is behind controls (Z=2), above the
+                     skyline (Z=0), and extends right from unchanged V anchor. -->
+            <Grid x:Name="VPortraitHost" Grid.ColumnSpan="2" Panel.ZIndex="1"
+                  HorizontalAlignment="Left" Margin="-3,0,0,-6"
+                  Width="214" Background="Transparent" ClipToBounds="True"
+                  fx:ChamferClip.CornerCut="14">
+                <!-- Both 482:928 layers preserve their original painted right fade. -->
+                <Grid x:Name="VImageLayers">
+                    <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
+                           HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
+                </Grid>
+                <!-- Only top/side black edges; never draw a dark seam where
+                     the portrait's yellow bottom meets the yellow outer border. -->
+                <!-- No full-width right-edge outline through the new painted fade. -->
+            </Grid>
 
             <Grid Grid.Column="1" Panel.ZIndex="2" Background="Transparent" ClipToBounds="True">
                 <Grid.RowDefinitions>
@@ -606,28 +624,12 @@
             </Grid>
         </Grid>
 
-        <!-- Inner frame shape is unchanged. It renders behind V at the left,
-             not over the painted portrait. -->
+        <!-- Inner chassis remains the root-level frame above the content;
+             the owner artwork remains untouched below UI and border. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
                                   Panel.ZIndex="10" FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
 
-        <!-- Pin to old V top/left and +6-DIP bottom overlap. The wider
-             owner art flows right beyond the unchanged reserved column. -->
-        <Grid x:Name="VPortraitHost" Grid.Row="1" Panel.ZIndex="20"
-              HorizontalAlignment="Left" Margin="26,0,0,23"
-              Width="214" Background="Transparent" ClipToBounds="True"
-              fx:ChamferClip.CornerCut="14">
-            <!-- Both 482:928 layers preserve their original painted right fade. -->
-            <Grid x:Name="VImageLayers">
-                <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
-                       HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                <Image x:Name="VBlackImage" Stretch="Uniform" StretchDirection="Both"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="1"/>
-            </Grid>
-            <!-- Only top/side black edges; never draw a dark seam where
-                 the portrait's yellow bottom meets the yellow outer border. -->
-            <!-- No full-width right-edge outline through the new painted fade. -->
-        </Grid>
+
     </Grid>
 </Window>

@@ -111,14 +111,17 @@ internal static class Program
             var chassis = rootGrid.Children
                 .OfType<GTotalOptimizer.App.Visuals.ContentChassisOutline>().Single();
             var zOuter = System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork);
-            var zPortrait = System.Windows.Controls.Panel.GetZIndex(window.VPortraitHost);
             var zInner = System.Windows.Controls.Panel.GetZIndex(chassis);
-            if (!(zOuter > zPortrait && zPortrait > zInner))
+            var zSky = System.Windows.Controls.Panel.GetZIndex(window.SkylineHost);
+            var zPortrait = System.Windows.Controls.Panel.GetZIndex(window.VPortraitHost);
+            var contentGrid = (System.Windows.Controls.Grid)System.Windows.Media.VisualTreeHelper
+                .GetParent(window.CapturePage);
+            var zControls = System.Windows.Controls.Panel.GetZIndex(contentGrid);
+            if (!(zOuter > zInner && zSky < zPortrait && zPortrait < zControls) ||
+                !window.ContentRegion.Children.Contains(window.VPortraitHost))
                 throw new InvalidOperationException(
-                    $"Wrong WPF compositing priority: outer={zOuter}, V={zPortrait}, inner={zInner}");
-            if (!rootGrid.Children.Contains(window.VPortraitHost))
-                throw new InvalidOperationException(
-                    "V must be a direct root overlay to cross the inner border");
+                    $"V must extend behind controls and above skyline: " +
+                    $"outer={zOuter}, inner={zInner}, sky={zSky}, V={zPortrait}, UI={zControls}");
 
             var colored = window.VColorImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("New V color art missing");
