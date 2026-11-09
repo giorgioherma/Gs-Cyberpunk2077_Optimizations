@@ -107,7 +107,7 @@ $uiNames=@(
   'images/The overflow.png',
   'images/TrueHeader_GCO_page1.png',
   'elements/GCO_Border_Regular_1280x760_FINAL.png',
-  'elements/GCO_logo_4.png'
+  'elements/Logo_GCO_Official.png'
 )
 $uiTarget=Join-Path $root 'assets/ui'
 foreach ($name in $uiNames) {
@@ -123,7 +123,7 @@ foreach ($name in $uiNames) {
     throw "Packaged artwork hash mismatch: $name"
   }
 }
-Write-Host 'PASS V pair, transparent puddle, blue skyline, Regular border and owner GCO logo copied byte-identically'
+Write-Host 'PASS V pair, transparent puddle, skyline, Regular border and official GCO logo copied byte-identically'
 
 # Fonts are embedded as WPF assembly resources; ship OFL license notices.
 foreach ($family in @('Rajdhani','Oxanium')) {

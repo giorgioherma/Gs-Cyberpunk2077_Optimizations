@@ -43,23 +43,40 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid Background="Transparent">
-                            <Border x:Name="ButtonFrame"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="1.5"/>
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <fx:ChamferOutline x:Name="ButtonFrame"
+                                               Fill="{TemplateBinding Background}"
+                                               Stroke="{TemplateBinding BorderBrush}"
+                                               StrokeThickness="1.6" CornerCut="6" IsHitTestVisible="False"/>
+                            <Path x:Name="ButtonTrace" Data="M 0,5 L 6,0 L 26,0"
+                                  Stroke="#FFF000" StrokeThickness="1.2" Width="27" Height="6"
+                                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                                  Margin="6,1,0,0" IsHitTestVisible="False"/>
+                            <Path x:Name="ButtonTail" Data="M 0,5 L 7,5 L 12,0"
+                                  Stroke="#00E2F2" StrokeThickness="1.3" Width="13" Height="6"
+                                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                  Margin="0,0,6,1" IsHitTestVisible="False"/>
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center"
                                               RecognizesAccessKey="True"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonFrame" Property="BorderBrush" Value="#00E2F2"/>
+                                <Setter TargetName="ButtonFrame" Property="Stroke" Value="#00E2F2"/>
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#1B292B"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#263C40"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonFrame" Property="Stroke" Value="#FFF000"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#788588"/>
-                                <Setter TargetName="ButtonFrame" Property="BorderBrush" Value="#304347"/>
-                                <Setter TargetName="ButtonFrame" Property="Background" Value="#10191B"/>
+                                <Setter TargetName="ButtonFrame" Property="Stroke" Value="#304347"/>
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#10191B"/>
+                                <Setter TargetName="ButtonTrace" Property="Opacity" Value="0.22"/>
+                                <Setter TargetName="ButtonTail" Property="Opacity" Value="0.25"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -128,20 +145,26 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid>
-                            <Border x:Name="ContinueShape" Background="{TemplateBinding Background}"
-                                    BorderBrush="#E8D800" BorderThickness="2.1"/>
+                        <Grid Background="Transparent">
+                            <fx:ChamferOutline x:Name="ContinueShape"
+                                               Fill="{TemplateBinding Background}"
+                                               Stroke="#E8D800" StrokeThickness="2.1"
+                                               CornerCut="9" IsHitTestVisible="False"/>
+                            <Path Data="M 0,5 L 7,0 L 25,0" Stroke="#00E2F2"
+                                  StrokeThickness="1.6" Width="26" Height="6"
+                                  HorizontalAlignment="Left" VerticalAlignment="Top"
+                                  Margin="7,2,0,0" IsHitTestVisible="False"/>
                             <ContentPresenter Margin="15,2,9,2"
                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ContinueShape" Property="BorderBrush" Value="#00E2F2"/>
+                                <Setter TargetName="ContinueShape" Property="Stroke" Value="#00E2F2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#718386"/>
-                                <Setter TargetName="ContinueShape" Property="Background" Value="#182527"/>
-                                <Setter TargetName="ContinueShape" Property="BorderBrush" Value="#36565F"/>
+                                <Setter TargetName="ContinueShape" Property="Fill" Value="#182527"/>
+                                <Setter TargetName="ContinueShape" Property="Stroke" Value="#36565F"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -203,33 +226,18 @@
                Stretch="Fill" StretchDirection="Both"
                IsHitTestVisible="False" SnapsToDevicePixels="True"
                RenderOptions.BitmapScalingMode="HighQuality"/>
+        <!-- Official logo aligns its black slope/squares with the raster frame;
+             it alone sits ABOVE the original outer PNG and all other UI. -->
+        <Image x:Name="GcoHeaderLogo" Grid.RowSpan="2" Panel.ZIndex="50"
+               Width="274" Height="76" Margin="12,7,0,0"
+               HorizontalAlignment="Left" VerticalAlignment="Top"
+               Stretch="Uniform" IsHitTestVisible="False"
+               RenderOptions.BitmapScalingMode="HighQuality"/>
 
-        <!-- Keep the title/header TRANSPARENT so the artwork's TOP border
-             remains visible beneath it. Other UI stays unchanged. -->
-        <Grid x:Name="TopHeaderHost" Grid.Row="0" Panel.ZIndex="18" Background="Transparent" Margin="10,6,10,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="165"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <!-- Owner's 300x127 transparent logo fits BELOW the painted upper frame.
-                 Its bottom 8 DIPs intentionally overlap the lower image/inner line;
-                 the original outer raster frame stays frontmost (Z=30). -->
-            <Image x:Name="GcoHeaderLogo" Grid.Column="0" Width="132" Height="56"
-                   Margin="0,14,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"
-                   Stretch="Uniform" IsHitTestVisible="False"
-                   RenderOptions.BitmapScalingMode="HighQuality"/>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,15,0,0">
-                <TextBlock x:Name="AppBrandTitle" Text="G's Cyberpunk 2077 Optimizer"
-                           Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
-                           FontWeight="SemiBold" FontSize="19"/>
-                <TextBlock x:Name="AppBrandSubtitle" Text="CET and REDscript Optimization"
-                           Foreground="#00D9F5" FontWeight="SemiBold"
-                           FontSize="11.5" Margin="0,1,0,0"/>
-            </StackPanel>
-            <!-- Refresh is always accessible in the top header, not in
-                 the game-path panel. The main stage controls stay unchanged. -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+        <!-- No app title or subtitle in the top margin; only owner logo and tabs. -->
+        <Grid x:Name="TopHeaderHost" Grid.Row="0" Panel.ZIndex="18"
+              Background="Transparent" Margin="10,6,10,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
                         HorizontalAlignment="Right" Margin="0,13,23,0">
                 <Button x:Name="RefreshButton" Content="⟳  REFRESH"
                         Style="{StaticResource MinorButton}" Click="Refresh_Click"
@@ -238,7 +246,6 @@
                            VerticalAlignment="Center" FontFamily="{StaticResource Oxanium}"
                            FontSize="11"/>
             </StackPanel>
-            <!-- The content chassis draws the only header divider. -->
         </Grid>
 
         <!-- Page indicators float in the clear band ABOVE the thin inner box.
@@ -251,6 +258,14 @@
                 <fx:SlantedTabShape x:Name="CaptureTabShape"
                                     Fill="#FFF000" Stroke="#FFF000"
                                     StrokeThickness="1.8" IsHitTestVisible="False"/>
+                <Path x:Name="CaptureTabMarks" Data="M 0,8 L 6,0 M 10,8 L 16,0 M 20,8 L 26,0"
+                      Stroke="#061014" StrokeThickness="2" Width="27" Height="9"
+                      HorizontalAlignment="Left" VerticalAlignment="Center"
+                      Margin="40,0,0,0" IsHitTestVisible="False"/>
+                <Path Data="M 0,0 L 23,0 L 29,6" Stroke="#061014"
+                      StrokeThickness="1.3" Width="30" Height="7"
+                      HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                      Margin="0,0,38,7" IsHitTestVisible="False"/>
                 <TextBlock x:Name="CaptureTabLabel" Text="CAPTURE" Foreground="#061014"
                            FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
                            FontSize="18" HorizontalAlignment="Center"
@@ -260,6 +275,14 @@
                 <fx:SlantedTabShape x:Name="AnalyzeTabShape"
                                     Fill="#0D171B" Stroke="#91ABB4"
                                     StrokeThickness="1.8" IsHitTestVisible="False"/>
+                <Path x:Name="AnalyzeTabMarks" Data="M 0,8 L 6,0 M 10,8 L 16,0 M 20,8 L 26,0"
+                      Stroke="#00E2F2" StrokeThickness="2" Width="27" Height="9"
+                      HorizontalAlignment="Left" VerticalAlignment="Center"
+                      Margin="40,0,0,0" IsHitTestVisible="False"/>
+                <Path Data="M 0,0 L 23,0 L 29,6" Stroke="#00E2F2"
+                      StrokeThickness="1.3" Width="30" Height="7"
+                      HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                      Margin="0,0,38,7" IsHitTestVisible="False"/>
                 <TextBlock x:Name="AnalyzeTabLabel" Text="ANALYZE" Foreground="#D8E2E6"
                            FontFamily="{StaticResource Oxanium}" FontWeight="Bold"
                            FontSize="18" HorizontalAlignment="Center"
@@ -336,7 +359,7 @@
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
                         <!-- Move title and its description together. -->
-                        <StackPanel x:Name="HeroSection" Margin="62,3,0,12">
+                        <StackPanel x:Name="HeroSection" Margin="62,31,0,12">
                             <TextBlock x:Name="HeroTitle" Margin="0"
                                        FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
@@ -353,13 +376,21 @@
 
                         <!-- White heading outside a height-constrained Game Root box. -->
                         <!-- Restore the original Game Root X alignment. -->
-                        <StackPanel Margin="0,31,0,9">
+                        <StackPanel Margin="0,37,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                           Stroke="#00E2F2" StrokeThickness="2.7"
                                           Width="18" Height="20" Margin="0,0,9,0"/>
-                                    <TextBlock Text="GAME ROOT / CYBERPUNK 2077"
+                                    <Viewbox x:Name="GameRootFolderIcon" Width="24" Height="20" Margin="0,0,8,0" VerticalAlignment="Center">
+                                         <Grid Width="34" Height="26">
+                                             <Path Data="M 2,7 L 12,7 L 16,11 L 32,11 L 32,24 L 2,24 Z"
+                                                   Fill="#11191A" Stroke="#FFF000" StrokeThickness="2.2"/>
+                                             <Path Data="M 2,11 L 32,11 L 29,20 L 5,20 Z"
+                                                   Fill="#192222" Stroke="#FFF000" StrokeThickness="1.5"/>
+                                         </Grid>
+                                     </Viewbox>
+                                     <TextBlock Text="GAME ROOT / CYBERPUNK 2077"
                                                Foreground="#F5F6F6" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="15.5" VerticalAlignment="Center"/>
                                 </StackPanel>
@@ -409,7 +440,7 @@
                             </Grid>
                         </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" Margin="2,4,0,9" Height="24">
+                        <StackPanel x:Name="CaptureWorkflowHeading" Orientation="Horizontal" Margin="2,15,0,9" Height="24">
                             <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                   Stroke="#00E2F2" StrokeThickness="2.7"
                                   Width="18" Height="20" Margin="0,0,9,0"
@@ -441,12 +472,19 @@
                                         <TextBlock Text="01" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox HorizontalAlignment="Center" Width="38" Height="35">
-                                            <Path Data="M 12,1 L 12,19 M 6,13 L 12,19 L 18,13 M 2,21 L 2,26 L 22,26 L 22,21"
-                                                  Stroke="#00E2F2" StrokeThickness="2.3"
-                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                                  StrokeLineJoin="Round" Width="24" Height="28"/>
-                                        </Viewbox>
+                                        <Viewbox x:Name="InstallStageIcon" HorizontalAlignment="Center" Width="42" Height="36">
+                                             <Grid Width="48" Height="44">
+                                                 <Path Data="M 10,7 L 38,7 L 38,35 L 10,35 Z"
+                                                       Fill="#0B1A1C" Stroke="#FFF000" StrokeThickness="2.3"/>
+                                                 <Path Data="M 15,3 L 15,7 M 24,3 L 24,7 M 33,3 L 33,7
+                                                                 M 15,35 L 15,40 M 24,35 L 24,40 M 33,35 L 33,40
+                                                                 M 5,13 L 10,13 M 5,22 L 10,22 M 5,30 L 10,30
+                                                                 M 38,13 L 43,13 M 38,22 L 43,22 M 38,30 L 43,30"
+                                                       Stroke="#00E2F2" StrokeThickness="2.1"/>
+                                                 <Path Data="M 24,12 L 24,27 M 18,22 L 24,28 L 30,22 M 18,32 L 30,32"
+                                                       Stroke="#FFF000" StrokeThickness="2.4"/>
+                                             </Grid>
+                                         </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepOneTitle" Grid.Row="1" Text="Install Profilers"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
@@ -478,12 +516,16 @@
                                         <TextBlock Text="02" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox HorizontalAlignment="Center" Width="41" Height="35">
-                                            <Path Data="M 8,6 C 6,6 4,7 3,10 L 1,18 C 0,25 5,27 9,20 L 12,16 L 22,16 L 25,20 C 30,27 35,25 34,18 L 32,10 C 31,7 29,6 27,6 Z M 8,11 L 8,17 M 5,14 L 11,14 M 25,11 L 26,12 M 29,15 L 30,16"
-                                                  Stroke="#00E2F2" StrokeThickness="1.8"
-                                                  StrokeLineJoin="Round" StrokeStartLineCap="Round"
-                                                  Width="35" Height="27"/>
-                                        </Viewbox>
+                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="42" Height="36">
+                                             <Grid Width="48" Height="44">
+                                                 <Path Data="M 24,3 L 24,21" Stroke="#FFF000"
+                                                       StrokeThickness="3.4"/>
+                                                 <Path Data="M 13,10 C 3,17 4,30 13,36 C 20,42 33,41 39,34 C 46,25 41,15 35,10"
+                                                       Stroke="#00E2F2" StrokeThickness="3" Fill="Transparent"/>
+                                                 <Path Data="M 30,28 L 42,16 M 32,16 L 42,16 L 42,26"
+                                                       Stroke="#FFF000" StrokeThickness="2.2" Fill="Transparent"/>
+                                             </Grid>
+                                         </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepTwoTitle" Grid.Row="1" Text="Start Cyberpunk"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
@@ -515,11 +557,17 @@
                                         <TextBlock Text="03" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox HorizontalAlignment="Center" Width="42" Height="35">
-                                            <Path Data="M 2,7 L 18,1 L 34,7 L 18,13 Z M 2,13 L 18,19 L 34,13 M 2,20 L 18,26 L 34,20"
-                                                  Stroke="#00E2F2" StrokeThickness="2"
-                                                  StrokeLineJoin="Round" Width="36" Height="28"/>
-                                        </Viewbox>
+                                        <Viewbox x:Name="CollectStageIcon" HorizontalAlignment="Center" Width="43" Height="36">
+                                             <Grid Width="50" Height="44">
+                                                 <Path Data="M 14,10 L 30,4 L 46,10 L 30,16 Z
+                                                                 M 14,17 L 30,23 L 46,17
+                                                                 M 14,24 L 30,30 L 46,24
+                                                                 M 14,31 L 30,37 L 46,31"
+                                                       Stroke="#00E2F2" StrokeThickness="2.5" Fill="Transparent"/>
+                                                 <Path Data="M 2,20 L 20,20 M 15,14 L 21,20 L 15,26"
+                                                       Stroke="#FFF000" StrokeThickness="3" Fill="Transparent"/>
+                                             </Grid>
+                                         </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepThreeTitle" Grid.Row="1" Text="Collect Results"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"

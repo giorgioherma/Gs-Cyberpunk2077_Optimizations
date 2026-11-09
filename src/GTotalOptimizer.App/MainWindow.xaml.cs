@@ -89,9 +89,9 @@ public partial class MainWindow : Window
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
-        GcoHeaderLogo.Source = ImageFile("elements", "GCO_logo_4.png");
+        GcoHeaderLogo.Source = ImageFile("elements", "Logo_GCO_Official.png");
         if (GcoHeaderLogo.Source is null)
-            Trace.TraceError("Missing/undecodable owner GCO logo PNG in assets/ui/elements.");
+            Trace.TraceError("Missing/undecodable official GCO logo PNG in assets/ui/elements.");
         PuddleOverflowImage.Source = ImageFile("images", "The overflow.png");
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
@@ -211,9 +211,13 @@ public partial class MainWindow : Window
         CaptureTabShape.Fill = results ? inactive : active;
         CaptureTabShape.Stroke = results ? new SolidColorBrush(Color.FromRgb(145, 171, 180)) : active;
         CaptureTabLabel.Foreground = results ? Brushes.White : new SolidColorBrush(Color.FromRgb(6, 16, 20));
+        CaptureTabMarks.Stroke = results ? new SolidColorBrush(Color.FromRgb(0, 226, 242)) :
+            new SolidColorBrush(Color.FromRgb(6, 16, 20));
         AnalyzeTabShape.Fill = results ? active : inactive;
         AnalyzeTabShape.Stroke = results ? active : new SolidColorBrush(Color.FromRgb(145, 171, 180));
         AnalyzeTabLabel.Foreground = results ? new SolidColorBrush(Color.FromRgb(6, 16, 20)) : Brushes.White;
+        AnalyzeTabMarks.Stroke = results ? new SolidColorBrush(Color.FromRgb(6, 16, 20)) :
+            new SolidColorBrush(Color.FromRgb(0, 226, 242));
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)

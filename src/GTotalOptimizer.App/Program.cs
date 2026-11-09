@@ -109,6 +109,7 @@ internal static class Program
             var chassis = rootGrid.Children
                 .OfType<GTotalOptimizer.App.Visuals.ContentChassisOutline>().Single();
             var zOuter = System.Windows.Controls.Panel.GetZIndex(window.OuterBorderArtwork);
+            var zLogo = System.Windows.Controls.Panel.GetZIndex(window.GcoHeaderLogo);
             var zInner = System.Windows.Controls.Panel.GetZIndex(chassis);
             var zSky = System.Windows.Controls.Panel.GetZIndex(window.SkylineHost);
             var zPortrait = System.Windows.Controls.Panel.GetZIndex(window.VPortraitHost);
@@ -119,13 +120,14 @@ internal static class Program
             var zTabs = System.Windows.Controls.Panel.GetZIndex(window.TopTabsHost);
             var zHeader = System.Windows.Controls.Panel.GetZIndex(window.TopHeaderHost);
             var zSpill = System.Windows.Controls.Panel.GetZIndex(window.PuddleOverflowHost);
-            if (!(zOuter > zTabs && zTabs > zHeader && zHeader > zSpill && zSpill > zInner &&
+            if (!(zLogo > zOuter && zOuter > zTabs && zTabs > zHeader &&
+                   zHeader > zSpill && zSpill > zInner &&
                   zInner > zContent && zSky < zPortrait && zPortrait < zControls) ||
                 !window.ContentRegion.Children.Contains(window.VPortraitHost) ||
                 !rootGrid.Children.Contains(window.PuddleOverflowHost) ||
                 window.PuddleOverflowHost.IsHitTestVisible)
                 throw new InvalidOperationException(
-                    $"Only puddle crop can cross inner frame: outer={zOuter}, " +
+                    $"Owner logo must be FRONTMOST; only puddle crosses inner frame: logo={zLogo}, outer={zOuter}, " +
                     $"tabs={zTabs}, header={zHeader}, spill={zSpill}, inner={zInner}, " +
                     $"content={zContent}, sky={zSky}, V={zPortrait}, UI={zControls}");
             var spillTopLeft = window.PuddleOverflowHost.TransformToAncestor(visual)
@@ -140,32 +142,34 @@ internal static class Program
                     $"Owner crop offset/scale differs from V: base={portraitTopLeft}, spill={spillTopLeft}");
             Console.WriteLine("PASS V starts after left inner line; only owner puddle crop covers thin frame");
 
-            // Tabs reach the lower 68-DIP thin rule, while the owner logo extends
-            // eight DIPs over it without covering the original outer PNG.
+            // Tabs meet the inner rule while the official GCO logo covers the
+            // upper raster slope and yellow square accents as the topmost layer.
             var tabTop = window.TopTabsHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             if (tabTop.Y < 7 || Math.Abs(tabTop.Y + window.TopTabsHost.ActualHeight - 68) > .75 ||
                 tabTop.X < 220 || window.TopTabsHost.ActualWidth < 800)
                 throw new InvalidOperationException(
-                    $"Tabs are not inside header margin: {tabTop} " +
+                    $"Tabs are not touching the lower header rule: {tabTop} " +
                     $"size={window.TopTabsHost.ActualWidth}x{window.TopTabsHost.ActualHeight}");
             var logo = window.GcoHeaderLogo.Source as System.Windows.Media.Imaging.BitmapSource
-                ?? throw new InvalidOperationException("Owner GCO logo is missing from WPF layout");
+                ?? throw new InvalidOperationException("Official GCO logo is missing from packaged WPF UI");
             var logoTop = window.GcoHeaderLogo.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             double logoOverhang = logoTop.Y + window.GcoHeaderLogo.ActualHeight - 68;
-            if (logo.PixelWidth != 300 || logo.PixelHeight != 127 ||
-                Math.Abs(window.GcoHeaderLogo.ActualWidth - 132) > .5 ||
-                Math.Abs(window.GcoHeaderLogo.ActualHeight - 56) > .5 ||
-                logoTop.X < 18 || logoTop.X + window.GcoHeaderLogo.ActualWidth > 175 ||
-                logoTop.Y < 18 || logoTop.Y > 23 ||
-                logoOverhang < 7 || logoOverhang > 10 ||
-                window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Uniform)
+            if (logo.PixelWidth != 700 || logo.PixelHeight != 179 ||
+                Math.Abs(window.GcoHeaderLogo.ActualWidth - 274) > .5 ||
+                Math.Abs(window.GcoHeaderLogo.ActualHeight - 76) > .5 ||
+                Math.Abs(logoTop.X - 12) > .5 || Math.Abs(logoTop.Y - 7) > .5 ||
+                Math.Abs(logoOverhang - 15) > .5 ||
+                window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Uniform ||
+                window.GcoHeaderLogo.IsHitTestVisible ||
+                !rootGrid.Children.Contains(window.GcoHeaderLogo))
                 throw new InvalidOperationException(
-                    $"Owner 300x127 logo must clear the raster upper border and hang 7-10 DIP " +
-                    $"over the lower image: top={logoTop}, size={window.GcoHeaderLogo.ActualWidth}x" +
-                    $"{window.GcoHeaderLogo.ActualHeight}, overhang={logoOverhang}");
-            Console.WriteLine($"PASS owner GCO logo under outer raster border, lower overhang={logoOverhang:0.#} DIP");
+                    $"Official 700x179 logo must be topmost at 274x76, x12/y7; " +
+                    $"actual={logoTop} {window.GcoHeaderLogo.ActualWidth}x" +
+                    $"{window.GcoHeaderLogo.ActualHeight} overhang={logoOverhang}");
+            Console.WriteLine(
+                $"PASS official 700x179 GCO logo frontmost, fitted 274x76, lower overlap={logoOverhang:0.#} DIP");
             if (System.Windows.Controls.Grid.GetRow(window.CapturePage) != 0 ||
                 System.Windows.Controls.Grid.GetRow(window.ResultsPage) != 0)
                 throw new InvalidOperationException("GOT LAG content must start directly at inner frame");
@@ -231,31 +235,15 @@ internal static class Program
             var dependencyBrush = window.DependencyText.Foreground as System.Windows.Media.SolidColorBrush;
             if (dependencyBrush?.Color != System.Windows.Media.Color.FromRgb(255, 240, 0))
                 throw new InvalidOperationException("0-Engine prerequisite text must use GCO neon yellow");
-            if (window.AppBrandTitle.Text != "G's Cyberpunk 2077 Optimizer" ||
-                window.AppBrandSubtitle.Text != "CET and REDscript Optimization" ||
-                window.BuildVersionText.Text != "v1.1.8")
-                throw new InvalidOperationException("Top header brand/subtitle/version are inconsistent");
-            var brandLeft = window.AppBrandTitle.TransformToAncestor(visual)
-                .Transform(new System.Windows.Point(0, 0)).X;
-            var brandSubLeft = window.AppBrandSubtitle.TransformToAncestor(visual)
-                .Transform(new System.Windows.Point(0, 0)).X;
-            if (Math.Abs(brandLeft - brandSubLeft) > .5)
-                throw new InvalidOperationException("Header title/subtitle must align as a pair");
-            var brandTop = window.AppBrandTitle.TransformToAncestor(visual)
-                .Transform(new System.Windows.Point(0, 0));
-            var brandSubTop = window.AppBrandSubtitle.TransformToAncestor(visual)
-                .Transform(new System.Windows.Point(0, 0));
-            double brandCenter = (brandTop.Y + brandSubTop.Y +
-                                  window.AppBrandSubtitle.ActualHeight) / 2;
-            double refreshCenter = refreshTop.Y + window.RefreshButton.ActualHeight / 2;
-            // Midpoint of the usable band: raster upper border ~20 DIP,
-            // inner lower rule at 68 DIP. Keep text and controls off the upper art.
-            if (brandCenter < 40 || brandCenter > 49 ||
-                refreshCenter < 40 || refreshCenter > 49 ||
-                Math.Abs(brandCenter - refreshCenter) > 5)
+            if (window.BuildVersionText.Text != "v1.1.8" ||
+                window.TopHeaderHost.Children.OfType<System.Windows.Controls.StackPanel>().Single()
+                    .Children.OfType<System.Windows.Controls.TextBlock>().Count() != 1)
                 throw new InvalidOperationException(
-                    $"Header must be centered between upper raster and lower rule: " +
-                    $"brandY={brandCenter:0.##}, refreshY={refreshCenter:0.##}");
+                    "No app name/subtitle may remain in the top margin, only version and REFRESH");
+            double refreshCenter = refreshTop.Y + window.RefreshButton.ActualHeight / 2;
+            if (refreshCenter < 40 || refreshCenter > 49)
+                throw new InvalidOperationException(
+                    $"REFRESH must be centered between the raster top and inner rule: Y={refreshCenter:0.##}");
             var versionTop = window.BuildVersionText.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             if (Math.Abs((refreshTop.Y + window.RefreshButton.ActualHeight / 2) -
@@ -277,8 +265,18 @@ internal static class Program
                     "All neon UI boxes must use the source-anchored spatial field; card titles centered");
             var gameRootGroup = System.Windows.Media.VisualTreeHelper.GetParent(window.GameRootPanel)
                 as System.Windows.FrameworkElement;
-            if (gameRootGroup is null || Math.Abs(gameRootGroup.Margin.Top - 31) > .5)
-                throw new InvalidOperationException("Game Root and following workflow need 30 DIP lower offset");
+            if (gameRootGroup is null || Math.Abs(gameRootGroup.Margin.Top - 37) > .5 ||
+                Math.Abs(window.HeroSection.Margin.Top - 31) > .5 ||
+                Math.Abs(window.CaptureWorkflowHeading.Margin.Top - 15) > .5)
+                throw new InvalidOperationException(
+                    "Hero, Game Root and Capture Workflow must use new staggered vertical spacing");
+            var heroY = window.HeroTitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).Y;
+            var gameRootY = window.GameRootPanel.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).Y;
+            if (heroY < 90 || heroY > 130 || gameRootY < 225 || gameRootY > 275)
+                throw new InvalidOperationException(
+                    $"Hero should sit between lower header and newly lowered Game Root: {heroY:0.#}/{gameRootY:0.#}");
             var firstCard = cardBorders[0];
             var middle = cardBorders[1];
             var last = cardBorders[2];
@@ -288,6 +286,16 @@ internal static class Program
                 .Transform(new System.Windows.Point(0, 0)).X;
             var threeLeft = last.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0)).X;
+            var cardTop = firstCard.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).Y;
+            var cardBottom = cardTop + firstCard.ActualHeight;
+            var scrollBottom = window.CapturePage.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).Y + window.CapturePage.ActualHeight;
+            if (cardTop < 390 || cardBottom > scrollBottom - 10 ||
+                scrollBottom - cardBottom > 55)
+                throw new InvalidOperationException(
+                    $"Capture Workflow should rest just above footer, not crowd it: " +
+                    $"cards={cardTop:0.#}-{cardBottom:0.#} scrollBottom={scrollBottom:0.#}");
             double gap12 = twoLeft - oneLeft - firstCard.ActualWidth;
             double gap23 = threeLeft - twoLeft - middle.ActualWidth;
             if (Math.Abs(gap12 - 26) > 1 || Math.Abs(gap23 - 26) > 1 ||
@@ -295,6 +303,29 @@ internal static class Program
                 throw new InvalidOperationException(
                     $"Each card should be 16 DIP slimmer with 26-DIP gaps: " +
                     $"gap12={gap12:0.##}, gap23={gap23:0.##}");
+            if (window.GameRootFolderIcon.ActualWidth < 18 ||
+                window.InstallStageIcon.ActualWidth < 30 ||
+                window.LaunchStageIcon.ActualWidth < 30 ||
+                window.CollectStageIcon.ActualWidth < 30 ||
+                window.CaptureTabMarks.Data is null || window.AnalyzeTabMarks.Data is null)
+                throw new InvalidOperationException(
+                    "The folder, 3 original WPF cybernetic icons and decorated tab traces must render");
+            foreach (var control in new[] { window.InstallButton, window.LaunchButton,
+                                            window.CollectButton, window.BrowseButton, window.RefreshButton })
+            {
+                control.ApplyTemplate();
+                if (control.Template.FindName("ButtonFrame", control)
+                    is not GTotalOptimizer.App.Visuals.ChamferOutline frameShape ||
+                    Math.Abs(frameShape.CornerCut - 6) > .5)
+                    throw new InvalidOperationException(
+                        "All workflow/minor buttons must have real chamfered WPF vector shells");
+            }
+            window.ContinueButton.ApplyTemplate();
+            if (window.ContinueButton.Template.FindName("ContinueShape", window.ContinueButton)
+                is not GTotalOptimizer.App.Visuals.ChamferOutline continueFrame ||
+                Math.Abs(continueFrame.CornerCut - 9) > .5)
+                throw new InvalidOperationException("Continue must retain its vector chamfer/disabled state");
+            Console.WriteLine("PASS yellow folder, 3 custom WPF stage icons, decorated tabs and chamfered buttons");
             double t1 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
                 firstCard, new System.Windows.Point(firstCard.ActualWidth / 2, firstCard.ActualHeight / 2));
             double t2 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
@@ -511,9 +542,12 @@ internal static class Program
             var smallLogo = smallWindow.GcoHeaderLogo.Source as System.Windows.Media.Imaging.BitmapSource;
             var smallLogoTop = smallWindow.GcoHeaderLogo.TransformToAncestor(smallRoot)
                 .Transform(new System.Windows.Point(0, 0));
-            if (smallLogo?.PixelWidth != 300 || smallLogo.PixelHeight != 127 ||
-                Math.Abs(smallLogoTop.Y + smallWindow.GcoHeaderLogo.ActualHeight - 68 - 8) > 1)
-                throw new InvalidOperationException("GCO logo image/overlap lost at minimum size");
+            if (smallLogo?.PixelWidth != 700 || smallLogo.PixelHeight != 179 ||
+                Math.Abs(smallLogoTop.Y - 7) > 1 ||
+                Math.Abs(smallWindow.GcoHeaderLogo.ActualWidth - 274) > 1 ||
+                System.Windows.Controls.Panel.GetZIndex(smallWindow.GcoHeaderLogo) <=
+                    System.Windows.Controls.Panel.GetZIndex(smallWindow.OuterBorderArtwork))
+                throw new InvalidOperationException("Official topmost GCO logo lost size/anchor at minimum size");
             var smallV = smallWindow.VPortraitHost.TransformToAncestor(smallRoot)
                 .Transform(new System.Windows.Point(0, 0));
             var smallSpill = smallWindow.PuddleOverflowHost.TransformToAncestor(smallRoot)
