@@ -89,6 +89,9 @@ public partial class MainWindow : Window
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
+        GcoHeaderLogo.Source = ImageFile("elements", "GCO_logo_4.png");
+        if (GcoHeaderLogo.Source is null)
+            Trace.TraceError("Missing/undecodable owner GCO logo PNG in assets/ui/elements.");
         PuddleOverflowImage.Source = ImageFile("images", "The overflow.png");
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
@@ -173,7 +176,7 @@ public partial class MainWindow : Window
             ? ContentRegion.ActualWidth + 58.0
             : (ActualWidth > 0 ? ActualWidth : Width);
         var left = 250.0 + Math.Clamp((1280.0 - clientWidth) * 0.8, 0.0, 170.0);
-        var desired = new Thickness(left, 0, 29, 5);
+        var desired = new Thickness(left, 0, 29, 0);
         if (TopTabsHost.Margin != desired)
             TopTabsHost.Margin = desired;
     }

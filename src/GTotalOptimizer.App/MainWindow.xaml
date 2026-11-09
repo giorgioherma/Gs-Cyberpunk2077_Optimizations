@@ -206,15 +206,20 @@
 
         <!-- Keep the title/header TRANSPARENT so the artwork's TOP border
              remains visible beneath it. Other UI stays unchanged. -->
-        <Grid Grid.Row="0" Background="Transparent" Margin="10,6,10,0">
+        <Grid x:Name="TopHeaderHost" Grid.Row="0" Panel.ZIndex="18" Background="Transparent" Margin="10,6,10,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="165"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <!-- Reserved for owner's future logo. No provisional GCO text. -->
-            <Grid Grid.Column="0"/>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,-3,0,0">
+            <!-- Owner's 300x127 transparent logo fits BELOW the painted upper frame.
+                 Its bottom 8 DIPs intentionally overlap the lower image/inner line;
+                 the original outer raster frame stays frontmost (Z=30). -->
+            <Image x:Name="GcoHeaderLogo" Grid.Column="0" Width="132" Height="56"
+                   Margin="0,14,0,0" HorizontalAlignment="Center" VerticalAlignment="Top"
+                   Stretch="Uniform" IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,15,0,0">
                 <TextBlock x:Name="AppBrandTitle" Text="G's Cyberpunk 2077 Optimizer"
                            Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
                            FontWeight="SemiBold" FontSize="19"/>
@@ -225,7 +230,7 @@
             <!-- Refresh is always accessible in the top header, not in
                  the game-path panel. The main stage controls stay unchanged. -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
-                        HorizontalAlignment="Right" Margin="0,-5,23,0">
+                        HorizontalAlignment="Right" Margin="0,13,23,0">
                 <Button x:Name="RefreshButton" Content="⟳  REFRESH"
                         Style="{StaticResource MinorButton}" Click="Refresh_Click"
                         Height="27" MinWidth="94" Margin="0,0,16,0"/>
@@ -240,7 +245,7 @@
              Kept separate from the scrollable Capture/Analyze content. -->
         <Grid x:Name="TopTabsHost" Grid.Row="0" Panel.ZIndex="22"
               VerticalAlignment="Bottom" Height="44"
-              Margin="250,0,29,5" IsHitTestVisible="False">
+              Margin="250,0,29,0" IsHitTestVisible="False">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
             <Grid Width="246" Height="44" Margin="0,0,12,0">
                 <fx:SlantedTabShape x:Name="CaptureTabShape"
@@ -348,7 +353,7 @@
 
                         <!-- White heading outside a height-constrained Game Root box. -->
                         <!-- Restore the original Game Root X alignment. -->
-                        <StackPanel Margin="0,1,0,9">
+                        <StackPanel Margin="0,31,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
@@ -421,7 +426,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0" Margin="0,0,5,0">
+                            <Grid Grid.Column="0" Margin="8,0,13,0">
                                 <fx:ChamferOutline x:Name="StepOneOutline" Fill="#081012"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -458,7 +463,7 @@
                                 </Grid>
                             </Grid>
 
-                            <Grid Grid.Column="1" Margin="5,0,5,0">
+                            <Grid Grid.Column="1" Margin="13,0,13,0">
                                 <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#081012"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -495,7 +500,7 @@
                                 </Grid>
                             </Grid>
 
-                            <Grid Grid.Column="2" Margin="5,0,0,0">
+                            <Grid Grid.Column="2" Margin="13,0,8,0">
                                 <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#081012"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>

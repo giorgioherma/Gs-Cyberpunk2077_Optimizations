@@ -117,15 +117,16 @@ internal static class Program
             var zControls = System.Windows.Controls.Panel.GetZIndex(contentGrid);
             var zContent = System.Windows.Controls.Panel.GetZIndex(window.ContentRegion);
             var zTabs = System.Windows.Controls.Panel.GetZIndex(window.TopTabsHost);
+            var zHeader = System.Windows.Controls.Panel.GetZIndex(window.TopHeaderHost);
             var zSpill = System.Windows.Controls.Panel.GetZIndex(window.PuddleOverflowHost);
-            if (!(zOuter > zTabs && zTabs > zSpill && zSpill > zInner &&
+            if (!(zOuter > zTabs && zTabs > zHeader && zHeader > zSpill && zSpill > zInner &&
                   zInner > zContent && zSky < zPortrait && zPortrait < zControls) ||
                 !window.ContentRegion.Children.Contains(window.VPortraitHost) ||
                 !rootGrid.Children.Contains(window.PuddleOverflowHost) ||
                 window.PuddleOverflowHost.IsHitTestVisible)
                 throw new InvalidOperationException(
                     $"Only puddle crop can cross inner frame: outer={zOuter}, " +
-                    $"tabs={zTabs}, spill={zSpill}, inner={zInner}, " +
+                    $"tabs={zTabs}, header={zHeader}, spill={zSpill}, inner={zInner}, " +
                     $"content={zContent}, sky={zSky}, V={zPortrait}, UI={zControls}");
             var spillTopLeft = window.PuddleOverflowHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
@@ -139,14 +140,32 @@ internal static class Program
                     $"Owner crop offset/scale differs from V: base={portraitTopLeft}, spill={spillTopLeft}");
             Console.WriteLine("PASS V starts after left inner line; only owner puddle crop covers thin frame");
 
-            // Tabs are in the upper band, outside the inner content frame.
+            // Tabs reach the lower 68-DIP thin rule, while the owner logo extends
+            // eight DIPs over it without covering the original outer PNG.
             var tabTop = window.TopTabsHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
-            if (tabTop.Y < 7 || tabTop.Y + window.TopTabsHost.ActualHeight > 65 ||
+            if (tabTop.Y < 7 || Math.Abs(tabTop.Y + window.TopTabsHost.ActualHeight - 68) > .75 ||
                 tabTop.X < 220 || window.TopTabsHost.ActualWidth < 800)
                 throw new InvalidOperationException(
                     $"Tabs are not inside header margin: {tabTop} " +
                     $"size={window.TopTabsHost.ActualWidth}x{window.TopTabsHost.ActualHeight}");
+            var logo = window.GcoHeaderLogo.Source as System.Windows.Media.Imaging.BitmapSource
+                ?? throw new InvalidOperationException("Owner GCO logo is missing from WPF layout");
+            var logoTop = window.GcoHeaderLogo.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            double logoOverhang = logoTop.Y + window.GcoHeaderLogo.ActualHeight - 68;
+            if (logo.PixelWidth != 300 || logo.PixelHeight != 127 ||
+                Math.Abs(window.GcoHeaderLogo.ActualWidth - 132) > .5 ||
+                Math.Abs(window.GcoHeaderLogo.ActualHeight - 56) > .5 ||
+                logoTop.X < 18 || logoTop.X + window.GcoHeaderLogo.ActualWidth > 175 ||
+                logoTop.Y < 18 || logoTop.Y > 23 ||
+                logoOverhang < 7 || logoOverhang > 10 ||
+                window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Uniform)
+                throw new InvalidOperationException(
+                    $"Owner 300x127 logo must clear the raster upper border and hang 7-10 DIP " +
+                    $"over the lower image: top={logoTop}, size={window.GcoHeaderLogo.ActualWidth}x" +
+                    $"{window.GcoHeaderLogo.ActualHeight}, overhang={logoOverhang}");
+            Console.WriteLine($"PASS owner GCO logo under outer raster border, lower overhang={logoOverhang:0.#} DIP");
             if (System.Windows.Controls.Grid.GetRow(window.CapturePage) != 0 ||
                 System.Windows.Controls.Grid.GetRow(window.ResultsPage) != 0)
                 throw new InvalidOperationException("GOT LAG content must start directly at inner frame");
@@ -222,6 +241,21 @@ internal static class Program
                 .Transform(new System.Windows.Point(0, 0)).X;
             if (Math.Abs(brandLeft - brandSubLeft) > .5)
                 throw new InvalidOperationException("Header title/subtitle must align as a pair");
+            var brandTop = window.AppBrandTitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            var brandSubTop = window.AppBrandSubtitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            double brandCenter = (brandTop.Y + brandSubTop.Y +
+                                  window.AppBrandSubtitle.ActualHeight) / 2;
+            double refreshCenter = refreshTop.Y + window.RefreshButton.ActualHeight / 2;
+            // Midpoint of the usable band: raster upper border ~20 DIP,
+            // inner lower rule at 68 DIP. Keep text and controls off the upper art.
+            if (brandCenter < 40 || brandCenter > 49 ||
+                refreshCenter < 40 || refreshCenter > 49 ||
+                Math.Abs(brandCenter - refreshCenter) > 5)
+                throw new InvalidOperationException(
+                    $"Header must be centered between upper raster and lower rule: " +
+                    $"brandY={brandCenter:0.##}, refreshY={refreshCenter:0.##}");
             var versionTop = window.BuildVersionText.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0));
             if (Math.Abs((refreshTop.Y + window.RefreshButton.ActualHeight / 2) -
@@ -241,9 +275,26 @@ internal static class Program
                 cardTitles.Any(t => t.TextAlignment != System.Windows.TextAlignment.Center))
                 throw new InvalidOperationException(
                     "All neon UI boxes must use the source-anchored spatial field; card titles centered");
+            var gameRootGroup = System.Windows.Media.VisualTreeHelper.GetParent(window.GameRootPanel)
+                as System.Windows.FrameworkElement;
+            if (gameRootGroup is null || Math.Abs(gameRootGroup.Margin.Top - 31) > .5)
+                throw new InvalidOperationException("Game Root and following workflow need 30 DIP lower offset");
             var firstCard = cardBorders[0];
             var middle = cardBorders[1];
             var last = cardBorders[2];
+            var oneLeft = firstCard.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var twoLeft = middle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var threeLeft = last.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            double gap12 = twoLeft - oneLeft - firstCard.ActualWidth;
+            double gap23 = threeLeft - twoLeft - middle.ActualWidth;
+            if (Math.Abs(gap12 - 26) > 1 || Math.Abs(gap23 - 26) > 1 ||
+                Math.Abs(oneLeft - rootLeft - 8) > 1)
+                throw new InvalidOperationException(
+                    $"Each card should be 16 DIP slimmer with 26-DIP gaps: " +
+                    $"gap12={gap12:0.##}, gap23={gap23:0.##}");
             double t1 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
                 firstCard, new System.Windows.Point(firstCard.ActualWidth / 2, firstCard.ActualHeight / 2));
             double t2 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
@@ -454,9 +505,15 @@ internal static class Program
                 throw new InvalidOperationException("New owner art fails minimum-size layout");
             var smallTabTop = smallWindow.TopTabsHost.TransformToAncestor(smallRoot)
                 .Transform(new System.Windows.Point(0, 0));
-            if (smallTabTop.Y + smallWindow.TopTabsHost.ActualHeight > 65 ||
+            if (Math.Abs(smallTabTop.Y + smallWindow.TopTabsHost.ActualHeight - 68) > .75 ||
                 smallTabTop.X < 310)
                 throw new InvalidOperationException("Responsive tabs overlap small window title");
+            var smallLogo = smallWindow.GcoHeaderLogo.Source as System.Windows.Media.Imaging.BitmapSource;
+            var smallLogoTop = smallWindow.GcoHeaderLogo.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0));
+            if (smallLogo?.PixelWidth != 300 || smallLogo.PixelHeight != 127 ||
+                Math.Abs(smallLogoTop.Y + smallWindow.GcoHeaderLogo.ActualHeight - 68 - 8) > 1)
+                throw new InvalidOperationException("GCO logo image/overlap lost at minimum size");
             var smallV = smallWindow.VPortraitHost.TransformToAncestor(smallRoot)
                 .Transform(new System.Windows.Point(0, 0));
             var smallSpill = smallWindow.PuddleOverflowHost.TransformToAncestor(smallRoot)
