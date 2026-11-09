@@ -13,7 +13,7 @@ Read, in order:
 6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint:** **GCO v1.1.8** (explicit owner-requested unified package version bump on 2026-11-08), integrated CET + GRSP + optional PresentMon, two-page .NET 10 WPF. Current v1.1.8 Windows CI [#42449545227](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42449545227) **SUCCESS** (183/183 contracts, artifact 13604784059, verified 1.1.8.0 EXE versions). Pre-bump v1.1.7 CI #42438748376 was also successful. Native gameplay, capture/restore, full border PNG visual approval, CET-only/GRSP-only independence and optimizer generation remain unverified or pending; never infer them from CI.
+**Current checkpoint:** **GCO v1.1.8** (explicit owner-requested unified package version bump on 2026-11-08), integrated CET + GRSP + optional PresentMon, two-page .NET 10 WPF. Latest v1.1.8 Windows CI [#42564273365](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42564273365) **SUCCESS** (183/183 contracts, versioned and run-qualified artifact 13650626941, packaged build identity verified). Earlier v1.1.8 CI #42449545227 and pre-bump v1.1.7 CI #42438748376 also succeeded. Native gameplay, capture/restore, full border PNG visual approval, CET-only/GRSP-only independence and optimizer generation remain unverified or pending; never infer them from CI.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 
