@@ -919,16 +919,16 @@ if (args.Length > 0)
     Require(!File.Exists(Path.Combine(borderDir, "GCO_Border_Small_1080x640_FINAL.png")),
         "unused Small border must not ship in the single-canvas package");
     var imageDir = Path.Combine(delivered, "assets", "ui", "images");
-    Require(PngDimensions(Path.Combine(imageDir, "Upright_hotka.png")) == (743, 2117) &&
-        PngDimensions(Path.Combine(imageDir, "GCO_V_original_pixel_locked_silhouette.png")) == (743, 2117),
-        "original aligned portrait pair shipped under images");
-    // Skyline is the owner's original PNG. Its source SHA-256 is checked
-    // against the packaged copy by Build-Test.ps1; do not reject a valid
-    // original because a documentation-era size was hard-coded here.
-    var skyline = PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png"));
-    Require(skyline.Width > 0 && skyline.Height > 0,
-        "original valid PNG blue skyline shipped under images (actual " +
-        skyline.Width + "x" + skyline.Height + ")");
+    Require(PngDimensions(Path.Combine(imageDir, "V_background_1_color.png")) == (482, 928) &&
+        PngDimensions(Path.Combine(imageDir, "V_background_1_black.png")) == (482, 928),
+        "new owner-painted 482x928 color/black V pair shipped under images");
+    Require(!File.Exists(Path.Combine(imageDir, "Upright_hotka.png")) &&
+        !File.Exists(Path.Combine(imageDir, "GCO_V_original_pixel_locked_silhouette.png")),
+        "obsolete V PNGs must not be shipped with the new background");
+    // Same canonical filename; actual updated owner asset has 1870x652 pixels.
+    // The builder checks original source/packaged SHA-256 identity.
+    Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (1870, 652),
+        "updated 1870x652 RGB blue skyline shipped under original filename");
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +
