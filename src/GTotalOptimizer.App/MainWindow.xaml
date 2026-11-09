@@ -231,7 +231,7 @@
         <Image x:Name="GcoHeaderLogo" Grid.RowSpan="2" Panel.ZIndex="50"
                Width="274" Height="76" Margin="12,7,0,0"
                HorizontalAlignment="Left" VerticalAlignment="Top"
-               Stretch="Uniform" IsHitTestVisible="False"
+               Stretch="Fill" IsHitTestVisible="False"
                RenderOptions.BitmapScalingMode="HighQuality"/>
 
         <!-- No app title or subtitle in the top margin; only owner logo and tabs. -->

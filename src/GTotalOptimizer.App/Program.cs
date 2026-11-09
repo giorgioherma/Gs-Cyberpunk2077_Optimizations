@@ -161,7 +161,7 @@ internal static class Program
                 Math.Abs(window.GcoHeaderLogo.ActualHeight - 76) > .5 ||
                 Math.Abs(logoTop.X - 12) > .5 || Math.Abs(logoTop.Y - 7) > .5 ||
                 Math.Abs(logoOverhang - 15) > .5 ||
-                window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Uniform ||
+                window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Fill ||
                 window.GcoHeaderLogo.IsHitTestVisible ||
                 !rootGrid.Children.Contains(window.GcoHeaderLogo))
                 throw new InvalidOperationException(
