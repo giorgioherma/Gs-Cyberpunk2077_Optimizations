@@ -214,3 +214,7 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-09 — Versioned download artifacts, unchanged product v1.1.8
 
 - GitHub Actions used a generic artifact filename, so different builds downloaded as `Gs-Cyberpunk2077_Optimizer.zip` despite embedded `VERSION.txt`. Offline inspection of user's upload confirmed it was v1.1.7. New existing-workflow upload name includes v1.1.8 and source run/attempt; `BUILD-INFO.json` records commit/run/attempt and the guide states current version in the first line. Same portable root launcher/folder and component payload. Run integrated CI before claiming completion. The ZIP warning remains unclassified without Firefox's precise explanation or a vendor detection report.
+
+### 2026-11-09 — Owner-painted V and pure-black background
+
+- Source commit 7d95d081 replaces current WPF art references with 482x928 V_background_1_black/color.png, while retaining the former narrow sidebar, old V top/left/height and lower border overlap. The 482:928 full width now extends right with user-painted transition and no generated WPF halo/mask/right outline. Owner updated existing TrueHeader_GCO_page1.png to RGB 1870x652; the 174-DIP host is unchanged. WPF canvas/Game Root/skyline fade are #000000. Existing unified CI must verify packaging/WPF; owner must confirm native appearance. No v1.1.8, profiler, shared runtime or workflow changes.
