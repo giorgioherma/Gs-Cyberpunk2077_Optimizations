@@ -262,6 +262,16 @@ public partial class MainWindow : Window
     {
         if (initialized && !pathUpdate && !busy) await RefreshSourceAsync();
     }
+
+    private void GamePath_LostKeyboardFocus(
+        object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        // WPF scrolls a single-line editable path towards its caret.
+        // Once editing ends, show the recognizable drive/root prefix again;
+        // never change the path string, installer state or a focused edit.
+        GamePathBox.CaretIndex = 0;
+        GamePathBox.ScrollToHorizontalOffset(0);
+    }
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshSourceAsync();
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
@@ -306,6 +316,8 @@ public partial class MainWindow : Window
         {
             pathUpdate = true;
             GamePathBox.Text = current.GameRoot;
+            GamePathBox.CaretIndex = 0;
+            GamePathBox.ScrollToHorizontalOffset(0);
             pathUpdate = false;
         }
         inspection = current;

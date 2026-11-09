@@ -16,6 +16,8 @@
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
         <SolidColorBrush x:Key="Cyan" Color="#00E2F2"/>
         <SolidColorBrush x:Key="Muted" Color="#A8B3B5"/>
+        <!-- Fallback for non-spatial outlines. The framed UI below uses
+             one spatial color field anchored to V and the cyan skyline. -->
         <LinearGradientBrush x:Key="NeonStroke" StartPoint="0,0" EndPoint="1,0">
             <GradientStop Color="#FFF000" Offset="0"/>
             <GradientStop Color="#FFF000" Offset=".48"/>
@@ -74,9 +76,9 @@
             <Setter Property="Foreground" Value="#F2F5F5"/>
             <Setter Property="BorderBrush" Value="#42616A"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontSize" Value="13.5"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="Padding" Value="9,0"/>
             <Setter Property="CaretBrush" Value="#FFF000"/>
             <!-- Native rectangular WPF field: no chamfer clipping and no
                  background leaking from behind the cut-corner parent. -->
@@ -210,30 +212,26 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" BorderBrush="#DCE000" BorderThickness="0,0,1.5,0"
-                    Padding="2,0,15,0" Margin="0,4,15,6">
-                <TextBlock Text="GCO" FontFamily="{StaticResource Oxanium}"
-                           FontWeight="ExtraBold" Foreground="#FFF000"
-                           FontSize="34" VerticalAlignment="Center"
-                           ToolTip="Placeholder for the approved GCO logo"/>
-            </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,0,0,0">
-                <TextBlock Text="G's Cyberpunk 2077 Optimizer"
+            <!-- Reserved for owner's future logo. No provisional GCO text. -->
+            <Grid Grid.Column="0"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="6,-3,0,0">
+                <TextBlock x:Name="AppBrandTitle" Text="G's Cyberpunk 2077 Optimizer"
                            Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
                            FontWeight="SemiBold" FontSize="19"/>
-                <TextBlock Text="CET  /  REDscript  /  PresentMon"
-                           Foreground="#00D9F5" FontWeight="SemiBold" FontSize="11" Margin="1,1,0,0"/>
+                <TextBlock x:Name="AppBrandSubtitle" Text="CET and REDscript Optimization"
+                           Foreground="#00D9F5" FontWeight="SemiBold"
+                           FontSize="11.5" Margin="0,1,0,0"/>
             </StackPanel>
             <!-- Refresh is always accessible in the top header, not in
                  the game-path panel. The main stage controls stay unchanged. -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
-                        HorizontalAlignment="Right" Margin="0,0,14,0">
+                        HorizontalAlignment="Right" Margin="0,-5,23,0">
                 <Button x:Name="RefreshButton" Content="⟳  REFRESH"
                         Style="{StaticResource MinorButton}" Click="Refresh_Click"
-                        Margin="0,0,14,0"/>
-                <TextBlock Text="v1.1.8" Foreground="#87999F"
+                        Height="27" MinWidth="94" Margin="0,0,16,0"/>
+                <TextBlock x:Name="BuildVersionText" Text="v1.1.8" Foreground="#A7B8BD"
                            VerticalAlignment="Center" FontFamily="{StaticResource Oxanium}"
-                           FontSize="10"/>
+                           FontSize="11"/>
             </StackPanel>
             <!-- The content chassis draws the only header divider. -->
         </Grid>
@@ -332,8 +330,9 @@
                     </ScrollViewer.Resources>
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
-                        <StackPanel Margin="0,3,0,12">
-                            <TextBlock x:Name="HeroTitle" Margin="22,0,0,0"
+                        <!-- Move title and its description together. -->
+                        <StackPanel x:Name="HeroSection" Margin="62,3,0,12">
+                            <TextBlock x:Name="HeroTitle" Margin="0"
                                        FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
                                 <Run Text="GOT LAG? " FontSize="28" FontWeight="ExtraBold"
@@ -341,7 +340,8 @@
                                 <Run Text="Cyberpunk 2077 CET and REDscript Optimizations"
                                      Foreground="#F4F6F6"/>
                             </TextBlock>
-                            <TextBlock Text="Capture performance data, analyze it and generate a custom optimization pack."
+                            <TextBlock x:Name="HeroSubtitle"
+                                       Text="Capture performance data, analyze it and generate a custom optimization pack."
                                        Foreground="#EDF3F5" FontSize="14.5"
                                        Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
@@ -361,19 +361,22 @@
                             </Grid>
                             <!-- Fixed size prevents Path geometry inflating StackPanel measure. -->
                             <Grid x:Name="GameRootPanel" Height="108" Background="#000000">
-                                <fx:ChamferOutline Fill="#000000"
-                                                   Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
-                                                   CornerCut="14" IsHitTestVisible="False"/>
+                                <fx:ChamferOutline x:Name="GameRootOutline" Fill="#000000"
+                                                   Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <!-- Keep the rectangular input entirely inside the 14-DIP
                                      chamfer clearance at both ends. OPEN gets a 16-DIP gap. -->
-                                <StackPanel Margin="22,7,22,6">
-                                    <Grid Height="30">
+                                <StackPanel x:Name="GameRootContents"
+                                            Margin="22,0,22,0" VerticalAlignment="Center">
+                                    <Grid Height="32">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="90"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="GamePathBox" Grid.Column="0"
                                                  Style="{StaticResource PathInput}"
+                                                 ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                 LostKeyboardFocus="GamePath_LostKeyboardFocus"
                                                  TextChanged="GamePath_Changed"/>
                                         <Button x:Name="BrowseButton" Grid.Column="1" Content="OPEN"
                                                 Style="{StaticResource MinorButton}" Margin="16,0,0,0"
@@ -385,7 +388,7 @@
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </Grid>
-                                    <TextBlock x:Name="DependencyText" Foreground="#FAD76B"
+                                    <TextBlock x:Name="DependencyText" Foreground="#FFF000"
                                                Height="16" VerticalAlignment="Center"
                                                FontSize="11.5" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
@@ -419,9 +422,9 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid Grid.Column="0" Margin="0,0,5,0">
-                                <fx:ChamferOutline Fill="#081012"
-                                                   Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
-                                                   CornerCut="14" IsHitTestVisible="False"/>
+                                <fx:ChamferOutline x:Name="StepOneOutline" Fill="#081012"
+                                                   Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="42"/>
@@ -440,13 +443,15 @@
                                                   StrokeLineJoin="Round" Width="24" Height="28"/>
                                         </Viewbox>
                                     </Grid>
-                                    <TextBlock Grid.Row="1" Text="Install Profilers"
+                                    <TextBlock x:Name="StepOneTitle" Grid.Row="1" Text="Install Profilers"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,4,0,4"
                                                Text="Install the available CET and/or REDscript profiling tools."
                                                Foreground="#A8B3B5" FontSize="13"
-                                               TextWrapping="Wrap"/>
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
+                                               VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <Button x:Name="InstallButton" Grid.Row="3" Content="INSTALL PROFILERS"
                                             Style="{StaticResource ActionButton}" Click="Install_Click"
                                             IsEnabled="False"/>
@@ -454,9 +459,9 @@
                             </Grid>
 
                             <Grid Grid.Column="1" Margin="5,0,5,0">
-                                <fx:ChamferOutline Fill="#081012"
-                                                   Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
-                                                   CornerCut="14" IsHitTestVisible="False"/>
+                                <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#081012"
+                                                   Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="42"/>
@@ -475,13 +480,15 @@
                                                   Width="35" Height="27"/>
                                         </Viewbox>
                                     </Grid>
-                                    <TextBlock Grid.Row="1" Text="Start Cyberpunk"
+                                    <TextBlock x:Name="StepTwoTitle" Grid.Row="1" Text="Start Cyberpunk"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,4,0,4"
                                                Text="Record a varied run: idle, walking, driving and heavy combat."
                                                Foreground="#A8B3B5" FontSize="13"
-                                               TextWrapping="Wrap"/>
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
+                                               VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <Button x:Name="LaunchButton" Grid.Row="3" Content="START CYBERPUNK"
                                             Style="{StaticResource ActionButton}" Click="Launch_Click"
                                             IsEnabled="False"/>
@@ -489,9 +496,9 @@
                             </Grid>
 
                             <Grid Grid.Column="2" Margin="5,0,0,0">
-                                <fx:ChamferOutline Fill="#081012"
-                                                   Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
-                                                   CornerCut="14" IsHitTestVisible="False"/>
+                                <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#081012"
+                                                   Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="42"/>
@@ -509,13 +516,15 @@
                                                   StrokeLineJoin="Round" Width="36" Height="28"/>
                                         </Viewbox>
                                     </Grid>
-                                    <TextBlock Grid.Row="1" Text="Collect Results"
+                                    <TextBlock x:Name="StepThreeTitle" Grid.Row="1" Text="Collect Results"
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,4,0,4"
                                                Text="Close the game. Verify and collect evidence before restoration."
                                                Foreground="#A8B3B5" FontSize="13"
-                                               TextWrapping="Wrap"/>
+                                               HorizontalAlignment="Stretch" TextAlignment="Center"
+                                               VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <Button x:Name="CollectButton" Grid.Row="3" Content="COLLECT RESULTS"
                                             Style="{StaticResource ActionButton}" Click="Collect_Click"
                                             IsEnabled="False"/>
@@ -551,6 +560,7 @@
                                 Click="Restore_Click"/>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
+                            Margin="-10,-25,10,25"
                             Style="{StaticResource ContinueStyle}" Click="Continue_Click"
                             IsEnabled="False"/>
                 </Grid>
@@ -625,7 +635,8 @@
              outline visible. ONLY the owner RGBA bottom puddle strip above
              it may cross the line. The original outer raster stays topmost. -->
         <fx:ContentChassisOutline Grid.RowSpan="2" HeaderHeight="68"
-                                  Panel.ZIndex="13" FrameInset="27" Stroke="{StaticResource NeonStroke}"
+                                  Panel.ZIndex="13" FrameInset="27"
+                                  Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                   IsHitTestVisible="False"/>
 
         <!-- Directly register the owner's 365x49 crop with the V 482x928

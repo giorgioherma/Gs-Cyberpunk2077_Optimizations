@@ -114,6 +114,62 @@ public static class ChamferGeometry
 }
 
 /// <summary>
+/// One global source-anchored color field for GCO's INNER neon outlines.
+/// Yellow originates near V at the lower left; cyan originates near the
+/// owner's upper-right skyline. Each border samples these common scene-space
+/// coordinates, so separate cards cannot share an artificial 50% midpoint.
+/// The raster outer frame remains entirely owner-provided and untouched.
+/// </summary>
+public static class SpatialNeonField
+{
+    private static (Point Yellow, Point Cyan) Anchors(double width, double height) =>
+        (new Point(width * .09, height * .80),
+         new Point(width * .93, height * .12));
+
+    public static Brush Create(FrameworkElement element, Brush fallback)
+    {
+        var window = Window.GetWindow(element);
+        if (window?.Content is not FrameworkElement root ||
+            root.ActualWidth < 1 || root.ActualHeight < 1)
+            return fallback;
+        Point origin;
+        try { origin = element.TranslatePoint(new Point(0, 0), root); }
+        catch (InvalidOperationException) { return fallback; }
+
+        var (yellow, cyan) = Anchors(root.ActualWidth, root.ActualHeight);
+        var brush = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(yellow.X - origin.X, yellow.Y - origin.Y),
+            EndPoint = new Point(cyan.X - origin.X, cyan.Y - origin.Y)
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(255, 240, 0), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(248, 229, 28), .28));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(111, 205, 186), .60));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0, 226, 242), .82));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0, 226, 242), 1));
+        brush.Freeze();
+        return brush;
+    }
+
+    // Geometry regression: the field must become cooler towards the
+    // skyline and warmer towards the lower-left V on *every* card.
+    public static double PositionAt(FrameworkElement element, Point localPoint)
+    {
+        var window = Window.GetWindow(element);
+        if (window?.Content is not FrameworkElement root ||
+            root.ActualWidth < 1 || root.ActualHeight < 1)
+            throw new InvalidOperationException("Spatial neon requires a measured WPF root");
+        var scene = element.TranslatePoint(localPoint, root);
+        var (yellow, cyan) = Anchors(root.ActualWidth, root.ActualHeight);
+        double dx = cyan.X - yellow.X;
+        double dy = cyan.Y - yellow.Y;
+        return Math.Clamp(((scene.X - yellow.X) * dx + (scene.Y - yellow.Y) * dy) /
+                          (dx * dx + dy * dy), 0, 1);
+    }
+}
+
+/// <summary>
 /// Static WPF vector decoration with optional soft glow and neon corner fins.
 /// Layout comes from the containing Grid; this element never measures to 1000 DIPs.
 /// </summary>
@@ -134,6 +190,9 @@ public sealed class ChamferOutline : FrameworkElement
     public static readonly DependencyProperty GlowProperty =
         DependencyProperty.Register(nameof(Glow), typeof(bool), typeof(ChamferOutline),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty SpatialStrokeProperty =
+        DependencyProperty.Register(nameof(SpatialStroke), typeof(bool), typeof(ChamferOutline),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty AccentCornersProperty =
         DependencyProperty.Register(nameof(AccentCorners), typeof(bool), typeof(ChamferOutline),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -143,6 +202,7 @@ public sealed class ChamferOutline : FrameworkElement
     public double StrokeThickness { get => (double)GetValue(StrokeThicknessProperty); set => SetValue(StrokeThicknessProperty, value); }
     public double CornerCut { get => (double)GetValue(CornerCutProperty); set => SetValue(CornerCutProperty, value); }
     public bool Glow { get => (bool)GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
+    public bool SpatialStroke { get => (bool)GetValue(SpatialStrokeProperty); set => SetValue(SpatialStrokeProperty, value); }
     public bool AccentCorners { get => (bool)GetValue(AccentCornersProperty); set => SetValue(AccentCornersProperty, value); }
 
     protected override void OnRender(DrawingContext dc)
@@ -153,17 +213,18 @@ public sealed class ChamferOutline : FrameworkElement
         var inset = Math.Max(thickness / 2.0 + 0.25, 1.0);
         var cut = ChamferGeometry.ScaledCut(this, CornerCut);
         var shape = ChamferGeometry.Create(RenderSize.Width, RenderSize.Height, cut, inset);
+        var stroke = SpatialStroke ? SpatialNeonField.Create(this, Stroke) : Stroke;
 
         if (Glow)
         {
-            var soft = Stroke.CloneCurrentValue();
+            var soft = stroke.CloneCurrentValue();
             soft.Opacity = 0.12;
-            var near = Stroke.CloneCurrentValue();
+            var near = stroke.CloneCurrentValue();
             near.Opacity = 0.24;
             dc.DrawGeometry(null, new Pen(soft, thickness + 12) { LineJoin = PenLineJoin.Miter }, shape);
             dc.DrawGeometry(null, new Pen(near, thickness + 6) { LineJoin = PenLineJoin.Miter }, shape);
         }
-        dc.DrawGeometry(Fill, new Pen(Stroke, thickness) { LineJoin = PenLineJoin.Miter }, shape);
+        dc.DrawGeometry(Fill, new Pen(stroke, thickness) { LineJoin = PenLineJoin.Miter }, shape);
 
         if (AccentCorners)
         {
@@ -715,6 +776,9 @@ public sealed class ContentChassisOutline : FrameworkElement
     public static readonly DependencyProperty StrokeProperty =
         DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(ContentChassisOutline),
             new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty SpatialStrokeProperty =
+        DependencyProperty.Register(nameof(SpatialStroke), typeof(bool), typeof(ContentChassisOutline),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty HeaderHeightProperty =
         DependencyProperty.Register(nameof(HeaderHeight), typeof(double), typeof(ContentChassisOutline),
             new FrameworkPropertyMetadata(68.0, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -722,6 +786,7 @@ public sealed class ContentChassisOutline : FrameworkElement
         DependencyProperty.Register(nameof(FrameInset), typeof(double), typeof(ContentChassisOutline),
             new FrameworkPropertyMetadata(14.0, FrameworkPropertyMetadataOptions.AffectsRender));
     public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+    public bool SpatialStroke { get => (bool)GetValue(SpatialStrokeProperty); set => SetValue(SpatialStrokeProperty, value); }
     public double HeaderHeight { get => (double)GetValue(HeaderHeightProperty); set => SetValue(HeaderHeightProperty, value); }
     public double FrameInset { get => (double)GetValue(FrameInsetProperty); set => SetValue(FrameInsetProperty, value); }
 
@@ -730,7 +795,8 @@ public sealed class ContentChassisOutline : FrameworkElement
         base.OnRender(dc);
         if (RenderSize.Width < 90 || RenderSize.Height < HeaderHeight + 50) return;
         var cut = ChamferGeometry.ScaledCut(this, ChamferGeometry.StandardCut);
-        dc.DrawGeometry(null, new Pen(Stroke, 1.15) { LineJoin = PenLineJoin.Miter },
+        var stroke = SpatialStroke ? SpatialNeonField.Create(this, Stroke) : Stroke;
+        dc.DrawGeometry(null, new Pen(stroke, 1.15) { LineJoin = PenLineJoin.Miter },
             ChamferGeometry.CreateContentFrame(RenderSize.Width, RenderSize.Height,
                 HeaderHeight, FrameInset, cut));
     }

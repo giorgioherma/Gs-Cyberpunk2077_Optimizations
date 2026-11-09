@@ -165,9 +165,13 @@ internal static class Program
                     $"root={rootLeft}, rightStart={rightStart}");
             var heroLeft = window.HeroTitle.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0)).X;
-            if (Math.Abs(heroLeft - rootLeft - 22.0) > 1.5)
+            var subtitleLeft = window.HeroSubtitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            if (Math.Abs(heroLeft - rootLeft - 62.0) > 1.5 ||
+                Math.Abs(subtitleLeft - heroLeft) > 1.5)
                 throw new InvalidOperationException(
-                    $"GOT LAG headline not independently offset right: hero={heroLeft}, root={rootLeft}");
+                    $"GOT LAG heading/subtitle must share the same +62 DIP offset: " +
+                    $"hero={heroLeft}, subtitle={subtitleLeft}, root={rootLeft}");
             var pathFrame = window.GamePathBox.Template.FindName("PathFrame", window.GamePathBox);
             if (pathFrame is not System.Windows.Controls.Border frame ||
                 frame.CornerRadius != new System.Windows.CornerRadius(0) ||
@@ -192,7 +196,80 @@ internal static class Program
             if (window.ModCountText.Margin.Right != 0 ||
                 window.DependencyText.Text.Contains("MO2", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("MO2 placeholder must not occupy Page 1");
-            Console.WriteLine("PASS independent GOT LAG title offset; original Game Root X; rectangular inset path; upper REFRESH; no MO2 placeholder");
+            // The path is centered in the taller chamfer, not pressed against
+            // its upper line. The native WPF TextBox has no vertical scroll crop.
+            var pathGroupY = window.GameRootContents.TransformToAncestor(window.GameRootPanel)
+                .Transform(new System.Windows.Point(0, 0)).Y;
+            var expectedPathGroupY = (window.GameRootPanel.ActualHeight -
+                                      window.GameRootContents.ActualHeight) / 2;
+            if (Math.Abs(pathGroupY - expectedPathGroupY) > 2.5 ||
+                window.GamePathBox.FontSize > 14 ||
+                window.GamePathBox.Padding.Top > 0.1 ||
+                window.GamePathBox.ToolTip is null)
+                throw new InvalidOperationException(
+                    $"Game Root inner content must be vertically centered and path fully legible: " +
+                    $"actualY={pathGroupY}, expectedY={expectedPathGroupY}");
+            var dependencyBrush = window.DependencyText.Foreground as System.Windows.Media.SolidColorBrush;
+            if (dependencyBrush?.Color != System.Windows.Media.Color.FromRgb(255, 240, 0))
+                throw new InvalidOperationException("0-Engine prerequisite text must use GCO neon yellow");
+            if (window.AppBrandTitle.Text != "G's Cyberpunk 2077 Optimizer" ||
+                window.AppBrandSubtitle.Text != "CET and REDscript Optimization" ||
+                window.BuildVersionText.Text != "v1.1.8")
+                throw new InvalidOperationException("Top header brand/subtitle/version are inconsistent");
+            var brandLeft = window.AppBrandTitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var brandSubLeft = window.AppBrandSubtitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            if (Math.Abs(brandLeft - brandSubLeft) > .5)
+                throw new InvalidOperationException("Header title/subtitle must align as a pair");
+            var versionTop = window.BuildVersionText.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            if (Math.Abs((refreshTop.Y + window.RefreshButton.ActualHeight / 2) -
+                         (versionTop.Y + window.BuildVersionText.ActualHeight / 2)) > 3.5)
+                throw new InvalidOperationException("REFRESH and version should share top-right baseline");
+            if (window.ContinueButton.Margin.Left != -10 ||
+                window.ContinueButton.Margin.Top != -25 ||
+                window.ContinueButton.Margin.Right != 10 ||
+                window.ContinueButton.Margin.Bottom != 25)
+                throw new InvalidOperationException("Continue button should be 25 DIP higher, 10 DIP left");
+            var cardBorders = new[] { window.StepOneOutline, window.StepTwoOutline,
+                                      window.StepThreeOutline };
+            var cardTitles = new[] { window.StepOneTitle, window.StepTwoTitle,
+                                     window.StepThreeTitle };
+            if (!window.GameRootOutline.SpatialStroke || !chassis.SpatialStroke ||
+                cardBorders.Any(c => !c.SpatialStroke) ||
+                cardTitles.Any(t => t.TextAlignment != System.Windows.TextAlignment.Center))
+                throw new InvalidOperationException(
+                    "All neon UI boxes must use the source-anchored spatial field; card titles centered");
+            var first = cardBorders[0];
+            var middle = cardBorders[1];
+            var last = cardBorders[2];
+            double t1 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
+                first, new System.Windows.Point(first.ActualWidth / 2, first.ActualHeight / 2));
+            double t2 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
+                middle, new System.Windows.Point(middle.ActualWidth / 2, middle.ActualHeight / 2));
+            double t3 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
+                last, new System.Windows.Point(last.ActualWidth / 2, last.ActualHeight / 2));
+            if (!(t1 + .10 < t2 && t2 + .10 < t3))
+                throw new InvalidOperationException(
+                    $"Left-to-right borders must follow V-to-skyline source: {t1:0.###}, {t2:0.###}, {t3:0.###}");
+            foreach (var shape in cardBorders)
+            {
+                double upperRight = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
+                    shape, new System.Windows.Point(shape.ActualWidth - 4, 4));
+                double lowerLeft = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
+                    shape, new System.Windows.Point(4, shape.ActualHeight - 4));
+                if (upperRight < lowerLeft + .12)
+                    throw new InvalidOperationException(
+                        "Card border must become more cyan at its upper/right corner");
+            }
+            var spatialBrush = GTotalOptimizer.App.Visuals.SpatialNeonField.Create(
+                first, System.Windows.Media.Brushes.White) as System.Windows.Media.LinearGradientBrush;
+            if (spatialBrush?.MappingMode != System.Windows.Media.BrushMappingMode.Absolute)
+                throw new InvalidOperationException("Neon field must map from shared screen coordinates");
+            Console.WriteLine(
+                $"PASS GOT LAG + subtitle jointly offset; header aligned, centered path, " +
+                $"three centered cards and V-to-skyline spatial gradients ({t1:0.##}/{t2:0.##}/{t3:0.##})");
 
             var colored = window.VColorImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("New V color art missing");
@@ -400,6 +477,19 @@ internal static class Program
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");
+            var minCards = new[] { smallWindow.StepOneOutline, smallWindow.StepTwoOutline,
+                                   smallWindow.StepThreeOutline };
+            var minColorIndex = minCards.Select(shape =>
+                GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(shape,
+                    new System.Windows.Point(shape.ActualWidth / 2, shape.ActualHeight / 2))).ToArray();
+            if (!(minColorIndex[0] < minColorIndex[1] && minColorIndex[1] < minColorIndex[2]))
+                throw new InvalidOperationException("Spatial neon source order lost at minimum size");
+            var smallTitle = smallWindow.HeroTitle.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var smallSubtitle = smallWindow.HeroSubtitle.TransformToAncestor(smallRoot)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            if (Math.Abs(smallTitle - smallSubtitle) > 1.5)
+                throw new InvalidOperationException("Headline and subtitle drift at minimum size");
             if (small.PixelWidth != 1280 || small.PixelHeight != 760)
                 throw new InvalidOperationException(
                     $"Small-window raster must be Regular 1280x760, got {small.PixelWidth}x{small.PixelHeight}");
