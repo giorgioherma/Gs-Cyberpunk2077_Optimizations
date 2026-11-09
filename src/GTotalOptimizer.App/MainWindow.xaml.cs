@@ -81,20 +81,14 @@ public partial class MainWindow : Window
             }
             catch { return null; }
         }
-        var colored = ImageFile("images", "Upright_hotka.png");
-        var black = ImageFile("images", "GCO_V_original_pixel_locked_silhouette.png");
+        var colored = ImageFile("images", "V_background_1_color.png");
+        var black = ImageFile("images", "V_background_1_black.png");
         if (colored is not null && black is not null &&
             colored.PixelWidth == black.PixelWidth && colored.PixelHeight == black.PixelHeight)
         {
             VColorImage.Source = colored;
             VBlackImage.Source = black;
         }
-        // Generate one static alpha map for both registered V images. The
-        // colored and black image pixels, scale and animations remain unchanged.
-        VImageLayers.OpacityMask = new ImageBrush(CreatePortraitEdgeMask())
-        {
-            Stretch = Stretch.Fill
-        };
         CityImage.Source = ImageFile("images", "TrueHeader_GCO_page1.png");
         // Use one immutable master for the lifetime of this window.
         // WPF continuously scales it; never swap BitmapSource on resize.
@@ -102,46 +96,6 @@ public partial class MainWindow : Window
             ImageFile("elements", "GCO_Border_Regular_1280x760_FINAL.png");
         if (OuterBorderArtwork.Source is null)
             Trace.TraceError("Missing/undecodable Regular border PNG in assets/ui/elements.");
-    }
-
-    // Deterministic, one-time WPF textures: no disk assets, runtime shader,
-    // animation loop, or bitmap manipulation of the two original V images.
-    // Low-frequency variations make the fade slightly dirty rather than a
-    // geometric straight line; the full body and most of the ink stay opaque.
-    private static BitmapSource CreatePortraitEdgeMask()
-    {
-        const int width = 192;
-        const int height = 512;
-        const int stride = width * 4;
-        var pixels = new byte[stride * height];
-        for (int y = 0; y < height; ++y)
-        {
-            double v = (double)y / (height - 1);
-            // The lower painted ink and its border overlap must remain crisp.
-            double strength = v > .86 ? .05 : v > .70 ? .35 : 1.0;
-            double sway = .013 * Math.Sin(v * 21.0)
-                        + .009 * Math.Sin(v * 57.0 + 1.7)
-                        + .004 * Math.Sin(v * 121.0 + 2.3);
-            double start = .912 + sway * .65 + (1.0 - strength) * .072;
-            for (int x = 0; x < width; ++x)
-            {
-                double u = (double)x / (width - 1);
-                double rough = .014 * Math.Sin(u * 83.0 + v * 31.0)
-                             * Math.Sin(v * 46.0 - u * 18.0);
-                double t = Math.Clamp((u - start + rough) / Math.Max(.012, 1.0 - start), 0.0, 1.0);
-                double smooth = t * t * (3.0 - 2.0 * t);
-                byte alpha = (byte)Math.Round(255.0 * (1.0 - smooth));
-                int i = y * stride + x * 4;
-                pixels[i] = 255;
-                pixels[i + 1] = 255;
-                pixels[i + 2] = 255;
-                pixels[i + 3] = alpha;
-            }
-        }
-        var bitmap = BitmapSource.Create(width, height, 96, 96,
-            System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
-        bitmap.Freeze();
-        return bitmap;
     }
 
     private void SetPortraitStage(PortraitStage stage)
@@ -199,11 +153,12 @@ public partial class MainWindow : Window
         if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
-    // Both exact 743x2117 V images resize together from the same TOP/LEFT.
-    // Six DIPs beyond the content region gives the corrected yellow
-    // border a ~1-DIP visual overlap rather than a dark hairline seam.
-    // The separately owned WPF inner border is not changed.
+    // Preserve the old narrow V content-column reservation. The new
+    // 482:928 owner image pair retains the old top/left/height anchor and
+    // extends its extra transition pixels rightwards without shifting UI.
     private const double PortraitBottomOverhang = 6.0;
+    private const double ReservedVAspect = 743.0 / 2117.0;
+    private const double NewVAspect = 482.0 / 928.0;
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e) =>
         UpdatePortraitWidth();
 
@@ -215,19 +170,14 @@ public partial class MainWindow : Window
         if (ArtworkColumn is null || ContentRegion is null) return;
         var imageHeight = Math.Max(1.0, ContentRegion.ActualHeight
                                              + PortraitBottomOverhang);
-        var imageWidth = Math.Clamp(
-            imageHeight * 743.0 / 2117.0, 170.0, 245.0);
-        ArtworkColumn.Width = new GridLength(imageWidth);
-        // V is a root-level overlay, so the thin inner chassis can stay
-        // untouched behind it while the original two image layers still
-        // render in exactly the same host with identical Uniform scaling.
-        // +3 preserves the previous host width from Margin="-3,0,0,-8".
+        // Keep the old right-hand controls anchored to their original X.
+        var reservedWidth = Math.Clamp(
+            imageHeight * ReservedVAspect, 170.0, 245.0);
+        ArtworkColumn.Width = new GridLength(reservedWidth);
+        // Two equally sized, Uniform-stretched owner PNGs; no right crop.
+        // The +3-DIP host adjustment retains the previous left overlap.
         if (VPortraitHost is not null)
-            VPortraitHost.Width = imageWidth + 3.0;
-        // The outward glow needs room for its elliptical arch and skirt:
-        // size it from the original portrait without moving/cropping V.
-        if (VAtmosphereHost is not null)
-            VAtmosphereHost.Width = imageWidth + 245.0;
+            VPortraitHost.Width = imageHeight * NewVAspect + 3.0;
     }
 
     private void SetActiveTab(bool results)

@@ -6,7 +6,7 @@
         Icon="pack://application:,,,/Icons/GOT_LAG.ico"
         Width="1280" Height="760" MinWidth="1080" MinHeight="640"
         WindowStartupLocation="CenterScreen"
-        Background="#060D0F" Foreground="#F1F5F6"
+        Background="#000000" Foreground="#F1F5F6"
         FontFamily="./Fonts/Rajdhani/#Rajdhani" FontSize="14"
         Loaded="Window_Loaded" Activated="Window_Activated"
         SizeChanged="Window_SizeChanged" Closed="Window_Closed">
@@ -147,14 +147,14 @@
             </Setter>
         </Style>
         <!-- Minimal neon yellow scroll indicator; maintain functional track,
-             thumb, keyboard scrolling and dark #060D0F background. -->
+             thumb, keyboard scrolling and dark #000000 background. -->
         <Style x:Key="NeonScrollBar" TargetType="{x:Type ScrollBar}">
             <Setter Property="Width" Value="10"/>
-            <Setter Property="Background" Value="#060D0F"/>
+            <Setter Property="Background" Value="#000000"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ScrollBar}">
-                        <Grid Background="#060D0F" Width="10">
+                        <Grid Background="#000000" Width="10">
                             <Track x:Name="PART_Track"
                                    Minimum="{TemplateBinding Minimum}"
                                    Maximum="{TemplateBinding Maximum}"
@@ -188,7 +188,7 @@
     </Window.Resources>
     <!-- Compact default window: 1280x760 DIPs. At 1080x640 the right
          content scrolls rather than clipping; native profilers are unaffected. -->
-    <Grid Background="#060D0F" ClipToBounds="True">
+    <Grid Background="#000000" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="68"/>
             <RowDefinition Height="*"/>
@@ -248,11 +248,8 @@
                  above the inner outline as a direct root-grid sibling. -->
             <Grid Grid.Column="0" Background="Transparent"/>
 
-            <!-- Skyline must sit BEHIND the atmosphere. When it was nested
-                 above the halo it painted its dark left-side pixels over the
-                 yellow glow and made the effect almost invisible. -->
-                <!-- Original user full-width 2048x682 skyline, below the title gap.
-                     The alpha/dark blue is composited without rectangular borders. -->
+            <!-- Updated owner skyline is already balanced to pure black. -->
+                <!-- Same named new header image, existing 174-DIP skyline slot. -->
             <Grid x:Name="SkylineHost" Grid.Column="1" Panel.ZIndex="0" Height="174"
                       VerticalAlignment="Top" ClipToBounds="True" IsHitTestVisible="False">
                     <Image x:Name="CityImage"
@@ -263,104 +260,16 @@
                     <Rectangle>
                         <Rectangle.Fill>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#00060D0F" Offset=".70"/>
-                                <GradientStop Color="#FF060D0F" Offset="1"/>
+                                <GradientStop Color="#00000000" Offset=".70"/>
+                                <GradientStop Color="#FF000000" Offset="1"/>
                             </LinearGradientBrush>
                         </Rectangle.Fill>
                     </Rectangle>
                 </Grid>
 
 
-            <!-- Round 6: V originates the yellow atmosphere. No side-strip
-                 mask: the field radiates from V, then a separate curved dark
-                 canopy above and skirt below sculpt its shape. This stays
-                 behind the controls and never edits the two portrait images. -->
-            <Grid x:Name="VAtmosphereHost" Grid.ColumnSpan="2" Panel.ZIndex="1"
-                  HorizontalAlignment="Left" VerticalAlignment="Stretch"
-                  Width="450" IsHitTestVisible="False">
-                <!-- Broad, warm, center-open field expanding horizontally
-                     from V, with gradual yellow-to-amber color smudging. -->
-                <Rectangle x:Name="VMainGlow">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.24,0.48" GradientOrigin="0.24,0.48"
-                                             RadiusX="0.82" RadiusY="0.73">
-                            <GradientStop Color="#B8FFF000" Offset="0"/>
-                            <GradientStop Color="#A2FFE500" Offset=".22"/>
-                            <GradientStop Color="#70FFD400" Offset=".46"/>
-                            <GradientStop Color="#36FFBA00" Offset=".69"/>
-                            <GradientStop Color="#0ADC8900" Offset=".84"/>
-                            <GradientStop Color="#00FFC600" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Brighter near V's head, diffusing into the main light
-                     instead of forming a separate vertical yellow stripe. -->
-                <Rectangle x:Name="VUpperHalo">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.19,0.27" GradientOrigin="0.19,0.27"
-                                             RadiusX="0.52" RadiusY="0.39">
-                            <GradientStop Color="#86FFF000" Offset="0"/>
-                            <GradientStop Color="#48FFE600" Offset=".40"/>
-                            <GradientStop Color="#13FFD000" Offset=".76"/>
-                            <GradientStop Color="#00FFD000" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Lower amber smear tracks V's ink trail, not a bottom band. -->
-                <Rectangle x:Name="VLowerHalo">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.21,0.84" GradientOrigin="0.21,0.84"
-                                             RadiusX="0.65" RadiusY="0.36">
-                            <GradientStop Color="#78FFDC00" Offset="0"/>
-                            <GradientStop Color="#39FFC500" Offset=".43"/>
-                            <GradientStop Color="#0BBB9400" Offset=".78"/>
-                            <GradientStop Color="#00FFC500" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Opaque near its top-right origin: a DARK ELLIPTICAL ARCH
-                     intrudes from above, then smudges out below the skyline. -->
-                <Rectangle x:Name="VTopArch">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.70,-0.26" GradientOrigin="0.70,-0.26"
-                                             RadiusX="0.87" RadiusY="0.79">
-                            <GradientStop Color="#FF060D0F" Offset="0"/>
-                            <GradientStop Color="#F8060D0F" Offset=".25"/>
-                            <GradientStop Color="#C6060D0F" Offset=".48"/>
-                            <GradientStop Color="#54060D0F" Offset=".68"/>
-                            <GradientStop Color="#00060D0F" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Separate soft lower-right SKIRT shapes the yellow field
-                     under V rather than fading vertically through the center. -->
-                <Rectangle x:Name="VBottomSkirt">
-                    <Rectangle.Fill>
-                        <RadialGradientBrush Center="0.70,1.18" GradientOrigin="0.70,1.18"
-                                             RadiusX="0.95" RadiusY="0.66">
-                            <GradientStop Color="#FF060D0F" Offset="0"/>
-                            <GradientStop Color="#F2060D0F" Offset=".30"/>
-                            <GradientStop Color="#B0060D0F" Offset=".51"/>
-                            <GradientStop Color="#3E060D0F" Offset=".75"/>
-                            <GradientStop Color="#00060D0F" Offset="1"/>
-                        </RadialGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <!-- Only the distant tail is contained horizontally; the
-                     arch/skirt, not this fade, define the transition shape. -->
-                <Rectangle x:Name="VRightFade">
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#00060D0F" Offset="0"/>
-                            <GradientStop Color="#00060D0F" Offset=".68"/>
-                            <GradientStop Color="#18060D0F" Offset=".79"/>
-                            <GradientStop Color="#B0060D0F" Offset=".95"/>
-                            <GradientStop Color="#FF060D0F" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-            </Grid>
-
+            <!-- Owner-painted V alpha now provides the whole yellow-to-black
+                 transition. Never add a competing synthetic WPF atmosphere. -->
 
             <Grid Grid.Column="1" Panel.ZIndex="2" Background="Transparent" ClipToBounds="True">
                 <Grid.RowDefinitions>
@@ -430,8 +339,8 @@
                                         Click="Refresh_Click"/>
                             </Grid>
                             <!-- Fixed size prevents Path geometry inflating StackPanel measure. -->
-                            <Grid x:Name="GameRootPanel" Height="108" Background="#060D0F">
-                                <fx:ChamferOutline Fill="#060D0F"
+                            <Grid x:Name="GameRootPanel" Height="108" Background="#000000">
+                                <fx:ChamferOutline Fill="#000000"
                                                    Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
                                                    CornerCut="14" IsHitTestVisible="False"/>
                                 <StackPanel Margin="11,7,11,6">
@@ -632,7 +541,7 @@
                 </Grid>
 
                 <Grid x:Name="ResultsPage" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed"
-                      Background="#060D0F">
+                      Background="#000000">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="{x:Type ScrollBar}"
@@ -703,16 +612,13 @@
                                   Panel.ZIndex="10" FrameInset="27" Stroke="{StaticResource NeonStroke}"
                                   IsHitTestVisible="False"/>
 
-        <!-- A single portrait host sits in the root row, directly over the
-             left part of the inner stroke. Root row1 starts at the SAME top
-             as ContentRegion. The 26-DIP left margin is 29−3, the 23-DIP
-             bottom inset is 29−6. Neither image is moved or stretched. -->
+        <!-- Pin to old V top/left and +6-DIP bottom overlap. The wider
+             owner art flows right beyond the unchanged reserved column. -->
         <Grid x:Name="VPortraitHost" Grid.Row="1" Panel.ZIndex="20"
               HorizontalAlignment="Left" Margin="26,0,0,23"
               Width="214" Background="Transparent" ClipToBounds="True"
               fx:ChamferClip.CornerCut="14">
-            <!-- One shared mask: the aligned black/color originals receive
-                 exactly the same irregular edge fade, without asset edits. -->
+            <!-- Both 482:928 layers preserve their original painted right fade. -->
             <Grid x:Name="VImageLayers">
                 <Image x:Name="VColorImage" Stretch="Uniform" StretchDirection="Both"
                        HorizontalAlignment="Left" VerticalAlignment="Top"/>
@@ -721,7 +627,7 @@
             </Grid>
             <!-- Only top/side black edges; never draw a dark seam where
                  the portrait's yellow bottom meets the yellow outer border. -->
-            <fx:PortraitOutline Panel.ZIndex="1" IsHitTestVisible="False"/>
+            <!-- No full-width right-edge outline through the new painted fade. -->
         </Grid>
     </Grid>
 </Window>

@@ -102,8 +102,8 @@ PublishManager 'src/GTotalOptimizer.App/GTotalOptimizer.App.csproj' (Join-Path $
 # Never flatten paths: the WPF runtime resolves images/ and elements/.
 $uiSource=Join-Path (Get-Location) 'assets/ui'
 $uiNames=@(
-  'images/Upright_hotka.png',
-  'images/GCO_V_original_pixel_locked_silhouette.png',
+  'images/V_background_1_color.png',
+  'images/V_background_1_black.png',
   'images/TrueHeader_GCO_page1.png',
   'elements/GCO_Border_Regular_1280x760_FINAL.png'
 )
@@ -121,7 +121,7 @@ foreach ($name in $uiNames) {
     throw "Packaged artwork hash mismatch: $name"
   }
 }
-Write-Host 'PASS WPF original V pair, BLUE skyline, and Regular border canvas (no cloud asset)'
+Write-Host 'PASS new owner V pair, updated true-black BLUE skyline and Regular border canvas'
 
 # Fonts are embedded as WPF assembly resources; ship OFL license notices.
 foreach ($family in @('Rajdhani','Oxanium')) {
