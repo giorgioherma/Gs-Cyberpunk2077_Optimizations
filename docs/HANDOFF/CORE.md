@@ -218,3 +218,7 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-09 — Owner-painted V and pure-black background
 
 - Source commit 7d95d081 replaces current WPF art references with 482x928 V_background_1_black/color.png, while retaining the former narrow sidebar, old V top/left/height and lower border overlap. The 482:928 full width now extends right with user-painted transition and no generated WPF halo/mask/right outline. Owner updated existing TrueHeader_GCO_page1.png to RGB 1870x652; the 174-DIP host is unchanged. WPF canvas/Game Root/skyline fade are #000000. Existing unified CI must verify packaging/WPF; owner must confirm native appearance. No v1.1.8, profiler, shared runtime or workflow changes.
+
+### Verified true-black V background artifact — 2026-11-09
+
+- Code 4b45b4bb6a5e07917f9d726b5ea6199019671319 passed canonical [Windows CI #42623681521](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42623681521), **184/184** package/source tests and actual offscreen WPF checks for new V pair/header, black color and minimum/resized layout. Artifact ID 13677361617, 85,261,782 bytes, versioned filename Gs-Cyberpunk2077_Optimizer-v1.1.8-run173-a1.zip. V is inside ContentRegion above skyline, below real controls, letting wide yellow fade pass behind UI instead of covering text. Real owner Windows screenshot and gameplay capture remain separate acceptance. One workflow, v1.1.8 and profiler binaries unchanged.
