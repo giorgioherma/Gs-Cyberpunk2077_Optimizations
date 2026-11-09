@@ -78,26 +78,26 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Padding" Value="12,4"/>
             <Setter Property="CaretBrush" Value="#FFF000"/>
-            <!-- Chamfer the visual field, preserve the real TextBox content host. -->
+            <!-- Native rectangular WPF field: no chamfer clipping and no
+                 background leaking from behind the cut-corner parent. -->
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Grid Background="Transparent">
-                            <fx:ChamferOutline x:Name="PathFrame"
-                                               Fill="{TemplateBinding Background}"
-                                               Stroke="{TemplateBinding BorderBrush}"
-                                               StrokeThickness="1.3" CornerCut="14"
-                                               IsHitTestVisible="False"/>
+                        <Border x:Name="PathFrame"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="0" SnapsToDevicePixels="True">
                             <ScrollViewer x:Name="PART_ContentHost"
                                           Margin="{TemplateBinding Padding}"
                                           Background="Transparent"/>
-                        </Grid>
+                        </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="PathFrame" Property="Stroke" Value="#FFF000"/>
+                                <Setter TargetName="PathFrame" Property="BorderBrush" Value="#FFF000"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="PathFrame" Property="Fill" Value="#10191B"/>
+                                <Setter TargetName="PathFrame" Property="Background" Value="#10191B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -224,14 +224,16 @@
                 <TextBlock Text="CET  /  REDscript  /  PresentMon"
                            Foreground="#00D9F5" FontWeight="SemiBold" FontSize="11" Margin="1,1,0,0"/>
             </StackPanel>
-            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+            <!-- Refresh is always accessible in the top header, not in
+                 the game-path panel. The main stage controls stay unchanged. -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                        HorizontalAlignment="Right" Margin="0,0,14,0">
+                <Button x:Name="RefreshButton" Content="⟳  REFRESH"
+                        Style="{StaticResource MinorButton}" Click="Refresh_Click"
+                        Margin="0,0,14,0"/>
                 <TextBlock Text="v1.1.8" Foreground="#87999F"
-                           HorizontalAlignment="Right" FontFamily="{StaticResource Oxanium}"
+                           VerticalAlignment="Center" FontFamily="{StaticResource Oxanium}"
                            FontSize="10"/>
-                <CheckBox x:Name="ReduceMotionCheck" Content="Reduce flashing"
-                          Foreground="#A9B8BB" FontSize="10"
-                          HorizontalAlignment="Right" Margin="0,2,0,0"
-                          Checked="ReduceMotion_Changed" Unchecked="ReduceMotion_Changed"/>
             </StackPanel>
             <!-- The content chassis draws the only header divider. -->
         </Grid>
@@ -331,7 +333,8 @@
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
                         <StackPanel Margin="0,3,0,12">
-                            <TextBlock FontFamily="{StaticResource Oxanium}" FontSize="19"
+                            <TextBlock x:Name="HeroTitle" Margin="22,0,0,0"
+                                       FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
                                 <Run Text="GOT LAG? " FontSize="28" FontWeight="ExtraBold"
                                      Foreground="#FFF000"/>
@@ -344,7 +347,8 @@
                         </StackPanel>
 
                         <!-- White heading outside a height-constrained Game Root box. -->
-                        <StackPanel Margin="-11,1,0,9">
+                        <!-- Restore the original Game Root X alignment. -->
+                        <StackPanel Margin="0,1,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
@@ -354,36 +358,32 @@
                                                Foreground="#F5F6F6" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="15.5" VerticalAlignment="Center"/>
                                 </StackPanel>
-                                <Button x:Name="RefreshButton" Content="⟳  REFRESH"
-                                        HorizontalAlignment="Right" Style="{StaticResource MinorButton}"
-                                        Click="Refresh_Click"/>
                             </Grid>
                             <!-- Fixed size prevents Path geometry inflating StackPanel measure. -->
                             <Grid x:Name="GameRootPanel" Height="108" Background="#000000">
                                 <fx:ChamferOutline Fill="#000000"
                                                    Stroke="{StaticResource NeonStroke}" StrokeThickness="2.0"
                                                    CornerCut="14" IsHitTestVisible="False"/>
-                                <StackPanel Margin="11,7,11,6">
+                                <!-- Keep the rectangular input entirely inside the 14-DIP
+                                     chamfer clearance at both ends. OPEN gets a 16-DIP gap. -->
+                                <StackPanel Margin="22,7,22,6">
                                     <Grid Height="30">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="73"/>
+                                            <ColumnDefinition Width="90"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="GamePathBox" Grid.Column="0"
                                                  Style="{StaticResource PathInput}"
                                                  TextChanged="GamePath_Changed"/>
                                         <Button x:Name="BrowseButton" Grid.Column="1" Content="OPEN"
-                                                Style="{StaticResource MinorButton}" Margin="6,0,0,0"
+                                                Style="{StaticResource MinorButton}" Margin="16,0,0,0"
                                                 Click="Browse_Click"/>
                                     </Grid>
                                     <Grid Margin="2,4,2,0" Height="18">
                                         <TextBlock x:Name="ModCountText" Foreground="#F1F5F6"
                                                    FontSize="12.5" FontWeight="SemiBold"
                                                    VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" Margin="0,0,140,0"/>
-                                        <TextBlock Text="DIRECT   /   MO2 LATER"
-                                                   HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                   Foreground="#8899A2" FontSize="11"/>
+                                                   TextTrimming="CharacterEllipsis"/>
                                     </Grid>
                                     <TextBlock x:Name="DependencyText" Foreground="#FAD76B"
                                                Height="16" VerticalAlignment="Center"

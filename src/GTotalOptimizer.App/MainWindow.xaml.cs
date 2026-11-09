@@ -118,7 +118,7 @@ public partial class MainWindow : Window
 
     private void StartGlitchIfVisible()
     {
-        if (!IsActive || ReduceMotionCheck.IsChecked == true ||
+        if (!IsActive ||
             VBlackImage.Source is null || VColorImage.Source is null)
             return;
         glitchTimer.Interval = TimeSpan.FromMilliseconds(350 + glitchRandom.Next(1100));
@@ -128,7 +128,7 @@ public partial class MainWindow : Window
     private void GlitchTick(object? sender, EventArgs e)
     {
         if (portraitStage is not (PortraitStage.Capturing or PortraitStage.Collecting) ||
-            !IsActive || ReduceMotionCheck.IsChecked == true)
+            !IsActive)
         {
             glitchTimer.Stop();
             VBlackImage.Opacity = 1;
@@ -144,14 +144,6 @@ public partial class MainWindow : Window
             : portraitStage == PortraitStage.Collecting ? 90 + glitchRandom.Next(800)
               : 240 + glitchRandom.Next(2200);
         glitchTimer.Interval = TimeSpan.FromMilliseconds(next);
-    }
-
-    private void ReduceMotion_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!initialized) return;
-        glitchTimer.Stop();
-        VBlackImage.Opacity = portraitStage == PortraitStage.Collected ? 0 : 1;
-        if (ReduceMotionCheck.IsChecked != true) StartGlitchIfVisible();
     }
 
     // Preserve the old narrow V content-column reservation. The new
@@ -347,7 +339,7 @@ public partial class MainWindow : Window
             c.State != GTotalOptimizer.Core.CheckState.Missing);
         DependencyText.Text = $"0-Engine {(zeroEngine ? "found (version not yet verified)" : "MISSING")}  ·  " +
             $"r6/scripts {(scripts ? "found" : "missing")}  ·  " +
-            $"RED4ext {(red4ext ? "found" : "missing")}  ·  MO2 deferred";
+            $"RED4ext {(red4ext ? "found" : "missing")}";
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {

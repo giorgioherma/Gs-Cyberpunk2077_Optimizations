@@ -159,9 +159,40 @@ internal static class Program
                 .Transform(new System.Windows.Point(0, 0)).X;
             var rightStart = window.SkylineHost.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0)).X;
-            if (!(rootLeft < rightStart + 10.0))
-                throw new InvalidOperationException("Game Root was not nudged toward V");
-            Console.WriteLine("PASS tabs in upper margin, GOT LAG raised, Game Root shifted toward V and console unboxed");
+            if (Math.Abs(rootLeft - rightStart - 15.0) > 1.5)
+                throw new InvalidOperationException(
+                    $"Game Root must return to original content alignment: " +
+                    $"root={rootLeft}, rightStart={rightStart}");
+            var heroLeft = window.HeroTitle.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            if (Math.Abs(heroLeft - rootLeft - 22.0) > 1.5)
+                throw new InvalidOperationException(
+                    $"GOT LAG headline not independently offset right: hero={heroLeft}, root={rootLeft}");
+            var pathFrame = window.GamePathBox.Template.FindName("PathFrame", window.GamePathBox);
+            if (pathFrame is not System.Windows.Controls.Border frame ||
+                frame.CornerRadius != new System.Windows.CornerRadius(0) ||
+                Math.Abs(frame.BorderThickness.Left - 1) > .2)
+                throw new InvalidOperationException("Game path must use a normal rectangular TextBox frame");
+            var fieldLeft = window.GamePathBox.TransformToAncestor(window.GameRootPanel)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var openLeft = window.BrowseButton.TransformToAncestor(window.GameRootPanel)
+                .Transform(new System.Windows.Point(0, 0)).X;
+            var openRight = openLeft + window.BrowseButton.ActualWidth;
+            if (fieldLeft < 20 || openLeft - fieldLeft - window.GamePathBox.ActualWidth < 15 ||
+                openRight > window.GameRootPanel.ActualWidth - 20)
+                throw new InvalidOperationException(
+                    $"Path field must clear chamfer and OPEN button: " +
+                    $"fieldX={fieldLeft}, width={window.GamePathBox.ActualWidth}, " +
+                    $"buttonX={openLeft}, buttonRight={openRight}");
+            var refreshTop = window.RefreshButton.TransformToAncestor(visual)
+                .Transform(new System.Windows.Point(0, 0));
+            if (refreshTop.Y < 5 || refreshTop.Y + window.RefreshButton.ActualHeight > 66 ||
+                refreshTop.X < 1020)
+                throw new InvalidOperationException("REFRESH must be in the top-right header band");
+            if (window.ModCountText.Margin.Right != 0 ||
+                window.DependencyText.Text.Contains("MO2", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("MO2 placeholder must not occupy Page 1");
+            Console.WriteLine("PASS independent GOT LAG title offset; original Game Root X; rectangular inset path; upper REFRESH; no MO2 placeholder");
 
             var colored = window.VColorImage.Source as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("New V color art missing");
@@ -359,6 +390,13 @@ internal static class Program
                 Math.Abs(smallWindow.PuddleOverflowHost.ActualHeight -
                          smallWindow.VPortraitHost.ActualHeight * 49.0 / 928.0) > 0.75)
                 throw new InvalidOperationException("Owner crop must follow V at minimum size");
+            var minFieldLeft = smallWindow.GamePathBox.TransformToAncestor(
+                smallWindow.GameRootPanel).Transform(new System.Windows.Point(0, 0)).X;
+            var minOpenLeft = smallWindow.BrowseButton.TransformToAncestor(
+                smallWindow.GameRootPanel).Transform(new System.Windows.Point(0, 0)).X;
+            if (minFieldLeft < 20 ||
+                minOpenLeft - minFieldLeft - smallWindow.GamePathBox.ActualWidth < 15)
+                throw new InvalidOperationException("Small-window path field crosses chamfer or OPEN gap");
             var small = smallWindow.OuterBorderArtwork.Source
                 as System.Windows.Media.Imaging.BitmapSource
                 ?? throw new InvalidOperationException("Small-window border Source is null");
