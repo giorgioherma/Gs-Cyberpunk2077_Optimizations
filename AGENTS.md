@@ -13,7 +13,7 @@ Read, in order:
 6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint (2026-11-10):** **GCO v1.2.0** (owner-approved source version; full Windows CI pending), .NET10 WPF, CET+GRSP+optional PresentMon. Current verified source [`f9f3194d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f9f3194d3c90e5d528271b2c2e2d7da48e51d546), automatic [Windows CI #202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) **SUCCESS 185/185**, downloadable artifact **13744838319**. Owner's Capture page final layout/vector icons are packaged; visual screenshot acceptance pending. In-game profiling/capture restoration, CET-only/GRSP-only independence and generation are not yet proven.
+**Current checkpoint (2026-11-10):** **GCO v1.2.0** (owner-approved, Windows CI #203 SUCCESS 185/185, artifact 13745309499), .NET10 WPF, CET+GRSP+optional PresentMon. Current verified source [`f9f3194d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f9f3194d3c90e5d528271b2c2e2d7da48e51d546), automatic [Windows CI #202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) **SUCCESS 185/185**, downloadable artifact **13744838319**. Owner's Capture page final layout/vector icons are packaged; visual screenshot acceptance pending. In-game profiling/capture restoration, CET-only/GRSP-only independence and generation are not yet proven.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 
@@ -167,3 +167,8 @@ Read, in order:
 ### 2026-11-10 — Latest owner Page 1 visual checkpoint (verified package)
 
 - Final current WPF source `f9f3194d` moves Game Root +30 DIP, aligns the workflow exactly once to the shortened root area, narrows each card by 12 DIP total, raises the hero block by 14 DIP without shifting downstream vertically, removes folder artwork, restores flat faces and adds bold cyan bloom-lined download/gamepad/data WPF icons and yellow 1/2/3 markers. Owner official logo, metallic buttons/tabs, native profilers and v1.1.9 unchanged. CI [#202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) green; no subjective positioning test. Use user Windows screenshot for visual acceptance.
+
+
+### 2026-11-10 — v1.2.0 CI completion
+
+- The single source `Directory.Build.props` is now GCO v1.2.0. Relevant `main` push source `51af8d18` automatically ran [Windows CI #203](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42780878125) **SUCCESS, 185/185**, with exact owner-component restore smoke, shared .NET 10, WPF render smoke, manifest/version checks, and artifact **13745309499**. No native component version or UI change in this bump.

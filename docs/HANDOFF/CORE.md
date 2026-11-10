@@ -266,3 +266,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-10 — Owner-approved GCO v1.2.0
 
 - The next unified product build is **GCO v1.2.0**, using exactly one canonical `VersionPrefix` in `Directory.Build.props`. WPF/assembly/file/package/Actions artifact identifiers all derive from that value. Only product metadata and current README/decisions/handoff are edited. Existing owner profilers, icon/layout changes, .NET 10 single-runtime and integration contracts stay unchanged. Await automatic full Windows Actions verification; don't claim successful v1.2.0 build until verified.
+
+- **Verified v1.2.0:** source `51af8d18`, automatic [Windows CI #203](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42780878125) **SUCCESS 185/185**, artifact **13745309499** (85,383,442 bytes). No component-owned profiler version, layout or backend behavior changes.
