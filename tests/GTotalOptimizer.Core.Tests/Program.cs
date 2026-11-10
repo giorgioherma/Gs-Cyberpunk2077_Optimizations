@@ -365,6 +365,41 @@ try
         "Missing capture: CET",
         "collection notice names only missing CET when others are present");
 
+    // redscript 0.5.31 is an engine/tools compiler, not a RED4ext plugin.
+    var fakeRedscript = Path.Combine(root, "RedscriptDetectionFixture");
+    var redscriptTools = Path.Combine(fakeRedscript, "engine", "tools");
+    var redscriptConfig = Path.Combine(fakeRedscript, "engine", "config", "base");
+    var wrongOldLocation = Path.Combine(fakeRedscript, "red4ext", "plugins", "redscript");
+    Directory.CreateDirectory(wrongOldLocation);
+    File.WriteAllText(Path.Combine(wrongOldLocation, "redscript.dll"), "not a real compiler");
+    Require(!FrameworkPreflight.InspectRedscript(fakeRedscript).Present,
+        "obsolete RED4ext plugin path never qualifies as redscript");
+    Directory.CreateDirectory(redscriptTools);
+    File.WriteAllText(Path.Combine(redscriptTools, "scc.exe"), "test compiler stub");
+    var incompleteCompiler = FrameworkPreflight.InspectRedscript(fakeRedscript);
+    Require(incompleteCompiler.Present && !incompleteCompiler.StructureCompatible,
+        "partial engine/tools redscript install is recognized but safely refused");
+    File.WriteAllText(Path.Combine(redscriptTools, "scc_lib.dll"), "test library stub");
+    Directory.CreateDirectory(redscriptConfig);
+    File.WriteAllText(Path.Combine(redscriptConfig, "scripts.ini"), "[Scripts]\\nEnableCompilation=true");
+    var installedCompiler = FrameworkPreflight.InspectRedscript(fakeRedscript);
+    Require(installedCompiler.Present && installedCompiler.StructureCompatible &&
+        FrameworkPreflight.Evaluate(new(
+            new(true, "2.31"), new(true, "1.37.1"), new(true, "0.18.6"),
+            new(true, "1.30.0"), installedCompiler)).Issues
+            .All(issue => issue != "redscript 0.5.31 is missing"),
+        "engine/tools scc compiler and scripts.ini are detected independent of RED4ext");
+    Require(installedCompiler.Version is null &&
+        FrameworkPreflight.Evaluate(new(
+            new(true, "2.31"), new(true, "1.37.1"), new(true, "0.18.6"),
+            new(true, "1.30.0"), installedCompiler)).Issues
+            .Contains("redscript compatibility could not be verified"),
+        "unknown binary version cannot be guessed from mere file presence");
+    File.Delete(Path.Combine(redscriptTools, "scc_lib.dll"));
+    Require(FrameworkPreflight.InspectRedscript(fakeRedscript) is
+        { Present: true, StructureCompatible: false },
+        "missing shared compiler library reports incomplete installation");
+
     // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.
     static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) => new(exists, v, shape);
     GameFrameworkEvidence Full(string? engine = "0.18.6") =>
@@ -386,7 +421,7 @@ try
         "all bad/missing framework versions are listed, not hidden by first error");
     Require(!FrameworkPreflight.Evaluate(Full() with
         { Redscript = E(null) }).Ready,
-        "an existing but unverifiable plugin is not declared compatible");
+        "an existing but unverifiable compiler is not declared compatible");
     Require(CaptureAdmissionPolicy.CanCollect(true, true) &&
         !CaptureAdmissionPolicy.CanCollect(true, false),
         "Collect eligibility follows an actual launch, not the F11 capture result");
