@@ -591,10 +591,15 @@ public partial class MainWindow : Window
         try { tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot); }
         catch (Exception ex) { return (null, false, "PresentMon tracking invalid: " + ex.Message); }
 
-        var processes = Process.GetProcessesByName("PresentMon");
-        var anyRunning = processes.Any(p => !p.HasExited);
-        foreach (var process in processes) process.Dispose();
-        if (tracked is null && !anyRunning) return (null, true, null);
+        try
+        {
+            if (tracked is null && !PresentMonCaptureController.HasOwnedRunning(packageRoot))
+                return (null, true, null);
+        }
+        catch (Exception ex)
+        {
+            return (tracked, false, "Could not verify PresentMon ownership: " + ex.Message);
+        }
 
         try
         {
