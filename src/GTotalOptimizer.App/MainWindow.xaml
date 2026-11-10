@@ -556,7 +556,7 @@
                                                        FontWeight="ExtraBold" FontSize="23" TextAlignment="Center"
                                                        VerticalAlignment="Center" Margin="0,-1,4,0"/>
                                         </Grid>
-                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="58" Height="42"
+                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="54" Height="39"
                                                   IsHitTestVisible="False">
                                              <fx:StageEmblem Kind="Ignition" Width="80" Height="56"/>
                                          </Viewbox>
