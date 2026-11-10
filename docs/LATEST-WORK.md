@@ -1092,3 +1092,10 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - **Owner correction after initial documentation commit:** do not pin 0-Engine to the last current release; preserve the >=0.18.0 compatibility minimum, while other core framework versions remain exact. No source changes, and no CI was triggered by this documentation correction.
 
 - **Latest owner clarification:** accept future 0-Engine versions by minimum-version rule without assuming each release needs a new GCO update. Actual integration still needs structural/injection contract checks; incompatible changes must produce a clear refusal/recovery path rather than silent modification of user mods. Documentation-only; no build or app behavior changed.
+
+
+## 2026-11-10 — Installer/unlock UX locked (design decision only)
+
+- Owner confirmed two-stage admission: game 2.31 + exact CET 1.37.1, RED4ext 1.30.0, redscript 0.5.31, plus mandatory 0-Engine >=0.18.0 with profiler injection contract check, unlocks INSTALL PROFILERS (subject to game closed and no recovery conflict). **Without 0-Engine, do not install**; no additional user mod count requirement.
+- After running *both source-owned installers*, GCO must requery both managed profiler states and journal integrity; only then unlock START CYBERPUNK. Display `G-CET Profiler · INSTALLED | G-REDscript Profiler · INSTALLED | PresentMon · AUTOMATIC` under the immutable game path and report `G-CET and G-REDscript profilers successfully installed. Ready to start Cyberpunk 2077.` in console. Fail/partial states require safe recovery and block Start.
+- CONTINUE still demands verified native capture evidence and restoration; PresentMon-only does not qualify. Documentation-only decision. **Not implemented; no test claims and no new CI run.** Preserve v1.2.0 and original two-page WPF/owner-managed install flows.
