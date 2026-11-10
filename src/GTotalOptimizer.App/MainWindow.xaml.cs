@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
     private bool captureLaunched;
+    private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
+    private string? consolePinned;
     private bool? lastGameRunning;
     private bool pendingGameStateRefresh;
     private bool gameStateRefreshInFlight;
@@ -274,7 +276,10 @@ public partial class MainWindow : Window
         if (!initialized || !IsLoaded) return;
         var running = GameRunning();
         if (lastGameRunning is bool prior && prior != running)
+        {
             pendingGameStateRefresh = true;
+            if (prior && !running) captureLaunched = false;
+        }
         lastGameRunning = running;
 
         if (!pendingGameStateRefresh || busy || gameStateRefreshInFlight ||
@@ -316,7 +321,11 @@ public partial class MainWindow : Window
         GamePathBox.CaretIndex = 0;
         GamePathBox.ScrollToHorizontalOffset(0);
     }
-    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RefreshSourceAsync();
+    private async void Refresh_Click(object sender, RoutedEventArgs e)
+    {
+        consolePinned = null;
+        await RefreshSourceAsync();
+    }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
     {
@@ -340,7 +349,13 @@ public partial class MainWindow : Window
         RestoreButton.IsEnabled = !isBusy;
     }
 
-    private void SetStatus(string message) => StatusText.Text = message;
+    private void SetStatus(string message) => StatusText.Text = consolePinned ?? message;
+    private void PinStatus(string message)
+    {
+        consolePinned = message;
+        StatusText.Text = message;
+    }
+    private void ClearStatusPin() => consolePinned = null;
 
     private async Task RefreshSourceAsync()
     {
@@ -395,12 +410,12 @@ public partial class MainWindow : Window
             c.State != GTotalOptimizer.Core.CheckState.Missing);
         var red4ext = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
             c.State != GTotalOptimizer.Core.CheckState.Missing);
-        // This line describes source prerequisites only; folder/source presence
-        // is not proof of a compatible CET runtime or 0-Engine version.
-        DependencyText.Text = $"CET source {(cetSource ? "found" : "MISSING")}  ·  " +
-            $"0-Engine {(zeroEngine ? "found (version not yet verified)" : "MISSING")}  ·  " +
-            $"r6/scripts {(scripts ? "found" : "missing")}  ·  " +
-            $"RED4ext {(red4ext ? "found" : "missing")}";
+        // Installer admission is based on actual framework versions, never
+        // on mod counts or presence of an empty r6/scripts folder.
+        var framework = FrameworkPreflight.Inspect(current.GameRoot!);
+        DependencyText.Text = framework.Ready
+            ? "CET 1.37.1  ·  0-Engine >= 0.18.0  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
+            : framework.Detail;
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
@@ -414,7 +429,6 @@ public partial class MainWindow : Window
                 (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)) return;
             liveState = state;
             var running = GameRunning();
-            if (!running) captureLaunched = false;
             var session = Workflow.HasRecoveryJournal;
             var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
             savedCapture = saved;
@@ -434,15 +448,18 @@ public partial class MainWindow : Window
             // insufficient to authorize Continue without native capture.
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
 
-            var nativeReady = state.CanCollect(session, running) &&
-                ((state.CetCaptureReady && saved?.Cet is null) ||
-                 (state.GrspCaptureReady && saved?.Redscript is null));
-            var readyToCollect = nativeReady || session && !running && sameFrameSession;
-            InstallButton.IsEnabled = state.CleanForInstall && !session;
-            LaunchButton.IsEnabled = state.CanLaunch(session, running) &&
-                !state.BothCaptured && !captureLaunched && frame is null;
+            // Collect is the next action AFTER launch, even if F11 failed.
+            // It is the Collect click itself that stops PresentMon.
+            var captureStarted = Workflow.HasCaptureAttempt(current.GameRoot!);
+            var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted);
+            var recentLaunch = captureLaunched &&
+                DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
+            InstallButton.IsEnabled = framework.Ready && state.CleanForInstall && !session && !running;
+            LaunchButton.IsEnabled = framework.Ready && state.BothInstalled && session &&
+                !running && !recentLaunch && (!state.BothCaptured || saved?.CollectionAttempted == true);
             CollectButton.IsEnabled = readyToCollect;
-            ContinueButton.IsEnabled = HasNative(saved);
+            ContinueButton.IsEnabled = !running &&
+                CaptureAdmissionPolicy.CanContinue(saved, frame is null);
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
             InstallButton.Content = state.CetManaged && state.GrspManaged
@@ -450,23 +467,20 @@ public partial class MainWindow : Window
             LaunchButton.Content = running ? "GAME RUNNING"
                 : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
             CollectButton.Content = HasNative(saved) ? "RESULTS VERIFIED" : "COLLECT RESULTS";
-            RestoreButton.Visibility = session && !running ? Visibility.Visible : Visibility.Collapsed;
+            RestoreButton.Visibility = session ? Visibility.Visible : Visibility.Collapsed;
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
-            SetStatus(running
-                ? "Cyberpunk running. F11 starts/stops CET + REDscript. Close the game before Collect."
-                : HasNative(saved)
-                    ? "Native capture verified. Continue checks missing results and restores original profiler files."
+            SetStatus(!framework.Ready ? framework.Detail
+                : running ? "Cyberpunk running. F11 controls CET + REDscript. Click COLLECT RESULTS after closing the game."
+                : saved?.CollectionAttempted == true
+                    ? CaptureAdmissionPolicy.CollectionStatus(saved)
                     : readyToCollect
-                        ? "Capture available: Collect stops PresentMon and copies source-owner evidence."
+                        ? "Click COLLECT RESULTS to stop PresentMon and inspect all three captures."
                         : state.BothInstalled
-                            ? "Native profilers installed. No completed capture yet."
+                            ? "G-CET and G-REDscript profilers installed. Ready to start Cyberpunk 2077."
                             : session
-                                ? "Existing session requires recovery or additional capture."
-                                : $"CET Profiler: {cetProfiler}  /  REDscript Profiler: {redProfiler}. Both currently required; independent domains pending." +
-                                  ((state.Cet is not ("OFFICIAL" or "PROFILER_ACTIVE") ||
-                                    state.Grsp is not ("NOT_INSTALLED" or "INSTALLED_CURRENT"))
-                                      ? $" Owner state: CET={state.Cet}, GRSP={state.Grsp}." : ""));
+                                ? "Profiler session needs recovery; use RESTORE PROFILERS."
+                                : $"G-CET Profiler: {cetProfiler}  /  G-REDscript Profiler: {redProfiler}.");
             if (HasNative(saved) && portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
         }
