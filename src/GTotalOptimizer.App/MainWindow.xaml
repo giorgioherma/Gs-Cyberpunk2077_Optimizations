@@ -282,7 +282,7 @@
         <!-- Official logo aligns its black slope/squares with the raster frame;
              it alone sits ABOVE the original outer PNG and all other UI. -->
         <Image x:Name="GcoHeaderLogo" Grid.RowSpan="2" Panel.ZIndex="50"
-               Width="274" Height="76" Margin="21,13,0,0"
+               Width="274" Height="76" Margin="21,14,0,0"
                HorizontalAlignment="Left" VerticalAlignment="Top"
                Stretch="Fill" IsHitTestVisible="False"
                RenderOptions.BitmapScalingMode="HighQuality"/>
