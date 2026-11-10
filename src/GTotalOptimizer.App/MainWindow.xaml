@@ -295,7 +295,7 @@
                 <Button x:Name="RefreshButton" Content="⟳  REFRESH"
                         Style="{StaticResource MinorButton}" Click="Refresh_Click"
                         Height="27" MinWidth="94" Margin="0,0,16,0"/>
-                <TextBlock x:Name="BuildVersionText" Text="v1.1.8" Foreground="#A7B8BD"
+                <TextBlock x:Name="BuildVersionText" Foreground="#A7B8BD"
                            VerticalAlignment="Center" FontFamily="{StaticResource Oxanium}"
                            FontSize="11"/>
             </StackPanel>

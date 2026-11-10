@@ -2,7 +2,7 @@ param([switch]$Integrated)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.8') { throw "Unexpected unified app version: $version" }
+if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid unified app version from MSBuild: $version" }
 $useWpf=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:UseWPF).Trim()
 if ($LASTEXITCODE -ne 0 -or $useWpf -ne 'true') { throw 'Unified GUI must build its native WPF frontend' }
 # Publish into a short stable staging path. The long branded end-user folder
