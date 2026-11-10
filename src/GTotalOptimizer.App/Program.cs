@@ -317,7 +317,15 @@ internal static class Program
                 window.CaptureTabShape.Fill is not System.Windows.Media.LinearGradientBrush ||
                 window.CaptureTabMarks.Data is null || window.AnalyzeTabMarks.Data is null)
                 throw new InvalidOperationException(
-                    "The folder, 3 original WPF cybernetic icons and decorated tab traces must render");
+                    $"WPF badge contract failed: sizes=[folder={window.GameRootFolderIcon.ActualWidth:0.#}, " +
+                    $"chip={window.InstallStageIcon.ActualWidth:0.#}, ignition={window.LaunchStageIcon.ActualWidth:0.#}, " +
+                    $"data={window.CollectStageIcon.ActualWidth:0.#}]; kinds=[" +
+                    $"{(window.InstallStageIcon.Child as GTotalOptimizer.App.Visuals.StageEmblem)?.Kind}, " +
+                    $"{(window.LaunchStageIcon.Child as GTotalOptimizer.App.Visuals.StageEmblem)?.Kind}, " +
+                    $"{(window.CollectStageIcon.Child as GTotalOptimizer.App.Visuals.StageEmblem)?.Kind}]; " +
+                    $"captureLit={window.CaptureTabShape.Lit} analyzeLit={window.AnalyzeTabShape.Lit} " +
+                    $"captureFill={window.CaptureTabShape.Fill.GetType().Name} " +
+                    $"tabMarks={window.CaptureTabMarks.Data is not null}/{window.AnalyzeTabMarks.Data is not null}");
             foreach (var control in new[] { window.InstallButton, window.LaunchButton,
                                             window.CollectButton, window.BrowseButton, window.RefreshButton })
             {
