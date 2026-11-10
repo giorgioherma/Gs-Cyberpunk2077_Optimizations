@@ -402,14 +402,6 @@ public partial class MainWindow : Window
         }
         var redOwners = RedscriptModCounter.CountPhysical(current.GameRoot);
         ModCountText.Text = $"Game found  ·  {current.CetModCount} CET mods  ·  {redOwners} REDscript groups";
-        var cetSource = current.Checks.Any(c => c.Name == "CET source folder" &&
-            c.State != GTotalOptimizer.Core.CheckState.Missing);
-        var zeroEngine = current.Checks.Any(c => c.Name == "0-Engine source" &&
-            c.State != GTotalOptimizer.Core.CheckState.Missing);
-        var scripts = current.Checks.Any(c => c.Name == "REDscript source folder" &&
-            c.State != GTotalOptimizer.Core.CheckState.Missing);
-        var red4ext = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
-            c.State != GTotalOptimizer.Core.CheckState.Missing);
         // Installer admission is based on actual framework versions, never
         // on mod counts or presence of an empty r6/scripts folder.
         var framework = FrameworkPreflight.Inspect(current.GameRoot!);
@@ -433,10 +425,6 @@ public partial class MainWindow : Window
             var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
             savedCapture = saved;
             var frame = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
-            var sameFrameSession = saved is not null && frame is not null &&
-                Path.GetFullPath(frame).StartsWith(
-                    CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId) +
-                    Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
             // This row describes installed GCO profilers, not base CET/REDscript.
             // CET "OFFICIAL" is the original loader, not our managed profiler.
@@ -466,7 +454,7 @@ public partial class MainWindow : Window
                 ? "PROFILERS INSTALLED" : "INSTALL PROFILERS";
             LaunchButton.Content = running ? "GAME RUNNING"
                 : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
-            CollectButton.Content = HasNative(saved) ? "RESULTS VERIFIED" : "COLLECT RESULTS";
+            CollectButton.Content = "COLLECT RESULTS";
             RestoreButton.Visibility = session ? Visibility.Visible : Visibility.Collapsed;
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
