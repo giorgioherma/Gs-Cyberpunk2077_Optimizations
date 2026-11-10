@@ -252,3 +252,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-10 — GCO v1.1.9 version centralization
 
 - Owner approved **GCO v1.1.9** and requested product version be maintained in just one place: `Directory.Build.props`. WPF reads the compiled assembly version for its title/header; the existing integrated build script and single Windows workflow resolve version through MSBuild. File and assembly versions are derived from `VersionPrefix`; artifacts inherit verified package version. CET v1.3.4, GRSP v1.0.0 and PresentMon v2.6.0 are independently versioned and unchanged. Full auto-build CI to verify before calling the new release available.
+
+- **Verified:** automatic [Windows CI #195](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42765559887) from `e1d82a9f61eb331342de3dbf90862abe8648bee9` **SUCCESS**, 185/185 contracts; GCO v1.1.9 downloadable artifact **13738789129**. The product version is centralized without changing owner component versions.
