@@ -379,6 +379,24 @@ try
         "Missing capture: CET",
         "collection notice names only missing CET when others are present");
 
+    // A small explicit catalog supplies human-readable console diagnostics;
+    // only the verified official 0.5.31 executable+library is admissible.
+    var knownRedscriptExecutables = new (string Hash, string Version)[]
+    {
+        ("CE40C4663E3E20DDD0BF8173DEC993699C597832D09F87636EDAADEAEB6D344B", "0.5.28"),
+        ("8FE63C150ABCDD04E67419F3B144CC0652761C3B636D2978438721609ABB93F7", "0.5.30"),
+        (RedscriptCompilerFingerprints.Official031Exe, "0.5.31"),
+        ("F7BF0A5A0986AEC61D360AE79A3E957B8E21C0781309193A2A056C7BDE0E90BC", "0.5.32")
+    };
+    foreach (var (hash, version) in knownRedscriptExecutables)
+        Require(RedscriptCompilerFingerprints.IdentifyExecutable(hash) == version &&
+            RedscriptCompilerFingerprints.IdentifyExecutable(hash.ToLowerInvariant()) == version,
+            "known redscript " + version + " compiler SHA-256 is recognized case-independently");
+    Require(RedscriptCompilerFingerprints.IdentifyExecutable(
+            "00" + RedscriptCompilerFingerprints.Official031Exe[2..]) is null &&
+        RedscriptCompilerFingerprints.IdentifyExecutable(null) is null,
+        "unknown or modified compiler hash is not guessed into a supported version");
+
     // redscript 0.5.31 is an engine/tools compiler, not a RED4ext plugin.
     var fakeRedscript = Path.Combine(root, "RedscriptDetectionFixture");
     var redscriptTools = Path.Combine(fakeRedscript, "engine", "tools");
@@ -456,9 +474,23 @@ try
         using (var modified = new FileStream(liveLibrary, FileMode.Append, FileAccess.Write))
             modified.WriteByte(0x5A);
         var wrongLibrary = FrameworkPreflight.InspectRedscript(fakeRedscript);
+        var mismatchPreflight = FrameworkPreflight.Evaluate(
+            officialStack with { Redscript = wrongLibrary });
         Require(wrongLibrary is { Present: true, Version: null, StructureCompatible: true } &&
-            !FrameworkPreflight.Evaluate(officialStack with { Redscript = wrongLibrary }).Ready,
-            "other-version or modified scc_lib.dll cannot masquerade as redscript 0.5.31");
+            !mismatchPreflight.Ready &&
+            mismatchPreflight.Detail.Contains("scc_lib.dll does not match the official 0.5.31"),
+            "a mismatched companion DLL is blocked with an actionable console diagnostic");
+        foreach (var unsupported in new[] { "0.5.28", "0.5.30", "0.5.32" })
+        {
+            var unsupportedPreflight = FrameworkPreflight.Evaluate(officialStack with
+            {
+                Redscript = new FrameworkEvidence(true, unsupported)
+            });
+            Require(!unsupportedPreflight.Ready &&
+                unsupportedPreflight.Detail.Contains(
+                    "redscript requires 0.5.31; found " + unsupported),
+                "recognized redscript " + unsupported + " reports its version without unlocking install");
+        }
     }
 
     // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.

@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace GTotalOptimizer.Core;
 
-public sealed record FrameworkEvidence(bool Present, string? Version, bool StructureCompatible = true);
+public sealed record FrameworkEvidence(bool Present, string? Version, bool StructureCompatible = true,
+    string? Diagnostic = null);
 public sealed record GameFrameworkEvidence(
     FrameworkEvidence Game, FrameworkEvidence Cet, FrameworkEvidence ZeroEngine,
     FrameworkEvidence Red4ext, FrameworkEvidence Redscript);
@@ -12,6 +13,26 @@ public sealed record FrameworkPreflightResult(IReadOnlyList<string> Issues)
 {
     public bool Ready => Issues.Count == 0;
     public string Detail => Ready ? "Cyberpunk 2.31 frameworks verified." : string.Join("  |  ", Issues);
+}
+
+// This deliberately small list is for reporting known redscript scc.exe builds,
+// not admitting older/newer compiler versions. Hashes of modified/self-built
+// binaries remain UNKNOWN rather than being guessed from metadata or filenames.
+public static class RedscriptCompilerFingerprints
+{
+    public const string Official031Exe =
+        "DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD";
+    public const string Official031Library =
+        "49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100";
+
+    public static string? IdentifyExecutable(string? sha256) => sha256?.ToUpperInvariant() switch
+    {
+        "CE40C4663E3E20DDD0BF8173DEC993699C597832D09F87636EDAADEAEB6D344B" => "0.5.28",
+        "8FE63C150ABCDD04E67419F3B144CC0652761C3B636D2978438721609ABB93F7" => "0.5.30",
+        Official031Exe => "0.5.31",
+        "F7BF0A5A0986AEC61D360AE79A3E957B8E21C0781309193A2A056C7BDE0E90BC" => "0.5.32",
+        _ => null
+    };
 }
 
 // Source-based admission: a folder alone is never proof of framework compatibility.
@@ -60,6 +81,11 @@ public static class FrameworkPreflight
             failures.Add(name + " required profiling interfaces are missing or incompatible");
             return;
         }
+        if (!string.IsNullOrWhiteSpace(evidence.Diagnostic))
+        {
+            failures.Add(evidence.Diagnostic);
+            return;
+        }
         var found = Parts(evidence.Version);
         if (found is null)
         {
@@ -103,27 +129,18 @@ public static class FrameworkPreflight
         return null;
     }
 
-    // Exact, immutable upstream v0.5.31 Windows compiler fingerprints.
-    // These identify the one supported redscript compiler release, not mods
-    // or mutable REDscript source. The known release ZIP was independently
-    // verified against the upstream published archive SHA-256.
-    private const string Redscript031ExeSha256 =
-        "DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD";
-    private const string Redscript031LibSha256 =
-        "49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100";
-
-    private static bool MatchesSha256(string path, string expectedHash)
+    // Bounded, read-only SHA-256 fingerprinting; never invokes the compiler.
+    private static string? FileSha256(string path)
     {
         try
         {
             using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (file.Length == 0 || file.Length > 16 * 1024 * 1024) return false;
-            return string.Equals(Convert.ToHexString(SHA256.HashData(file)),
-                expectedHash, StringComparison.Ordinal);
+            if (file.Length == 0 || file.Length > 16 * 1024 * 1024) return null;
+            return Convert.ToHexString(SHA256.HashData(file));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return null;
         }
     }
 
@@ -159,17 +176,21 @@ public static class FrameworkPreflight
         var hasLibrary = File.Exists(library);
         var hasAlternate = File.Exists(alternateLibrary);
         var hasConfig = File.Exists(config);
-        // Only the official supported compiler pair is a verified 0.5.31
-        // installation. PE version metadata (when present) is not trusted
-        // to bypass the binary identity contract; nothing is executed.
+        // Recognize only known executable fingerprints for console diagnostics.
+        // Installation acceptance still requires the exact official 0.5.31
+        // executable AND matching official companion library and scripts.ini.
         var shape = hasExe && hasLibrary && hasConfig;
-        var verified = shape &&
-            MatchesSha256(compiler, Redscript031ExeSha256) &&
-            MatchesSha256(library, Redscript031LibSha256);
+        var version = hasExe
+            ? RedscriptCompilerFingerprints.IdentifyExecutable(FileSha256(compiler))
+            : null;
+        var officialPair = version == "0.5.31" &&
+            FileSha256(library) == RedscriptCompilerFingerprints.Official031Library;
+        var mismatch = shape && version == "0.5.31" && !officialPair;
         return new(
             hasExe || hasLibrary || hasAlternate || hasConfig,
-            verified ? "0.5.31" : null,
-            shape);
+            mismatch ? null : version,
+            shape,
+            mismatch ? "redscript 0.5.31 scc.exe recognized, but scc_lib.dll does not match the official 0.5.31 release. Reinstall matching redscript files." : null);
     }
 
     public static FrameworkPreflightResult Inspect(string gameRoot)
