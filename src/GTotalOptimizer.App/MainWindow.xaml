@@ -463,7 +463,7 @@
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </Grid>
-                                    <TextBlock x:Name="DependencyText" Foreground="#FFF000"
+                                    <TextBlock x:Name="DependencyText" Foreground="{StaticResource Cyan}"
                                                Height="16" VerticalAlignment="Center"
                                                FontSize="11.5" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>

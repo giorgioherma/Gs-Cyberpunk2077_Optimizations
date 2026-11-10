@@ -400,6 +400,7 @@ public partial class MainWindow : Window
         {
             ModCountText.Text = "Select the Cyberpunk 2077 game folder";
             DependencyText.Text = "CET, 0-Engine, r6/scripts and RED4ext have not been checked.";
+            DependencyText.Foreground = (Brush)FindResource("Cyan");
             CetStatusText.Text = "G-CET Profiler  ·  NOT CHECKED";
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
@@ -412,8 +413,12 @@ public partial class MainWindow : Window
         // on mod counts or presence of an empty r6/scripts folder.
         var framework = FrameworkPreflight.Inspect(current.GameRoot!);
         DependencyText.Text = framework.Ready
-            ? "CET 1.37.1  ·  0-Engine >= 0.18.0  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
+            ? "CET 1.37.1  ·  0-Engine present  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
             : framework.Detail;
+        // Only a fully admitted framework stack is yellow. Unsupported,
+        // missing or unchecked installations use the existing cyan accent.
+        // Validation and install/capture gates remain owned by FrameworkPreflight.
+        DependencyText.Foreground = (Brush)FindResource(framework.Ready ? "Yellow" : "Cyan");
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
