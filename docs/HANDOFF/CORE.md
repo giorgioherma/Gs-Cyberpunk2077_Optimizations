@@ -288,3 +288,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 
 - The black square at upper-right of the chamfered Game Root panel is the **parent `Grid Background="#000000"`**, not the editable input's new top-right cut. The parent must be transparent and the existing chamfered `GameRootOutline Fill="#000000"` remains the sole black surface. Preserve the PathInput editor/focus behavior; no masks or duplicate border patches.
 - Rework the existing Start gamepad vector for a broader, smoother PlayStation controller with four distinct neon face buttons. Keep the other two symbols, screenshot layout, CET/GRSP integration and GCO v1.2.0 as-is. Await full Windows CI and screenshot approval.
+
+- **Verified latest UI fix:** source `f8b7e757`; automatic [Windows CI #206](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42794222066) **SUCCESS 185/185**, v1.2.0 artifact **13752598080**. The Game Root black rectangle backing is removed and gamepad grips widened; user visual screenshot acceptance is outstanding.
