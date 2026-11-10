@@ -550,24 +550,27 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Classic rounded PlayStation-style controller: broad shoulder, low wide
-    // grips and smooth bottom curves rather than sharp triangular handles.
+    // Rounded four-button gamepad based on the approved reference. A shallow
+    // central shoulder notch, broad outer body, and deep rounded handgrips
+    // must remain visible when rendered at the actual Capture-card size.
     private static readonly Geometry Gamepad =
-        Path("M 14,26 " +
-             "C 17,22 22,20 29,20 " +
-             "L 35,20 " +
-             "C 42,20 47,22 50,26 " +
-             "C 53,29 56,36 59,43 " +
-             "C 62,50 58,56 52,55 " +
-             "C 46,54 44,48 41,45 " +
-             "C 39,43 37,42 33,42 " +
-             "L 31,42 " +
-             "C 27,42 25,43 23,45 " +
-             "C 20,48 18,54 12,55 " +
-             "C 6,56 2,50 5,43 " +
-             "C 8,36 11,29 14,26 Z");
+        Path("M 19,15 " +
+             "C 23,12 27,12 30,15 " +
+             "C 31,16 33,16 34,15 " +
+             "C 38,12 42,12 46,15 " +
+             "C 51,17 54,24 57,32 " +
+             "L 61,43 " +
+             "C 63,50 60,58 54,58 " +
+             "C 49,58 46,53 42,48 " +
+             "C 40,45 38,44 35,44 " +
+             "L 29,44 " +
+             "C 26,44 24,45 22,48 " +
+             "C 18,53 15,58 10,58 " +
+             "C 4,58 1,50 3,43 " +
+             "L 7,32 " +
+             "C 10,24 13,17 19,15 Z");
     private static readonly Geometry GamepadCross =
-        Path("M 20,27 L 20,39 M 14,33 L 26,33");
+        Path("M 18,25 L 18,37 M 12,31 L 24,31");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -610,10 +613,10 @@ public sealed class StageEmblem : FrameworkElement
             case StageEmblemKind.Ignition:
                 DrawNeon(dc, Gamepad);
                 DrawNeon(dc, GamepadCross);
-                DrawButton(dc, new Point(44, 27));
-                DrawButton(dc, new Point(50, 33));
+                DrawButton(dc, new Point(44, 25));
+                DrawButton(dc, new Point(51, 32));
                 DrawButton(dc, new Point(44, 39));
-                DrawButton(dc, new Point(38, 33));
+                DrawButton(dc, new Point(37, 32));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);

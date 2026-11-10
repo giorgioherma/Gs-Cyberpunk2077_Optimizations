@@ -324,3 +324,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-10 — Owner screenshot revision: outer chamfer bleed and gamepad shape
 
 - Remove the rectangular dark backing exposed outside the Game Root chamfer; retain the established actual outline and editable path field. The Start Cyberpunk gamepad must have a **broad, soft-rounded PlayStation-style body and handles** with four distinct face buttons; keep the download/data symbols and all other approved layout, profiler integration and product version unchanged.
+
+
+## 2026-11-10 — Correct Start controller shape at its actual WPF render size
+
+- The middle workflow icon must match the supplied reference's recognizable broad **PlayStation-style rounded controller** with deep curved grips and **four clearly separate buttons**. Correct the icon's Viewbox/element aspect sizing together with vector geometry; retain the other two accepted icons, cyan glow, page layout, current Game Root corner fix and v1.2.0. Visual acceptance is from the real Windows app.

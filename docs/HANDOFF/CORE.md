@@ -290,3 +290,8 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - Rework the existing Start gamepad vector for a broader, smoother PlayStation controller with four distinct neon face buttons. Keep the other two symbols, screenshot layout, CET/GRSP integration and GCO v1.2.0 as-is. Await full Windows CI and screenshot approval.
 
 - **Verified latest UI fix:** source `f8b7e757`; automatic [Windows CI #206](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42794222066) **SUCCESS 185/185**, v1.2.0 artifact **13752598080**. The Game Root black rectangle backing is removed and gamepad grips widened; user visual screenshot acceptance is outstanding.
+
+
+### 2026-11-10 — Reference-matched controller redraw (CI pending)
+
+- The owner rejected #206 controller. The key underlying size issue is the square 64×64 gamepad element uniformly reduced within the 64×48 Viewbox. Replace its actual render proportions with a 90×64 controller-specific source element inside a 76×54 Viewbox, and redraw the glyph as broad smooth PlayStation-style shoulders/grips with four distinct buttons. Preserve everything else, including v1.2.0 and the one original CI pipeline. Do not invent aesthetic CI contracts; record CI/artifact once green.

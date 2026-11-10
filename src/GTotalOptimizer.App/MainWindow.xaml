@@ -556,9 +556,9 @@
                                                        FontWeight="ExtraBold" FontSize="23" TextAlignment="Center"
                                                        VerticalAlignment="Center" Margin="0,-1,4,0"/>
                                         </Grid>
-                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="64" Height="48"
+                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="76" Height="54"
                                                   IsHitTestVisible="False">
-                                             <fx:StageEmblem Kind="Ignition" Width="64" Height="64"/>
+                                             <fx:StageEmblem Kind="Ignition" Width="90" Height="64"/>
                                          </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepTwoTitle" Grid.Row="1" Margin="0,8,0,0" Text="Start Cyberpunk"
