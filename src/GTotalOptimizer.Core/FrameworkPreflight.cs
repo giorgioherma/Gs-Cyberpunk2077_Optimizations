@@ -46,14 +46,15 @@ public static class FrameworkPreflight
         return 0;
     }
     private static void Check(FrameworkEvidence evidence, string name, string target,
-        IList<string> failures, bool minimum = false, bool game = false)
+        IList<string> failures, bool minimum = false, bool game = false,
+        bool checkStructure = true)
     {
         if (!evidence.Present)
         {
             failures.Add(game ? "Cyberpunk 2077 2.31 is required" : name + " " + target + " is missing");
             return;
         }
-        if (!evidence.StructureCompatible)
+        if (checkStructure && !evidence.StructureCompatible)
         {
             failures.Add(name + " required profiling interfaces are missing or incompatible");
             return;
@@ -78,7 +79,11 @@ public static class FrameworkPreflight
         var problems = new List<string>();
         Check(installed.Game, "Cyberpunk 2077", "2.31", problems, game: true);
         Check(installed.Cet, "CET", "1.37.1", problems);
-        Check(installed.ZeroEngine, "0-Engine", "0.18.0 or greater", problems, minimum: true);
+        // GCO checks 0-Engine admission by installed version only. CET's
+        // Resolver/Generator exclusively owns source/injection compatibility
+        // and must decide whether it can generate an optimization.
+        Check(installed.ZeroEngine, "0-Engine", "0.18.0 or greater", problems,
+            minimum: true, checkStructure: false);
         Check(installed.Red4ext, "RED4ext", "1.30.0", problems);
         Check(installed.Redscript, "redscript", "0.5.31", problems);
         return new(problems);
@@ -147,8 +152,7 @@ public static class FrameworkPreflight
         return Evaluate(new(
             new(File.Exists(exe), PeVersion(exe, productOnly: true)),
             new(File.Exists(cet), PeVersion(cet)),
-            new(File.Exists(Path.Combine(engine, "init.lua")), EngineVersion(engine),
-                Directory.Exists(Path.Combine(engine, "modules"))),
+            new(File.Exists(Path.Combine(engine, "init.lua")), EngineVersion(engine)),
             new(File.Exists(red4), PeVersion(red4)),
             InspectRedscript(gameRoot)));
     }

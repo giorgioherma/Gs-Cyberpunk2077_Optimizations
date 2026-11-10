@@ -141,7 +141,21 @@ try
         "source file detected but not advertised compatible");
     Require(probe.Checks.Any(c => c.Name == "G-REDruntime source" && c.State == CheckState.Unverified),
         "redscript source presence not equated to runtime compatibility");
+    // This source intentionally has no modules/ or injector entrypoints.
+    // A versioned, installed 0-Engine is admitted for profiling, while
+    // CET Resolver/Generator remains responsible for modification decisions.
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.19.0\"");
     var physicalPreflight = FrameworkPreflight.Inspect(root);
+    Require(!physicalPreflight.Issues.Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
+        "physical 0-Engine 0.19 passes version-only admission without modules directory");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.17.2\"");
+    Require(FrameworkPreflight.Inspect(root).Issues
+        .Any(x => x.Contains("0-Engine requires 0.18.0 or greater", StringComparison.Ordinal)),
+        "physical 0-Engine below 0.18 is still blocked independently of module layout");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.18.0\"");
+    Require(!FrameworkPreflight.Inspect(root).Issues
+        .Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
+        "physical minimum 0.18.0 accepted with no generator source compatibility scan");
     Require(!physicalPreflight.Ready &&
         physicalPreflight.Issues.Contains("CET 1.37.1 is missing") &&
         physicalPreflight.Issues.Contains("RED4ext 1.30.0 is missing") &&
@@ -415,9 +429,15 @@ try
         "0-Engine future version is admitted without a release whitelist");
     Require(!FrameworkPreflight.Evaluate(Full("0.17.2")).Ready,
         "ambiguous 0-Engine 0.17.x variants fail the minimum");
-    Require(!FrameworkPreflight.Evaluate(Full() with
+    Require(FrameworkPreflight.Evaluate(Full() with
         { ZeroEngine = E("0.18.6", shape: false) }).Ready,
-        "0-Engine requires source-compatible injection entrypoints");
+        "0-Engine v0.18+ passes GCO preflight without source/injection shape restrictions");
+    Require(!FrameworkPreflight.Evaluate(Full() with
+        { ZeroEngine = E(null, shape: true) }).Ready &&
+        FrameworkPreflight.Evaluate(Full() with
+        { ZeroEngine = E(null, shape: true) }).Issues
+            .Contains("0-Engine compatibility could not be verified"),
+        "unknown 0-Engine version still requires honest version diagnostics");
     var badFrameworks = FrameworkPreflight.Evaluate(new(
         E("2.5"), E("1.38.0"), E(null, false), E("1.31.0"), E("0.5.32")));
     Require(!badFrameworks.Ready && badFrameworks.Issues.Count == 5 &&
