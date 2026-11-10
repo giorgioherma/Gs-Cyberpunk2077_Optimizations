@@ -158,12 +158,12 @@ public sealed class UnifiedProfilerWorkflow
         return id;
     }
 
-    public CollectedCaptureIndex RecordCollectionAttempt(string game)
+    public CollectedCaptureIndex RecordCollectionAttempt(string game, bool presentMonStopped)
     {
         if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting results.");
         if (!HasCaptureAttempt(game))
             throw new InvalidOperationException("A capture launch has not been recorded.");
-        return CollectedCaptureStore.MarkCollectionAttempted(packageRoot, game, SessionId());
+        return CollectedCaptureStore.MarkCollectionAttempted(packageRoot, game, SessionId(), presentMonStopped);
     }
 
     public async Task<ProfilerWorkflowResult> InstallAsync(string game, CancellationToken token = default)
