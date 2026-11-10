@@ -50,6 +50,29 @@ public static class ChamferGeometry
         return path;
     }
 
+    // Only the upper-right corner of the Game Root input is cut; all other
+    // corners stay square. Geometry scales from the actual rendered dimensions.
+    public static Geometry CreateTopRightCut(double width, double height,
+        double cut, double inset = 0)
+    {
+        var left = inset;
+        var top = inset;
+        var right = Math.Max(left, width - inset);
+        var bottom = Math.Max(top, height - inset);
+        cut = Math.Clamp(cut, 0, Math.Min(right - left, bottom - top) / 2.0);
+        var path = new StreamGeometry();
+        using (var ctx = path.Open())
+        {
+            ctx.BeginFigure(new Point(left, top), true, true);
+            ctx.LineTo(new Point(right - cut, top), true, false);
+            ctx.LineTo(new Point(right, top + cut), true, false);
+            ctx.LineTo(new Point(right, bottom), true, false);
+            ctx.LineTo(new Point(left, bottom), true, false);
+        }
+        path.Freeze();
+        return path;
+    }
+
     // The INNER top is the one line BELOW the logo/header, NOT a parallel
     // duplicate of the outer top perimeter.
     // Straight inset runs ignore the decorative raster's circuit dents.
@@ -199,6 +222,9 @@ public sealed class ChamferOutline : FrameworkElement
     public static readonly DependencyProperty MetallicFinishProperty =
         DependencyProperty.Register(nameof(MetallicFinish), typeof(bool), typeof(ChamferOutline),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty TopRightOnlyProperty =
+        DependencyProperty.Register(nameof(TopRightOnly), typeof(bool), typeof(ChamferOutline),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty LitProperty =
         DependencyProperty.Register(nameof(Lit), typeof(bool), typeof(ChamferOutline),
             new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -232,6 +258,7 @@ public sealed class ChamferOutline : FrameworkElement
     public bool SpatialStroke { get => (bool)GetValue(SpatialStrokeProperty); set => SetValue(SpatialStrokeProperty, value); }
     public bool AccentCorners { get => (bool)GetValue(AccentCornersProperty); set => SetValue(AccentCornersProperty, value); }
     public bool MetallicFinish { get => (bool)GetValue(MetallicFinishProperty); set => SetValue(MetallicFinishProperty, value); }
+    public bool TopRightOnly { get => (bool)GetValue(TopRightOnlyProperty); set => SetValue(TopRightOnlyProperty, value); }
     public bool Lit { get => (bool)GetValue(LitProperty); set => SetValue(LitProperty, value); }
 
     protected override void OnRender(DrawingContext dc)
@@ -241,7 +268,9 @@ public sealed class ChamferOutline : FrameworkElement
         var thickness = Math.Max(0.5, StrokeThickness);
         var inset = Math.Max(thickness / 2.0 + 0.25, 1.0);
         var cut = ChamferGeometry.ScaledCut(this, CornerCut);
-        var shape = ChamferGeometry.Create(RenderSize.Width, RenderSize.Height, cut, inset);
+        var shape = TopRightOnly
+            ? ChamferGeometry.CreateTopRightCut(RenderSize.Width, RenderSize.Height, cut, inset)
+            : ChamferGeometry.Create(RenderSize.Width, RenderSize.Height, cut, inset);
         var stroke = SpatialStroke ? SpatialNeonField.Create(this, Stroke) : Stroke;
 
         if (Glow)
@@ -517,18 +546,21 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Start: wide, symmetric controller outline with distinguishable grips.
-    // Use the full 64-DIP canvas so controls remain legible after Viewbox scaling.
+    // Rounded reference controller: smooth grips, D-pad and four face buttons.
     private static readonly Geometry Gamepad =
-        Path("M 17,22 C 21,19 25,18 30,19 L 34,19 " +
-             "C 39,18 43,19 47,22 " +
-             "C 52,26 57,39 58,47 " +
-             "C 59,52 56,55 52,54 " +
-             "C 48,53 44,47 40,43 " +
-             "L 24,43 C 20,47 16,53 12,54 " +
-             "C 8,55 5,52 6,47 C 7,39 12,26 17,22 Z");
+        Path("M 20,19 C 23,17 27,17 29,19 " +
+             "C 31,20 33,20 35,19 " +
+             "C 38,17 41,17 44,19 " +
+             "C 49,21 51,27 53,33 L 57,43 " +
+             "C 59,48 58,53 53,53 " +
+             "C 49,53 46,49 43,45 " +
+             "C 41,42 39,41 36,41 L 28,41 " +
+             "C 25,41 23,42 21,45 " +
+             "C 18,49 15,53 11,53 " +
+             "C 6,53 5,48 7,43 L 11,32 " +
+             "C 13,26 16,21 20,19 Z");
     private static readonly Geometry GamepadCross =
-        Path("M 21,28 L 21,39 M 15.5,33.5 L 26.5,33.5");
+        Path("M 20,28 L 20,38 M 15,33 L 25,33");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -573,8 +605,10 @@ public sealed class StageEmblem : FrameworkElement
             case StageEmblemKind.Ignition:
                 DrawNeon(dc, Gamepad);
                 DrawNeon(dc, GamepadCross);
-                DrawButton(dc, new Point(43, 30));
-                DrawButton(dc, new Point(49, 36));
+                DrawButton(dc, new Point(44, 27));
+                DrawButton(dc, new Point(49, 33));
+                DrawButton(dc, new Point(44, 39));
+                DrawButton(dc, new Point(39, 33));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);

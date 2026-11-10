@@ -275,3 +275,8 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - User's latest screenshot refinement: shrink each of the existing three WPF workflow cards by **20 DIP width**, grow height by **24 DIP**, raise Game Root plus workflow **18 DIP** via hero trailing space, maintain centered alignment and margins to footer. Place card titles directly above their descriptions with consistent breathing room below icons. Improve only the WPF Start controller silhouette; keep the accepted Download and Data icons. Console wrapping/status region remains allocated 63 DIP, Continue lowered 5 DIP. Official GCO logo, primary buttons, tabs, CET/GRSP/PresentMon ownership and version **1.2.0** preserved. Await actual full Windows CI and owner screenshot review; no cosmetic CI contracts.
 
 - **Verified latest visual refinement:** source `433963ff`, [Windows CI #204](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42787117774) **SUCCESS 185/185**, artifact **13749453873** (`Gs-Cyberpunk2077_Optimizer-v1.2.0-run204-a1`). No product version or profiler changes; card/controller aesthetics await user Windows screenshot.
+
+
+### 2026-11-10 — Rounded controller and upper-right-only editable path chamfer
+
+- Owner requires GitHub source modifications, not generated images. Change only `StageEmblem` gamepad WPF vector (rounded silhouette, **four** face buttons) and `PathInput` top-right cut via new opt-in mode of existing `ChamferOutline`, retaining native `PART_ContentHost` editing/scrolling, focus and disabled states. No changes to other icons, accepted Page 1 geometry, original artwork or v1.2.0. CI must complete before artifact claims.

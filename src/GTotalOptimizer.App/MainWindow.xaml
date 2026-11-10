@@ -140,26 +140,26 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Padding" Value="9,0"/>
             <Setter Property="CaretBrush" Value="#FFF000"/>
-            <!-- Native rectangular WPF field: no chamfer clipping and no
-                 background leaking from behind the cut-corner parent. -->
+            <!-- One upper-right cut; native text editing and scrolling remain intact. -->
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="PathFrame"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="0" SnapsToDevicePixels="True">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <fx:ChamferOutline x:Name="PathFrame"
+                                               Fill="{TemplateBinding Background}"
+                                               Stroke="{TemplateBinding BorderBrush}"
+                                               StrokeThickness="1" CornerCut="8"
+                                               TopRightOnly="True" IsHitTestVisible="False"/>
                             <ScrollViewer x:Name="PART_ContentHost"
                                           Margin="{TemplateBinding Padding}"
                                           Background="Transparent"/>
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="PathFrame" Property="BorderBrush" Value="#FFF000"/>
+                                <Setter TargetName="PathFrame" Property="Stroke" Value="#FFF000"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="PathFrame" Property="Background" Value="#10191B"/>
+                                <Setter TargetName="PathFrame" Property="Fill" Value="#10191B"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
