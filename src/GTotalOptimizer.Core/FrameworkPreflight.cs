@@ -122,16 +122,19 @@ public static class FrameworkPreflight
         var tools = Path.Combine(gameRoot, "engine", "tools");
         var compiler = Path.Combine(tools, "scc.exe");
         var library = Path.Combine(tools, "scc_lib.dll");
+        var alternateLibrary = Path.Combine(tools, "scc.dll");
         var config = Path.Combine(gameRoot, "engine", "config", "base", "scripts.ini");
 
         var hasExe = File.Exists(compiler);
         var hasLibrary = File.Exists(library);
+        var hasAlternate = File.Exists(alternateLibrary);
         var hasConfig = File.Exists(config);
-        // A partial installation is present but incompatible; do not
-        // misleadingly claim redscript is entirely absent.
+        // Recognize an alternate scc.dll filename as possible redscript
+        // evidence, but upstream scc.exe requires scc_lib.dll: never claim
+        // the incomplete/renamed compiler is safe to use.
         return new(
-            hasExe || hasLibrary || hasConfig,
-            PeVersion(library) ?? PeVersion(compiler),
+            hasExe || hasLibrary || hasAlternate || hasConfig,
+            PeVersion(library) ?? PeVersion(compiler) ?? PeVersion(alternateLibrary),
             hasExe && hasLibrary && hasConfig);
     }
 
