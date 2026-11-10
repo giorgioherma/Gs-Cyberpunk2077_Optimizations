@@ -496,14 +496,22 @@ public partial class MainWindow : Window
     private async Task InstallProfilersAsync()
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        ClearStatusPin();
+        var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
+        if (!frameworks.Ready) { Warn(frameworks.Detail, "Framework preflight"); return; }
         SetBusy(true);
-        SetStatus("Installing native profilers through their authoritative owners...");
+        SetStatus("Installing G-CET and G-REDscript profilers through their owners...");
         try
         {
             var result = await Workflow.InstallAsync(inspection.GameRoot);
-            if (result.Ok) { captureLaunched = false; SetPortraitStage(PortraitStage.Black); }
-            SetStatus(result.Detail);
-            if (!result.Ok) Warn(result.Detail, "Profiler installation");
+            if (result.Ok)
+            {
+                captureLaunched = false;
+                SetPortraitStage(PortraitStage.Black);
+                // InstallAsync already re-inspects both source-owned managers.
+                PinStatus("G-CET and G-REDscript profilers successfully installed. Ready to start Cyberpunk 2077.");
+            }
+            else Warn(result.Detail, "Profiler installation");
         }
         catch (Exception ex) { Warn(ex.Message, "Profiler installation"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
@@ -512,29 +520,55 @@ public partial class MainWindow : Window
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
     private async Task LaunchCaptureAsync()
     {
-        if (busy || captureLaunched || GameRunning() ||
-            !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
+        if (captureLaunched && DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10))
+        {
+            Warn("The previous launch is still being processed. Do not start a second game.", "Start");
+            return;
+        }
         var game = inspection.GameRoot;
+        ClearStatusPin();
         SetBusy(true);
         try
         {
+            var frameworks = FrameworkPreflight.Inspect(game);
+            if (!frameworks.Ready) throw new InvalidOperationException(frameworks.Detail);
             var state = await Workflow.InspectAsync(game);
             if (!state.BothInstalled || !Workflow.HasRecoveryJournal)
-                throw new InvalidOperationException("The current backend requires both verified profilers and a GCO session. Independent-domain support is pending.");
+                throw new InvalidOperationException("Both G-CET and G-REDscript profiler installations must be verified before Start.");
+            if (state.BothCaptured)
+            {
+                var prior = Workflow.ReadCollected(game);
+                if (prior?.CollectionAttempted != true)
+                    throw new InvalidOperationException("Uncollected native profiler results exist. Use COLLECT RESULTS before starting again.");
+            }
             var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
             if (!File.Exists(executable))
                 throw new FileNotFoundException("Cyberpunk2077.exe is missing.", executable);
             if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
                 throw new InvalidOperationException("Bundled profiler provenance changed.");
-            var capture = Workflow.ReadCollected(game) ??
-                throw new InvalidDataException("Capture session identity is missing.");
+
+            // The elevated PresentMon restart already serializes owners,
+            // gracefully stops old GCO-owned instances, and refuses foreign
+            // processes. A fresh attempt ID prevents mixing old CSVs/results.
+            var previousMon = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
+            var attemptId = Workflow.BeginCaptureAttempt(game);
+            captureLaunched = true;
+            lastLaunchRequestedUtc = DateTime.UtcNow;
             string? frameWarning = null;
             try
             {
-                var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, capture.SessionId);
+                var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, attemptId);
                 await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
             }
-            catch (Exception ex) { frameWarning = ex.Message; }
+            catch (Exception ex)
+            {
+                if (previousMon is not null)
+                    throw new InvalidOperationException("Previous GCO PresentMon session could not be safely restarted: " + ex.Message);
+                frameWarning = ex.Message;
+            }
+
             try
             {
                 _ = Process.Start(new ProcessStartInfo(executable)
@@ -553,12 +587,10 @@ public partial class MainWindow : Window
                 }
                 throw;
             }
-            captureLaunched = true;
             SetPortraitStage(PortraitStage.Capturing);
-            SetStatus(frameWarning is null
-                ? "Game launched. PresentMon recording; F11 starts/stops CET and REDscript."
-                : "Game launched with native profilers; optional PresentMon failed.");
-            if (frameWarning is not null) Warn("PresentMon unavailable: " + frameWarning, "Optional frame-time capture");
+            PinStatus(frameWarning is null
+                ? "Cyberpunk launched. PresentMon recording automatically; F11 starts/stops G-CET and G-REDscript."
+                : "Cyberpunk launched with both native profilers. PresentMon failed: " + frameWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Launch and capture"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
