@@ -26,6 +26,8 @@ Read, in order:
 - **Before proposing a new workflow:** prove the active workflow cannot serve the requirement; seek the user's explicit authorization; document why in `docs/LATEST-WORK.md` and retire/migrate its predecessor *in the same change*. An agent's convenience, temporary debugging, or a failed CI run is **not** justification for another workflow.
 - **No hardcoded aesthetic assertions:** Never gate CI on an owner's chosen logo X/Y, pixel width, margins, icon size/shine, decorative RGB samples, border placement or similar subjective design values. The owner validates appearance from the real app screenshot; source smoke validates real WPF loads, essential controls exist and both pages render. Keep meaningful functionality, source integrity, component provenance, install/restore safety and final ZIP contracts. Report exact CI run, SHA and pass/fail; artifact ID only when packaging was deliberately run. Normal source CI does **not** create an artifact or prove gameplay. Documentation-only commits need no Windows build. Never bump version without explicit owner request.
 
+**First proportional-push CI proof:** [#189](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42750599194) **SUCCESS**, managed build and **170 source-only contracts**, **zero artifacts** and all full-integration steps skipped. No manual integrated package has been requested or verified after this CI policy change. Documentation-only commits remain excluded from Windows CI.
+
 ## Non-negotiable ownership
 
 4. **Respect component ownership.**
