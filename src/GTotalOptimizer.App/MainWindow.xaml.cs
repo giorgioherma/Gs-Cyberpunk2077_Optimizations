@@ -596,52 +596,97 @@ public partial class MainWindow : Window
         finally { SetBusy(false); await RefreshSourceAsync(); }
     }
 
+    // Collect and independent recovery share ONE PresentMon stop policy:
+    // only our named ETW session/process can be stopped, and only a verified
+    // graceful exit permits Continue. No F11 handler is installed by GCO.
+    private async Task<(string? Csv, bool Stopped, string? Error)> StopOwnedPresentMonAsync(string sessionId)
+    {
+        string? tracked;
+        try { tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot); }
+        catch (Exception ex) { return (null, false, "PresentMon tracking invalid: " + ex.Message); }
+
+        var processes = Process.GetProcessesByName("PresentMon");
+        var anyRunning = processes.Any(p => !p.HasExited);
+        foreach (var process in processes) process.Dispose();
+        if (tracked is null && !anyRunning) return (null, true, null);
+
+        try
+        {
+            var target = tracked ?? PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, sessionId);
+            await PresentMonCaptureController.RunAsync(packageRoot, target, restart: false);
+            if (tracked is not null) PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+            return (tracked, true, null);
+        }
+        catch (Exception ex)
+        {
+            return (tracked, false, "PresentMon shutdown not verified: " + ex.Message);
+        }
+    }
+
     private async void Collect_Click(object sender, RoutedEventArgs e) => await CollectResultsAsync();
     private async Task CollectResultsAsync()
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         var game = inspection.GameRoot;
-        if (GameRunning()) { Warn("Close Cyberpunk before collecting.", "Game running"); return; }
+        if (GameRunning())
+        {
+            Warn("Close Cyberpunk before collecting results.", "Collection");
+            return;
+        }
+        if (!Workflow.HasCaptureAttempt(game))
+        {
+            Warn("Start Cyberpunk before collecting results.", "Collection");
+            return;
+        }
+        ClearStatusPin();
         SetBusy(true);
         SetPortraitStage(PortraitStage.Collecting);
-        SetStatus("Stopping PresentMon and verifying/copying current-session evidence...");
+        SetStatus("Stopping PresentMon, then collecting CET and REDscript evidence...");
         try
         {
-            var capture = Workflow.ReadCollected(game) ??
-                throw new InvalidDataException("No matching GCO session.");
-            var tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
-            string? frameWarning = null;
-            if (tracked is not null)
+            var attempt = Workflow.ReadCollected(game) ??
+                throw new InvalidDataException("No matching GCO capture attempt.");
+            // The click is the trigger. Do not gate it on F11, a prior CSV,
+            // or whether PresentMon has already stopped independently.
+            var stop = await StopOwnedPresentMonAsync(attempt.SessionId);
+            string? frameWarning = stop.Error;
+            if (stop.Stopped && stop.Csv is not null)
             {
-                try
+                var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, attempt.SessionId) +
+                    Path.DirectorySeparatorChar;
+                if (!Path.GetFullPath(stop.Csv).StartsWith(expectedRoot,
+                    StringComparison.OrdinalIgnoreCase))
+                    frameWarning = "PresentMon CSV belongs to an earlier attempt; not reused.";
+                else
                 {
-                    var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, capture.SessionId) +
-                        Path.DirectorySeparatorChar;
-                    if (!Path.GetFullPath(tracked).StartsWith(expectedRoot, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("PresentMon CSV is from another capture session.");
-                    await PresentMonCaptureController.RunAsync(packageRoot, tracked, restart: false);
-                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                    try { CollectedCaptureStore.CollectPresentMon(packageRoot, game, capture.SessionId, tracked); }
-                    catch (Exception ex) { frameWarning = "PresentMon stopped, CSV unusable: " + ex.Message; }
-                }
-                catch (Exception ex)
-                {
-                    frameWarning = "PresentMon stop failed; retry Collect: " + ex.Message;
+                    try
+                    {
+                        CollectedCaptureStore.CollectPresentMon(packageRoot, game,
+                            attempt.SessionId, stop.Csv);
+                    }
+                    catch (Exception ex)
+                    {
+                        frameWarning = "CSV unavailable: " + ex.Message;
+                    }
                 }
             }
-            var result = await Workflow.CollectResultsAsync(game);
-            var saved = Workflow.ReadCollected(game, verifyHashes: true);
+            var native = await Workflow.CollectResultsAsync(game);
+            // This durable record is written only AFTER the user explicitly
+            // clicks Collect. Even zero captures receive exact diagnostics.
+            var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
+            saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
+            captureLaunched = false;
             if (HasNative(saved))
             {
-                resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId);
+                resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
                 SetPortraitStage(PortraitStage.Collected);
                 UpdateResultTexts(saved);
             }
-            else
-                SetPortraitStage(PortraitStage.Black);
-            SetStatus(result.Detail + (frameWarning is null ? "" : " " + frameWarning));
-            // Deliberately no missing-domain popup here; Continue owns the prompt.
+            else SetPortraitStage(PortraitStage.Black);
+
+            PinStatus(CaptureAdmissionPolicy.CollectionStatus(saved, frameWarning,
+                native.Ok ? null : native.Detail));
         }
         catch (Exception ex)
         {
