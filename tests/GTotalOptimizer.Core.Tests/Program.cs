@@ -147,11 +147,11 @@ try
     var physicalPreflight = FrameworkPreflight.Inspect(root);
     Require(!physicalPreflight.Issues.Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
         "real physical minimal 0-Engine init.lua passes without a recognizable version");
-    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \\"0.17.2\\"");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), @"version = ""0.17.2""");
     Require(!FrameworkPreflight.Inspect(root).Issues
         .Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
         "legacy physical 0-Engine 0.17.2 does not block profiler installation");
-    File.WriteAllText(Path.Combine(cet, "init.lua"), "engineVersion = \\"0.18.6\\"");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), @"engineVersion = ""0.18.6""");
     Require(!FrameworkPreflight.Inspect(root).Issues
         .Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
         "owner-style engineVersion 0.18.6 does not require version parsing");
