@@ -309,7 +309,13 @@ public partial class MainWindow : Window
 
     private async void GamePath_Changed(object sender, TextChangedEventArgs e)
     {
-        if (initialized && !pathUpdate && !busy) await RefreshSourceAsync();
+        if (initialized && !pathUpdate && !busy)
+        {
+            // A deliberate new source selection invalidates the previous
+            // session's pinned console diagnostic.
+            ClearStatusPin();
+            await RefreshSourceAsync();
+        }
     }
 
     private void GamePath_LostKeyboardFocus(
