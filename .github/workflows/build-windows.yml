@@ -1,6 +1,8 @@
 name: Gs-Cyberpunk2077_Optimizer
 # Product version changes only on an explicit user request; keep fixed otherwise.
 
+# Push = source verification only. A portable ZIP is an explicit checkpoint.
+# One canonical workflow; do not automatically assemble a release per commit.
 on:
   workflow_dispatch:
   push:
@@ -13,6 +15,10 @@ on:
       - 'src/GTotalOptimizer.Launcher/**'
       - 'src/GTotalOptimizer.Core/**'
       - 'tests/GTotalOptimizer.Core.Tests/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read
@@ -27,12 +33,14 @@ jobs:
         with:
           path: unified
       - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
           ref: 7f3489d8fd7e02d595f4a053616044cf2f6b2dab
           path: unified/vendor-cet
           persist-credentials: false
       - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
           ref: c6871e21d3d3ece8e36d3ea47d45e18d0d7acead
@@ -41,7 +49,20 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Compile GCO and run core contracts (push only; no distribution)
+        if: github.event_name == 'push'
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -c Release -p:SelfContained=false
+          if ($LASTEXITCODE -ne 0) { throw 'Managed GCO source compilation failed' }
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'GCO source/core contracts failed' }
+          Write-Host 'PASS managed GCO build/core contracts; no profiler bundle or artifact.'
+
       - name: Download exact latest successful CET developer profiler artifact
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         working-directory: unified
         env:
@@ -52,12 +73,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
       - name: Assemble integrated two-page GUI and profilers (one shared runtime)
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         working-directory: unified
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
       - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         working-directory: unified
         run: |
@@ -90,7 +113,10 @@ jobs:
             if ($exit -ne 0) { throw "CLI $executable $arguments exit=$exit stderr=$stderr stdout=$stdout" }
             return $stdout
           }
-          $version='1.1.8'
+          $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+            throw 'Cannot resolve GCO source product version'
+          }
           if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) { throw 'Integrated package version mismatch' }
           $cet=Join-Path $root 'components/cet/G-CET-Runtime-Profiler.exe'
           $grsp=Join-Path $root 'components/grsp/G-REDscript-Profiler.exe'
@@ -126,22 +152,29 @@ jobs:
           if (!(Test-Path $env:DOTNET_HOST_TRACEFILE)) { throw 'Private .NET10 host trace missing' }
           Write-Host 'PASS CET+GRSP private .NET10 headless CLI launches and GRSP owned install/restore.'
       - name: Test source contracts and verify the final downloadable package
+        if: github.event_name == 'workflow_dispatch'
         id: verify_package
         shell: pwsh
         working-directory: unified
         run: |
           $ErrorActionPreference='Stop'
           $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
-          if ($LASTEXITCODE -ne 0 -or $version -ne '1.1.8') { throw 'Unexpected GCO package version' }
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+            throw 'Cannot resolve GCO package version from source'
+          }
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          $fileVersion=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:FileVersion).Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fileVersion)) {
+            throw 'Cannot resolve GCO file version from source'
+          }
           foreach ($exe in @(
             (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
             (Join-Path $root 'app/G-Total-Optimizer.App.exe')
           )) {
-            if ((Get-Item $exe).VersionInfo.FileVersion -ne '1.1.8.0') {
-              throw "GCO executable version mismatch: $exe"
+            if ((Get-Item $exe).VersionInfo.FileVersion -ne $fileVersion) {
+              throw "GCO executable file version differs from MSBuild source property: $exe"
             }
           }
           if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) {
@@ -191,11 +224,11 @@ jobs:
           }
           Write-Host 'PASS actual shipped GUI host detects verified component manifest from unrelated CWD'
 
-          # Offscreen WPF rendering regression: image presence in the ZIP is
-          # insufficient. The actual UI must paint bright border pixels.
+          # Offscreen WPF smoke: validate real packaged assets, controls and pages.
+          # Owner-selected visual positions, sizes and colors are NOT test locks.
           $visual=New-Object System.Diagnostics.ProcessStartInfo
           $visual.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
-          $visual.ArgumentList.Add('--verify-border-ui')
+          $visual.ArgumentList.Add('--verify-wpf-ui')
           $visual.WorkingDirectory=$env:RUNNER_TEMP
           $visual.UseShellExecute=$false
           $visual.CreateNoWindow=$true
@@ -203,17 +236,17 @@ jobs:
           $visual.RedirectStandardError=$true
           $wpfCheck=New-Object System.Diagnostics.Process
           $wpfCheck.StartInfo=$visual
-          if (!$wpfCheck.Start()) { throw 'Could not run WPF outer-border regression' }
+          if (!$wpfCheck.Start()) { throw 'Could not launch packaged WPF rendering smoke' }
           $wpfOutTask=$wpfCheck.StandardOutput.ReadToEndAsync()
           $wpfErrTask=$wpfCheck.StandardError.ReadToEndAsync()
           if (!$wpfCheck.WaitForExit(60000)) {
             $wpfCheck.Kill()
-            throw 'WPF outer-border visual regression timed out'
+            throw 'Packaged WPF rendering smoke timed out'
           }
           $wpfOut=$wpfOutTask.GetAwaiter().GetResult()
           $wpfErr=$wpfErrTask.GetAwaiter().GetResult()
           if ($wpfCheck.ExitCode -ne 0) {
-            throw "WPF border pixels not verified: $wpfErr $wpfOut"
+            throw "Packaged WPF could not render: $wpfErr $wpfOut"
           }
           Write-Host $wpfOut
 
@@ -254,6 +287,7 @@ jobs:
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
           # Run/attempt distinguishes rebuilt archives without bumping GCO.
