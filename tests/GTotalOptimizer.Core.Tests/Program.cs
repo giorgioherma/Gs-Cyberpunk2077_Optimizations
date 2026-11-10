@@ -375,6 +375,11 @@ try
     Require(!FrameworkPreflight.InspectRedscript(fakeRedscript).Present,
         "obsolete RED4ext plugin path never qualifies as redscript");
     Directory.CreateDirectory(redscriptTools);
+    File.WriteAllText(Path.Combine(redscriptTools, "scc.dll"), "alternate name stub");
+    Require(FrameworkPreflight.InspectRedscript(fakeRedscript) is
+        { Present: true, StructureCompatible: false },
+        "engine/tools/scc.dll is recognized as partial evidence, never a complete official compiler");
+    File.Delete(Path.Combine(redscriptTools, "scc.dll"));
     File.WriteAllText(Path.Combine(redscriptTools, "scc.exe"), "test compiler stub");
     var incompleteCompiler = FrameworkPreflight.InspectRedscript(fakeRedscript);
     Require(incompleteCompiler.Present && !incompleteCompiler.StructureCompatible,
