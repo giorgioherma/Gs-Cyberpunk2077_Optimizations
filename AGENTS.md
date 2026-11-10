@@ -13,7 +13,7 @@ Read, in order:
 6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint (2026-11-10):** **GCO v1.2.0**, .NET10 WPF, CET+GRSP+optional PresentMon. Latest source [`f8b7e757`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f8b7e757a7fdd1a287f1cf1e98cf2ec99197346e), automatic [Windows CI #206](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42794222066) **SUCCESS 185/185**, artifact **13752598080**. Fixed rectangular black background protruding outside Game Root chamfer and redesigned a wider, rounder four-button Start controller. Await owner Windows screenshot approval; in-game capture/restore, independent CET-only/GRSP-only modes and optimization generation remain unverified.
+**Current checkpoint (2026-11-10):** **GCO v1.2.0**, .NET10 WPF, CET+GRSP+optional PresentMon. Current source [`1e657db3`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/1e657db3b2473a9c1ddf7035156056da70d8ab06), automatic [Windows CI #207](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42797852332) **SUCCESS 185/185**, artifact **13755402454**. The Start controller now uses a wide, correctly sized rounded four-button vector based on the user's reference, with no other UI or profiler changes. Await owner Windows screenshot approval; in-game capture/restore, independent CET-only/GRSP-only operation and generation remain unverified.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 

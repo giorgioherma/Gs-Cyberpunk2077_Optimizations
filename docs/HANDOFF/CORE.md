@@ -295,3 +295,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-10 — Reference-matched controller redraw (CI pending)
 
 - The owner rejected #206 controller. The key underlying size issue is the square 64×64 gamepad element uniformly reduced within the 64×48 Viewbox. Replace its actual render proportions with a 90×64 controller-specific source element inside a 76×54 Viewbox, and redraw the glyph as broad smooth PlayStation-style shoulders/grips with four distinct buttons. Preserve everything else, including v1.2.0 and the one original CI pipeline. Do not invent aesthetic CI contracts; record CI/artifact once green.
+
+- **Verified controller redraw:** source `1e657db3`, [Windows CI #207](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42797852332) **SUCCESS 185/185**, GCO v1.2.0 artifact **13755402454**. The 76×54 Viewbox/90×64 WPF controller with shallow upper notch, round grips and four buttons is packaged. Await owner real Windows screenshot approval; no other layout/runtime/feature modifications.
