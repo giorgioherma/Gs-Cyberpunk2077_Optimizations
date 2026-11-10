@@ -550,27 +550,25 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Rounded four-button gamepad based on the approved reference. A shallow
-    // central shoulder notch, broad outer body, and deep rounded handgrips
-    // must remain visible when rendered at the actual Capture-card size.
+    // Owner reference shape, drawn on a natural 80x64 canvas. A flat
+    // recessed center joins two modest rounded shoulder humps; the broad
+    // handgrips curve underneath an elevated, flat central bridge.
+    // Do not stretch this artwork horizontally or substitute a V-shaped belly.
     private static readonly Geometry Gamepad =
-        Path("M 19,15 " +
-             "C 23,12 27,12 30,15 " +
-             "C 31,16 33,16 34,15 " +
-             "C 38,12 42,12 46,15 " +
-             "C 51,17 54,24 57,32 " +
-             "L 61,43 " +
-             "C 63,50 60,58 54,58 " +
-             "C 49,58 46,53 42,48 " +
-             "C 40,45 38,44 35,44 " +
-             "L 29,44 " +
-             "C 26,44 24,45 22,48 " +
-             "C 18,53 15,58 10,58 " +
-             "C 4,58 1,50 3,43 " +
-             "L 7,32 " +
-             "C 10,24 13,17 19,15 Z");
+        Path("M 8,24 C 10,16 18,11 25,11 " +
+             "C 29,11 31,15 34,15 L 46,15 " +
+             "C 49,15 51,11 55,11 C 62,11 69,16 71,24 " +
+             "C 74,33 77,51 76,55 C 75,61 70,63 65,62 " +
+             "C 60,62 56,55 52,50 C 50,47 48,45 45,45 " +
+             "L 35,45 C 32,45 30,47 28,50 " +
+             "C 24,55 20,62 15,62 C 10,63 5,61 4,55 " +
+             "C 3,50 5,33 8,24 Z");
+    // Filled D-pad is deliberately solid, like the reference, not two thin
+    // line segments with a large halo.
     private static readonly Geometry GamepadCross =
-        Path("M 18,25 L 18,37 M 12,31 L 24,31");
+        Path("M 19,27 L 23,27 L 23,23 L 27,23 " +
+             "L 27,27 L 31,27 L 31,33 L 27,33 " +
+             "L 27,37 L 23,37 L 23,33 L 19,33 Z");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -590,8 +588,8 @@ public sealed class StageEmblem : FrameworkElement
 
     private static void DrawButton(DrawingContext dc, Point center)
     {
-        dc.DrawEllipse(null, ButtonGlow, center, 2.2, 2.2);
-        dc.DrawEllipse(ButtonFill, null, center, 1.8, 1.8);
+        dc.DrawEllipse(null, ButtonGlow, center, 2.6, 2.6);
+        dc.DrawEllipse(ButtonFill, null, center, 2.2, 2.2);
         dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(190, 220, 255, 255)),
             null, new Point(center.X - 0.5, center.Y - 0.5), 0.75, 0.75);
     }
@@ -602,8 +600,11 @@ public sealed class StageEmblem : FrameworkElement
         if (RenderSize.Width < 2 || RenderSize.Height < 2)
             return;
 
+        // The three artwork types retain their native proportions. The
+        // controller alone uses the reference's 80x64 coordinate system.
         dc.PushTransform(new ScaleTransform(
-            RenderSize.Width / 64.0, RenderSize.Height / 64.0));
+            RenderSize.Width / (Kind == StageEmblemKind.Ignition ? 80.0 : 64.0),
+            RenderSize.Height / 64.0));
         switch (Kind)
         {
             case StageEmblemKind.Chip:
@@ -612,11 +613,12 @@ public sealed class StageEmblem : FrameworkElement
                 break;
             case StageEmblemKind.Ignition:
                 DrawNeon(dc, Gamepad);
-                DrawNeon(dc, GamepadCross);
-                DrawButton(dc, new Point(44, 25));
-                DrawButton(dc, new Point(51, 32));
-                DrawButton(dc, new Point(44, 39));
-                DrawButton(dc, new Point(37, 32));
+                dc.DrawGeometry(null, ButtonGlow, GamepadCross);
+                dc.DrawGeometry(ButtonFill, null, GamepadCross);
+                DrawButton(dc, new Point(60, 24));
+                DrawButton(dc, new Point(67, 31));
+                DrawButton(dc, new Point(60, 38));
+                DrawButton(dc, new Point(53, 31));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);
