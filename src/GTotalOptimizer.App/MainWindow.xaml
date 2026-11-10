@@ -640,8 +640,9 @@
                                    Text="Select the Cyberpunk 2077 game folder."
                                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                         <Button x:Name="RestoreButton" Grid.Column="1"
-                                Content="RESTORE" Margin="5,0,0,0"
+                                Content="RESTORE PROFILERS" Margin="5,0,0,0"
                                 Style="{StaticResource MinorButton}" Visibility="Collapsed"
+                                ToolTip="Restore original profiler files without entering Analyze"
                                 Click="Restore_Click"/>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
