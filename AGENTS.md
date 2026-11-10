@@ -13,7 +13,7 @@ Read, in order:
 6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint (2026-11-10):** **GCO v1.2.0**, .NET10 WPF, CET+GRSP+optional PresentMon. Latest verified source [`bb5f072`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/bb5f07207208732a09337f475eb8f25c18053a1e), automatic [Windows CI #209](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42813102528) **SUCCESS 185/185**, portable artifact **13763152279**. Start icon **actually traced from owner-supplied cyan reference pixels**, 80×56 WPF geometry with direct traced cross and four face-button positions. The Game Root corner and other icons are untouched. Windows visual approval and in-game capture/restore, independent CET/GRSP modes and generation remain unverified.
+**Current checkpoint (2026-11-10):** **GCO v1.2.1** source-version bump authorized; integrated Windows CI for v1.2.1 is **pending**. Last completed baseline is [Windows CI #249](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42883506384) **SUCCESS, 231/231**, source `88b52bb1f934d74907b819e8c551b8370307c83c`, v1.2.0 artifact **13795690774**. Existing .NET 10 WPF, CET+GRSP+automatic/optional-evidence PresentMon, one shared runtime and source-owner restore boundaries remain unchanged. GCO 0-Engine preflight now checks only the mod folder and `init.lua` existence; no version or injection assessment. CI still does not establish owner Windows screenshot acceptance, actual game capture/restore or pass generation.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 
@@ -32,13 +32,13 @@ Read, in order:
 
 4. **Respect component ownership.**
 
-- **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. CET profiling requires 0-Engine v0.17.2+.
+- **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. GCO profiling checks only that 0-Engine's mod directory and `init.lua` exist; CET's Resolver owns generation and injection compatibility.
 - **GRSP:** Owns REDscript profiling and instrumentation.
 - **GCO:** Owns unified analysis, cross-domain coordination, new REDscript Resolver/Generator, UI, reporting and final optimization ZIP.
 - **G-REDruntime:** Owns shared framework services for REDscript, included only when required.
 - **One combined optimization plan**, using CET and GRSP evidence and live sources. Preserve CET's authoritative generation pipeline and REDscript compilation/source-safety checks. Never duplicate implementations.
 
-- **CET source:** `giorgioherma/G-CET_Runtime_Profiler` on `dev/resolver-profiler-handoff`. Its source-owned installer/restore and CET optimization generation remain authoritative; GCO never replaces or duplicates them. Standalone CET's core-only mode is a documented capability, but the user-approved **GCO CET profiling workflow** validates 0-Engine v0.17.2+.
+- **CET source:** `giorgioherma/G-CET_Runtime_Profiler` on `dev/resolver-profiler-handoff`. Its source-owned installer/restore and CET optimization generation remain authoritative; GCO never replaces or duplicates them. Standalone CET's core-only mode is a documented capability, but the user-approved **GCO CET profiling workflow** verifies only 0-Engine mod directory and `init.lua` presence at installation preflight.
 - **GRSP source:** `giorgioherma/GRSP-G-REDscript-Profiler` on `dev/resolver-profiler-handoff`. Missing measurement hooks/report fields are fixed THERE, not reimplemented in GCO.
 - **G-REDruntime source:** `giorgioherma/G-REDruntime_Framework` on `main`. Shared REDscript runtime files enter the generated ZIP only for accepted rules which require them; not a universal dependency.
 - **GCO source:** this repo on `main`. One **central cross-domain coordination/optimization plan**, using CET and GRSP evidence and current live mod sources. CET retains its authoritative Resolver/generator decisions and fixed order; GCO owns new REDscript Resolver/Generator. GCO validates compatibility, composes owner outputs and assembles the final ZIP.
