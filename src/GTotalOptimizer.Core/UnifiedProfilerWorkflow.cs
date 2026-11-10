@@ -92,6 +92,37 @@ public sealed class UnifiedProfilerWorkflow
         return LiveProfilerStateParser.Parse(c.RawJson!, g.RawJson!);
     }
 
+    // The strict framework preflight ran before this session installed its
+    // temporary profiler binaries. Only a matching journal and verified owner
+    // state may retain that approval while CET's native file is replaced.
+    public bool HasInstalledFrameworkBaseline(string game, LiveProfilerState state)
+    {
+        if (!state.BothInstalled || !HasRecoveryJournal) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+            var data = doc.RootElement;
+            if (!data.TryGetProperty("gameRoot", out var gamePath) ||
+                gamePath.ValueKind != JsonValueKind.String ||
+                !string.Equals(gamePath.GetString(), Normalize(game),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !data.TryGetProperty("sessionId", out var id) ||
+                id.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(id.GetString()) ||
+                !data.TryGetProperty("stage", out var stage) ||
+                stage.ValueKind != JsonValueKind.String)
+                return false;
+            // v1.2.1 sessions used these same two durable stages after
+            // preflight and owner installations; both remain compatible.
+            return stage.GetString() is "both-installed" or "capture-attempt";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
     private string? JournalSessionId()
     {
         if (!File.Exists(Journal)) return null;
@@ -189,10 +220,13 @@ public sealed class UnifiedProfilerWorkflow
             Require(await Run(BackendKind.Cet, "install", game, token));
             WriteJournal(game, "cet-installed");
             Require(await Run(BackendKind.Grsp, "install", game, token));
-            WriteJournal(game, "both-installed");
+            WriteJournal(game, "owners-installed");
             var post = await InspectAsync(game, token);
             if (!post.BothInstalled)
                 throw new InvalidOperationException($"Post-install identity failed: CET={post.Cet}, GRSP={post.Grsp}.");
+            // The admitted baseline is frozen only after both owners prove
+            // installed identity. Interrupted installs remain recovery-only.
+            WriteJournal(game, "both-installed");
             return new(true, "CET and REDscript profiler installed and verified by owner status.");
         }
         catch (Exception ex)

@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterScreen"
         Background="#000000" Foreground="#F1F5F6"
         FontFamily="./Fonts/Rajdhani/#Rajdhani" FontSize="14"
-        Loaded="Window_Loaded" Activated="Window_Activated"
+        Loaded="Window_Loaded" Activated="Window_Activated" StateChanged="Window_StateChanged"
         SizeChanged="Window_SizeChanged" Closed="Window_Closed">
     <Window.Resources>
         <FontFamily x:Key="Rajdhani">./Fonts/Rajdhani/#Rajdhani</FontFamily>
@@ -124,6 +124,87 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <!-- Layered WPF vector actions, not flat recolors or raster buttons. -->
+        <LinearGradientBrush x:Key="RestoreMetal" StartPoint=".06,0" EndPoint=".75,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#F5FBFC" Offset=".19"/>
+            <GradientStop Color="#CEDCE0" Offset=".47"/>
+            <GradientStop Color="#9AB2BC" Offset=".86"/>
+            <GradientStop Color="#688791" Offset="1"/>
+        </LinearGradientBrush>
+        <Style x:Key="StageActionButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource GoldenMetal}"/>
+            <Setter Property="Foreground" Value="#071012"/>
+            <Setter Property="BorderBrush" Value="#CFB900"/>
+            <Setter Property="FontFamily" Value="{StaticResource Oxanium}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="ExtraBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <fx:ChamferOutline x:Name="StageShell" Fill="#091316"
+                                               Stroke="{TemplateBinding BorderBrush}"
+                                               StrokeThickness="1.8" CornerCut="8"
+                                               IsHitTestVisible="False"/>
+                            <fx:ChamferOutline x:Name="StageFace" Margin="2"
+                                               Fill="{TemplateBinding Background}"
+                                               Stroke="#FFF6A0" StrokeThickness="1.0"
+                                               CornerCut="6" MetallicFinish="True"
+                                               IsHitTestVisible="False"/>
+                            <Path x:Name="StageEdge" Data="M 0,4 L 4,0 L 32,0"
+                                  Stroke="#FFFFCE" StrokeThickness="1.35"
+                                  Width="34" Height="6" HorizontalAlignment="Left"
+                                  VerticalAlignment="Top" Margin="12,4,0,0"
+                                  IsHitTestVisible="False"/>
+                            <Path x:Name="StageCorner" Data="M 0,5 L 11,5 L 16,0"
+                                  Stroke="#00E2F2" StrokeThickness="1.25"
+                                  Width="17" Height="7" HorizontalAlignment="Right"
+                                  VerticalAlignment="Bottom" Margin="0,0,12,4"
+                                  IsHitTestVisible="False"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="StageShell" Property="Stroke" Value="#00E2F2"/>
+                                <Setter TargetName="StageShell" Property="Glow" Value="True"/>
+                                <Setter TargetName="StageFace" Property="Stroke" Value="#B6FFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="StageFace" Property="Fill"
+                                        Value="{StaticResource GoldenMetalHot}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="StageShell" Property="Stroke" Value="#00E2F2"/>
+                                <Setter TargetName="StageShell" Property="Glow" Value="True"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#78898D"/>
+                                <Setter TargetName="StageShell" Property="Stroke" Value="#304347"/>
+                                <Setter TargetName="StageShell" Property="Glow" Value="False"/>
+                                <Setter TargetName="StageFace" Property="Fill"
+                                        Value="{StaticResource ButtonMetalDark}"/>
+                                <Setter TargetName="StageFace" Property="Stroke" Value="#344C52"/>
+                                <Setter TargetName="StageFace" Property="Lit" Value="False"/>
+                                <Setter TargetName="StageEdge" Property="Opacity" Value=".24"/>
+                                <Setter TargetName="StageCorner" Property="Opacity" Value=".24"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="RestoreStageButton" TargetType="Button"
+               BasedOn="{StaticResource StageActionButton}">
+            <Setter Property="Background" Value="{StaticResource RestoreMetal}"/>
+            <Setter Property="Foreground" Value="#007D9F"/>
+            <Setter Property="BorderBrush" Value="#7BCEDC"/>
         </Style>
         <Style x:Key="MinorButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
             <Setter Property="Foreground" Value="#00E2F2"/>
@@ -526,12 +607,12 @@
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,3,0,0"
-                                               Text="Install the available CET and/or REDscript profiling tools."
+                                               Text="Install the CET and REDscript profiling tools."
                                                Foreground="#A8B3B5" FontSize="13"
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                VerticalAlignment="Top" TextWrapping="Wrap"/>
                                     <Button x:Name="InstallButton" Grid.Row="3" Content="INSTALL PROFILERS"
-                                            Style="{StaticResource ActionButton}" Click="Install_Click"
+                                            Style="{StaticResource StageActionButton}" Click="Install_Click"
                                             IsEnabled="False"/>
                                 </Grid>
                             </Grid>
@@ -571,7 +652,7 @@
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                VerticalAlignment="Top" TextWrapping="Wrap"/>
                                     <Button x:Name="LaunchButton" Grid.Row="3" Content="START CYBERPUNK"
-                                            Style="{StaticResource ActionButton}" Click="Launch_Click"
+                                            Style="{StaticResource StageActionButton}" Click="Launch_Click"
                                             IsEnabled="False"/>
                                 </Grid>
                             </Grid>
@@ -611,7 +692,7 @@
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                VerticalAlignment="Top" TextWrapping="Wrap"/>
                                     <Button x:Name="CollectButton" Grid.Row="3" Content="COLLECT RESULTS"
-                                            Style="{StaticResource ActionButton}" Click="Collect_Click"
+                                            Style="{StaticResource StageActionButton}" Click="Collect_Click"
                                             IsEnabled="False"/>
                                 </Grid>
                             </Grid>
@@ -625,8 +706,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="188"/>
                     </Grid.ColumnDefinitions>
-                    <!-- No panel fill/border or second slash: the original V
-                         already has a cyan slash here. Keep status/RESTORE alive. -->
+                    <!-- RESTORE reuses the first stage action, not a footer button. -->
                     <Grid x:Name="ConsoleTextHost" Grid.Column="0"
                           Margin="-7,-30,9,19" Background="Transparent">
                         <Grid.ColumnDefinitions>
@@ -639,11 +719,6 @@
                                    VerticalAlignment="Center" TextWrapping="Wrap"
                                    Text="Select the Cyberpunk 2077 game folder."
                                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                        <Button x:Name="RestoreButton" Grid.Column="1"
-                                Content="RESTORE PROFILERS" Margin="5,0,0,0"
-                                Style="{StaticResource MinorButton}" Visibility="Collapsed"
-                                ToolTip="Restore original profiler files without entering Analyze"
-                                Click="Restore_Click"/>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
                             Margin="-10,-20,10,20"

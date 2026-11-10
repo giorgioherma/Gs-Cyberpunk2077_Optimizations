@@ -294,10 +294,36 @@ public partial class MainWindow : Window
 
     private void Window_Activated(object sender, EventArgs e)
     {
-        if (!initialized || busy) return;
+        if (!initialized || busy ||
+            WindowState == System.Windows.WindowState.Minimized) return;
         if (portraitStage is PortraitStage.Capturing or PortraitStage.Collecting)
             StartGlitchIfVisible();
-        if (IsLoaded) _ = RefreshSourceAsync();
+        // Do not run synchronous pre-await inspection inside the taskbar's
+        // native activation transition; schedule it once activation settles.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (IsLoaded && !busy &&
+                WindowState != System.Windows.WindowState.Minimized)
+                _ = RefreshSourceAsync();
+        }));
+    }
+
+    private void Window_StateChanged(object sender, EventArgs e)
+    {
+        if (WindowState == System.Windows.WindowState.Minimized)
+        {
+            glitchTimer.Stop();
+            return;
+        }
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (IsLoaded && IsVisible &&
+                WindowState != System.Windows.WindowState.Minimized)
+            {
+                Activate();
+                Focus();
+            }
+        }));
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -353,7 +379,6 @@ public partial class MainWindow : Window
         GamePathBox.IsEnabled = BrowseButton.IsEnabled = RefreshButton.IsEnabled = !isBusy;
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = !isBusy && false;
-        RestoreButton.IsEnabled = !isBusy;
     }
 
     private void SetStatus(string message) => StatusText.Text = consolePinned ?? message;
@@ -394,7 +419,12 @@ public partial class MainWindow : Window
         InstallButton.Content = "INSTALL PROFILERS";
         LaunchButton.Content = "START CYBERPUNK";
         CollectButton.Content = "COLLECT RESULTS";
-        RestoreButton.Visibility = Visibility.Collapsed;
+        var recoveryMode = Workflow.HasRecoveryJournal;
+        InstallButton.Content = recoveryMode ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
+        InstallButton.Style = (Style)FindResource(recoveryMode ? "RestoreStageButton" : "StageActionButton");
+        // Recover even if the instrumented native CET binary no longer matches
+        // the original framework version admitted before installation.
+        if (recoveryMode) InstallButton.IsEnabled = !GameRunning();
 
         UserSettings.WriteGameRoot(GamePathBox.Text);
         if (!current.IsValidGame)
@@ -412,14 +442,8 @@ public partial class MainWindow : Window
         ModCountText.Text = $"Game found  ·  {current.CetModCount} CET mods  ·  {redOwners} REDscript groups";
         // Installer admission is based on actual framework versions, never
         // on mod counts or presence of an empty r6/scripts folder.
-        var framework = FrameworkPreflight.Inspect(current.GameRoot!);
-        DependencyText.Text = framework.Ready
-            ? "CET 1.37.1  ·  0-Engine present  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
-            : framework.Detail;
-        // Only a fully admitted framework stack is yellow. Unsupported,
-        // missing or unchecked installations use the existing cyan accent.
-        // Validation and install/capture gates remain owned by FrameworkPreflight.
-        DependencyText.Foreground = (Brush)FindResource(framework.Ready ? "Yellow" : "Cyan");
+        // Owner status must be inspected before framework revalidation: GCO's
+        // temporary CET native DLL is not the original pre-install binary.
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
@@ -434,6 +458,17 @@ public partial class MainWindow : Window
             liveState = state;
             var running = GameRunning();
             var session = Workflow.HasRecoveryJournal;
+            // A game-bound, verified owner installation reuses the original
+            // admitted baseline until verified restore removes the journal.
+            // No extra profiler version whitelist is needed.
+            var pinnedFramework = Workflow.HasInstalledFrameworkBaseline(current.GameRoot!, state);
+            var framework = pinnedFramework
+                ? new FrameworkPreflightResult(Array.Empty<string>())
+                : FrameworkPreflight.Inspect(current.GameRoot!);
+            DependencyText.Text = framework.Ready
+                ? "CET 1.37.1  ·  0-Engine present  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
+                : framework.Detail;
+            DependencyText.Foreground = (Brush)FindResource(framework.Ready ? "Yellow" : "Cyan");
             var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
             savedCapture = saved;
             var frame = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
@@ -454,20 +489,20 @@ public partial class MainWindow : Window
             var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted);
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
-            InstallButton.IsEnabled = framework.Ready && state.CleanForInstall && !session && !running;
-            LaunchButton.IsEnabled = framework.Ready && state.BothInstalled && session &&
+            InstallButton.IsEnabled = session ? !running
+                : framework.Ready && state.CleanForInstall && !running;
+            LaunchButton.IsEnabled = pinnedFramework &&
                 !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
-            CollectButton.IsEnabled = readyToCollect;
+            CollectButton.IsEnabled = !running && readyToCollect;
             ContinueButton.IsEnabled = !running &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null);
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
-            InstallButton.Content = state.CetManaged && state.GrspManaged
-                ? "PROFILERS INSTALLED" : "INSTALL PROFILERS";
+            InstallButton.Content = session ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
+            InstallButton.Style = (Style)FindResource(session ? "RestoreStageButton" : "StageActionButton");
             LaunchButton.Content = running ? "GAME RUNNING"
                 : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
             CollectButton.Content = "COLLECT RESULTS";
-            RestoreButton.Visibility = session ? Visibility.Visible : Visibility.Collapsed;
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
             SetStatus(!framework.Ready ? framework.Detail
@@ -492,7 +527,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Install_Click(object sender, RoutedEventArgs e) => await InstallProfilersAsync();
+    private async void Install_Click(object sender, RoutedEventArgs e)
+    {
+        // The first card switches from install to recovery for an owned session.
+        if (Workflow.HasRecoveryJournal) await RestoreIncompleteSessionAsync();
+        else await InstallProfilersAsync();
+    }
     private async Task InstallProfilersAsync()
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
@@ -532,11 +572,9 @@ public partial class MainWindow : Window
         SetBusy(true);
         try
         {
-            var frameworks = FrameworkPreflight.Inspect(game);
-            if (!frameworks.Ready) throw new InvalidOperationException(frameworks.Detail);
             var state = await Workflow.InspectAsync(game);
-            if (!state.BothInstalled || !Workflow.HasRecoveryJournal)
-                throw new InvalidOperationException("Both G-CET and G-REDscript profiler installations must be verified before Start.");
+            if (!Workflow.HasInstalledFrameworkBaseline(game, state))
+                throw new InvalidOperationException("Verified, game-bound G-CET and G-REDscript installations are required before Start. RESTORE PROFILERS is available for recovery.");
             // Owner-ready archives can belong to the preceding attempt. Never
             // roll the journal to a fresh attempt while either remains pending.
             if (state.CetCaptureReady || state.GrspCaptureReady)
@@ -788,7 +826,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Restore_Click(object sender, RoutedEventArgs e) => await RestoreIncompleteSessionAsync();
     private async Task RestoreIncompleteSessionAsync()
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||

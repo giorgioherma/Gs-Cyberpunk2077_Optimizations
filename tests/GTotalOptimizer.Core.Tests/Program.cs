@@ -343,6 +343,46 @@ try
             .CanCollect(hasCurrentSession: true, gameRunning: false),
         "independent CET-only and REDscript-only results can be collected");
 
+    // Strict original framework versions are not rechecked while GCO's
+    // temporary native profiler is installed and both owners verify identity.
+    var sessionPackage = Path.Combine(root, "FrameworkSessionPackage");
+    var sessionResults = Path.Combine(sessionPackage, "RESULTS");
+    Directory.CreateDirectory(sessionResults);
+    var sessionJournal = Path.Combine(sessionResults, "GCO-active-profile-session.json");
+    var sessionGame = Path.Combine(root, "FrameworkSessionGame");
+    Directory.CreateDirectory(sessionGame);
+    var sessionWorkflow = new UnifiedProfilerWorkflow(sessionPackage);
+    void SessionStage(string stage, string path, string id = "confirmed-test-session")
+        => File.WriteAllText(sessionJournal, System.Text.Json.JsonSerializer.Serialize(
+            new { gameRoot = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar), stage, sessionId = id }));
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
+        "absent ownership journal cannot skip original preflight");
+    foreach (var stage in new[] { "install-started", "cet-installed", "owners-installed" })
+    {
+        SessionStage(stage, sessionGame);
+        Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
+            "interrupted install stage " + stage + " does not pin framework admission");
+    }
+    SessionStage("both-installed", sessionGame);
+    Require(sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
+            sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
+        "owner-verified install freezes framework admission after CET native replacement");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, goodStatus) &&
+            !sessionWorkflow.HasInstalledFrameworkBaseline(Path.Combine(root, "WrongGame"), installedStatus),
+        "unmanaged or mismatched game install never inherits the pinned baseline");
+    SessionStage("capture-attempt", sessionGame);
+    Require(sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
+        "restarted capture retains game-bound framework admission");
+    SessionStage("capture-attempt", sessionGame, "");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
+        "empty session identity does not authorize the baseline");
+    File.WriteAllText(sessionJournal, "{broken-json");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
+        "malformed journal never authorizes the baseline");
+    File.Delete(sessionJournal);
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
+        "verified restore removes the session and reactivates strict preflight");
+
     // Archive copies are verified, immutable evidence for Continue.
     var archiveGame = Path.Combine(root, "CaptureGame");
     Directory.CreateDirectory(archiveGame);
