@@ -295,11 +295,11 @@
             </StackPanel>
         </Grid>
 
-        <!-- Page indicators float in the clear band ABOVE the thin inner box.
-             Kept separate from the scrollable Capture/Analyze content. -->
+        <!-- Page indicators center on the entire window in the clear band ABOVE
+             the inner chassis, independently of the right content column. -->
         <Grid x:Name="TopTabsHost" Grid.Row="0" Panel.ZIndex="22"
               VerticalAlignment="Bottom" Height="44"
-              Margin="250,0,29,0" IsHitTestVisible="False">
+              IsHitTestVisible="False">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
             <Grid Width="246" Height="44" Margin="0,0,12,0">
                 <fx:SlantedTabShape x:Name="CaptureTabShape" Lit="True"

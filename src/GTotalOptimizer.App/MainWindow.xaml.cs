@@ -162,27 +162,11 @@ public partial class MainWindow : Window
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdatePortraitWidth();
-        UpdateTopTabMargin();
     }
 
     private void ContentRegion_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdatePortraitWidth();
-        UpdateTopTabMargin();
-    }
-
-    private void UpdateTopTabMargin()
-    {
-        if (TopTabsHost is null || ContentRegion is null) return;
-        // At minimum width, move the tabs slightly right of the brand title.
-        // At 1280 the centre remains over the old right content column.
-        var clientWidth = ContentRegion.ActualWidth > 0
-            ? ContentRegion.ActualWidth + 58.0
-            : (ActualWidth > 0 ? ActualWidth : Width);
-        var left = 250.0 + Math.Clamp((1280.0 - clientWidth) * 0.8, 0.0, 170.0);
-        var desired = new Thickness(left, 0, 29, 0);
-        if (TopTabsHost.Margin != desired)
-            TopTabsHost.Margin = desired;
     }
 
     private void UpdatePortraitWidth()
@@ -247,7 +231,6 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         UpdatePortraitWidth();
-        UpdateTopTabMargin();
         lastGameRunning = GameRunning();
         gameStateTimer.Start();
         _ = RefreshSourceAsync();
