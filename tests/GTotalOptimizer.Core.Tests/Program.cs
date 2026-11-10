@@ -368,6 +368,52 @@ try
     catch (InvalidDataException) { tamperCaught = true; }
     Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
 
+
+    // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.
+    static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) => new(exists, v, shape);
+    GameFrameworkEvidence Full(string? engine = "0.18.6") =>
+        new(E("2.3.1"), E("1.37.1"), E(engine), E("1.30.0"), E("0.5.31"));
+    Require(FrameworkPreflight.Evaluate(Full()).Ready,
+        "Cyberpunk 2.31 supported framework stack is admitted");
+    Require(FrameworkPreflight.Evaluate(Full("0.19.0")).Ready,
+        "0-Engine future version is admitted without a release whitelist");
+    Require(!FrameworkPreflight.Evaluate(Full("0.17.2")).Ready,
+        "ambiguous 0-Engine 0.17.x variants fail the minimum");
+    Require(!FrameworkPreflight.Evaluate(Full() with
+        { ZeroEngine = E("0.18.6", shape: false) }).Ready,
+        "0-Engine requires source-compatible injection entrypoints");
+    var badFrameworks = FrameworkPreflight.Evaluate(new(
+        E("2.5"), E("1.38.0"), E(null, false), E("1.31.0"), E("0.5.32")));
+    Require(!badFrameworks.Ready && badFrameworks.Issues.Count == 5 &&
+        badFrameworks.Detail.Contains("0-Engine 0.18.0 or greater is missing") &&
+        badFrameworks.Detail.Contains("CET requires 1.37.1; found 1.38.0"),
+        "all bad/missing framework versions are listed, not hidden by first error");
+    Require(!FrameworkPreflight.Evaluate(Full() with
+        { Redscript = E(null) }).Ready,
+        "an existing but unverifiable plugin is not declared compatible");
+    Require(CaptureAdmissionPolicy.CanCollect(true, true) &&
+        !CaptureAdmissionPolicy.CanCollect(true, false),
+        "Collect eligibility follows an actual launch, not the F11 capture result");
+    Require(!CaptureAdmissionPolicy.CanContinue(emptyCapture, true) &&
+        !CaptureAdmissionPolicy.CanContinue(cetCopy, true) &&
+        !CaptureAdmissionPolicy.CanContinue(redCopy, true),
+        "Continue remains blocked until explicit Collect has recorded two captures");
+    var attemptedDual = CollectedCaptureStore.MarkCollectionAttempted(package,
+        archiveGame, sessionId);
+    Require(CaptureAdmissionPolicy.CanContinue(attemptedDual, true) &&
+        !CaptureAdmissionPolicy.CanContinue(attemptedDual, false),
+        "dual native capture allows Continue without PresentMon only after stopped collection");
+    Require(CaptureAdmissionPolicy.CollectionStatus(attemptedDual)
+        .Contains("PresentMon: RESULTS MISSING") &&
+        CaptureAdmissionPolicy.CollectionStatus(attemptedDual)
+        .Contains("CONTINUE enabled"),
+        "missing frame CSV warns in console but does not block native optimization");
+    Require(CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
+        .Contains("G-REDscript Profiler: RESULTS MISSING") &&
+        CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
+        .Contains("CONTINUE disabled"),
+        "missing GRSP capture disables Continue and reports exact failing domain");
+
     // Continue invokes owner-managed restore and deletes the active journal.
     // Page 2 must continue reading its bound collection index independently.
     var restoredGame = Path.Combine(root, "RestoredSessionGame");
@@ -379,12 +425,16 @@ try
     try { CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId); }
     catch (InvalidDataException) { notRestoredRejected = true; }
     Require(notRestoredRejected, "unrestored capture cannot be opened as the completed analysis page");
-    CollectedCaptureStore.MarkRestored(package, restoredCopy,
-        skipCet: false, skipRedscript: true, skipFrameTime: true);
+    var restoredDual = CollectedCaptureStore.CopyOwner(package, restoredGame,
+        restoredId, BackendKind.Grsp, redSource);
+    restoredDual = CollectedCaptureStore.MarkCollectionAttempted(package, restoredGame, restoredId);
+    CollectedCaptureStore.MarkRestored(package, restoredDual,
+        skipCet: false, skipRedscript: false, skipFrameTime: true);
     var postRestore = CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId);
     Require(postRestore.Restored && postRestore.Cet is not null &&
+        postRestore.Redscript is not null && postRestore.CollectionAttempted &&
         postRestore.Skipped is not null &&
-        postRestore.Skipped.Contains("REDscript") && postRestore.Skipped.Contains("FrameTime"),
+        !postRestore.Skipped.Contains("REDscript") && postRestore.Skipped.Contains("FrameTime"),
         "Page 2 can read a verified, restored capture after its owner journal is deleted");
     var wrongGameRejected = false;
     try { CollectedCaptureStore.ReadRestored(package, archiveGame, restoredId); }
