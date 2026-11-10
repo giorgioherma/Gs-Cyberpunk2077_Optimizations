@@ -261,3 +261,8 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - Keep action buttons, tabs, V/skyline, chassis and captures unchanged. Remove folder symbol, use flat card fill, yellow 1/2/3 page markers and original rendered glowing bold cyan download, game controller and layered-data WPF icons. Capture description now warns against menus, inventory and pausing; Collect describes continuing to Analyze. Update details in `docs/LATEST-WORK.md`. Existing Windows pipeline must validate compiling XAML, runtime package and integration; user Windows screenshot judges aesthetics. Keep v1.1.9.
 
 - **Verified latest UI build:** source `f9f3194d`, automatic [Windows CI #202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) **SUCCESS 185/185**, artifact **13744838319**, GCO v1.1.9. New cards/icons and single-shift capture layout packaged without changing logo or native owners; user screenshot acceptance remains pending.
+
+
+### 2026-11-10 — Owner-approved GCO v1.2.0
+
+- The next unified product build is **GCO v1.2.0**, using exactly one canonical `VersionPrefix` in `Directory.Build.props`. WPF/assembly/file/package/Actions artifact identifiers all derive from that value. Only product metadata and current README/decisions/handoff are edited. Existing owner profilers, icon/layout changes, .NET 10 single-runtime and integration contracts stay unchanged. Await automatic full Windows Actions verification; don't claim successful v1.2.0 build until verified.

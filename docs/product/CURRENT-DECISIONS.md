@@ -309,3 +309,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 
 - Retain official owner logo placement and existing metallic buttons/tabs. Raise GOT LAG headline+subtitle together about 14 DIP without shifting downstream vertical positions. Move Game Root x+30 DIP and shorten its available width, aligning Capture Workflow to the same region **once**, not double translating individual cards. Narrow each card by 12 DIP total (6 per side) and retain the original card spacing or greater.
 - Game Root has no folder symbol. Three workflow cards use a single-color face instead of metallic shading, simple bold cyan-glowing WPF vectors (download tray, gamepad, layers), and yellow page-style 1/2/3 numeral markers. Start instructions explicitly avoid menus/inventory/pauses; Collect copy references continuing to Analyze. All original capture actions, owner assets, two-page system and v1.1.9 remain unchanged.
+
+
+## 2026-11-10 — Explicit unified app v1.2.0 version bump
+
+- Owner explicitly requested **GCO v1.1.9 → v1.2.0**. Change only the canonical `VersionPrefix` in `Directory.Build.props`; retain derived assembly/file/WPF/package/CI identity without redundant version literals. No component-owner version or app UI/backend change authorized.

@@ -13,7 +13,7 @@ Read, in order:
 6. `docs/design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md` (latest approved Page 1 and profiler admission).
 6. Before touching a source component, its **own** repository's `AGENTS.md` / handoff / integration docs and current checked-out implementation. Never substitute an old TOTAL snapshot for these.
 
-**Current checkpoint (2026-11-10):** **GCO v1.1.9**, .NET10 WPF, CET+GRSP+optional PresentMon. Current verified source [`f9f3194d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f9f3194d3c90e5d528271b2c2e2d7da48e51d546), automatic [Windows CI #202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) **SUCCESS 185/185**, downloadable artifact **13744838319**. Owner's Capture page final layout/vector icons are packaged; visual screenshot acceptance pending. In-game profiling/capture restoration, CET-only/GRSP-only independence and generation are not yet proven.
+**Current checkpoint (2026-11-10):** **GCO v1.2.0** (owner-approved source version; full Windows CI pending), .NET10 WPF, CET+GRSP+optional PresentMon. Current verified source [`f9f3194d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f9f3194d3c90e5d528271b2c2e2d7da48e51d546), automatic [Windows CI #202](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42778746419) **SUCCESS 185/185**, downloadable artifact **13744838319**. Owner's Capture page final layout/vector icons are packaged; visual screenshot acceptance pending. In-game profiling/capture restoration, CET-only/GRSP-only independence and generation are not yet proven.
 
 ## CI workflow ownership — one active integrated pipeline (mandatory)
 
