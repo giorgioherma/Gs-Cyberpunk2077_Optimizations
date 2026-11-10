@@ -532,6 +532,10 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Pen OuterBloom = Stroke(32, 11.0);
     private static readonly Pen InnerBloom = Stroke(100, 6.8);
     private static readonly Pen CyanCore = Stroke(255, 3.8);
+    // Ref-specific lighter bloom; preserve original pens for icons 1 and 3.
+    private static readonly Pen GamepadOuterBloom = Stroke(24, 8.5);
+    private static readonly Pen GamepadInnerBloom = Stroke(80, 5.7);
+    private static readonly Pen GamepadCyanCore = Stroke(255, 3.15);
     private static readonly Pen IceHighlight = new(new SolidColorBrush(
         Color.FromArgb(167, 220, 255, 255)), 0.9)
     {
@@ -550,25 +554,41 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Owner reference shape, drawn on a natural 80x64 canvas. A flat
-    // recessed center joins two modest rounded shoulder humps; the broad
-    // handgrips curve underneath an elevated, flat central bridge.
-    // Do not stretch this artwork horizontally or substitute a V-shaped belly.
+    // Direct vector trace from the owner's 700x96 cyan controller reference.
+    // Coordinates follow the extracted stroke centerline (80x56 canvas):
+    // twin rounded shoulders, straight recessed top, flat lower bridge,
+    // deep curved grips. No hand-invented controller silhouette.
     private static readonly Geometry Gamepad =
-        Path("M 8,24 C 10,16 18,11 25,11 " +
-             "C 29,11 31,15 34,15 L 46,15 " +
-             "C 49,15 51,11 55,11 C 62,11 69,16 71,24 " +
-             "C 74,33 77,51 76,55 C 75,61 70,63 65,62 " +
-             "C 60,62 56,55 52,50 C 50,47 48,45 45,45 " +
-             "L 35,45 C 32,45 30,47 28,50 " +
-             "C 24,55 20,62 15,62 C 10,63 5,61 4,55 " +
-             "C 3,50 5,33 8,24 Z");
-    // Filled D-pad is deliberately solid, like the reference, not two thin
-    // line segments with a large halo.
+        Path("M 13.4,11.7 " +
+             "C 14.7,9.6 16.5,7.7 18.7,6.2 " +
+             "C 20.6,4.9 22.9,3.9 25.0,4.0 " +
+             "C 27.9,4.1 30.6,6.1 33.5,7.3 " +
+             "C 38.3,7.3 42.5,7.3 47.3,7.3 " +
+             "C 50.5,6.1 53.6,4.0 56.8,4.0 " +
+             "C 59.4,4.0 62.1,5.4 64.2,7.3 " +
+             "C 66.0,8.9 67.4,10.8 68.5,12.8 " +
+             "C 72.4,19.9 73.0,28.2 73.8,37.0 " +
+             "C 74.1,40.5 74.4,44.1 72.7,46.9 " +
+             "C 71.8,48.4 70.2,49.7 68.5,50.2 " +
+             "C 67.4,50.5 66.3,50.5 65.3,50.2 " +
+             "C 59.6,48.8 57.4,39.8 52.6,37.0 " +
+             "C 49.4,35.2 45.2,35.9 40.9,35.9 " +
+             "C 36.6,35.9 32.3,35.2 29.3,37.0 " +
+             "C 25.2,39.4 23.4,46.5 18.7,49.1 " +
+             "C 16.1,50.5 12.6,50.7 10.2,49.1 " +
+             "C 8.6,48.1 7.5,46.5 7.0,44.7 " +
+             "C 6.4,42.6 6.7,40.4 7.0,38.1 " +
+             "C 8.1,28.8 8.5,19.1 13.4,11.7 Z");
+    // Filled D-pad contour traced from that same reference image.
     private static readonly Geometry GamepadCross =
-        Path("M 19,27 L 23,27 L 23,23 L 27,23 " +
-             "L 27,27 L 31,27 L 31,33 L 27,33 " +
-             "L 27,37 L 23,37 L 23,33 L 19,33 Z");
+        Path("M 27.1,15.0 L 24.0,15.0 L 24.0,18.3 " +
+             "L 22.9,19.4 L 19.7,19.4 L 18.7,20.5 " +
+             "L 18.7,23.8 L 22.9,23.8 L 24.0,24.9 " +
+             "L 24.0,28.2 L 25.0,29.3 L 26.1,28.2 " +
+             "L 27.1,28.2 L 27.1,24.9 L 28.2,23.8 " +
+             "L 31.4,23.8 L 32.4,22.7 L 32.4,20.5 " +
+             "L 31.4,19.4 L 30.3,20.5 L 29.3,20.5 " +
+             "L 27.1,18.3 Z");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -578,18 +598,19 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry DataBottom =
         Path("M 10,44 L 32,56 L 54,44");
 
-    private static void DrawNeon(DrawingContext dc, Geometry geometry)
+    private static void DrawNeon(DrawingContext dc, Geometry geometry,
+        bool useReferenceWeight = false)
     {
-        dc.DrawGeometry(null, OuterBloom, geometry);
-        dc.DrawGeometry(null, InnerBloom, geometry);
-        dc.DrawGeometry(null, CyanCore, geometry);
+        dc.DrawGeometry(null, useReferenceWeight ? GamepadOuterBloom : OuterBloom, geometry);
+        dc.DrawGeometry(null, useReferenceWeight ? GamepadInnerBloom : InnerBloom, geometry);
+        dc.DrawGeometry(null, useReferenceWeight ? GamepadCyanCore : CyanCore, geometry);
         dc.DrawGeometry(null, IceHighlight, geometry);
     }
 
     private static void DrawButton(DrawingContext dc, Point center)
     {
-        dc.DrawEllipse(null, ButtonGlow, center, 2.6, 2.6);
-        dc.DrawEllipse(ButtonFill, null, center, 2.2, 2.2);
+        dc.DrawEllipse(null, ButtonGlow, center, 2.1, 2.1);
+        dc.DrawEllipse(ButtonFill, null, center, 1.8, 1.8);
         dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(190, 220, 255, 255)),
             null, new Point(center.X - 0.5, center.Y - 0.5), 0.75, 0.75);
     }
@@ -600,11 +621,11 @@ public sealed class StageEmblem : FrameworkElement
         if (RenderSize.Width < 2 || RenderSize.Height < 2)
             return;
 
-        // The three artwork types retain their native proportions. The
-        // controller alone uses the reference's 80x64 coordinate system.
+        // The two original icons retain 64x64 units; the directly traced
+        // controller has its own natural 80x56 reference aspect ratio.
         dc.PushTransform(new ScaleTransform(
             RenderSize.Width / (Kind == StageEmblemKind.Ignition ? 80.0 : 64.0),
-            RenderSize.Height / 64.0));
+            RenderSize.Height / (Kind == StageEmblemKind.Ignition ? 56.0 : 64.0)));
         switch (Kind)
         {
             case StageEmblemKind.Chip:
@@ -612,13 +633,13 @@ public sealed class StageEmblem : FrameworkElement
                 DrawNeon(dc, InstallTray);
                 break;
             case StageEmblemKind.Ignition:
-                DrawNeon(dc, Gamepad);
+                DrawNeon(dc, Gamepad, useReferenceWeight: true);
                 dc.DrawGeometry(null, ButtonGlow, GamepadCross);
                 dc.DrawGeometry(ButtonFill, null, GamepadCross);
-                DrawButton(dc, new Point(60, 24));
-                DrawButton(dc, new Point(67, 31));
-                DrawButton(dc, new Point(60, 38));
-                DrawButton(dc, new Point(53, 31));
+                DrawButton(dc, new Point(54.7, 15.6));
+                DrawButton(dc, new Point(60.2, 21.5));
+                DrawButton(dc, new Point(54.7, 27.1));
+                DrawButton(dc, new Point(49.3, 21.7));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);

@@ -304,3 +304,8 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - Owner rejected build #207 icon; Game Root corner is accepted and must remain untouched. Original `StageEmblem` gamepad source is replaced by an 80×64 natural-aspect vector copied from the reference's geometry: recessed horizontal upper center, rounded outer shoulders, flat elevated lower bridge, deep rounded grips, **solid D-pad** and four distinct face dots. Existing 76×54 icon Viewbox and cyan bloom remain. No other Page 1 layout, backend, version or CI edits. Await actual full Windows CI and owner screenshot approval.
 
 - **Verified:** source `1657020b` reference-traced gamepad, automatic [Windows CI #208](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42799647511) **SUCCESS 185/185**, portable v1.2.0 artifact **13756065208**. Other Page 1 assets, approved Game Root corner, profilers and workflow unchanged. Owner screenshot acceptance pending.
+
+
+### 2026-11-10 — Start gamepad traced from owner's actual 700×96 reference (CI pending)
+
+- User explicitly rejected both the #207 and #208 hand-drawn controller substitutions. The current Start icon is traced directly from the supplied reference's cyan pixels: outline centerline → 19 cubic segments, D-pad contour → filled WPF geometry, four measured face-button positions. Correct the native aspect to **80×56** within existing 76×54 Viewbox and retain the shared icon renderer with only reference-specific pen weights. Do not draw a fresh interpretation next time or ship the reference bitmap. All other artwork, icons, approved chamfer, product version and owned profiler logic remain untouched. Run full integrated CI and record precise evidence.
