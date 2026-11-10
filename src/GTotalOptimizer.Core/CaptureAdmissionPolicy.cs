@@ -6,7 +6,7 @@ public static class CaptureAdmissionPolicy
         hasOwnedSession && launchAttemptStarted;
 
     public static bool CanContinue(CollectedCaptureIndex? capture, bool presentMonStopped) =>
-        presentMonStopped && capture?.CollectionAttempted == true &&
+        presentMonStopped && capture?.PresentMonStopVerified == true && capture.CollectionAttempted &&
         capture.Cet is not null && capture.Redscript is not null;
 
     public static string CollectionStatus(CollectedCaptureIndex capture,
