@@ -113,12 +113,33 @@ public static class FrameworkPreflight
         return null;
     }
 
+    // redscript is the standalone script compiler, NOT a RED4ext plugin.
+    // Upstream 0.5.31 package: engine/tools/scc.exe + scc_lib.dll, and
+    // engine/config/base/scripts.ini. Read-only: do not execute the compiler
+    // to determine its version (that could compile/change the user's game).
+    public static FrameworkEvidence InspectRedscript(string gameRoot)
+    {
+        var tools = Path.Combine(gameRoot, "engine", "tools");
+        var compiler = Path.Combine(tools, "scc.exe");
+        var library = Path.Combine(tools, "scc_lib.dll");
+        var config = Path.Combine(gameRoot, "engine", "config", "base", "scripts.ini");
+
+        var hasExe = File.Exists(compiler);
+        var hasLibrary = File.Exists(library);
+        var hasConfig = File.Exists(config);
+        // A partial installation is present but incompatible; do not
+        // misleadingly claim redscript is entirely absent.
+        return new(
+            hasExe || hasLibrary || hasConfig,
+            PeVersion(library) ?? PeVersion(compiler),
+            hasExe && hasLibrary && hasConfig);
+    }
+
     public static FrameworkPreflightResult Inspect(string gameRoot)
     {
         var exe = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
         var cet = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks.asi");
         var red4 = Path.Combine(gameRoot, "red4ext", "RED4ext.dll");
-        var red = Path.Combine(gameRoot, "red4ext", "plugins", "redscript", "redscript.dll");
         var engine = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks", "mods", "0-Engine");
         return Evaluate(new(
             new(File.Exists(exe), PeVersion(exe, productOnly: true)),
@@ -126,6 +147,6 @@ public static class FrameworkPreflight
             new(File.Exists(Path.Combine(engine, "init.lua")), EngineVersion(engine),
                 Directory.Exists(Path.Combine(engine, "modules"))),
             new(File.Exists(red4), PeVersion(red4)),
-            new(File.Exists(red), PeVersion(red))));
+            InspectRedscript(gameRoot)));
     }
 }
