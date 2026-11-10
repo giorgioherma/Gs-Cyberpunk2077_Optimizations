@@ -268,3 +268,8 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - The next unified product build is **GCO v1.2.0**, using exactly one canonical `VersionPrefix` in `Directory.Build.props`. WPF/assembly/file/package/Actions artifact identifiers all derive from that value. Only product metadata and current README/decisions/handoff are edited. Existing owner profilers, icon/layout changes, .NET 10 single-runtime and integration contracts stay unchanged. Await automatic full Windows Actions verification; don't claim successful v1.2.0 build until verified.
 
 - **Verified v1.2.0:** source `51af8d18`, automatic [Windows CI #203](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42780878125) **SUCCESS 185/185**, artifact **13745309499** (85,383,442 bytes). No component-owned profiler version, layout or backend behavior changes.
+
+
+### 2026-11-10 — Capture card proportions and Start icon retry (CI pending)
+
+- User's latest screenshot refinement: shrink each of the existing three WPF workflow cards by **20 DIP width**, grow height by **24 DIP**, raise Game Root plus workflow **18 DIP** via hero trailing space, maintain centered alignment and margins to footer. Place card titles directly above their descriptions with consistent breathing room below icons. Improve only the WPF Start controller silhouette; keep the accepted Download and Data icons. Console wrapping/status region remains allocated 63 DIP, Continue lowered 5 DIP. Official GCO logo, primary buttons, tabs, CET/GRSP/PresentMon ownership and version **1.2.0** preserved. Await actual full Windows CI and owner screenshot review; no cosmetic CI contracts.

@@ -314,3 +314,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-10 — Explicit unified app v1.2.0 version bump
 
 - Owner explicitly requested **GCO v1.1.9 → v1.2.0**. Change only the canonical `VersionPrefix` in `Directory.Build.props`; retain derived assembly/file/WPF/package/CI identity without redundant version literals. No component-owner version or app UI/backend change authorized.
+
+
+## 2026-11-10 — Capture screenshot refinement after v1.2.0
+
+- User requested three workflow cards **20 DIP narrower each (10 per side), 24 DIP taller**, still centered beneath Game Root, with title **immediately above** its corresponding description and a deliberate gap **below the icon**. Raise the Game Root/workflow content about 10–20 DIP to make room, while leaving sufficient console space for two rows of notifications and a clear margin near Continue. Retry the Start Cyberpunk WPF game controller as a readable bold cyan outline; preserve the accepted download/data icons. No user logo, theme, external binary, profile or version change.

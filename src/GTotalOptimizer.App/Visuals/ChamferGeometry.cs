@@ -517,15 +517,18 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Start: recognizable gamepad silhouette, directional cross and buttons.
+    // Start: wide, symmetric controller outline with distinguishable grips.
+    // Use the full 64-DIP canvas so controls remain legible after Viewbox scaling.
     private static readonly Geometry Gamepad =
-        Path("M 18,24 C 21,21 26,20 31,20 L 34,20 C 39,20 43,21 46,24 " +
-             "C 49,28 53,40 54,46 C 55,51 53,54 49,54 " +
-             "C 45,54 42,48 39,44 L 25,44 " +
-             "C 22,48 19,54 15,54 C 11,54 9,51 10,46 " +
-             "C 11,40 15,28 18,24 Z");
+        Path("M 17,22 C 21,19 25,18 30,19 L 34,19 " +
+             "C 39,18 43,19 47,22 " +
+             "C 52,26 57,39 58,47 " +
+             "C 59,52 56,55 52,54 " +
+             "C 48,53 44,47 40,43 " +
+             "L 24,43 C 20,47 16,53 12,54 " +
+             "C 8,55 5,52 6,47 C 7,39 12,26 17,22 Z");
     private static readonly Geometry GamepadCross =
-        Path("M 20,30 L 20,40 M 15,35 L 25,35");
+        Path("M 21,28 L 21,39 M 15.5,33.5 L 26.5,33.5");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -570,8 +573,8 @@ public sealed class StageEmblem : FrameworkElement
             case StageEmblemKind.Ignition:
                 DrawNeon(dc, Gamepad);
                 DrawNeon(dc, GamepadCross);
-                DrawButton(dc, new Point(42, 33));
-                DrawButton(dc, new Point(47, 38));
+                DrawButton(dc, new Point(43, 30));
+                DrawButton(dc, new Point(49, 36));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);
