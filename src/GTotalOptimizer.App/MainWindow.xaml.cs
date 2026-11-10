@@ -444,7 +444,7 @@ public partial class MainWindow : Window
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
             InstallButton.IsEnabled = framework.Ready && state.CleanForInstall && !session && !running;
             LaunchButton.IsEnabled = framework.Ready && state.BothInstalled && session &&
-                !running && !recentLaunch && (!state.BothCaptured || saved?.CollectionAttempted == true);
+                !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
             CollectButton.IsEnabled = readyToCollect;
             ContinueButton.IsEnabled = !running &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null);
@@ -525,12 +525,10 @@ public partial class MainWindow : Window
             var state = await Workflow.InspectAsync(game);
             if (!state.BothInstalled || !Workflow.HasRecoveryJournal)
                 throw new InvalidOperationException("Both G-CET and G-REDscript profiler installations must be verified before Start.");
-            if (state.BothCaptured)
-            {
-                var prior = Workflow.ReadCollected(game);
-                if (prior?.CollectionAttempted != true)
-                    throw new InvalidOperationException("Uncollected native profiler results exist. Use COLLECT RESULTS before starting again.");
-            }
+            // Owner-ready archives can belong to the preceding attempt. Never
+            // roll the journal to a fresh attempt while either remains pending.
+            if (state.CetCaptureReady || state.GrspCaptureReady)
+                throw new InvalidOperationException("Native profiler results are already pending. Use COLLECT RESULTS, then RESTORE PROFILERS and reinstall before another capture.");
             var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
             if (!File.Exists(executable))
                 throw new FileNotFoundException("Cyberpunk2077.exe is missing.", executable);
