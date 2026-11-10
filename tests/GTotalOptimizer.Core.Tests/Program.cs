@@ -359,16 +359,6 @@ try
         "Missing capture: CET",
         "collection notice names only missing CET when others are present");
 
-    Require(File.Exists(Path.Combine(cetSource, "CET_Summary.json")),
-        "source-owner archive remains untouched after GCO copy");
-    File.AppendAllText(Path.Combine(CollectedCaptureStore.DomainFolder(package,sessionId,"CET"),
-        "CET_Summary.json"), "tampered");
-    var tamperCaught = false;
-    try { CollectedCaptureStore.Read(package, archiveGame, sessionId, verifyHashes: true); }
-    catch (InvalidDataException) { tamperCaught = true; }
-    Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
-
-
     // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.
     static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) => new(exists, v, shape);
     GameFrameworkEvidence Full(string? engine = "0.18.6") =>
@@ -412,6 +402,16 @@ try
         CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
         .Contains("CONTINUE disabled"),
         "missing GRSP capture disables Continue and reports exact failing domain");
+
+    Require(File.Exists(Path.Combine(cetSource, "CET_Summary.json")),
+        "source-owner archive remains untouched after GCO copy");
+    File.AppendAllText(Path.Combine(CollectedCaptureStore.DomainFolder(package,sessionId,"CET"),
+        "CET_Summary.json"), "tampered");
+    var tamperCaught = false;
+    try { CollectedCaptureStore.Read(package, archiveGame, sessionId, verifyHashes: true); }
+    catch (InvalidDataException) { tamperCaught = true; }
+    Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
+
 
     // Continue invokes owner-managed restore and deletes the active journal.
     // Page 2 must continue reading its bound collection index independently.
