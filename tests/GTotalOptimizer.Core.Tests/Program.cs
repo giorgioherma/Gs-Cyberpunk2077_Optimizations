@@ -355,15 +355,21 @@ try
     void SessionStage(string stage, string path, string id = "confirmed-test-session")
         => File.WriteAllText(sessionJournal, System.Text.Json.JsonSerializer.Serialize(
             new { gameRoot = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar), stage, sessionId = id }));
-    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
-        "absent ownership journal cannot skip original preflight");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
+            !sessionWorkflow.HasSessionForGame(sessionGame),
+        "absent ownership journal shows INSTALL, never RESTORE");
     foreach (var stage in new[] { "install-started", "cet-installed", "owners-installed" })
     {
         SessionStage(stage, sessionGame);
-        Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
-            "interrupted install stage " + stage + " does not pin framework admission");
+        Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
+                sessionWorkflow.HasSessionForGame(sessionGame),
+            "partial owner install remains RESTORE-eligible without bypassing framework admission: " + stage);
     }
     SessionStage("both-installed", sessionGame);
+    Require(sessionWorkflow.HasSessionForGame(sessionGame) &&
+            !sessionWorkflow.HasSessionForGame(Path.Combine(root, "AnotherCyberpunk")) &&
+            sessionWorkflow.HasRecoveryJournal,
+        "a pending game-bound RESTORE never moves to a different selected source; foreign INSTALL remains blocked");
     Require(sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
             sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
         "owner-verified install freezes framework admission after CET native replacement");
@@ -377,11 +383,15 @@ try
     Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
         "empty session identity does not authorize the baseline");
     File.WriteAllText(sessionJournal, "{broken-json");
-    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
-        "malformed journal never authorizes the baseline");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus) &&
+            !sessionWorkflow.HasSessionForGame(sessionGame) &&
+            sessionWorkflow.HasRecoveryJournal,
+        "corrupt recovery journal stays blocking and does not impersonate a valid restore target");
     File.Delete(sessionJournal);
-    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
-        "verified restore removes the session and reactivates strict preflight");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus) &&
+            !sessionWorkflow.HasSessionForGame(sessionGame) &&
+            !sessionWorkflow.HasRecoveryJournal,
+        "owner-verified restore removes the journal, changes RESTORE to INSTALL, and reactivates preflight");
 
     // Archive copies are verified, immutable evidence for Continue.
     var archiveGame = Path.Combine(root, "CaptureGame");

@@ -87,7 +87,7 @@ internal static class Program
                 {
                     window.GamePathBox, window.BrowseButton, window.RefreshButton,
                     window.InstallButton, window.LaunchButton, window.CollectButton,
-                    window.ContinueButton, window.TopTabsHost
+                    window.ContinueButton, window.TopTabsHost, window.StepTwoHotkey
                 };
                 foreach (var control in controls)
                 {
@@ -95,6 +95,10 @@ internal static class Program
                         throw new InvalidOperationException(
                             "Essential WPF control failed layout: " + control.Name);
                 }
+
+                if (window.StepTwoHotkey.Text != "STOP / START — F11")
+                    throw new InvalidOperationException(
+                        "Capture card is missing the explicit F11 start/stop instructions");
 
                 void Render()
                 {

@@ -70,6 +70,22 @@ public sealed class UnifiedProfilerWorkflow
     public UnifiedProfilerWorkflow(string packageRoot) => this.packageRoot = Path.GetFullPath(packageRoot);
     public bool HasRecoveryJournal => File.Exists(Journal);
 
+    // The recovery journal is package-wide, but its owner is one game root.
+    // A different selected installation must not acquire the old session's
+    // RESTORE button, nor start a new install while recovery is outstanding.
+    // After the owners verify restoration, RestoreOwnedAsync removes Journal
+    // and the normal INSTALL state returns without a separate UI flag.
+    public bool HasSessionForGame(string game)
+    {
+        if (string.IsNullOrWhiteSpace(game) || !HasRecoveryJournal) return false;
+        try { return OwnsSession(game); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     private static bool GameRunning() => Process.GetProcessesByName("Cyberpunk2077").Length != 0;
     private static string Normalize(string game) => Path.GetFullPath(game).TrimEnd(Path.DirectorySeparatorChar);
     private string Exe(BackendKind kind) => BackendLocator.Executable(packageRoot, kind);

@@ -126,12 +126,20 @@
             </Setter>
         </Style>
         <!-- Layered WPF vector actions, not flat recolors or raster buttons. -->
-        <LinearGradientBrush x:Key="RestoreMetal" StartPoint=".06,0" EndPoint=".75,1">
-            <GradientStop Color="#FFFFFF" Offset="0"/>
-            <GradientStop Color="#F5FBFC" Offset=".19"/>
-            <GradientStop Color="#CEDCE0" Offset=".47"/>
-            <GradientStop Color="#9AB2BC" Offset=".86"/>
-            <GradientStop Color="#688791" Offset="1"/>
+        <!-- Original dark-blue metal face, with a separate translucent white
+             top glaze. Restore is not a silver/white flat button. -->
+        <LinearGradientBrush x:Key="RestoreMetal" StartPoint=".06,0" EndPoint=".88,1">
+            <GradientStop Color="#426D7A" Offset="0"/>
+            <GradientStop Color="#294D5B" Offset=".21"/>
+            <GradientStop Color="#1B3946" Offset=".48"/>
+            <GradientStop Color="#102733" Offset=".76"/>
+            <GradientStop Color="#071821" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="RestoreTopGlaze" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#A8FFFFFF" Offset="0"/>
+            <GradientStop Color="#62FFFFFF" Offset=".19"/>
+            <GradientStop Color="#17FFFFFF" Offset=".42"/>
+            <GradientStop Color="#00FFFFFF" Offset=".65"/>
         </LinearGradientBrush>
         <Style x:Key="StageActionButton" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource GoldenMetal}"/>
@@ -155,6 +163,10 @@
                                                Stroke="#FFF6A0" StrokeThickness="1.0"
                                                CornerCut="6" MetallicFinish="True"
                                                IsHitTestVisible="False"/>
+                            <fx:ChamferOutline x:Name="StageGlaze" Margin="3"
+                                               Fill="{StaticResource RestoreTopGlaze}"
+                                               StrokeThickness="0" CornerCut="5"
+                                               Opacity="0" IsHitTestVisible="False"/>
                             <Path x:Name="StageEdge" Data="M 0,4 L 4,0 L 32,0"
                                   Stroke="#FFFFCE" StrokeThickness="1.35"
                                   Width="34" Height="6" HorizontalAlignment="Left"
@@ -184,6 +196,19 @@
                                 <Setter TargetName="StageShell" Property="Stroke" Value="#00E2F2"/>
                                 <Setter TargetName="StageShell" Property="Glow" Value="True"/>
                             </Trigger>
+                            <Trigger Property="Tag" Value="Restore">
+                                <Setter TargetName="StageFace" Property="Stroke" Value="#3899B3"/>
+                                <Setter TargetName="StageEdge" Property="Stroke" Value="#E8FBFF"/>
+                                <Setter TargetName="StageGlaze" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Restore"/>
+                                    <Condition Property="IsPressed" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="StageFace" Property="Fill"
+                                        Value="{StaticResource ButtonMetalHot}"/>
+                            </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#78898D"/>
                                 <Setter TargetName="StageShell" Property="Stroke" Value="#304347"/>
@@ -192,6 +217,7 @@
                                         Value="{StaticResource ButtonMetalDark}"/>
                                 <Setter TargetName="StageFace" Property="Stroke" Value="#344C52"/>
                                 <Setter TargetName="StageFace" Property="Lit" Value="False"/>
+                                <Setter TargetName="StageGlaze" Property="Opacity" Value="0"/>
                                 <Setter TargetName="StageEdge" Property="Opacity" Value=".24"/>
                                 <Setter TargetName="StageCorner" Property="Opacity" Value=".24"/>
                             </Trigger>
@@ -203,8 +229,9 @@
         <Style x:Key="RestoreStageButton" TargetType="Button"
                BasedOn="{StaticResource StageActionButton}">
             <Setter Property="Background" Value="{StaticResource RestoreMetal}"/>
-            <Setter Property="Foreground" Value="#007D9F"/>
-            <Setter Property="BorderBrush" Value="#7BCEDC"/>
+            <Setter Property="Foreground" Value="#00E2F2"/>
+            <Setter Property="BorderBrush" Value="#328EA8"/>
+            <Setter Property="Tag" Value="Restore"/>
         </Style>
         <Style x:Key="MinorButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
             <Setter Property="Foreground" Value="#00E2F2"/>
@@ -646,11 +673,18 @@
                                                Foreground="#F2F5F5" FontFamily="{StaticResource Oxanium}"
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
-                                    <TextBlock Grid.Row="2" Margin="0,3,0,0"
-                                               Text="Record a varied run: idle, walking, driving and heavy combat. Avoid menus, inventory or pausing the game in any way."
-                                               Foreground="#A8B3B5" FontSize="13"
-                                               HorizontalAlignment="Stretch" TextAlignment="Center"
-                                               VerticalAlignment="Top" TextWrapping="Wrap"/>
+                                    <StackPanel Grid.Row="2" Margin="0,3,0,0"
+                                                VerticalAlignment="Top" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Record a varied run: idle, walking, driving and heavy combat. Avoid menus, inventory or pausing the game in any way."
+                                                   Foreground="#A8B3B5" FontSize="13"
+                                                   HorizontalAlignment="Stretch" TextAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="StepTwoHotkey" Text="STOP / START — F11"
+                                                   Margin="0,6,0,0" Foreground="{StaticResource Cyan}"
+                                                   FontFamily="{StaticResource Oxanium}" FontSize="12.5"
+                                                   FontWeight="Bold" TextAlignment="Center"
+                                                   HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
                                     <Button x:Name="LaunchButton" Grid.Row="3" Content="START CYBERPUNK"
                                             Style="{StaticResource StageActionButton}" Click="Launch_Click"
                                             IsEnabled="False"/>

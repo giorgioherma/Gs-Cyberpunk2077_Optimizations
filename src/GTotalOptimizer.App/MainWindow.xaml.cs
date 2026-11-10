@@ -389,6 +389,18 @@ public partial class MainWindow : Window
     }
     private void ClearStatusPin() => consolePinned = null;
 
+    // Derive the label/surface directly from the actual, game-bound owner
+    // journal. Verified restore deletes the journal; switching source roots
+    // never inherits another game's recovery control.
+    private bool UpdateProfilerAction(string? gameRoot)
+    {
+        var recovery = gameRoot is not null && Workflow.HasSessionForGame(gameRoot);
+        InstallButton.Content = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
+        InstallButton.Style = (Style)FindResource(
+            recovery ? "RestoreStageButton" : "StageActionButton");
+        return recovery;
+    }
+
     private async Task RefreshSourceAsync()
     {
         if (!initialized || busy) return;
@@ -416,14 +428,11 @@ public partial class MainWindow : Window
         savedCapture = null;
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
-        InstallButton.Content = "INSTALL PROFILERS";
         LaunchButton.Content = "START CYBERPUNK";
         CollectButton.Content = "COLLECT RESULTS";
-        var recoveryMode = Workflow.HasRecoveryJournal;
-        InstallButton.Content = recoveryMode ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
-        InstallButton.Style = (Style)FindResource(recoveryMode ? "RestoreStageButton" : "StageActionButton");
-        // Recover even if the instrumented native CET binary no longer matches
-        // the original framework version admitted before installation.
+        var recoveryMode = UpdateProfilerAction(current.IsValidGame ? current.GameRoot : null);
+        // Recovery stays accessible if a temporary CET binary fails strict
+        // version checks, but never targets a different selected game root.
         if (recoveryMode) InstallButton.IsEnabled = !GameRunning();
 
         UserSettings.WriteGameRoot(GamePathBox.Text);
@@ -435,7 +444,9 @@ public partial class MainWindow : Window
             CetStatusText.Text = "G-CET Profiler  ·  NOT CHECKED";
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
-            SetStatus(current.Summary);
+            SetStatus(Workflow.HasRecoveryJournal
+                ? "An unfinished profiler session belongs to another game folder. Select its original Cyberpunk root to RESTORE PROFILERS."
+                : current.Summary);
             return;
         }
         var redOwners = RedscriptModCounter.CountPhysical(current.GameRoot);
@@ -457,7 +468,8 @@ public partial class MainWindow : Window
                 (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)) return;
             liveState = state;
             var running = GameRunning();
-            var session = Workflow.HasRecoveryJournal;
+            var session = UpdateProfilerAction(current.GameRoot!);
+            var foreignSession = Workflow.HasRecoveryJournal && !session;
             // A game-bound, verified owner installation reuses the original
             // admitted baseline until verified restore removes the journal.
             // No extra profiler version whitelist is needed.
@@ -490,7 +502,7 @@ public partial class MainWindow : Window
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
             InstallButton.IsEnabled = session ? !running
-                : framework.Ready && state.CleanForInstall && !running;
+                : !foreignSession && framework.Ready && state.CleanForInstall && !running;
             LaunchButton.IsEnabled = pinnedFramework &&
                 !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
             CollectButton.IsEnabled = !running && readyToCollect;
@@ -498,14 +510,14 @@ public partial class MainWindow : Window
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null);
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
-            InstallButton.Content = session ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
-            InstallButton.Style = (Style)FindResource(session ? "RestoreStageButton" : "StageActionButton");
             LaunchButton.Content = running ? "GAME RUNNING"
                 : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
             CollectButton.Content = "COLLECT RESULTS";
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
-            SetStatus(!framework.Ready ? framework.Detail
+            SetStatus(foreignSession
+                ? "An unfinished GCO profiler session belongs to another game folder. Select the original game root and RESTORE PROFILERS before installing here."
+                : !framework.Ready ? framework.Detail
                 : running ? "Cyberpunk running. F11 controls CET + REDscript. Click COLLECT RESULTS after closing the game."
                 : saved?.CollectionAttempted == true
                     ? CaptureAdmissionPolicy.CollectionStatus(saved)
@@ -529,9 +541,13 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        // The first card switches from install to recovery for an owned session.
-        if (Workflow.HasRecoveryJournal) await RestoreIncompleteSessionAsync();
-        else await InstallProfilersAsync();
+        if (inspection.IsValidGame && inspection.GameRoot is not null &&
+            Workflow.HasSessionForGame(inspection.GameRoot))
+            await RestoreIncompleteSessionAsync();
+        else if (Workflow.HasRecoveryJournal)
+            Warn("A different game root has an active recovery session. Select the original game folder and RESTORE PROFILERS first.", "Recovery required");
+        else
+            await InstallProfilersAsync();
     }
     private async Task InstallProfilersAsync()
     {
@@ -829,7 +845,7 @@ public partial class MainWindow : Window
     private async Task RestoreIncompleteSessionAsync()
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
-            !Workflow.HasRecoveryJournal) return;
+            !Workflow.HasSessionForGame(inspection.GameRoot)) return;
         if (GameRunning())
         {
             Warn("Close Cyberpunk before restoring profilers.", "Recovery");
