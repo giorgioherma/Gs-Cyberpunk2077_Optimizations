@@ -400,8 +400,8 @@ public partial class MainWindow : Window
         {
             ModCountText.Text = "Select the Cyberpunk 2077 game folder";
             DependencyText.Text = "CET, 0-Engine, r6/scripts and RED4ext have not been checked.";
-            CetStatusText.Text = "CET Profiler  ·  NOT CHECKED";
-            RedStatusText.Text = "REDscript Profiler  ·  NOT CHECKED";
+            CetStatusText.Text = "G-CET Profiler  ·  NOT CHECKED";
+            RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
             SetStatus(current.Summary);
             return;
@@ -436,8 +436,8 @@ public partial class MainWindow : Window
             // CET "OFFICIAL" is the original loader, not our managed profiler.
             var cetProfiler = state.CetManaged ? "INSTALLED" : "NOT INSTALLED";
             var redProfiler = state.GrspManaged ? "INSTALLED" : "NOT INSTALLED";
-            CetStatusText.Text = "CET Profiler  ·  " + cetProfiler;
-            RedStatusText.Text = "REDscript Profiler  ·  " + redProfiler;
+            CetStatusText.Text = "G-CET Profiler  ·  " + cetProfiler;
+            RedStatusText.Text = "G-REDscript Profiler  ·  " + redProfiler;
             // PresentMon recording evidence is handled separately and remains
             // insufficient to authorize Continue without native capture.
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
