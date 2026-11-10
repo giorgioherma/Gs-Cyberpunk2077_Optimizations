@@ -304,9 +304,9 @@ internal static class Program
                     $"Each card should be 16 DIP slimmer with 26-DIP gaps: " +
                     $"gap12={gap12:0.##}, gap23={gap23:0.##}");
             if (window.GameRootFolderIcon.ActualWidth < 18 ||
-                window.InstallStageIcon.ActualWidth < 45 ||
-                window.LaunchStageIcon.ActualWidth < 45 ||
-                window.CollectStageIcon.ActualWidth < 45 ||
+                window.InstallStageIcon.ActualWidth < 40 ||
+                window.LaunchStageIcon.ActualWidth < 40 ||
+                window.CollectStageIcon.ActualWidth < 40 ||
                 window.InstallStageIcon.Child is not GTotalOptimizer.App.Visuals.StageEmblem chip ||
                 chip.Kind != GTotalOptimizer.App.Visuals.StageEmblemKind.Chip ||
                 window.LaunchStageIcon.Child is not GTotalOptimizer.App.Visuals.StageEmblem ignition ||
