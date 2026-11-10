@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -22,16 +23,73 @@ public static class CollectedCaptureStore
         if (id.Length != 32 || id.Any(c => !Uri.IsHexDigit(c)))
             throw new InvalidDataException("Invalid GCO capture session identity.");
     }
+    private static bool IsDatedSessionName(string name, string id)
+    {
+        const string prefix = "GCO-Capture-";
+        const string format = "yyyyMMdd-HHmmss";
+        return name.Length == prefix.Length + format.Length + 1 + 32 &&
+            name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+            name[prefix.Length + format.Length] == '-' &&
+            name.EndsWith(id, StringComparison.OrdinalIgnoreCase) &&
+            DateTime.TryParseExact(name.Substring(prefix.Length, format.Length),
+                format, CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+    }
+
+    // A captured session is resolved from its immutable 32-hex identity. New
+    // sessions have readable clock names, while every existing unmodified
+    // GCO-Capture-<id> directory remains readable by the same APIs.
     public static string SessionFolder(string root, string id)
     {
         CheckId(id);
-        return Path.Combine(Path.GetFullPath(root), "RESULTS", "GCO-Capture-" + id);
+        var results = Path.Combine(Path.GetFullPath(root), "RESULTS");
+        var legacy = Path.Combine(results, "GCO-Capture-" + id);
+        if (!Directory.Exists(results)) return legacy;
+
+        var dated = Directory.EnumerateDirectories(results, "GCO-Capture-*",
+                SearchOption.TopDirectoryOnly)
+            .Where(dir => IsDatedSessionName(Path.GetFileName(dir), id))
+            .Take(2).ToArray();
+        if (dated.Length > 1 || (dated.Length > 0 && Directory.Exists(legacy)))
+            throw new InvalidDataException("Ambiguous GCO capture folder identity; preserve both directories for recovery.");
+        var folder = dated.Length == 1 ? dated[0] : legacy;
+        if (Directory.Exists(folder) &&
+            (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Linked GCO capture folder is not accepted.");
+        return folder;
     }
+
+    // Provision only at the moment a new attempt starts, before PresentMon
+    // writes. The existing journal retains the identity, not a mutable folder
+    // path; previous archives can be reopened even after owner restoration.
+    public static string CreateDatedSessionFolder(string root, string id,
+        DateTimeOffset started)
+    {
+        CheckId(id);
+        var results = Path.Combine(Path.GetFullPath(root), "RESULTS");
+        Directory.CreateDirectory(results);
+        var existing = SessionFolder(root, id);
+        if (Directory.Exists(existing))
+            throw new InvalidDataException("Capture session identity already exists; refusing to mix data.");
+        var name = "GCO-Capture-" +
+            started.ToLocalTime().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) +
+            "-" + id;
+        var folder = Path.Combine(results, name);
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    public static bool UsesDatedLayout(string root, string id) =>
+        IsDatedSessionName(Path.GetFileName(SessionFolder(root, id)), id);
+
     public static string DomainFolder(string root, string id, string domain)
     {
         if (domain is not ("CET" or "REDscript"))
             throw new InvalidDataException("Unknown profiler domain.");
-        return Path.Combine(SessionFolder(root, id), domain);
+        var newer = UsesDatedLayout(root, id);
+        var name = newer
+            ? (domain == "CET" ? "G-CET" : "G-RED")
+            : domain;
+        return Path.Combine(SessionFolder(root, id), name);
     }
     private static string IndexFile(string root, string id) =>
         Path.Combine(SessionFolder(root, id), "collection.json");
@@ -197,7 +255,8 @@ public static class CollectedCaptureStore
         var skipped = new List<string>();
         if (state.Cet is null && skipCet) skipped.Add("CET");
         if (state.Redscript is null && skipRedscript) skipped.Add("REDscript");
-        if (state.FrameTimeCsv is null && skipFrameTime) skipped.Add("FrameTime");
+        if (state.FrameTimeCsv is null && skipFrameTime)
+            skipped.Add(UsesDatedLayout(root, state.SessionId) ? "PresentMon" : "FrameTime");
         Write(root, state with { Restored = true, Skipped = skipped });
     }
     private static void Write(string root, CollectedCaptureIndex item)

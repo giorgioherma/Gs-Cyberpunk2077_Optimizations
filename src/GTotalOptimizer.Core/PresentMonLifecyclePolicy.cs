@@ -69,13 +69,17 @@ public static class PresentMonLifecyclePolicy
     public static string NewSessionCsv(string packageRoot, string sessionId)
     {
         var session = CollectedCaptureStore.SessionFolder(packageRoot, sessionId);
+        // New dated captures store PresentMon alongside G-CET/G-REDscript.
+        // Keep FrameTime for all previous session IDs and already saved CSVs.
+        var frameDir = CollectedCaptureStore.UsesDatedLayout(packageRoot, sessionId)
+            ? "PresentMon" : "FrameTime";
         // Use a short, still-unique attempt ID; the old 32-character nested
         // folder made a real user's full path exactly 260 characters, and
         // PresentMon silently wrote "PresentMon.cs" instead of ".csv".
         for (var attempt = 0; attempt < 5; attempt++)
         {
             var path = ValidateOutputCsv(packageRoot, Path.Combine(session,
-                "FrameTime", Guid.NewGuid().ToString("N")[..8], "PresentMon.csv"));
+                frameDir, Guid.NewGuid().ToString("N")[..8], "PresentMon.csv"));
             if (path.Length > MaxSafeOutputPathLength) break;
             // Never overwrite evidence from another attempt in this session.
             if (!Directory.Exists(Path.GetDirectoryName(path)!) && !File.Exists(path))

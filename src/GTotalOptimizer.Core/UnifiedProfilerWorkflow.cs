@@ -251,6 +251,10 @@ public sealed class UnifiedProfilerWorkflow
         if (!HasRecoveryJournal || !OwnsSession(game))
             throw new InvalidOperationException("No matching GCO profiler installation.");
         var id = Guid.NewGuid().ToString("N");
+        // Make one immutable, readable RESULTS folder for this attempt.
+        // Its name is resolved from the session ID later, including after
+        // the owner journal is removed by verified restoration.
+        CollectedCaptureStore.CreateDatedSessionFolder(packageRoot, id, DateTimeOffset.Now);
         WriteJournal(game, "capture-attempt", id);
         return id;
     }
