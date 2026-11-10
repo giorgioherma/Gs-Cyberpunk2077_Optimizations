@@ -412,7 +412,7 @@
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
                                 <Run Text="GOT LAG? " FontSize="28" FontWeight="ExtraBold"
                                      Foreground="#FFF000"/>
-                                <Run Text="Cyberpunk 2077 CET and REDscript Optimizations"
+                                <Run Text="G's Cyberpunk 2077 CET and REDscript Optimizations"
                                      Foreground="#F4F6F6"/>
                             </TextBlock>
                             <TextBlock x:Name="HeroSubtitle"
@@ -469,11 +469,11 @@
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <StackPanel Orientation="Horizontal" Margin="1,1,0,0" Height="16">
                                         <TextBlock x:Name="CetStatusText" Style="{StaticResource SmallStatus}"
-                                                   Width="145" Text="CET · checking"/>
+                                                   Width="178" Text="CET Profiler · NOT CHECKED"/>
                                         <TextBlock x:Name="RedStatusText" Style="{StaticResource SmallStatus}"
-                                                   Width="160" Text="REDscript · checking"/>
+                                                   Width="204" Text="REDscript Profiler · NOT CHECKED"/>
                                         <TextBlock x:Name="PresentStatusText" Style="{StaticResource SmallStatus}"
-                                                   Width="200" Text="PresentMon · optional"/>
+                                                   Width="175" Text="PresentMon · AUTOMATIC"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>

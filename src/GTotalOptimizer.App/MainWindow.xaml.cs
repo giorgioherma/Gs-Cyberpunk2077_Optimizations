@@ -378,22 +378,27 @@ public partial class MainWindow : Window
         if (!current.IsValidGame)
         {
             ModCountText.Text = "Select the Cyberpunk 2077 game folder";
-            DependencyText.Text = "CET and REDscript sources have not been verified.";
-            CetStatusText.Text = "CET  ·  not checked";
-            RedStatusText.Text = "REDscript  ·  not checked";
-            PresentStatusText.Text = "PresentMon  ·  optional";
+            DependencyText.Text = "CET, 0-Engine, r6/scripts and RED4ext have not been checked.";
+            CetStatusText.Text = "CET Profiler  ·  NOT CHECKED";
+            RedStatusText.Text = "REDscript Profiler  ·  NOT CHECKED";
+            PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
             SetStatus(current.Summary);
             return;
         }
         var redOwners = RedscriptModCounter.CountPhysical(current.GameRoot);
         ModCountText.Text = $"Game found  ·  {current.CetModCount} CET mods  ·  {redOwners} REDscript groups";
+        var cetSource = current.Checks.Any(c => c.Name == "CET source folder" &&
+            c.State != GTotalOptimizer.Core.CheckState.Missing);
         var zeroEngine = current.Checks.Any(c => c.Name == "0-Engine source" &&
             c.State != GTotalOptimizer.Core.CheckState.Missing);
         var scripts = current.Checks.Any(c => c.Name == "REDscript source folder" &&
             c.State != GTotalOptimizer.Core.CheckState.Missing);
         var red4ext = current.Checks.Any(c => c.Name == "RED4ext plugin folder" &&
             c.State != GTotalOptimizer.Core.CheckState.Missing);
-        DependencyText.Text = $"0-Engine {(zeroEngine ? "found (version not yet verified)" : "MISSING")}  ·  " +
+        // This line describes source prerequisites only; folder/source presence
+        // is not proof of a compatible CET runtime or 0-Engine version.
+        DependencyText.Text = $"CET source {(cetSource ? "found" : "MISSING")}  ·  " +
+            $"0-Engine {(zeroEngine ? "found (version not yet verified)" : "MISSING")}  ·  " +
             $"r6/scripts {(scripts ? "found" : "missing")}  ·  " +
             $"RED4ext {(red4ext ? "found" : "missing")}";
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
@@ -419,9 +424,15 @@ public partial class MainWindow : Window
                     CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId) +
                     Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-            CetStatusText.Text = "CET  ·  " + (state.CetManaged ? "installed" : state.Cet);
-            RedStatusText.Text = "REDscript  ·  " + (state.GrspManaged ? "installed" : state.Grsp);
-            PresentStatusText.Text = "PresentMon  ·  " + (frame is not null ? "recording" : "automatic / optional");
+            // This row describes installed GCO profilers, not base CET/REDscript.
+            // CET "OFFICIAL" is the original loader, not our managed profiler.
+            var cetProfiler = state.CetManaged ? "INSTALLED" : "NOT INSTALLED";
+            var redProfiler = state.GrspManaged ? "INSTALLED" : "NOT INSTALLED";
+            CetStatusText.Text = "CET Profiler  ·  " + cetProfiler;
+            RedStatusText.Text = "REDscript Profiler  ·  " + redProfiler;
+            // PresentMon recording evidence is handled separately and remains
+            // insufficient to authorize Continue without native capture.
+            PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
 
             var nativeReady = state.CanCollect(session, running) &&
                 ((state.CetCaptureReady && saved?.Cet is null) ||
@@ -452,7 +463,10 @@ public partial class MainWindow : Window
                             ? "Native profilers installed. No completed capture yet."
                             : session
                                 ? "Existing session requires recovery or additional capture."
-                                : $"CET: {state.Cet}  /  REDscript: {state.Grsp}. The current backend still requires both; independent domains are pending.");
+                                : $"CET Profiler: {cetProfiler}  /  REDscript Profiler: {redProfiler}. Both currently required; independent domains pending." +
+                                  ((state.Cet is not ("OFFICIAL" or "PROFILER_ACTIVE") ||
+                                    state.Grsp is not ("NOT_INSTALLED" or "INSTALLED_CURRENT"))
+                                      ? $" Owner state: CET={state.Cet}, GRSP={state.Grsp}." : ""));
             if (HasNative(saved) && portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
         }
