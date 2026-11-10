@@ -460,9 +460,9 @@ public sealed class SlantedTabShape : FrameworkElement
 
 
 /// <summary>
-/// Machined three-dimensional WPF emblems. These are UI vector assets, never
-/// extra profiler components or regenerated user art. The compact badge,
-/// lighting and each symbol are composed from crisp geometry at 64x64.
+/// Three clean original WPF line symbols: install/download, game controller
+/// and layered collected data. Frozen vector geometry, no bitmaps or animation.
+/// Cyan core strokes are backed by two translucent bloom strokes for soft glow.
 /// </summary>
 public enum StageEmblemKind { Chip, Ignition, Data }
 
@@ -472,135 +472,111 @@ public sealed class StageEmblem : FrameworkElement
         DependencyProperty.Register(nameof(Kind), typeof(StageEmblemKind), typeof(StageEmblem),
             new FrameworkPropertyMetadata(StageEmblemKind.Chip,
                 FrameworkPropertyMetadataOptions.AffectsRender));
+
     public StageEmblemKind Kind
     {
         get => (StageEmblemKind)GetValue(KindProperty);
         set => SetValue(KindProperty, value);
     }
 
-    private static readonly Brush Plate = Metal(
-        Color.FromRgb(33, 64, 72), Color.FromRgb(10, 27, 33),
-        Color.FromRgb(1, 10, 15));
-    private static readonly Brush Steel = Metal(
-        Color.FromRgb(195, 249, 250), Color.FromRgb(40, 153, 167),
-        Color.FromRgb(10, 63, 80));
-    private static readonly Brush Gold = Metal(
-        Color.FromRgb(255, 255, 189), Color.FromRgb(255, 240, 0),
-        Color.FromRgb(167, 116, 0));
-    private static readonly Brush Slate = Metal(
-        Color.FromRgb(59, 83, 91), Color.FromRgb(10, 27, 34),
-        Color.FromRgb(4, 11, 19));
-    private static readonly Brush Glow = Halo();
-    private static readonly Pen YellowEdge = MakePen(Color.FromRgb(255, 240, 0), 2.1);
-    private static readonly Pen CyanEdge = MakePen(Color.FromRgb(0, 226, 242), 2.0);
-    private static readonly Pen IceEdge = MakePen(Color.FromRgb(208, 252, 255), 1.1);
+    private static Geometry Path(string data)
+    {
+        var path = Geometry.Parse(data);
+        path.Freeze();
+        return path;
+    }
 
-    private static Brush Metal(Color top, Color mid, Color bottom)
+    private static Pen Stroke(byte alpha, double width)
     {
-        var value = new LinearGradientBrush
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, 0, 226, 242));
+        brush.Freeze();
+        var pen = new Pen(brush, width)
         {
-            StartPoint = new Point(0.08, 0), EndPoint = new Point(.88, 1)
-        };
-        value.GradientStops.Add(new GradientStop(top, 0));
-        value.GradientStops.Add(new GradientStop(mid, .37));
-        value.GradientStops.Add(new GradientStop(bottom, 1));
-        value.Freeze();
-        return value;
-    }
-    private static Brush Halo()
-    {
-        var value = new RadialGradientBrush
-        {
-            Center = new Point(.5, .48),
-            GradientOrigin = new Point(.44, .38),
-            RadiusX = .52, RadiusY = .52
-        };
-        value.GradientStops.Add(new GradientStop(Color.FromArgb(112, 0, 226, 242), 0));
-        value.GradientStops.Add(new GradientStop(Color.FromArgb(35, 0, 226, 242), .52));
-        value.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 226, 242), 1));
-        value.Freeze();
-        return value;
-    }
-    private static Pen MakePen(Color color, double thickness)
-    {
-        var pen = new Pen(new SolidColorBrush(color), thickness)
-        {
-            LineJoin = PenLineJoin.Miter
+            StartLineCap = PenLineCap.Round,
+            EndLineCap = PenLineCap.Round,
+            LineJoin = PenLineJoin.Round
         };
         pen.Freeze();
         return pen;
     }
-    private static Geometry Shape(string path)
+
+    private static readonly Pen OuterBloom = Stroke(32, 11.0);
+    private static readonly Pen InnerBloom = Stroke(100, 6.8);
+    private static readonly Pen CyanCore = Stroke(255, 3.8);
+    private static readonly Pen IceHighlight = new(new SolidColorBrush(
+        Color.FromArgb(167, 220, 255, 255)), 0.9)
     {
-        var geometry = Geometry.Parse(path);
-        geometry.Freeze();
-        return geometry;
+        StartLineCap = PenLineCap.Round,
+        EndLineCap = PenLineCap.Round,
+        LineJoin = PenLineJoin.Round
+    };
+
+    // Install: prominent down arrow entering a clean, open-topped tray.
+    private static readonly Geometry InstallArrow =
+        Path("M 32,8 L 32,39 M 21,29 L 32,40 L 43,29");
+    private static readonly Geometry InstallTray =
+        Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
+
+    // Start: recognizable gamepad silhouette, directional cross and buttons.
+    private static readonly Geometry Gamepad =
+        Path("M 18,24 C 21,21 26,20 31,20 L 34,20 C 39,20 43,21 46,24 " +
+             "C 49,28 53,40 54,46 C 55,51 53,54 49,54 " +
+             "C 45,54 42,48 39,44 L 25,44 " +
+             "C 22,48 19,54 15,54 C 11,54 9,51 10,46 " +
+             "C 11,40 15,28 18,24 Z");
+    private static readonly Geometry GamepadCross =
+        Path("M 20,30 L 20,40 M 15,35 L 25,35");
+
+    // Collect: three easily read layers, with a closed upper data plate.
+    private static readonly Geometry DataTop =
+        Path("M 32,8 L 54,20 L 32,32 L 10,20 Z");
+    private static readonly Geometry DataMiddle =
+        Path("M 10,32 L 32,44 L 54,32");
+    private static readonly Geometry DataBottom =
+        Path("M 10,44 L 32,56 L 54,44");
+
+    private static void DrawNeon(DrawingContext dc, Geometry geometry)
+    {
+        dc.DrawGeometry(null, OuterBloom, geometry);
+        dc.DrawGeometry(null, InnerBloom, geometry);
+        dc.DrawGeometry(null, CyanCore, geometry);
+        dc.DrawGeometry(null, IceHighlight, geometry);
     }
-    private static readonly Geometry Badge = Shape("M 21,4 L 43,4 L 60,21 L 60,43 L 43,60 L 21,60 L 4,43 L 4,21 Z");
-    private static readonly Geometry BadgeLip = Shape("M 23,9 L 41,9 L 55,23 L 55,41 L 41,55 L 23,55 L 9,41 L 9,23 Z");
-    private static readonly Geometry BadgeGloss = Shape("M 21,5 L 44,5 L 56,18 L 42,22 L 13,22 L 8,17 Z");
-    private static readonly Geometry ChipBody = Shape("M 18,19 L 45,19 L 45,46 L 18,46 Z");
-    private static readonly Geometry ChipTop = Shape("M 19,19 L 45,19 L 40,24 L 20,24 Z");
-    private static readonly Geometry DownArrow = Shape("M 32,23 L 32,39 M 25,33 L 32,40 L 39,33 M 24,43 L 40,43");
-    private static readonly Geometry StartRing = Shape("M 22,18 C 12,23 11,35 17,44 C 23,54 40,54 47,44 C 53,35 51,24 42,18");
-    private static readonly Geometry DataTop = Shape("M 14,23 L 32,14 L 50,23 L 32,32 Z");
-    private static readonly Geometry DataSide = Shape("M 14,23 L 32,32 L 32,39 L 14,30 Z");
-    private static readonly Geometry DataRight = Shape("M 32,32 L 50,23 L 50,30 L 32,39 Z");
-    private static readonly Geometry DataLower = Shape("M 14,38 L 32,47 L 50,38 M 14,44 L 32,53 L 50,44");
-    private static readonly Geometry DataIn = Shape("M 6,30 L 22,30 M 16,24 L 23,30 L 16,36");
+
+    private static void DrawButton(DrawingContext dc, Point center)
+    {
+        dc.DrawEllipse(null, OuterBloom, center, 2.5, 2.5);
+        dc.DrawEllipse(null, InnerBloom, center, 2.5, 2.5);
+        dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0, 226, 242)),
+            null, center, 2.2, 2.2);
+        dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(190, 220, 255, 255)),
+            null, new Point(center.X - 0.5, center.Y - 0.5), 0.75, 0.75);
+    }
 
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
-        if (RenderSize.Width < 2 || RenderSize.Height < 2) return;
-        dc.PushTransform(new ScaleTransform(RenderSize.Width / 64.0, RenderSize.Height / 64.0));
-        dc.DrawEllipse(Glow, null, new Point(32, 32), 31, 31);
-        dc.DrawGeometry(Plate, new Pen(new SolidColorBrush(Color.FromRgb(21, 127, 147)), 1.4), Badge);
-        dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb(126, 222, 251, 255)), 1.0), BadgeLip);
-        dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(45, 231, 255, 255)), null, BadgeGloss);
-        dc.DrawLine(YellowEdge, new Point(10, 20), new Point(20, 10));
-        dc.DrawLine(CyanEdge, new Point(44, 55), new Point(54, 45));
-        dc.DrawEllipse(Brushes.Black, IceEdge, new Point(13, 46), 2.1, 2.1);
-        dc.DrawEllipse(Brushes.Black, YellowEdge, new Point(51, 18), 1.7, 1.7);
+        if (RenderSize.Width < 2 || RenderSize.Height < 2)
+            return;
+
+        dc.PushTransform(new ScaleTransform(
+            RenderSize.Width / 64.0, RenderSize.Height / 64.0));
         switch (Kind)
         {
             case StageEmblemKind.Chip:
-                dc.DrawGeometry(Slate, YellowEdge, ChipBody);
-                dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(115, 255, 255, 255)),
-                                null, ChipTop);
-                for (int i = 0; i < 3; i++)
-                {
-                    var pos = 24 + i * 8;
-                    dc.DrawLine(CyanEdge, new Point(pos, 14), new Point(pos, 19));
-                    dc.DrawLine(CyanEdge, new Point(pos, 46), new Point(pos, 51));
-                    dc.DrawLine(CyanEdge, new Point(13, pos), new Point(18, pos));
-                    dc.DrawLine(CyanEdge, new Point(45, pos), new Point(51, pos));
-                }
-                dc.DrawGeometry(null, new Pen(Gold, 3.3)
-                    { LineJoin = PenLineJoin.Miter }, DownArrow);
-                dc.DrawLine(IceEdge, new Point(30, 27), new Point(30, 34));
+                DrawNeon(dc, InstallArrow);
+                DrawNeon(dc, InstallTray);
                 break;
             case StageEmblemKind.Ignition:
-                dc.DrawEllipse(Slate, new Pen(new SolidColorBrush(
-                    Color.FromArgb(108, 0, 226, 242)), 2), new Point(32, 34), 21, 21);
-                dc.DrawGeometry(null, new Pen(Steel, 5.2)
-                    { LineJoin = PenLineJoin.Miter }, StartRing);
-                dc.DrawGeometry(null, new Pen(new SolidColorBrush(
-                    Color.FromRgb(190, 253, 255)), 1.2), StartRing);
-                dc.DrawLine(new Pen(Gold, 5.5), new Point(32, 13), new Point(32, 34));
-                dc.DrawLine(IceEdge, new Point(30, 15), new Point(30, 27));
-                dc.DrawLine(YellowEdge, new Point(43, 37), new Point(49, 32));
+                DrawNeon(dc, Gamepad);
+                DrawNeon(dc, GamepadCross);
+                DrawButton(dc, new Point(42, 33));
+                DrawButton(dc, new Point(47, 38));
                 break;
             case StageEmblemKind.Data:
-                dc.DrawGeometry(Steel, CyanEdge, DataTop);
-                dc.DrawGeometry(Slate, new Pen(new SolidColorBrush(
-                    Color.FromRgb(11, 83, 99)), 1.6), DataSide);
-                dc.DrawGeometry(Slate, CyanEdge, DataRight);
-                dc.DrawLine(IceEdge, new Point(20, 23), new Point(32, 17));
-                dc.DrawGeometry(null, CyanEdge, DataLower);
-                dc.DrawGeometry(null, new Pen(Gold, 3.6)
-                    { LineJoin = PenLineJoin.Miter }, DataIn);
-                dc.DrawEllipse(Gold, null, new Point(7, 30), 2.2, 2.2);
+                DrawNeon(dc, DataTop);
+                DrawNeon(dc, DataMiddle);
+                DrawNeon(dc, DataBottom);
                 break;
         }
         dc.Pop();

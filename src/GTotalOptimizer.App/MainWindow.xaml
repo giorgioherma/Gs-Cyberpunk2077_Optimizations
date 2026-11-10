@@ -69,12 +69,6 @@
             <GradientStop Color="#FFF000" Offset=".61"/>
             <GradientStop Color="#D6AE00" Offset="1"/>
         </LinearGradientBrush>
-        <LinearGradientBrush x:Key="CardMetal" StartPoint="0,0" EndPoint=".12,1">
-            <GradientStop Color="#112126" Offset="0"/>
-            <GradientStop Color="#0B1A1E" Offset=".16"/>
-            <GradientStop Color="#081316" Offset=".52"/>
-            <GradientStop Color="#040B0E" Offset="1"/>
-        </LinearGradientBrush>
         <Style x:Key="ActionButton" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource ButtonMetal}"/>
             <Setter Property="Foreground" Value="#FFF000"/>
@@ -412,7 +406,7 @@
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
                         <!-- Move title and its description together. -->
-                        <StackPanel x:Name="HeroSection" Margin="62,31,0,12">
+                        <StackPanel x:Name="HeroSection" Margin="62,17,0,26">
                             <TextBlock x:Name="HeroTitle" Margin="0"
                                        FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
@@ -429,43 +423,12 @@
 
                         <!-- White heading outside a height-constrained Game Root box. -->
                         <!-- Restore the original Game Root X alignment. -->
-                        <StackPanel Margin="0,12,0,9">
+                        <StackPanel Margin="30,12,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                           Stroke="#00E2F2" StrokeThickness="2.7"
                                           Width="18" Height="20" Margin="0,0,9,0"/>
-                                    <Viewbox x:Name="GameRootFolderIcon" Width="26" Height="21"
-                                              Margin="0,0,8,0" VerticalAlignment="Center"
-                                              IsHitTestVisible="False">
-                                         <Grid Width="36" Height="28">
-                                             <!-- Brushed bright metal lid, black recessed pocket. -->
-                                             <Path Data="M 2,8 L 12,8 L 17,12 L 34,12 L 34,25 L 2,25 Z"
-                                                   Stroke="#B89E00" StrokeThickness="2">
-                                                 <Path.Fill>
-                                                     <LinearGradientBrush StartPoint="0,0" EndPoint=".34,1">
-                                                         <GradientStop Color="#FFFEC2" Offset="0"/>
-                                                         <GradientStop Color="#FFF000" Offset=".27"/>
-                                                         <GradientStop Color="#8C7400" Offset="1"/>
-                                                     </LinearGradientBrush>
-                                                 </Path.Fill>
-                                             </Path>
-                                             <Path Data="M 3,13 L 34,13 L 31,23 L 5,23 Z"
-                                                   Stroke="#FFF000" StrokeThickness="1.7">
-                                                 <Path.Fill>
-                                                     <LinearGradientBrush StartPoint="0,0" EndPoint=".2,1">
-                                                         <GradientStop Color="#31474C" Offset="0"/>
-                                                         <GradientStop Color="#0B1B22" Offset=".56"/>
-                                                         <GradientStop Color="#041015" Offset="1"/>
-                                                     </LinearGradientBrush>
-                                                 </Path.Fill>
-                                             </Path>
-                                             <Path Data="M 5,15 L 28,15" Stroke="#FFFFFF"
-                                                   StrokeThickness="1.1" Opacity=".9"/>
-                                             <Path Data="M 6,21 L 28,21" Stroke="#775F00"
-                                                   StrokeThickness="1.5"/>
-                                         </Grid>
-                                     </Viewbox>
                                      <TextBlock Text="GAME ROOT / CYBERPUNK 2077"
                                                Foreground="#F5F6F6" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="15.5" VerticalAlignment="Center"/>
@@ -516,7 +479,7 @@
                             </Grid>
                         </StackPanel>
 
-                        <StackPanel x:Name="CaptureWorkflowHeading" Orientation="Horizontal" Margin="2,15,0,9" Height="24">
+                        <StackPanel x:Name="CaptureWorkflowHeading" Orientation="Horizontal" Margin="32,15,0,9" Height="24">
                             <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                   Stroke="#00E2F2" StrokeThickness="2.7"
                                   Width="18" Height="20" Margin="0,0,9,0"
@@ -527,14 +490,14 @@
                         </StackPanel>
 
                         <!-- Large compact step cards. Buttons are inside each card. -->
-                        <Grid Height="204">
+                        <Grid Height="204" Margin="30,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0" Margin="8,0,13,0">
-                                <fx:ChamferOutline x:Name="StepOneOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
+                            <Grid Grid.Column="0" Margin="9,0,14,0">
+                                <fx:ChamferOutline x:Name="StepOneOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -545,10 +508,15 @@
                                         <RowDefinition Height="38"/>
                                     </Grid.RowDefinitions>
                                     <Grid Grid.Row="0">
-                                        <TextBlock Text="01" HorizontalAlignment="Left"
-                                                   Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                                   FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="InstallStageIcon" HorizontalAlignment="Center" Width="52" Height="42"
+                                        <Grid Width="37" Height="36" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                              IsHitTestVisible="False">
+                                            <Path Data="M 1,1 L 35,1 L 35,24 L 24,35 L 1,35 Z"
+                                                  Fill="{StaticResource GoldenMetal}" Stroke="#DCC700" StrokeThickness="1.2"/>
+                                            <TextBlock Text="1" Foreground="#061013" FontFamily="{StaticResource Oxanium}"
+                                                       FontWeight="ExtraBold" FontSize="23" TextAlignment="Center"
+                                                       VerticalAlignment="Center" Margin="0,-1,4,0"/>
+                                        </Grid>
+                                        <Viewbox x:Name="InstallStageIcon" HorizontalAlignment="Center" Width="58" Height="42"
                                                   IsHitTestVisible="False">
                                              <fx:StageEmblem Kind="Chip" Width="64" Height="64"/>
                                          </Viewbox>
@@ -568,8 +536,8 @@
                                 </Grid>
                             </Grid>
 
-                            <Grid Grid.Column="1" Margin="13,0,13,0">
-                                <fx:ChamferOutline x:Name="StepTwoOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
+                            <Grid Grid.Column="1" Margin="14,0,14,0">
+                                <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -580,10 +548,15 @@
                                         <RowDefinition Height="38"/>
                                     </Grid.RowDefinitions>
                                     <Grid Grid.Row="0">
-                                        <TextBlock Text="02" HorizontalAlignment="Left"
-                                                   Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                                   FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="52" Height="42"
+                                        <Grid Width="37" Height="36" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                              IsHitTestVisible="False">
+                                            <Path Data="M 1,1 L 35,1 L 35,24 L 24,35 L 1,35 Z"
+                                                  Fill="{StaticResource GoldenMetal}" Stroke="#DCC700" StrokeThickness="1.2"/>
+                                            <TextBlock Text="2" Foreground="#061013" FontFamily="{StaticResource Oxanium}"
+                                                       FontWeight="ExtraBold" FontSize="23" TextAlignment="Center"
+                                                       VerticalAlignment="Center" Margin="0,-1,4,0"/>
+                                        </Grid>
+                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="58" Height="42"
                                                   IsHitTestVisible="False">
                                              <fx:StageEmblem Kind="Ignition" Width="64" Height="64"/>
                                          </Viewbox>
@@ -593,7 +566,7 @@
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,4,0,4"
-                                               Text="Record a varied run: idle, walking, driving and heavy combat."
+                                               Text="Record a varied run: idle, walking, driving and heavy combat. Avoid menus, inventory or pausing the game in any way."
                                                Foreground="#A8B3B5" FontSize="13"
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                VerticalAlignment="Center" TextWrapping="Wrap"/>
@@ -603,8 +576,8 @@
                                 </Grid>
                             </Grid>
 
-                            <Grid Grid.Column="2" Margin="13,0,8,0">
-                                <fx:ChamferOutline x:Name="StepThreeOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
+                            <Grid Grid.Column="2" Margin="14,0,9,0">
+                                <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -615,10 +588,15 @@
                                         <RowDefinition Height="38"/>
                                     </Grid.RowDefinitions>
                                     <Grid Grid.Row="0">
-                                        <TextBlock Text="03" HorizontalAlignment="Left"
-                                                   Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                                   FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="CollectStageIcon" HorizontalAlignment="Center" Width="54" Height="42"
+                                        <Grid Width="37" Height="36" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                              IsHitTestVisible="False">
+                                            <Path Data="M 1,1 L 35,1 L 35,24 L 24,35 L 1,35 Z"
+                                                  Fill="{StaticResource GoldenMetal}" Stroke="#DCC700" StrokeThickness="1.2"/>
+                                            <TextBlock Text="3" Foreground="#061013" FontFamily="{StaticResource Oxanium}"
+                                                       FontWeight="ExtraBold" FontSize="23" TextAlignment="Center"
+                                                       VerticalAlignment="Center" Margin="0,-1,4,0"/>
+                                        </Grid>
+                                        <Viewbox x:Name="CollectStageIcon" HorizontalAlignment="Center" Width="58" Height="42"
                                                   IsHitTestVisible="False">
                                              <fx:StageEmblem Kind="Data" Width="64" Height="64"/>
                                          </Viewbox>
@@ -628,7 +606,7 @@
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                FontWeight="Bold" FontSize="15.5" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="2" Margin="0,4,0,4"
-                                               Text="Close the game. Verify and collect evidence before restoration."
+                                               Text="Close the game. Verify and collect evidence before continuing to Analyze."
                                                Foreground="#A8B3B5" FontSize="13"
                                                HorizontalAlignment="Stretch" TextAlignment="Center"
                                                VerticalAlignment="Center" TextWrapping="Wrap"/>
