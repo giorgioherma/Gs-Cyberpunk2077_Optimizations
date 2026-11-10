@@ -90,6 +90,37 @@ internal static class PresentMonCaptureController
         }
     }
 
+    // Share process ownership classification with the elevated stop/restart
+    // controller. A foreign PresentMon must not block a native-only capture
+    // when GCO has no tracked or running collector of its own.
+    private static bool IsOwnedExecutable(string root, string livePath, string officialHash)
+    {
+        if (PresentMonLifecyclePolicy.IsOwnedProcess(root, livePath)) return true;
+        var suffix = Path.Combine("components", "presentmon", "PresentMon.exe");
+        return livePath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(livePath) &&
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(livePath)))
+                .Equals(officialHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool HasOwnedRunning(string root)
+    {
+        var exe = PresentMonLifecyclePolicy.Executable(root);
+        if (!File.Exists(exe)) return false;
+        var officialHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(exe)));
+        foreach (var process in Process.GetProcessesByName("PresentMon"))
+        {
+            using (process)
+            {
+                if (process.HasExited) continue;
+                var livePath = process.MainModule?.FileName ??
+                    throw new InvalidOperationException("Cannot verify active PresentMon ownership.");
+                if (IsOwnedExecutable(root, livePath, officialHash)) return true;
+            }
+        }
+        return false;
+    }
+
     public static int ExecuteElevated(string action, string outputCsv)
     {
         string? resultPath = null;
@@ -108,7 +139,6 @@ internal static class PresentMonCaptureController
 
             var presentMon = PresentMonLifecyclePolicy.Executable(root);
             var officialHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(presentMon)));
-            var expectedPart = Path.Combine("components", "presentmon", "PresentMon.exe");
 
             // Serialize all GCO windows (including after app restarts). Without
             // this gate two elevated helpers could both observe no PresentMon
@@ -139,14 +169,7 @@ internal static class PresentMonCaptureController
                             "Cannot inspect PresentMon PID " + process.Id +
                             "; refusing to manipulate an unverified process.", ex);
                     }
-                    var currentOwner = PresentMonLifecyclePolicy.IsOwnedProcess(root, livePath);
-                    // A previous GCO extraction remains owned only when the
-                    // executable has identical official bytes and package path.
-                    var previousGco = livePath.EndsWith(expectedPart, StringComparison.OrdinalIgnoreCase) &&
-                        File.Exists(livePath) &&
-                        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(livePath)))
-                            .Equals(officialHash, StringComparison.OrdinalIgnoreCase);
-                    if (!currentOwner && !previousGco)
+                    if (!IsOwnedExecutable(root, livePath, officialHash))
                         throw new InvalidOperationException(
                             "Non-GCO PresentMon PID " + process.Id +
                             " is running. Close it manually before GCO capture.");
