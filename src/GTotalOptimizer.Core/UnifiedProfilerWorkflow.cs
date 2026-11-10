@@ -169,6 +169,8 @@ public sealed class UnifiedProfilerWorkflow
     public async Task<ProfilerWorkflowResult> InstallAsync(string game, CancellationToken token = default)
     {
         if (GameRunning()) return new(false, "Close Cyberpunk before installing profilers.");
+        var compatible = FrameworkPreflight.Inspect(game);
+        if (!compatible.Ready) return new(false, compatible.Detail);
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready) return new(false, bundle.Detail);
         if (HasRecoveryJournal)
