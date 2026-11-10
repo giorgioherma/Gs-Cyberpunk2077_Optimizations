@@ -8,7 +8,7 @@ public sealed record CollectedOwner(string SourceArchive, List<CollectedFile> Fi
 public sealed record CollectedCaptureIndex(
     string SessionId, string GameRoot, CollectedOwner? Cet, CollectedOwner? Redscript,
     string? FrameTimeCsv, bool Restored = false, List<string>? Skipped = null,
-    CollectedFile? FrameTimeEvidence = null)
+    CollectedFile? FrameTimeEvidence = null, bool CollectionAttempted = false)
 {
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
@@ -76,7 +76,8 @@ public static class CollectedCaptureStore
     public static CollectedCaptureIndex ReadRestored(string root, string game, string sessionId)
     {
         var saved = Read(root, game, sessionId, verifyHashes: true);
-        if (!saved.Restored || !saved.HasAny)
+        if (!saved.Restored || !saved.CollectionAttempted ||
+            saved.Cet is null || saved.Redscript is null)
             throw new InvalidDataException(
                 "The selected capture is not a completed, restored GCO session.");
         return saved;
@@ -177,6 +178,14 @@ public static class CollectedCaptureStore
         var proof = new CollectedFile(relative.Replace(Path.DirectorySeparatorChar, '/'),
             new FileInfo(path).Length, Hash(path));
         state = state with { FrameTimeCsv = path, FrameTimeEvidence = proof };
+        Write(root, state);
+        return state;
+    }
+
+    public static CollectedCaptureIndex MarkCollectionAttempted(string root, string game, string sessionId)
+    {
+        var state = Read(root, game, sessionId, verifyHashes: true);
+        state = state with { CollectionAttempted = true };
         Write(root, state);
         return state;
     }
