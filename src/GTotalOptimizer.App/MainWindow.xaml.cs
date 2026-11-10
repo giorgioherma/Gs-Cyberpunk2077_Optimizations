@@ -709,51 +709,6 @@ public partial class MainWindow : Window
             : Environment.NewLine + "PresentMon CSV: " + saved.FrameTimeCsv;
     }
 
-    private bool ConfirmPartialResults(CollectedCaptureIndex saved)
-    {
-        var missing = new List<string>();
-        if (liveState?.CetManaged == true && saved.Cet is null) missing.Add("CET");
-        if (liveState?.GrspManaged == true && saved.Redscript is null) missing.Add("REDscript");
-        if (saved.FrameTimeCsv is null) missing.Add("PresentMon (optional frame timing)");
-        if (missing.Count == 0) return true;
-
-        var dlg = new Window
-        {
-            Title = "Incomplete capture evidence",
-            Icon = Icon,
-            Owner = this,
-            Width = 520,
-            Height = 250,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.FromRgb(12, 21, 25)),
-            Foreground = Brushes.White,
-            ShowInTaskbar = false
-        };
-        var panel = new StackPanel { Margin = new Thickness(24) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Missing expected captures: " + string.Join(", ", missing),
-            FontSize = 15, TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(255, 240, 0))
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = "RETURN keeps your verified results and lets you try again. CONTINUE acknowledges missing evidence, then restores the native profilers.",
-            Margin = new Thickness(0, 14, 0, 20),
-            TextWrapping = TextWrapping.Wrap
-        });
-        var buttons = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var back = new System.Windows.Controls.Button { Content = "RETURN", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7), Margin = new Thickness(0, 0, 12, 0) };
-        var proceed = new System.Windows.Controls.Button { Content = "CONTINUE", MinWidth = 112, Padding = new Thickness(13, 7, 13, 7) };
-        back.Click += (_, _) => dlg.DialogResult = false;
-        proceed.Click += (_, _) => dlg.DialogResult = true;
-        buttons.Children.Add(back); buttons.Children.Add(proceed);
-        panel.Children.Add(buttons);
-        dlg.Content = panel;
-        return dlg.ShowDialog() == true;
-    }
-
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
     private async Task ContinueToAnalyticsAsync()
     {
@@ -771,21 +726,22 @@ public partial class MainWindow : Window
         CollectedCaptureIndex? saved;
         try { saved = Workflow.ReadCollected(game, verifyHashes: true); }
         catch (Exception ex) { Warn(ex.Message, "Evidence verification"); return; }
-        if (!HasNative(saved)) return;
-        if (PresentMonCaptureController.ReadTrackedCsv(packageRoot) is not null)
+        bool monStopped;
+        try { monStopped = PresentMonCaptureController.ReadTrackedCsv(packageRoot) is null; }
+        catch (Exception ex) { Warn("PresentMon state invalid: " + ex.Message, "Collection"); return; }
+        if (!CaptureAdmissionPolicy.CanContinue(saved, monStopped))
         {
-            Warn("PresentMon is still active. Use COLLECT RESULTS to stop it.", "Frame capture active");
+            Warn("Both current-attempt G-CET and G-REDscript captures must be verified after COLLECT RESULTS, and PresentMon must be stopped. Use RESTORE PROFILERS for recovery.", "CONTINUE unavailable");
             return;
         }
-        if (!ConfirmPartialResults(saved!)) return;
         SetBusy(true);
         try
         {
             // Only source-owner restoration can authorize Page 2. Missing
             // intentional domains are explicitly acknowledged above.
             var result = await Workflow.ContinueAsync(game,
-                skipCet: saved!.Cet is null, skipRedscript: saved.Redscript is null,
-                skipFrameTime: saved.FrameTimeCsv is null);
+                skipCet: false, skipRedscript: false,
+                skipFrameTime: saved!.FrameTimeCsv is null);
             if (!result.RestoreVerified)
             {
                 SetStatus(result.Detail);
@@ -834,35 +790,34 @@ public partial class MainWindow : Window
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
             !Workflow.HasRecoveryJournal) return;
-        if (GameRunning()) { Warn("Close Cyberpunk before restoring.", "Game running"); return; }
+        if (GameRunning())
+        {
+            Warn("Close Cyberpunk before restoring profilers.", "Recovery");
+            return;
+        }
+        ClearStatusPin();
         var game = inspection.GameRoot;
-        try { _ = await Workflow.InspectAsync(game); }
-        catch (Exception ex) { Warn("Owner status unavailable: " + ex.Message, "Recovery"); return; }
-        var choice = System.Windows.MessageBox.Show(this,
-            "End this profiling session and restore originals now? Already archived results remain intact. Incomplete diagnostics will be preserved.",
-            "Restore original files", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (choice != MessageBoxResult.Yes) return;
         SetBusy(true);
+        SetStatus("Restoring original game files through CET and REDscript owners...");
         try
         {
-            var result = await Workflow.RestoreOwnedAsync(game);
-            var csv = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
-            string? frameError = null;
-            if (csv is not null)
+            var capture = Workflow.ReadCollected(game) ??
+                throw new InvalidDataException("No matching GCO recovery journal.");
+            // Manual RESTORE must work even with zero captures or locked CONTINUE.
+            // Stop the GCO frame collector first, then restore both owners.
+            var stop = await StopOwnedPresentMonAsync(capture.SessionId);
+            if (!stop.Stopped)
             {
-                try
-                {
-                    await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: false);
-                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                }
-                catch (Exception ex) { frameError = ex.Message; }
+                Warn(stop.Error ?? "PresentMon shutdown could not be verified.", "Recovery required");
+                return;
             }
+            var result = await Workflow.RestoreOwnedAsync(game);
             captureLaunched = false;
             SetPortraitStage(PortraitStage.Black);
-            Warn(result.Detail + (frameError is null ? "" : "\nPresentMon: " + frameError),
-                result.RestoreVerified ? "Restored" : "Recovery required");
+            if (!result.RestoreVerified) Warn(result.Detail, "Recovery required");
+            else PinStatus("G-CET and G-REDscript profilers restored. Original game files verified. Capture evidence preserved.");
         }
-        catch (Exception ex) { Warn(ex.Message, "Recovery"); }
+        catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
     }
 
@@ -872,6 +827,7 @@ public partial class MainWindow : Window
             Process.Start(new ProcessStartInfo(resultsFolder) { UseShellExecute = true });
     }
 
-    private void Warn(string message, string title) =>
-        System.Windows.MessageBox.Show(this, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+    // The pinned console is the one normal diagnostic channel. No modal popup
+    // can interrupt collection/recovery or bypass the verified Continue gate.
+    private void Warn(string message, string title) => PinStatus(title + ": " + message);
 }
