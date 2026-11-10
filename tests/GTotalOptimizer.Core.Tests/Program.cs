@@ -141,21 +141,25 @@ try
         "source file detected but not advertised compatible");
     Require(probe.Checks.Any(c => c.Name == "G-REDruntime source" && c.State == CheckState.Unverified),
         "redscript source presence not equated to runtime compatibility");
-    // This source intentionally has no modules/ or injector entrypoints.
-    // A versioned, installed 0-Engine is admitted for profiling, while
-    // CET Resolver/Generator remains responsible for modification decisions.
-    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.19.0\"");
+    // No modules/injector entrypoints are required by GCO preflight.
+    // Even a versionless or legacy 0-Engine init.lua admits the profiler;
+    // CET Resolver/Generator alone determines injection compatibility.
     var physicalPreflight = FrameworkPreflight.Inspect(root);
     Require(!physicalPreflight.Issues.Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
-        "physical 0-Engine 0.19 passes version-only admission without modules directory");
-    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.17.2\"");
-    Require(FrameworkPreflight.Inspect(root).Issues
-        .Any(x => x.Contains("0-Engine requires 0.18.0 or greater", StringComparison.Ordinal)),
-        "physical 0-Engine below 0.18 is still blocked independently of module layout");
-    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \"0.18.0\"");
+        "real physical minimal 0-Engine init.lua passes without a recognizable version");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "version = \\"0.17.2\\"");
     Require(!FrameworkPreflight.Inspect(root).Issues
         .Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
-        "physical minimum 0.18.0 accepted with no generator source compatibility scan");
+        "legacy physical 0-Engine 0.17.2 does not block profiler installation");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "engineVersion = \\"0.18.6\\"");
+    Require(!FrameworkPreflight.Inspect(root).Issues
+        .Any(x => x.Contains("0-Engine", StringComparison.Ordinal)),
+        "owner-style engineVersion 0.18.6 does not require version parsing");
+    File.Delete(Path.Combine(cet, "init.lua"));
+    Require(FrameworkPreflight.Inspect(root).Issues
+        .Any(x => x.Contains("0-Engine/init.lua", StringComparison.Ordinal)),
+        "real physical 0-Engine directory without init.lua is blocked");
+    File.WriteAllText(Path.Combine(cet, "init.lua"), "-- restored minimal init");
     Require(!physicalPreflight.Ready &&
         physicalPreflight.Issues.Contains("CET 1.37.1 is missing") &&
         physicalPreflight.Issues.Contains("RED4ext 1.30.0 is missing") &&
