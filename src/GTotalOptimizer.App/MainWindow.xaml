@@ -469,9 +469,9 @@
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                     <StackPanel Orientation="Horizontal" Margin="1,1,0,0" Height="16">
                                         <TextBlock x:Name="CetStatusText" Style="{StaticResource SmallStatus}"
-                                                   Width="178" Text="CET Profiler · NOT CHECKED"/>
+                                                   Width="192" Text="G-CET Profiler · NOT CHECKED"/>
                                         <TextBlock x:Name="RedStatusText" Style="{StaticResource SmallStatus}"
-                                                   Width="204" Text="REDscript Profiler · NOT CHECKED"/>
+                                                   Width="240" Text="G-REDscript Profiler · NOT CHECKED"/>
                                         <TextBlock x:Name="PresentStatusText" Style="{StaticResource SmallStatus}"
                                                    Width="175" Text="PresentMon · AUTOMATIC"/>
                                     </StackPanel>
