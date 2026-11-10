@@ -41,6 +41,31 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # One-time upstream artifact provenance probe. Remove after fingerprint
+      # is validated and tracked in a local source contract.
+      - name: Inspect official redscript 0.5.31 fingerprints
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $zip=Join-Path $env:RUNNER_TEMP 'redscript-0.5.31-official.zip'
+          $folder=Join-Path $env:RUNNER_TEMP 'redscript-0.5.31-reference'
+          Invoke-WebRequest -Uri 'https://github.com/jac3km4/redscript/releases/download/v0.5.31/redscript-v0.5.31-windows.zip' -OutFile $zip
+          $digest=(Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash
+          if ($digest -ne '799BBD88863F6728616F8D723C941EA15DFF71ED5BBFD50C525F0D39EA0BF46B') {
+            throw "Official redscript release archive digest mismatch: $digest"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $folder -Force
+          foreach($file in @('scc.exe','scc_lib.dll')) {
+            $matches=@(Get-ChildItem -LiteralPath $folder -Recurse -File -Filter $file)
+            if($matches.Count -ne 1) { throw "Missing or ambiguous upstream $file count=$($matches.Count)" }
+            $hash=(Get-FileHash -LiteralPath $matches[0].FullName -Algorithm SHA256).Hash
+            Write-Host "UPSTREAM_0_5_31_$file SHA256=$hash SIZE=$($matches[0].Length)"
+            if($file -eq 'scc.exe') {
+              Write-Host "UPSTREAM_SCC_MATCHES_USER=$($hash -eq 'DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD')"
+            } else {
+              Write-Host "UPSTREAM_SCC_LIB_MATCHES_UPLOADED=$($hash -eq '49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100')"
+            }
+          }
       - name: Download exact latest successful CET developer profiler artifact
         shell: pwsh
         working-directory: unified
