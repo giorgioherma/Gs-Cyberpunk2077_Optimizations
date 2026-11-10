@@ -280,3 +280,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-10 — Rounded controller and upper-right-only editable path chamfer
 
 - Owner requires GitHub source modifications, not generated images. Change only `StageEmblem` gamepad WPF vector (rounded silhouette, **four** face buttons) and `PathInput` top-right cut via new opt-in mode of existing `ChamferOutline`, retaining native `PART_ContentHost` editing/scrolling, focus and disabled states. No changes to other icons, accepted Page 1 geometry, original artwork or v1.2.0. CI must complete before artifact claims.
+
+- **Verified:** automatic [Windows CI #205](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42791657392) **SUCCESS 185/185** on `da88f264`, downloadable GCO v1.2.0 artifact **13752850135**. Gamepad and path-corner WPF changes compiled and shipped; user screenshot still required to approve look.
