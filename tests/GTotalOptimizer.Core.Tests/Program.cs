@@ -398,8 +398,7 @@ try
         !CaptureAdmissionPolicy.CanContinue(cetCopy, true) &&
         !CaptureAdmissionPolicy.CanContinue(redCopy, true),
         "Continue remains blocked until explicit Collect has recorded two captures");
-    var attemptedDual = CollectedCaptureStore.MarkCollectionAttempted(package,
-        archiveGame, sessionId);
+    var attemptedDual = CollectedCaptureStore.MarkCollectionAttempted(package, archiveGame, sessionId, presentMonStopped: true);
     Require(CaptureAdmissionPolicy.CanContinue(attemptedDual, true) &&
         !CaptureAdmissionPolicy.CanContinue(attemptedDual, false),
         "dual native capture allows Continue without PresentMon only after stopped collection");
@@ -427,7 +426,7 @@ try
     Require(notRestoredRejected, "unrestored capture cannot be opened as the completed analysis page");
     var restoredDual = CollectedCaptureStore.CopyOwner(package, restoredGame,
         restoredId, BackendKind.Grsp, redSource);
-    restoredDual = CollectedCaptureStore.MarkCollectionAttempted(package, restoredGame, restoredId);
+    restoredDual = CollectedCaptureStore.MarkCollectionAttempted(package, restoredGame, restoredId, presentMonStopped: true);
     CollectedCaptureStore.MarkRestored(package, restoredDual,
         skipCet: false, skipRedscript: false, skipFrameTime: true);
     var postRestore = CollectedCaptureStore.ReadRestored(package, restoredGame, restoredId);
