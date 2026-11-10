@@ -419,6 +419,48 @@ try
         { Present: true, StructureCompatible: false },
         "missing shared compiler library reports incomplete installation");
 
+    // CI supplies an unpacked, SHA-256-verified upstream v0.5.31 Windows
+    // release as a physical fixture. This tests actual official binary
+    // acceptance, not just synthetic versions passed to Evaluate().
+    var officialRedscriptRoot = Environment.GetEnvironmentVariable(
+        "GCO_REDSCRIPT_REFERENCE_GAME_ROOT");
+    if (!string.IsNullOrWhiteSpace(officialRedscriptRoot))
+    {
+        var official = FrameworkPreflight.InspectRedscript(officialRedscriptRoot);
+        Require(official is { Present: true, Version: "0.5.31", StructureCompatible: true },
+            "official redscript 0.5.31 compiler pair is physically identified");
+        var officialStack = new GameFrameworkEvidence(
+            new(true, "2.31"), new(true, "1.37.1"), new(true, "0.18.0"),
+            new(true, "1.30.0"), official);
+        Require(FrameworkPreflight.Evaluate(officialStack).Ready,
+            "official redscript 0.5.31 binaries permit full compatible GCO preflight");
+
+        var liveExe = Path.Combine(redscriptTools, "scc.exe");
+        var liveLibrary = Path.Combine(redscriptTools, "scc_lib.dll");
+        File.Copy(Path.Combine(officialRedscriptRoot, "engine", "tools", "scc.exe"),
+            liveExe, overwrite: true);
+        File.Copy(Path.Combine(officialRedscriptRoot, "engine", "tools", "scc_lib.dll"),
+            liveLibrary, overwrite: true);
+        Require(FrameworkPreflight.InspectRedscript(fakeRedscript).Version == "0.5.31",
+            "genuine compiler files pass physical redscript detection in target layout");
+
+        using (var modified = new FileStream(liveExe, FileMode.Append, FileAccess.Write))
+            modified.WriteByte(0x5A);
+        var wrongExe = FrameworkPreflight.InspectRedscript(fakeRedscript);
+        Require(wrongExe is { Present: true, Version: null, StructureCompatible: true } &&
+            !FrameworkPreflight.Evaluate(officialStack with { Redscript = wrongExe }).Ready,
+            "changed/other-version scc.exe is refused even when the library is valid");
+
+        File.Copy(Path.Combine(officialRedscriptRoot, "engine", "tools", "scc.exe"),
+            liveExe, overwrite: true);
+        using (var modified = new FileStream(liveLibrary, FileMode.Append, FileAccess.Write))
+            modified.WriteByte(0x5A);
+        var wrongLibrary = FrameworkPreflight.InspectRedscript(fakeRedscript);
+        Require(wrongLibrary is { Present: true, Version: null, StructureCompatible: true } &&
+            !FrameworkPreflight.Evaluate(officialStack with { Redscript = wrongLibrary }).Ready,
+            "other-version or modified scc_lib.dll cannot masquerade as redscript 0.5.31");
+    }
+
     // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.
     static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) => new(exists, v, shape);
     GameFrameworkEvidence Full(string? engine = "0.18.6") =>

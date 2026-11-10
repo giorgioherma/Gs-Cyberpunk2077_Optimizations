@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace GTotalOptimizer.Core;
@@ -102,6 +103,30 @@ public static class FrameworkPreflight
         return null;
     }
 
+    // Exact, immutable upstream v0.5.31 Windows compiler fingerprints.
+    // These identify the one supported redscript compiler release, not mods
+    // or mutable REDscript source. The known release ZIP was independently
+    // verified against the upstream published archive SHA-256.
+    private const string Redscript031ExeSha256 =
+        "DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD";
+    private const string Redscript031LibSha256 =
+        "49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100";
+
+    private static bool MatchesSha256(string path, string expectedHash)
+    {
+        try
+        {
+            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (file.Length == 0 || file.Length > 16 * 1024 * 1024) return false;
+            return string.Equals(Convert.ToHexString(SHA256.HashData(file)),
+                expectedHash, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static string? EngineVersion(string folder)
     {
         foreach (var file in new[] { "init.lua", "version.lua", "manifest.json", "mod.json" })
@@ -134,13 +159,17 @@ public static class FrameworkPreflight
         var hasLibrary = File.Exists(library);
         var hasAlternate = File.Exists(alternateLibrary);
         var hasConfig = File.Exists(config);
-        // Recognize an alternate scc.dll filename as possible redscript
-        // evidence, but upstream scc.exe requires scc_lib.dll: never claim
-        // the incomplete/renamed compiler is safe to use.
+        // Only the official supported compiler pair is a verified 0.5.31
+        // installation. PE version metadata (when present) is not trusted
+        // to bypass the binary identity contract; nothing is executed.
+        var shape = hasExe && hasLibrary && hasConfig;
+        var verified = shape &&
+            MatchesSha256(compiler, Redscript031ExeSha256) &&
+            MatchesSha256(library, Redscript031LibSha256);
         return new(
             hasExe || hasLibrary || hasAlternate || hasConfig,
-            PeVersion(library) ?? PeVersion(compiler) ?? PeVersion(alternateLibrary),
-            hasExe && hasLibrary && hasConfig);
+            verified ? "0.5.31" : null,
+            shape);
     }
 
     public static FrameworkPreflightResult Inspect(string gameRoot)
