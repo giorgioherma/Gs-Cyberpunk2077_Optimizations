@@ -141,6 +141,12 @@ try
         "source file detected but not advertised compatible");
     Require(probe.Checks.Any(c => c.Name == "G-REDruntime source" && c.State == CheckState.Unverified),
         "redscript source presence not equated to runtime compatibility");
+    var physicalPreflight = FrameworkPreflight.Inspect(root);
+    Require(!physicalPreflight.Ready &&
+        physicalPreflight.Issues.Contains("CET 1.37.1 is missing") &&
+        physicalPreflight.Issues.Contains("RED4ext 1.30.0 is missing") &&
+        physicalPreflight.Issues.Contains("redscript 0.5.31 is missing"),
+        "existing r6/scripts and 0-Engine folder never substitute for installed compatible binaries");
 
 
     // REDscript owner counts must not pretend every .reds file is a separate mod.
@@ -402,6 +408,13 @@ try
         CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
         .Contains("CONTINUE disabled"),
         "missing GRSP capture disables Continue and reports exact failing domain");
+    var failedStop = CollectedCaptureStore.MarkCollectionAttempted(package,
+        archiveGame, sessionId, presentMonStopped: false);
+    Require(!CaptureAdmissionPolicy.CanContinue(failedStop, presentMonStopped: true) &&
+        !CollectedCaptureStore.Read(package, archiveGame, sessionId).PresentMonStopVerified,
+        "failed PresentMon shutdown is persisted and cannot be bypassed by app restart");
+    _ = CollectedCaptureStore.MarkCollectionAttempted(package,
+        archiveGame, sessionId, presentMonStopped: true);
 
     Require(File.Exists(Path.Combine(cetSource, "CET_Summary.json")),
         "source-owner archive remains untouched after GCO copy");
@@ -412,6 +425,22 @@ try
     catch (InvalidDataException) { tamperCaught = true; }
     Require(tamperCaught, "tampered collected evidence fails SHA-256 verification");
 
+
+    // A manually restored partial capture is NOT equivalent to Continue.
+    var incompleteGame = Path.Combine(root, "IncompleteRestoredGame");
+    Directory.CreateDirectory(incompleteGame);
+    var incompleteId = Guid.NewGuid().ToString("N");
+    var partial = CollectedCaptureStore.CopyOwner(package, incompleteGame,
+        incompleteId, BackendKind.Cet, cetSource);
+    partial = CollectedCaptureStore.MarkCollectionAttempted(package, incompleteGame,
+        incompleteId, presentMonStopped: true);
+    CollectedCaptureStore.MarkRestored(package, partial,
+        skipCet: false, skipRedscript: true, skipFrameTime: true);
+    var partialRestorationRefused = false;
+    try { CollectedCaptureStore.ReadRestored(package, incompleteGame, incompleteId); }
+    catch (InvalidDataException) { partialRestorationRefused = true; }
+    Require(partialRestorationRefused,
+        "RESTORE PROFILERS never unlocks ANALYZE when GRSP evidence is missing");
 
     // Continue invokes owner-managed restore and deletes the active journal.
     // Page 2 must continue reading its bound collection index independently.
