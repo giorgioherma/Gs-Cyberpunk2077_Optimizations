@@ -42,11 +42,6 @@ public static class FrameworkPreflight
         @"(?<![0-9])v?(?<number>[0-9]+\.[0-9]+(?:\.[0-9]+){0,2})(?![0-9])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(200));
-    private static readonly Regex ModVersion = new(
-        @"(?im)(?:\bversion\b|\bmodVersion\b)\s*(?:=|:)\s*['""]?v?(?<number>[0-9]+\.[0-9]+\.[0-9]+)",
-        RegexOptions.CultureInvariant,
-        TimeSpan.FromMilliseconds(200));
-
     private static int[]? Parts(string? version)
     {
         if (string.IsNullOrWhiteSpace(version)) return null;
@@ -68,7 +63,7 @@ public static class FrameworkPreflight
         return 0;
     }
     private static void Check(FrameworkEvidence evidence, string name, string target,
-        IList<string> failures, bool minimum = false, bool game = false,
+        IList<string> failures, bool game = false,
         bool checkStructure = true)
     {
         if (!evidence.Present)
@@ -92,9 +87,8 @@ public static class FrameworkPreflight
             failures.Add(name + " compatibility could not be verified");
             return;
         }
-        var required = minimum ? new[] { 0, 18, 0, 0 } :
-            game ? new[] { 2, 3, 1, 0 } : Parts(target)!;
-        var valid = minimum ? Compare(found, required) >= 0 : Compare(found, required) == 0;
+        var required = game ? new[] { 2, 3, 1, 0 } : Parts(target)!;
+        var valid = Compare(found, required) == 0;
         if (game && evidence.Version?.Trim() == "2.31") valid = true;
         if (!valid)
             failures.Add(game ? "Cyberpunk 2077 2.31 is required; found " + evidence.Version :
@@ -106,11 +100,11 @@ public static class FrameworkPreflight
         var problems = new List<string>();
         Check(installed.Game, "Cyberpunk 2077", "2.31", problems, game: true);
         Check(installed.Cet, "CET", "1.37.1", problems);
-        // GCO checks 0-Engine admission by installed version only. CET's
-        // Resolver/Generator exclusively owns source/injection compatibility
-        // and must decide whether it can generate an optimization.
-        Check(installed.ZeroEngine, "0-Engine", "0.18.0 or greater", problems,
-            minimum: true, checkStructure: false);
+        // Only require the CET mod folder and init.lua. This flag is
+        // populated by InspectZeroEngine; no version or injection checks.
+        // CET's Resolver/Generator owns source and module injection compatibility.
+        if (!installed.ZeroEngine.Present)
+            problems.Add("0-Engine is missing from CET mods (expected 0-Engine/init.lua)");
         Check(installed.Red4ext, "RED4ext", "1.30.0", problems);
         Check(installed.Redscript, "redscript", "0.5.31", problems);
         return new(problems);
@@ -144,20 +138,14 @@ public static class FrameworkPreflight
         }
     }
 
-    private static string? EngineVersion(string folder)
+    // GCO's 0-Engine gate is intentionally limited to folder+init.lua existence.
+    // CET's Resolver/Generator determines what, if anything, can be injected.
+    private static FrameworkEvidence InspectZeroEngine(string gameRoot)
     {
-        foreach (var file in new[] { "init.lua", "version.lua", "manifest.json", "mod.json" })
-        {
-            var path = Path.Combine(folder, file);
-            try
-            {
-                if (!File.Exists(path) || new FileInfo(path).Length > 262144) continue;
-                var m = ModVersion.Match(File.ReadAllText(path));
-                if (m.Success) return m.Groups["number"].Value;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or RegexMatchTimeoutException) { }
-        }
-        return null;
+        var folder = Path.Combine(gameRoot, "bin", "x64", "plugins",
+            "cyber_engine_tweaks", "mods", "0-Engine");
+        return new(Directory.Exists(folder) &&
+            File.Exists(Path.Combine(folder, "init.lua")), null);
     }
 
     // redscript is the standalone script compiler, NOT a RED4ext plugin.
@@ -198,11 +186,10 @@ public static class FrameworkPreflight
         var exe = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
         var cet = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks.asi");
         var red4 = Path.Combine(gameRoot, "red4ext", "RED4ext.dll");
-        var engine = Path.Combine(gameRoot, "bin", "x64", "plugins", "cyber_engine_tweaks", "mods", "0-Engine");
         return Evaluate(new(
             new(File.Exists(exe), PeVersion(exe, productOnly: true)),
             new(File.Exists(cet), PeVersion(cet)),
-            new(File.Exists(Path.Combine(engine, "init.lua")), EngineVersion(engine)),
+            InspectZeroEngine(gameRoot),
             new(File.Exists(red4), PeVersion(red4)),
             InspectRedscript(gameRoot)));
     }

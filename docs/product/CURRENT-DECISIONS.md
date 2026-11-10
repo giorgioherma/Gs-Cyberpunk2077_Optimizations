@@ -408,3 +408,10 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-10 — Owner-approved diagnostic-only redscript hash labels
 
 - Exact **0.5.31** admission remains unchanged and requires the verified upstream executable+library pair. An additional **small read-only version-label map for known `scc.exe` binaries** (0.5.28, 0.5.30 and 0.5.32) is permitted solely for actionable console reporting: GCO explains the rejected version instead of showing only `compatibility could not be verified`. Unknown builds and self-compiled binaries remain unverified. Never treat a label as permission to load another REDscript Resolver version. Companion DLL mismatch for 0.5.31 must fail explicitly. No new settings, UI, gameplay modifications, or expansion of 0-Engine/GCO version rules.
+
+
+## 2026-11-10 — Final 0-Engine preflight correction: presence only
+
+- **Supersedes** all earlier 0-Engine minimum-version (`>=0.18.0`), recognizable-version, and source-shape preflight requirements. GCO checks **only** that `<gameRoot>/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/` is a directory containing a file named `init.lua`. Any version, unknown version and any source layout pass. A missing folder or `init.lua` fails with the expected path; the check does not read `init.lua`, demand `modules/` or inspect versions/APIs.
+- **Ownership stays with CET:** the source-aware CET Resolver/Generator determines later whether its modules can safely be injected, whether already installed work is compatible, and whether generation must refuse. GCO profiler setup must not block capture merely because optimizations might be unavailable. The owner's `0-Engine.zip` contains `0-Engine/init.lua` and `engineVersion = "0.18.6"` (a layout the previous version parser failed to recognize); parsing was removed rather than expanded.
+- The fixed game/CET/RED4ext/redscript versions, two-page layout, .NET 10, authoritative install/restore, and GCO v1.2.0 remain unchanged.

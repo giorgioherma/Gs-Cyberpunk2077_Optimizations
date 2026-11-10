@@ -493,31 +493,55 @@ try
         }
     }
 
-    // Version acceptance: exact 2.31 CET/RED4ext/redscript, forward 0-Engine.
-    static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) => new(exists, v, shape);
-    GameFrameworkEvidence Full(string? engine = "0.18.6") =>
+    // Version acceptance: exact 2.31/CET/RED4ext/redscript; 0-Engine presence-only.
+    static FrameworkEvidence E(string? v, bool exists = true, bool shape = true) =>
+        new(exists, v, shape);
+    GameFrameworkEvidence Full(string? engine = null) =>
         new(E("2.3.1"), E("1.37.1"), E(engine), E("1.30.0"), E("0.5.31"));
     Require(FrameworkPreflight.Evaluate(Full()).Ready,
-        "Cyberpunk 2.31 supported framework stack is admitted");
-    Require(FrameworkPreflight.Evaluate(Full("0.19.0")).Ready,
-        "0-Engine future version is admitted without a release whitelist");
-    Require(!FrameworkPreflight.Evaluate(Full("0.17.2")).Ready,
-        "ambiguous 0-Engine 0.17.x variants fail the minimum");
+        "0-Engine with no identifiable version passes presence-only admission");
+    foreach (var oldOrNew in new[] { "0.1.0", "0.17.2", "0.18.0", "0.18.6", "0.19.0", "999.0.0" })
+        Require(FrameworkPreflight.Evaluate(Full(oldOrNew)).Ready,
+            "0-Engine " + oldOrNew + " does not gate profiler installation");
     Require(FrameworkPreflight.Evaluate(Full() with
-        { ZeroEngine = E("0.18.6", shape: false) }).Ready,
-        "0-Engine v0.18+ passes GCO preflight without source/injection shape restrictions");
+        { ZeroEngine = E(null, shape: false) }).Ready,
+        "0-Engine unknown source shape does not block profiler installation");
     Require(!FrameworkPreflight.Evaluate(Full() with
-        { ZeroEngine = E(null, shape: true) }).Ready &&
+        { ZeroEngine = E(null, exists: false) }).Ready &&
         FrameworkPreflight.Evaluate(Full() with
-        { ZeroEngine = E(null, shape: true) }).Issues
-            .Contains("0-Engine compatibility could not be verified"),
-        "unknown 0-Engine version still requires honest version diagnostics");
+        { ZeroEngine = E(null, exists: false) }).Detail.Contains("0-Engine/init.lua"),
+        "absent 0-Engine folder/init.lua blocks with an actionable path");
+
+    // Physical installation fixture: require the CET mods/0-Engine directory
+    // and init.lua, but never parse versions, modules or scheduler internals.
+    var zeroGame = Path.Combine(root, "ZeroEnginePresenceFixture");
+    var zeroMods = Path.Combine(zeroGame, "bin", "x64", "plugins",
+        "cyber_engine_tweaks", "mods");
+    var zeroDir = Path.Combine(zeroMods, "0-Engine");
+    Directory.CreateDirectory(zeroMods);
+    Require(FrameworkPreflight.Inspect(zeroGame).Issues.Any(i =>
+        i.Contains("0-Engine/init.lua")),
+        "CET mods directory without 0-Engine fails preflight");
+    Directory.CreateDirectory(zeroDir);
+    Require(FrameworkPreflight.Inspect(zeroGame).Issues.Any(i =>
+        i.Contains("0-Engine/init.lua")),
+        "empty 0-Engine directory lacking init.lua fails preflight");
+    File.WriteAllText(Path.Combine(zeroDir, "init.lua"),
+        "-- old/custom 0-Engine; deliberately no identifiable version or modules");
+    Require(!FrameworkPreflight.Inspect(zeroGame).Issues.Any(i =>
+        i.Contains("0-Engine")),
+        "0-Engine directory plus init.lua passes without version/module inspection");
+    File.Delete(Path.Combine(zeroDir, "init.lua"));
+    Require(FrameworkPreflight.Inspect(zeroGame).Issues.Any(i =>
+        i.Contains("0-Engine/init.lua")),
+        "removing 0-Engine init.lua revokes GCO preflight admission");
+
     var badFrameworks = FrameworkPreflight.Evaluate(new(
         E("2.5"), E("1.38.0"), E(null, false), E("1.31.0"), E("0.5.32")));
     Require(!badFrameworks.Ready && badFrameworks.Issues.Count == 5 &&
-        badFrameworks.Detail.Contains("0-Engine 0.18.0 or greater is missing") &&
+        badFrameworks.Detail.Contains("0-Engine/init.lua") &&
         badFrameworks.Detail.Contains("CET requires 1.37.1; found 1.38.0"),
-        "all bad/missing framework versions are listed, not hidden by first error");
+        "all incompatible fixed frameworks and missing 0-Engine are reported");
     Require(!FrameworkPreflight.Evaluate(Full() with
         { Redscript = E(null) }).Ready,
         "an existing but unverifiable compiler is not declared compatible");
