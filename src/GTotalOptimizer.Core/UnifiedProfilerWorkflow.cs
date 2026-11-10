@@ -121,11 +121,11 @@ public sealed class UnifiedProfilerWorkflow
         return game.GetString();
     }
 
-    private void WriteJournal(string game, string stage)
+    private void WriteJournal(string game, string stage, string? newSessionId = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         var temp = Journal + ".tmp";
-        var id = JournalSessionId() ?? Guid.NewGuid().ToString("N");
+        var id = newSessionId ?? JournalSessionId() ?? Guid.NewGuid().ToString("N");
         File.WriteAllText(temp, JsonSerializer.Serialize(new
         {
             gameRoot = Normalize(game), stage, sessionId = id,
@@ -136,6 +136,35 @@ public sealed class UnifiedProfilerWorkflow
 
     private bool OwnsSession(string game) =>
         string.Equals(JournalGame(), Normalize(game), StringComparison.OrdinalIgnoreCase);
+
+    public bool HasCaptureAttempt(string game)
+    {
+        if (!HasRecoveryJournal || !OwnsSession(game)) return false;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+        return doc.RootElement.TryGetProperty("stage", out var stage) &&
+            stage.ValueKind == JsonValueKind.String &&
+            stage.GetString() == "capture-attempt";
+    }
+
+    // A new attempt uses a fresh identity, so a previous partial or complete
+    // archive cannot accidentally qualify the next capture. Old evidence remains.
+    public string BeginCaptureAttempt(string game)
+    {
+        if (GameRunning()) throw new InvalidOperationException("Cyberpunk is running.");
+        if (!HasRecoveryJournal || !OwnsSession(game))
+            throw new InvalidOperationException("No matching GCO profiler installation.");
+        var id = Guid.NewGuid().ToString("N");
+        WriteJournal(game, "capture-attempt", id);
+        return id;
+    }
+
+    public CollectedCaptureIndex RecordCollectionAttempt(string game)
+    {
+        if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting results.");
+        if (!HasCaptureAttempt(game))
+            throw new InvalidOperationException("A capture launch has not been recorded.");
+        return CollectedCaptureStore.MarkCollectionAttempted(packageRoot, game, SessionId());
+    }
 
     public async Task<ProfilerWorkflowResult> InstallAsync(string game, CancellationToken token = default)
     {
@@ -276,15 +305,14 @@ public sealed class UnifiedProfilerWorkflow
         CollectedCaptureIndex saved;
         try { saved = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true); }
         catch (Exception ex) { return new(false, "Saved collection verification failed: " + ex.Message); }
-        if (!saved.HasAny) return new(false, "Collect at least one completed capture first.");
+        if (!CaptureAdmissionPolicy.CanContinue(saved, presentMonStopped: true))
+            return new(false, "Both current-attempt G-CET and G-REDscript profiler results are required before CONTINUE.");
         // The external ETW collector must be stopped at Collect, not during
         // the native-owner restoration transition.
         if (File.Exists(Path.Combine(packageRoot, "RESULTS", "GCO-current-PresentMon.txt")))
             return new(false, "PresentMon is not yet collected. Use COLLECT RESULTS to stop it first.");
-        if ((saved.Cet is null && !skipCet) ||
-            (saved.Redscript is null && !skipRedscript) ||
-            (saved.FrameTimeCsv is null && !skipFrameTime))
-            return new(false, "Explicit acknowledgment required for every missing capture.");
+        if (skipCet || skipRedscript || (saved.FrameTimeCsv is null && !skipFrameTime))
+            return new(false, "Native captures cannot be skipped; missing frame data must be recorded.");
         try
         {
             var state = await InspectAsync(game, token);
