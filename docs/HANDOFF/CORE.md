@@ -302,3 +302,5 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 ### 2026-11-10 — Owner reference-specific gamepad correction (CI pending)
 
 - Owner rejected build #207 icon; Game Root corner is accepted and must remain untouched. Original `StageEmblem` gamepad source is replaced by an 80×64 natural-aspect vector copied from the reference's geometry: recessed horizontal upper center, rounded outer shoulders, flat elevated lower bridge, deep rounded grips, **solid D-pad** and four distinct face dots. Existing 76×54 icon Viewbox and cyan bloom remain. No other Page 1 layout, backend, version or CI edits. Await actual full Windows CI and owner screenshot approval.
+
+- **Verified:** source `1657020b` reference-traced gamepad, automatic [Windows CI #208](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42799647511) **SUCCESS 185/185**, portable v1.2.0 artifact **13756065208**. Other Page 1 assets, approved Game Root corner, profilers and workflow unchanged. Owner screenshot acceptance pending.
