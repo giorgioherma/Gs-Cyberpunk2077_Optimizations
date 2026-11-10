@@ -435,7 +435,7 @@
                                 </StackPanel>
                             </Grid>
                             <!-- Fixed size prevents Path geometry inflating StackPanel measure. -->
-                            <Grid x:Name="GameRootPanel" Height="108" Background="#000000">
+                            <Grid x:Name="GameRootPanel" Height="108" Background="Transparent">
                                 <fx:ChamferOutline x:Name="GameRootOutline" Fill="#000000"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>

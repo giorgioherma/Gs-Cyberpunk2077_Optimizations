@@ -539,6 +539,10 @@ public sealed class StageEmblem : FrameworkElement
         EndLineCap = PenLineCap.Round,
         LineJoin = PenLineJoin.Round
     };
+    // Face buttons need a tighter halo than the main outline so four distinct
+    // dots remain visible at the small size in the workflow card.
+    private static readonly Pen ButtonGlow = Stroke(85, 3.4);
+    private static readonly Brush ButtonFill = new SolidColorBrush(Color.FromRgb(0, 226, 242));
 
     // Install: prominent down arrow entering a clean, open-topped tray.
     private static readonly Geometry InstallArrow =
@@ -546,21 +550,24 @@ public sealed class StageEmblem : FrameworkElement
     private static readonly Geometry InstallTray =
         Path("M 11,42 L 11,50 Q 11,55 16,55 L 48,55 Q 53,55 53,50 L 53,42");
 
-    // Rounded reference controller: smooth grips, D-pad and four face buttons.
+    // Classic rounded PlayStation-style controller: broad shoulder, low wide
+    // grips and smooth bottom curves rather than sharp triangular handles.
     private static readonly Geometry Gamepad =
-        Path("M 20,19 C 23,17 27,17 29,19 " +
-             "C 31,20 33,20 35,19 " +
-             "C 38,17 41,17 44,19 " +
-             "C 49,21 51,27 53,33 L 57,43 " +
-             "C 59,48 58,53 53,53 " +
-             "C 49,53 46,49 43,45 " +
-             "C 41,42 39,41 36,41 L 28,41 " +
-             "C 25,41 23,42 21,45 " +
-             "C 18,49 15,53 11,53 " +
-             "C 6,53 5,48 7,43 L 11,32 " +
-             "C 13,26 16,21 20,19 Z");
+        Path("M 14,26 " +
+             "C 17,22 22,20 29,20 " +
+             "L 35,20 " +
+             "C 42,20 47,22 50,26 " +
+             "C 53,29 56,36 59,43 " +
+             "C 62,50 58,56 52,55 " +
+             "C 46,54 44,48 41,45 " +
+             "C 39,43 37,42 33,42 " +
+             "L 31,42 " +
+             "C 27,42 25,43 23,45 " +
+             "C 20,48 18,54 12,55 " +
+             "C 6,56 2,50 5,43 " +
+             "C 8,36 11,29 14,26 Z");
     private static readonly Geometry GamepadCross =
-        Path("M 20,28 L 20,38 M 15,33 L 25,33");
+        Path("M 20,27 L 20,39 M 14,33 L 26,33");
 
     // Collect: three easily read layers, with a closed upper data plate.
     private static readonly Geometry DataTop =
@@ -580,10 +587,8 @@ public sealed class StageEmblem : FrameworkElement
 
     private static void DrawButton(DrawingContext dc, Point center)
     {
-        dc.DrawEllipse(null, OuterBloom, center, 2.5, 2.5);
-        dc.DrawEllipse(null, InnerBloom, center, 2.5, 2.5);
-        dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0, 226, 242)),
-            null, center, 2.2, 2.2);
+        dc.DrawEllipse(null, ButtonGlow, center, 2.2, 2.2);
+        dc.DrawEllipse(ButtonFill, null, center, 1.8, 1.8);
         dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(190, 220, 255, 255)),
             null, new Point(center.X - 0.5, center.Y - 0.5), 0.75, 0.75);
     }
@@ -606,9 +611,9 @@ public sealed class StageEmblem : FrameworkElement
                 DrawNeon(dc, Gamepad);
                 DrawNeon(dc, GamepadCross);
                 DrawButton(dc, new Point(44, 27));
-                DrawButton(dc, new Point(49, 33));
+                DrawButton(dc, new Point(50, 33));
                 DrawButton(dc, new Point(44, 39));
-                DrawButton(dc, new Point(39, 33));
+                DrawButton(dc, new Point(38, 33));
                 break;
             case StageEmblemKind.Data:
                 DrawNeon(dc, DataTop);

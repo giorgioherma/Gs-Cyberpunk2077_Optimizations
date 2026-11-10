@@ -282,3 +282,9 @@ Owner clarified that a slight V/border overlap hides a rasterized dark hairline 
 - Owner requires GitHub source modifications, not generated images. Change only `StageEmblem` gamepad WPF vector (rounded silhouette, **four** face buttons) and `PathInput` top-right cut via new opt-in mode of existing `ChamferOutline`, retaining native `PART_ContentHost` editing/scrolling, focus and disabled states. No changes to other icons, accepted Page 1 geometry, original artwork or v1.2.0. CI must complete before artifact claims.
 
 - **Verified:** automatic [Windows CI #205](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42791657392) **SUCCESS 185/185** on `da88f264`, downloadable GCO v1.2.0 artifact **13752850135**. Gamepad and path-corner WPF changes compiled and shipped; user screenshot still required to approve look.
+
+
+### 2026-11-10 — Game Root corner bleed root cause; real PlayStation-style controller (CI pending)
+
+- The black square at upper-right of the chamfered Game Root panel is the **parent `Grid Background="#000000"`**, not the editable input's new top-right cut. The parent must be transparent and the existing chamfered `GameRootOutline Fill="#000000"` remains the sole black surface. Preserve the PathInput editor/focus behavior; no masks or duplicate border patches.
+- Rework the existing Start gamepad vector for a broader, smoother PlayStation controller with four distinct neon face buttons. Keep the other two symbols, screenshot layout, CET/GRSP integration and GCO v1.2.0 as-is. Await full Windows CI and screenshot approval.
