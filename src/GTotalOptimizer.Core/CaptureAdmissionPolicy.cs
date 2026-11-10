@@ -24,6 +24,8 @@ public static class CaptureAdmissionPolicy
             status += "  |  PresentMon: " + monWarning;
         if (!string.IsNullOrWhiteSpace(nativeWarning))
             status += "  |  " + nativeWarning;
+        if (!capture.PresentMonStopVerified)
+            return status + "  |  PresentMon shutdown unverified. CONTINUE disabled.";
         if (capture.Cet is null || capture.Redscript is null)
             return status + "  |  Native capture incomplete. CONTINUE disabled.";
         return status + (capture.FrameTimeCsv is null
