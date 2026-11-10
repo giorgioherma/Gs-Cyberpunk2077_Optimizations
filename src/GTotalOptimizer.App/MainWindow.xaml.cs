@@ -162,6 +162,35 @@ public partial class MainWindow : Window
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdatePortraitWidth();
+        QueueHeaderTabAlignment();
+    }
+
+    // Keep the tab pair centered between the real, arranged logo and REFRESH,
+    // rather than centering relative to the full window or right content area.
+    // Loaded priority measures positions after WPF has arranged on resize.
+    private void QueueHeaderTabAlignment()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(AlignTabsBetweenHeaderControls));
+    }
+
+    private void AlignTabsBetweenHeaderControls()
+    {
+        if (RootLayout.ActualWidth <= 0 || GcoHeaderLogo.ActualWidth <= 0 ||
+            RefreshButton.ActualWidth <= 0)
+            return;
+
+        var logoRight = GcoHeaderLogo.TranslatePoint(
+            new Point(GcoHeaderLogo.ActualWidth, 0), RootLayout).X;
+        var refreshLeft = RefreshButton.TranslatePoint(new Point(0, 0), RootLayout).X;
+        // The supported minimum window leaves enough room for both 246-DIP tabs
+        // and their 12-DIP gap between these two header anchors.
+        if (refreshLeft - logoRight < 504)
+            return;
+
+        var desired = new Thickness(logoRight, 0,
+            RootLayout.ActualWidth - refreshLeft, 0);
+        if (TopTabsHost.Margin != desired)
+            TopTabsHost.Margin = desired;
     }
 
     private void ContentRegion_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
@@ -231,6 +260,7 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         UpdatePortraitWidth();
+        QueueHeaderTabAlignment();
         lastGameRunning = GameRunning();
         gameStateTimer.Start();
         _ = RefreshSourceAsync();

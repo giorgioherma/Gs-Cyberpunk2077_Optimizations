@@ -1053,3 +1053,10 @@ When implementation starts, append exact commits, build jobs, test output and ga
 
 - Main source [`2f7f9bb7`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/2f7f9bb76775f3f66a0f49af28dd41ec9572c770) auto-triggered original full [Windows CI #212](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42820339918): **COMPLETED SUCCESS**, **185/185 installation/CLI/package contracts**. CET/GRSP integration/restore smoke, bundled .NET10, native launcher, package manifest and actual WPF both-page render at configured sizes passed. This validates source and package behavior, not subjective tab placement.
 - Uploaded **`Gs-Cyberpunk2077_Optimizer-v1.2.0-run212-a1`**, artifact **13767970125**, **85,383,999 bytes**, SHA256 **805ada83ac3973fc61272fe36d3334b61a1547ca2d87a4b16785964dc31d9612**; [download](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42820339918/artifacts/13767970125). Owner to compare actual Windows placement with previous #211 before approving.
+
+
+## 2026-11-10 — Center tabs between GCO logo and REFRESH (owner visual decision)
+
+- Side-by-side owner screenshot comparison of #211 (right-content alignment) and #212 (whole-window centering) showed neither placement quite matched the header's actual visual balance. Owner explicitly chose the **midpoint of the open span from the logo's rightmost edge to REFRESH's leftmost edge**.
+- Reuse the existing single `TopTabsHost`, preserving both 246×44 metal tabs, their 12-DIP gap, active-page state, and the owner artwork. Give the existing root grid a name, and compute horizontal margins directly from **the rendered `GcoHeaderLogo` and `RefreshButton` bounds** after layout on Loaded and window resize. This centers in the true available space at normal and minimum sizes instead of using guessed X offsets or a second tab renderer.
+- No change to the controller, cards, other header graphics, game-root panel, profiling backend, version **v1.2.0**, or canonical automatic full Windows CI. Visual acceptance requires owner screenshot; source smoke must verify WPF loads and both pages render.

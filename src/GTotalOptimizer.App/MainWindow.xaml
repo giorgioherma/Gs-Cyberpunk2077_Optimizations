@@ -260,7 +260,7 @@
     </Window.Resources>
     <!-- Compact default window: 1280x760 DIPs. At 1080x640 the right
          content scrolls rather than clipping; native profilers are unaffected. -->
-    <Grid Background="#000000" ClipToBounds="True">
+    <Grid x:Name="RootLayout" Background="#000000" ClipToBounds="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="68"/>
             <RowDefinition Height="*"/>
@@ -295,8 +295,8 @@
             </StackPanel>
         </Grid>
 
-        <!-- Page indicators center on the entire window in the clear band ABOVE
-             the inner chassis, independently of the right content column. -->
+        <!-- Center state tabs in the free header space between the actual GCO logo
+             right edge and REFRESH left edge; resize alignment uses live bounds. -->
         <Grid x:Name="TopTabsHost" Grid.Row="0" Panel.ZIndex="22"
               VerticalAlignment="Bottom" Height="44"
               IsHitTestVisible="False">
