@@ -96,12 +96,12 @@
                             <Path x:Name="ButtonTrace" Data="M 0,5 L 6,0 L 26,0"
                                   Stroke="#FFF000" StrokeThickness="1.2" Width="27" Height="6"
                                   HorizontalAlignment="Left" VerticalAlignment="Top"
-                                  Margin="6,1,0,0" IsHitTestVisible="False"/>
+                                  ="6,1,0,0" IsHitTestVisible="False"/>
                             <Path x:Name="ButtonTail" Data="M 0,5 L 7,5 L 12,0"
                                   Stroke="#00E2F2" StrokeThickness="1.3" Width="13" Height="6"
                                   HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                  Margin="0,0,6,1" IsHitTestVisible="False"/>
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                  ="0,0,6,1" IsHitTestVisible="False"/>
+                            <ContentPresenter ="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center" VerticalAlignment="Center"
                                               RecognizesAccessKey="True"/>
                         </Grid>
@@ -282,7 +282,7 @@
         <!-- Official logo aligns its black slope/squares with the raster frame;
              it alone sits ABOVE the original outer PNG and all other UI. -->
         <Image x:Name="GcoHeaderLogo" Grid.RowSpan="2" Panel.ZIndex="50"
-               Width="274" Height="76" Margin="22,12,0,0"
+               Width="274" Height="76" Margin="17,17,0,0"
                HorizontalAlignment="Left" VerticalAlignment="Top"
                Stretch="Fill" IsHitTestVisible="False"
                RenderOptions.BitmapScalingMode="HighQuality"/>
