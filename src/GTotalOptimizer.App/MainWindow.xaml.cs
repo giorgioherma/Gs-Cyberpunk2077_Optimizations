@@ -539,15 +539,19 @@ public partial class MainWindow : Window
             // insufficient to authorize Continue without native capture.
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
 
-            // Collect is the next action AFTER launch, even if F11 failed.
-            // It is the Collect click itself that stops PresentMon.
+            // Collect is available after a launch even if F11 was never used,
+            // but is disabled once this attempt's PresentMon shutdown and
+            // collection have been recorded. A failed stop remains retryable.
             var captureStarted = Workflow.HasCaptureAttempt(current.GameRoot!);
-            var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted);
+            var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted, saved);
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
             InstallButton.IsEnabled = session ||
                 (!foreignSession && framework.Ready && state.CleanForInstall && !running);
-            LaunchButton.IsEnabled = pinnedFramework &&
+            // Do not start another game while the previous attempt still
+            // needs collection; BeginCaptureAttempt creates a fresh identity
+            // after collection, which re-enables Collect on the next launch.
+            LaunchButton.IsEnabled = pinnedFramework && !readyToCollect &&
                 !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
             CollectButton.IsEnabled = !running && readyToCollect;
             ContinueButton.IsEnabled = !running &&
@@ -636,6 +640,12 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException("Verified, game-bound G-CET and G-REDscript installations are required before Start. RESTORE PROFILERS is available for recovery.");
             // Owner-ready archives can belong to the preceding attempt. Never
             // roll the journal to a fresh attempt while either remains pending.
+            // Also require explicit collection of the previous launch, even
+            // when it crashed before any native F11 capture could complete.
+            if (CaptureAdmissionPolicy.CanCollect(
+                Workflow.HasSessionForGame(game), Workflow.HasCaptureAttempt(game),
+                Workflow.ReadCollected(game)))
+                throw new InvalidOperationException("Previous capture attempt is still pending. Use COLLECT RESULTS before starting another game.");
             if (state.CetCaptureReady || state.GrspCaptureReady)
                 throw new InvalidOperationException("Native profiler results are already pending. Use COLLECT RESULTS, then RESTORE PROFILERS and reinstall before another capture.");
             var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
@@ -736,6 +746,21 @@ public partial class MainWindow : Window
         if (!Workflow.HasCaptureAttempt(game))
         {
             Warn("Start Cyberpunk before collecting results.", "Collection");
+            return;
+        }
+        // Use the persisted current-attempt index, not a UI-only flag, so a
+        // completed Collect stays disabled even after reopening GCO.
+        CollectedCaptureIndex? existing;
+        try { existing = Workflow.ReadCollected(game); }
+        catch (Exception ex)
+        {
+            Warn("Cannot verify collection state: " + ex.Message, "Collection");
+            return;
+        }
+        if (!CaptureAdmissionPolicy.CanCollect(
+                Workflow.HasSessionForGame(game), true, existing))
+        {
+            Warn("This capture attempt has already been collected. Start a new capture attempt or RESTORE PROFILERS.", "Collection");
             return;
         }
         ClearStatusPin();
