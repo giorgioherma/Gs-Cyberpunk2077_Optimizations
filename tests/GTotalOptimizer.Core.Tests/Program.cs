@@ -352,24 +352,30 @@ try
     var sessionGame = Path.Combine(root, "FrameworkSessionGame");
     Directory.CreateDirectory(sessionGame);
     var sessionWorkflow = new UnifiedProfilerWorkflow(sessionPackage);
-    void SessionStage(string stage, string path, string id = "confirmed-test-session")
+    void SessionStage(string stage, string path, string id = "0123456789abcdef0123456789abcdef")
         => File.WriteAllText(sessionJournal, System.Text.Json.JsonSerializer.Serialize(
             new { gameRoot = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar), stage, sessionId = id }));
     Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
-            !sessionWorkflow.HasSessionForGame(sessionGame),
-        "absent ownership journal shows INSTALL, never RESTORE");
+            !sessionWorkflow.HasSessionForGame(sessionGame) &&
+            sessionWorkflow.ReadRecoveryGameRoot() is null &&
+            sessionWorkflow.ReadRecoverySessionId(sessionGame) is null,
+        "absent ownership journal shows INSTALL, never RESTORE or path lock");
     foreach (var stage in new[] { "install-started", "cet-installed", "owners-installed" })
     {
         SessionStage(stage, sessionGame);
         Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
-                sessionWorkflow.HasSessionForGame(sessionGame),
-            "partial owner install remains RESTORE-eligible without bypassing framework admission: " + stage);
+                sessionWorkflow.HasSessionForGame(sessionGame) &&
+                sessionWorkflow.ReadRecoveryGameRoot() == Path.GetFullPath(sessionGame) &&
+                sessionWorkflow.ReadRecoverySessionId(sessionGame) == "0123456789abcdef0123456789abcdef",
+            "partial install reopens on its stored root and exposes RESTORE without any capture index: " + stage);
     }
     SessionStage("both-installed", sessionGame);
     Require(sessionWorkflow.HasSessionForGame(sessionGame) &&
             !sessionWorkflow.HasSessionForGame(Path.Combine(root, "AnotherCyberpunk")) &&
+            sessionWorkflow.ReadRecoverySessionId(Path.Combine(root, "AnotherCyberpunk")) is null &&
+            sessionWorkflow.ReadRecoveryGameRoot() == Path.GetFullPath(sessionGame) &&
             sessionWorkflow.HasRecoveryJournal,
-        "a pending game-bound RESTORE never moves to a different selected source; foreign INSTALL remains blocked");
+        "a pending journal locks its original game path and disallows restoring a different game");
     Require(sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture) &&
             sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
         "owner-verified install freezes framework admission after CET native replacement");
@@ -380,18 +386,24 @@ try
     Require(sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedNoCapture),
         "restarted capture retains game-bound framework admission");
     SessionStage("capture-attempt", sessionGame, "");
-    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus),
-        "empty session identity does not authorize the baseline");
+    Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus) &&
+            sessionWorkflow.ReadRecoverySessionId(sessionGame) is null &&
+            sessionWorkflow.ReadRecoveryGameRoot() == Path.GetFullPath(sessionGame),
+        "invalid session identity does not authorize profiling but retains original recovery path");
     File.WriteAllText(sessionJournal, "{broken-json");
     Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus) &&
             !sessionWorkflow.HasSessionForGame(sessionGame) &&
+            sessionWorkflow.ReadRecoveryGameRoot() is null &&
+            sessionWorkflow.ReadRecoverySessionId(sessionGame) is null &&
             sessionWorkflow.HasRecoveryJournal,
-        "corrupt recovery journal stays blocking and does not impersonate a valid restore target");
+        "corrupt journal retains RESTORE availability without guessing a file-restoration target");
     File.Delete(sessionJournal);
     Require(!sessionWorkflow.HasInstalledFrameworkBaseline(sessionGame, installedStatus) &&
             !sessionWorkflow.HasSessionForGame(sessionGame) &&
+            sessionWorkflow.ReadRecoveryGameRoot() is null &&
+            sessionWorkflow.ReadRecoverySessionId(sessionGame) is null &&
             !sessionWorkflow.HasRecoveryJournal,
-        "owner-verified restore removes the journal, changes RESTORE to INSTALL, and reactivates preflight");
+        "owner-verified restore removes journal, unlocks Game Root and re-enables strict INSTALL preflight");
 
     // Archive copies are verified, immutable evidence for Continue.
     var archiveGame = Path.Combine(root, "CaptureGame");

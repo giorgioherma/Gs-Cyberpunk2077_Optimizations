@@ -63,8 +63,12 @@ public partial class MainWindow : Window
         gameStateTimer.Tick += GameStateTimer_Tick;
         LoadOriginalArtwork();
         pathUpdate = true;
-        GamePathBox.Text = UserSettings.ReadGameRoot();
+        // Reopen on the original profiler installation, regardless of the
+        // previous UI preference. The journal owns the recovery target.
+        GamePathBox.Text = Workflow.ReadRecoveryGameRoot() ??
+                           UserSettings.ReadGameRoot();
         pathUpdate = false;
+        UpdatePathLock();
         SetPortraitStage(PortraitStage.Black);
     }
 
@@ -336,13 +340,22 @@ public partial class MainWindow : Window
 
     private async void GamePath_Changed(object sender, TextChangedEventArgs e)
     {
-        if (initialized && !pathUpdate && !busy)
+        if (!initialized || pathUpdate || busy) return;
+        var recoveryRoot = Workflow.ReadRecoveryGameRoot();
+        if (recoveryRoot is not null &&
+            !string.Equals(GamePathBox.Text, recoveryRoot,
+                StringComparison.OrdinalIgnoreCase))
         {
-            // A deliberate new source selection invalidates the previous
-            // session's pinned console diagnostic.
-            ClearStatusPin();
-            await RefreshSourceAsync();
+            // Reject even programmatic source changes while a profiler session
+            // remains installed. Keyboard edits are already read-only.
+            pathUpdate = true;
+            GamePathBox.Text = recoveryRoot;
+            pathUpdate = false;
+            PinStatus("Game folder locked for profiler recovery. RESTORE PROFILERS to unlock it.");
+            return;
         }
+        ClearStatusPin();
+        await RefreshSourceAsync();
     }
 
     private void GamePath_LostKeyboardFocus(
@@ -362,6 +375,11 @@ public partial class MainWindow : Window
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
     {
+        if (Workflow.HasRecoveryJournal)
+        {
+            PinStatus("Game folder is locked until original profiler files are restored. Use RESTORE PROFILERS.");
+            return;
+        }
         using var browse = new System.Windows.Forms.FolderBrowserDialog
         {
             Description = "Select the Cyberpunk 2077 game folder",
@@ -373,12 +391,23 @@ public partial class MainWindow : Window
         else await RefreshSourceAsync();
     }
 
+    private void UpdatePathLock()
+    {
+        // A journal is written before owner mutations, so interrupted installs
+        // also lock the root. This survives an application restart.
+        var locked = Workflow.HasRecoveryJournal;
+        GamePathBox.IsReadOnly = locked;
+        GamePathBox.IsEnabled = !busy;
+        BrowseButton.IsEnabled = !busy && !locked;
+        RefreshButton.IsEnabled = !busy;
+    }
+
     private void SetBusy(bool isBusy)
     {
         busy = isBusy;
-        GamePathBox.IsEnabled = BrowseButton.IsEnabled = RefreshButton.IsEnabled = !isBusy;
+        UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
-            ContinueButton.IsEnabled = !isBusy && false;
+            ContinueButton.IsEnabled = false;
     }
 
     private void SetStatus(string message) => StatusText.Text = consolePinned ?? message;
@@ -394,7 +423,10 @@ public partial class MainWindow : Window
     // never inherits another game's recovery control.
     private bool UpdateProfilerAction(string? gameRoot)
     {
-        var recovery = gameRoot is not null && Workflow.HasSessionForGame(gameRoot);
+        // A durable journal always exposes recovery, even if damaged data
+        // prevents identification of its game root. The click then reports
+        // actionable recovery instructions in the console without writing.
+        var recovery = Workflow.HasRecoveryJournal;
         InstallButton.Content = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         InstallButton.Style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
@@ -412,6 +444,17 @@ public partial class MainWindow : Window
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
         var cancel = refreshCancellation = new CancellationTokenSource();
+        // If the saved root was changed outside GCO while closed, recover it
+        // from the installation journal before inspecting any new sources.
+        var ownedRoot = Workflow.ReadRecoveryGameRoot();
+        if (ownedRoot is not null &&
+            !string.Equals(GamePathBox.Text, ownedRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            pathUpdate = true;
+            GamePathBox.Text = ownedRoot;
+            pathUpdate = false;
+        }
+        UpdatePathLock();
         var current = GameInspector.Inspect(GamePathBox.Text);
         if (current.SourceKind == SourceKind.LiveCetMods &&
             current.IsValidGame && current.GameRoot is not null &&
@@ -430,10 +473,11 @@ public partial class MainWindow : Window
             ContinueButton.IsEnabled = false;
         LaunchButton.Content = "START CYBERPUNK";
         CollectButton.Content = "COLLECT RESULTS";
-        var recoveryMode = UpdateProfilerAction(current.IsValidGame ? current.GameRoot : null);
-        // Recovery stays accessible if a temporary CET binary fails strict
-        // version checks, but never targets a different selected game root.
-        if (recoveryMode) InstallButton.IsEnabled = !GameRunning();
+        var recoveryMode = UpdateProfilerAction(
+            current.IsValidGame ? current.GameRoot : GamePathBox.Text);
+        // Recovery is always clickable; when the game is open its handler
+        // gives a console instruction instead of touching the loaded files.
+        if (recoveryMode) InstallButton.IsEnabled = true;
 
         UserSettings.WriteGameRoot(GamePathBox.Text);
         if (!current.IsValidGame)
@@ -445,7 +489,7 @@ public partial class MainWindow : Window
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
             SetStatus(Workflow.HasRecoveryJournal
-                ? "An unfinished profiler session belongs to another game folder. Select its original Cyberpunk root to RESTORE PROFILERS."
+                ? "Profiler recovery remains available even though the selected game folder cannot be validated. Use RESTORE PROFILERS; the owner journal determines its target."
                 : current.Summary);
             return;
         }
@@ -501,8 +545,8 @@ public partial class MainWindow : Window
             var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted);
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
-            InstallButton.IsEnabled = session ? !running
-                : !foreignSession && framework.Ready && state.CleanForInstall && !running;
+            InstallButton.IsEnabled = session ||
+                (!foreignSession && framework.Ready && state.CleanForInstall && !running);
             LaunchButton.IsEnabled = pinnedFramework &&
                 !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
             CollectButton.IsEnabled = !running && readyToCollect;
@@ -541,11 +585,10 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        if (inspection.IsValidGame && inspection.GameRoot is not null &&
-            Workflow.HasSessionForGame(inspection.GameRoot))
+        // No modal dialog and no admission gate may suppress a requested
+        // recovery attempt. The owner journal supplies the only target.
+        if (Workflow.HasRecoveryJournal)
             await RestoreIncompleteSessionAsync();
-        else if (Workflow.HasRecoveryJournal)
-            Warn("A different game root has an active recovery session. Select the original game folder and RESTORE PROFILERS first.", "Recovery required");
         else
             await InstallProfilersAsync();
     }
@@ -844,34 +887,46 @@ public partial class MainWindow : Window
 
     private async Task RestoreIncompleteSessionAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
-            !Workflow.HasSessionForGame(inspection.GameRoot)) return;
+        if (busy) return;
+        var game = Workflow.ReadRecoveryGameRoot();
+        if (game is null || !Workflow.HasSessionForGame(game))
+        {
+            Warn("Saved profiler recovery path is missing or invalid. Keep the GCO package and recover through the original CET/REDscript owner managers.", "Recovery required");
+            return;
+        }
         if (GameRunning())
         {
             Warn("Close Cyberpunk before restoring profilers.", "Recovery");
             return;
         }
         ClearStatusPin();
-        var game = inspection.GameRoot;
         SetBusy(true);
         SetStatus("Restoring original game files through CET and REDscript owners...");
         try
         {
-            var capture = Workflow.ReadCollected(game) ??
-                throw new InvalidDataException("No matching GCO recovery journal.");
-            // Manual RESTORE must work even with zero captures or locked CONTINUE.
-            // Stop the GCO frame collector first, then restore both owners.
-            var stop = await StopOwnedPresentMonAsync(capture.SessionId);
+            // No capture index/collection attempt is required. Recover even
+            // directly after a partial install, including after GCO restarts.
+            var sessionId = Workflow.ReadRecoverySessionId(game) ??
+                            Guid.NewGuid().ToString("N");
+            var stop = await StopOwnedPresentMonAsync(sessionId);
             if (!stop.Stopped)
             {
                 Warn(stop.Error ?? "PresentMon shutdown could not be verified.", "Recovery required");
                 return;
             }
             var result = await Workflow.RestoreOwnedAsync(game);
+            if (!result.RestoreVerified)
+            {
+                Warn(result.Detail, "Recovery required");
+                return;
+            }
             captureLaunched = false;
             SetPortraitStage(PortraitStage.Black);
-            if (!result.RestoreVerified) Warn(result.Detail, "Recovery required");
-            else PinStatus("G-CET and G-REDscript profilers restored. Original game files verified. Capture evidence preserved.");
+            // Owner verification removed the journal. The same button changes
+            // immediately from RESTORE to INSTALL, and the path unlocks.
+            UpdateProfilerAction(game);
+            UpdatePathLock();
+            PinStatus("G-CET and G-REDscript original files restored and verified. Game folder unlocked; INSTALL PROFILERS is available. " + result.Detail);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }

@@ -70,6 +70,51 @@ public sealed class UnifiedProfilerWorkflow
     public UnifiedProfilerWorkflow(string packageRoot) => this.packageRoot = Path.GetFullPath(packageRoot);
     public bool HasRecoveryJournal => File.Exists(Journal);
 
+    // Recover the original target from the durable session, not mutable UI
+    // settings. This works even if the game exe / preflight is now unavailable.
+    // Never infer a path from partial or corrupt journal data.
+    public string? ReadRecoveryGameRoot()
+    {
+        if (!HasRecoveryJournal) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+            if (!doc.RootElement.TryGetProperty("gameRoot", out var root) ||
+                root.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(root.GetString()) ||
+                !Path.IsPathFullyQualified(root.GetString()!))
+                return null;
+            return Normalize(root.GetString()!);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException or InvalidOperationException
+            or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    // This ID is used only for stopping GCO-owned PresentMon on recovery.
+    // Restoring the original native files must not require a completed capture.
+    public string? ReadRecoverySessionId(string game)
+    {
+        if (!HasSessionForGame(game)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+            if (!doc.RootElement.TryGetProperty("sessionId", out var id) ||
+                id.ValueKind != JsonValueKind.String) return null;
+            var value = id.GetString();
+            return value is { Length: 32 } &&
+                   value.All(Uri.IsHexDigit) ? value : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
     // The recovery journal is package-wide, but its owner is one game root.
     // A different selected installation must not acquire the old session's
     // RESTORE button, nor start a new install while recovery is outstanding.
@@ -78,9 +123,14 @@ public sealed class UnifiedProfilerWorkflow
     public bool HasSessionForGame(string game)
     {
         if (string.IsNullOrWhiteSpace(game) || !HasRecoveryJournal) return false;
-        try { return OwnsSession(game); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-            or JsonException or ArgumentException or NotSupportedException)
+        try
+        {
+            var saved = ReadRecoveryGameRoot();
+            return saved is not null &&
+                   string.Equals(saved, Normalize(game),
+                       StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
         {
             return false;
         }
@@ -263,10 +313,21 @@ public sealed class UnifiedProfilerWorkflow
                 return new(false, "No matching GCO ownership journal. Use the authoritative standalone manager for recovery.");
             var status = await InspectAsync(game, token);
             string? evidenceFolder = null;
+            string? evidenceWarning = null;
             if (preserveIncompleteEvidence && !status.BothCaptured)
             {
-                var snapshot = ProfilerCrashEvidence.Preserve(packageRoot, game);
-                evidenceFolder = snapshot.Folder;
+                try
+                {
+                    var snapshot = ProfilerCrashEvidence.Preserve(packageRoot, game);
+                    evidenceFolder = snapshot.Folder;
+                }
+                catch (Exception ex)
+                {
+                    // Recover original native files even if supplemental crash
+                    // diagnostics cannot be copied. Saved collected capture
+                    // archives are separate and are never deleted here.
+                    evidenceWarning = "Diagnostic snapshot failed: " + ex.Message;
+                }
             }
             var problems = new List<string>();
             if (status.GrspManaged)
@@ -286,7 +347,8 @@ public sealed class UnifiedProfilerWorkflow
                     $" Owner status CET={end.Cet}; GRSP={end.Grsp}. Journal preserved.");
             File.Delete(Journal);
             return new(true, "Both owners verified restoration of original game state." +
-                (evidenceFolder is null ? "" : " Diagnostics preserved at: " + evidenceFolder),
+                (evidenceFolder is null ? "" : " Diagnostics preserved at: " + evidenceFolder) +
+                (evidenceWarning is null ? "" : " WARNING: " + evidenceWarning),
                 RestoreVerified: true);
         }
         catch (Exception ex)
