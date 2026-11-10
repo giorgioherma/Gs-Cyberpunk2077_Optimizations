@@ -159,13 +159,13 @@ internal static class Program
             if (logo.PixelWidth != 700 || logo.PixelHeight != 179 ||
                 Math.Abs(window.GcoHeaderLogo.ActualWidth - 274) > .5 ||
                 Math.Abs(window.GcoHeaderLogo.ActualHeight - 76) > .5 ||
-                Math.Abs(logoTop.X - 12) > .5 || Math.Abs(logoTop.Y - 7) > .5 ||
-                Math.Abs(logoOverhang - 15) > .5 ||
+                Math.Abs(logoTop.X - 2) > .5 || Math.Abs(logoTop.Y - 12) > .5 ||
+                Math.Abs(logoOverhang - 20) > .5 ||
                 window.GcoHeaderLogo.Stretch != System.Windows.Media.Stretch.Fill ||
                 window.GcoHeaderLogo.IsHitTestVisible ||
                 !rootGrid.Children.Contains(window.GcoHeaderLogo))
                 throw new InvalidOperationException(
-                    $"Official 700x179 logo must be topmost at 274x76, x12/y7; " +
+                    $"Official 700x179 logo must be topmost at 274x76, x2/y12; " +
                     $"actual={logoTop} {window.GcoHeaderLogo.ActualWidth}x" +
                     $"{window.GcoHeaderLogo.ActualHeight} overhang={logoOverhang}");
             Console.WriteLine(
@@ -259,13 +259,13 @@ internal static class Program
             var cardTitles = new[] { window.StepOneTitle, window.StepTwoTitle,
                                      window.StepThreeTitle };
             if (!window.GameRootOutline.SpatialStroke || !chassis.SpatialStroke ||
-                cardBorders.Any(c => !c.SpatialStroke) ||
+                cardBorders.Any(c => !c.SpatialStroke || !c.MetallicFinish) ||
                 cardTitles.Any(t => t.TextAlignment != System.Windows.TextAlignment.Center))
                 throw new InvalidOperationException(
                     "All neon UI boxes must use the source-anchored spatial field; card titles centered");
             var gameRootGroup = System.Windows.Media.VisualTreeHelper.GetParent(window.GameRootPanel)
                 as System.Windows.FrameworkElement;
-            if (gameRootGroup is null || Math.Abs(gameRootGroup.Margin.Top - 37) > .5 ||
+            if (gameRootGroup is null || Math.Abs(gameRootGroup.Margin.Top - 12) > .5 ||
                 Math.Abs(window.HeroSection.Margin.Top - 31) > .5 ||
                 Math.Abs(window.CaptureWorkflowHeading.Margin.Top - 15) > .5)
                 throw new InvalidOperationException(
@@ -274,7 +274,7 @@ internal static class Program
                 .Transform(new System.Windows.Point(0, 0)).Y;
             var gameRootY = window.GameRootPanel.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0)).Y;
-            if (heroY < 90 || heroY > 130 || gameRootY < 225 || gameRootY > 275)
+            if (heroY < 90 || heroY > 130 || gameRootY < 190 || gameRootY > 250)
                 throw new InvalidOperationException(
                     $"Hero should sit between lower header and newly lowered Game Root: {heroY:0.#}/{gameRootY:0.#}");
             var firstCard = cardBorders[0];
@@ -291,8 +291,8 @@ internal static class Program
             var cardBottom = cardTop + firstCard.ActualHeight;
             var scrollBottom = window.CapturePage.TransformToAncestor(visual)
                 .Transform(new System.Windows.Point(0, 0)).Y + window.CapturePage.ActualHeight;
-            if (cardTop < 390 || cardBottom > scrollBottom - 10 ||
-                scrollBottom - cardBottom > 55)
+            if (cardTop < 355 || cardBottom > scrollBottom - 34 ||
+                scrollBottom - cardBottom > 88)
                 throw new InvalidOperationException(
                     $"Capture Workflow should rest just above footer, not crowd it: " +
                     $"cards={cardTop:0.#}-{cardBottom:0.#} scrollBottom={scrollBottom:0.#}");
@@ -304,9 +304,17 @@ internal static class Program
                     $"Each card should be 16 DIP slimmer with 26-DIP gaps: " +
                     $"gap12={gap12:0.##}, gap23={gap23:0.##}");
             if (window.GameRootFolderIcon.ActualWidth < 18 ||
-                window.InstallStageIcon.ActualWidth < 30 ||
-                window.LaunchStageIcon.ActualWidth < 30 ||
-                window.CollectStageIcon.ActualWidth < 30 ||
+                window.InstallStageIcon.ActualWidth < 45 ||
+                window.LaunchStageIcon.ActualWidth < 45 ||
+                window.CollectStageIcon.ActualWidth < 45 ||
+                window.InstallStageIcon.Child is not GTotalOptimizer.App.Visuals.StageEmblem chip ||
+                chip.Kind != GTotalOptimizer.App.Visuals.StageEmblemKind.Chip ||
+                window.LaunchStageIcon.Child is not GTotalOptimizer.App.Visuals.StageEmblem ignition ||
+                ignition.Kind != GTotalOptimizer.App.Visuals.StageEmblemKind.Ignition ||
+                window.CollectStageIcon.Child is not GTotalOptimizer.App.Visuals.StageEmblem data ||
+                data.Kind != GTotalOptimizer.App.Visuals.StageEmblemKind.Data ||
+                !window.CaptureTabShape.Lit || window.AnalyzeTabShape.Lit ||
+                window.CaptureTabShape.Fill is not System.Windows.Media.LinearGradientBrush ||
                 window.CaptureTabMarks.Data is null || window.AnalyzeTabMarks.Data is null)
                 throw new InvalidOperationException(
                     "The folder, 3 original WPF cybernetic icons and decorated tab traces must render");
@@ -316,16 +324,22 @@ internal static class Program
                 control.ApplyTemplate();
                 if (control.Template.FindName("ButtonFrame", control)
                     is not GTotalOptimizer.App.Visuals.ChamferOutline frameShape ||
-                    Math.Abs(frameShape.CornerCut - 6) > .5)
+                    Math.Abs(frameShape.CornerCut - 6) > .5 ||
+                    !frameShape.MetallicFinish ||
+                    (control.IsEnabled && !frameShape.Lit) ||
+                    (!control.IsEnabled && frameShape.Lit))
                     throw new InvalidOperationException(
                         "All workflow/minor buttons must have real chamfered WPF vector shells");
             }
             window.ContinueButton.ApplyTemplate();
             if (window.ContinueButton.Template.FindName("ContinueShape", window.ContinueButton)
                 is not GTotalOptimizer.App.Visuals.ChamferOutline continueFrame ||
-                Math.Abs(continueFrame.CornerCut - 9) > .5)
+                Math.Abs(continueFrame.CornerCut - 9) > .5 ||
+                !continueFrame.MetallicFinish ||
+                (window.ContinueButton.IsEnabled && !continueFrame.Lit) ||
+                (!window.ContinueButton.IsEnabled && continueFrame.Lit))
                 throw new InvalidOperationException("Continue must retain its vector chamfer/disabled state");
-            Console.WriteLine("PASS yellow folder, 3 custom WPF stage icons, decorated tabs and chamfered buttons");
+            Console.WriteLine("PASS metallic shaded folder, three 64x64 lit WPF emblems, glossy tabs and multi-layer chrome button states");
             double t1 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
                 firstCard, new System.Windows.Point(firstCard.ActualWidth / 2, firstCard.ActualHeight / 2));
             double t2 = GTotalOptimizer.App.Visuals.SpatialNeonField.PositionAt(
@@ -345,6 +359,12 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Card border must become more cyan at its upper/right corner");
             }
+            if (window.Resources["ButtonMetal"] is not System.Windows.Media.LinearGradientBrush body ||
+                body.GradientStops.Count < 5 ||
+                window.Resources["GoldenMetal"] is not System.Windows.Media.LinearGradientBrush gold ||
+                gold.GradientStops.Count < 5)
+                throw new InvalidOperationException(
+                    "The chrome and gold button surfaces require real multi-stop material gradients");
             var spatialBrush = GTotalOptimizer.App.Visuals.SpatialNeonField.Create(
                 firstCard, System.Windows.Media.Brushes.White) as System.Windows.Media.LinearGradientBrush;
             if (spatialBrush?.MappingMode != System.Windows.Media.BrushMappingMode.Absolute)
@@ -543,7 +563,7 @@ internal static class Program
             var smallLogoTop = smallWindow.GcoHeaderLogo.TransformToAncestor(smallRoot)
                 .Transform(new System.Windows.Point(0, 0));
             if (smallLogo?.PixelWidth != 700 || smallLogo.PixelHeight != 179 ||
-                Math.Abs(smallLogoTop.Y - 7) > 1 ||
+                Math.Abs(smallLogoTop.Y - 12) > 1 ||
                 Math.Abs(smallWindow.GcoHeaderLogo.ActualWidth - 274) > 1 ||
                 System.Windows.Controls.Panel.GetZIndex(smallWindow.GcoHeaderLogo) <=
                     System.Windows.Controls.Panel.GetZIndex(smallWindow.OuterBorderArtwork))

@@ -196,6 +196,33 @@ public sealed class ChamferOutline : FrameworkElement
     public static readonly DependencyProperty AccentCornersProperty =
         DependencyProperty.Register(nameof(AccentCorners), typeof(bool), typeof(ChamferOutline),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty MetallicFinishProperty =
+        DependencyProperty.Register(nameof(MetallicFinish), typeof(bool), typeof(ChamferOutline),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty LitProperty =
+        DependencyProperty.Register(nameof(Lit), typeof(bool), typeof(ChamferOutline),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    // Stable vector material: no raster overlay, shader or frame-by-frame updates.
+    private static readonly Brush Reflection = BuildSurfaceBrush(
+        (Color.FromArgb(116, 215, 250, 255), 0),
+        (Color.FromArgb(45, 137, 197, 210), .38),
+        (Color.FromArgb(0, 20, 60, 70), 1));
+    private static readonly Brush DiagonalFlare = BuildSurfaceBrush(
+        (Color.FromArgb(0, 255, 255, 255), 0),
+        (Color.FromArgb(75, 240, 253, 255), .48),
+        (Color.FromArgb(0, 255, 255, 255), 1));
+    private static Brush BuildSurfaceBrush(params (Color Shade, double Offset)[] stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0), EndPoint = new Point(0, 1)
+        };
+        foreach (var (shade, offset) in stops)
+            brush.GradientStops.Add(new GradientStop(shade, offset));
+        brush.Freeze();
+        return brush;
+    }
 
     public Brush Fill { get => (Brush)GetValue(FillProperty); set => SetValue(FillProperty, value); }
     public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
@@ -204,6 +231,8 @@ public sealed class ChamferOutline : FrameworkElement
     public bool Glow { get => (bool)GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public bool SpatialStroke { get => (bool)GetValue(SpatialStrokeProperty); set => SetValue(SpatialStrokeProperty, value); }
     public bool AccentCorners { get => (bool)GetValue(AccentCornersProperty); set => SetValue(AccentCornersProperty, value); }
+    public bool MetallicFinish { get => (bool)GetValue(MetallicFinishProperty); set => SetValue(MetallicFinishProperty, value); }
+    public bool Lit { get => (bool)GetValue(LitProperty); set => SetValue(LitProperty, value); }
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -225,6 +254,44 @@ public sealed class ChamferOutline : FrameworkElement
             dc.DrawGeometry(null, new Pen(near, thickness + 6) { LineJoin = PenLineJoin.Miter }, shape);
         }
         dc.DrawGeometry(Fill, new Pen(stroke, thickness) { LineJoin = PenLineJoin.Miter }, shape);
+
+        if (MetallicFinish)
+        {
+            // Cast-metal base, chrome lip, angled specular window and dark lower edge.
+            // The entire sheen is clipped to the SAME 45-degree material geometry.
+            var w = RenderSize.Width;
+            var h = RenderSize.Height;
+            dc.PushClip(shape);
+            dc.PushOpacity(Lit ? 1.0 : .27);
+            dc.DrawRectangle(Reflection, null, new Rect(1, 1, w - 2,
+                Math.Min(15, h * .46)));
+            var facet = new StreamGeometry();
+            using (var ctx = facet.Open())
+            {
+                ctx.BeginFigure(new Point(Math.Max(0, cut - 3), 0), true, true);
+                ctx.LineTo(new Point(Math.Min(w, cut + w * .28), 0), true, false);
+                ctx.LineTo(new Point(Math.Min(w, w * .23), h * .55), true, false);
+                ctx.LineTo(new Point(0, h * .55), true, false);
+            }
+            facet.Freeze();
+            dc.DrawGeometry(DiagonalFlare, null, facet);
+            dc.DrawRectangle(
+                new SolidColorBrush(Color.FromArgb(135, 0, 7, 12)), null,
+                new Rect(0, h - 3, w, 3));
+            dc.Pop();
+            dc.Pop();
+            if (w > 30 && h > 18)
+            {
+                var rim = new Pen(new SolidColorBrush(
+                    Color.FromArgb(Lit ? (byte)205 : (byte)46, 184, 236, 247)), 1.0);
+                dc.DrawLine(rim, new Point(cut + 4, inset + 1.5),
+                           new Point(w - cut - 4, inset + 1.5));
+                var inner = ChamferGeometry.Create(w, h, Math.Max(2, cut - 1), inset + 2.3);
+                dc.DrawGeometry(null, new Pen(
+                    new SolidColorBrush(Color.FromArgb(Lit ? (byte)72 : (byte)24, 108, 173, 188)),
+                    .7) { LineJoin = PenLineJoin.Miter }, inner);
+            }
+        }
 
         if (AccentCorners)
         {
@@ -325,7 +392,11 @@ public sealed class SlantedTabShape : FrameworkElement
     public static readonly DependencyProperty StrokeThicknessProperty =
         DependencyProperty.Register(nameof(StrokeThickness), typeof(double), typeof(SlantedTabShape),
             new FrameworkPropertyMetadata(1.5, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty LitProperty =
+        DependencyProperty.Register(nameof(Lit), typeof(bool), typeof(SlantedTabShape),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    public bool Lit { get => (bool)GetValue(LitProperty); set => SetValue(LitProperty, value); }
     public Brush Fill { get => (Brush)GetValue(FillProperty); set => SetValue(FillProperty, value); }
     public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
     public double StrokeThickness { get => (double)GetValue(StrokeThicknessProperty); set => SetValue(StrokeThicknessProperty, value); }
@@ -347,7 +418,192 @@ public sealed class SlantedTabShape : FrameworkElement
             ctx.LineTo(new Point(inset, h - inset), true, false);
         }
         geometry.Freeze();
+        // Multi-level anodized metal: shaded solid body, lip, controlled shine,
+        // deep lower edge and one angled glass reflection across the face.
         dc.DrawGeometry(Fill, new Pen(Stroke, StrokeThickness), geometry);
+        dc.PushClip(geometry);
+        var sheen = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0), EndPoint = new Point(0, 1)
+        };
+        sheen.GradientStops.Add(new GradientStop(Color.FromArgb(
+            Lit ? (byte)135 : (byte)50, 255, 255, 255), 0));
+        sheen.GradientStops.Add(new GradientStop(Color.FromArgb(
+            Lit ? (byte)36 : (byte)16, 215, 243, 252), .55));
+        sheen.GradientStops.Add(new GradientStop(Color.FromArgb(0, 215, 243, 252), 1));
+        sheen.Freeze();
+        dc.DrawRectangle(sheen, null, new Rect(0, 0, w, h * .55));
+        var sliver = new StreamGeometry();
+        using (var c = sliver.Open())
+        {
+            c.BeginFigure(new Point(w * .32, 0), true, true);
+            c.LineTo(new Point(w * .49, 0), true, false);
+            c.LineTo(new Point(w * .37, h), true, false);
+            c.LineTo(new Point(w * .27, h), true, false);
+        }
+        sliver.Freeze();
+        dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(
+            Lit ? (byte)42 : (byte)18, 205, 244, 248)), null, sliver);
+        dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(150, 0, 7, 12)),
+                         null, new Rect(0, h - 3.2, w, 3.2));
+        dc.Pop();
+        dc.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(
+            Lit ? (byte)240 : (byte)124, 234, 255, 255)), 1.2),
+            new Point(inset + shift + 3, inset + 1.3),
+            new Point(w - inset - 3, inset + 1.3));
+        dc.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(
+            Lit ? (byte)132 : (byte)60, 0, 7, 12)), 1.5),
+            new Point(inset + 4, h - inset - 1.4),
+            new Point(w - inset - shift - 4, h - inset - 1.4));
+    }
+}
+
+
+/// <summary>
+/// Machined three-dimensional WPF emblems. These are UI vector assets, never
+/// extra profiler components or regenerated user art. The compact badge,
+/// lighting and each symbol are composed from crisp geometry at 64x64.
+/// </summary>
+public enum StageEmblemKind { Chip, Ignition, Data }
+
+public sealed class StageEmblem : FrameworkElement
+{
+    public static readonly DependencyProperty KindProperty =
+        DependencyProperty.Register(nameof(Kind), typeof(StageEmblemKind), typeof(StageEmblem),
+            new FrameworkPropertyMetadata(StageEmblemKind.Chip,
+                FrameworkPropertyMetadataOptions.AffectsRender));
+    public StageEmblemKind Kind
+    {
+        get => (StageEmblemKind)GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    private static readonly Brush Plate = Metal(
+        Color.FromRgb(33, 64, 72), Color.FromRgb(10, 27, 33),
+        Color.FromRgb(1, 10, 15));
+    private static readonly Brush Steel = Metal(
+        Color.FromRgb(195, 249, 250), Color.FromRgb(40, 153, 167),
+        Color.FromRgb(10, 63, 80));
+    private static readonly Brush Gold = Metal(
+        Color.FromRgb(255, 255, 189), Color.FromRgb(255, 240, 0),
+        Color.FromRgb(167, 116, 0));
+    private static readonly Brush Slate = Metal(
+        Color.FromRgb(59, 83, 91), Color.FromRgb(10, 27, 34),
+        Color.FromRgb(4, 11, 19));
+    private static readonly Brush Glow = Halo();
+    private static readonly Pen YellowEdge = MakePen(Color.FromRgb(255, 240, 0), 2.1);
+    private static readonly Pen CyanEdge = MakePen(Color.FromRgb(0, 226, 242), 2.0);
+    private static readonly Pen IceEdge = MakePen(Color.FromRgb(208, 252, 255), 1.1);
+
+    private static Brush Metal(Color top, Color mid, Color bottom)
+    {
+        var value = new LinearGradientBrush
+        {
+            StartPoint = new Point(0.08, 0), EndPoint = new Point(.88, 1)
+        };
+        value.GradientStops.Add(new GradientStop(top, 0));
+        value.GradientStops.Add(new GradientStop(mid, .37));
+        value.GradientStops.Add(new GradientStop(bottom, 1));
+        value.Freeze();
+        return value;
+    }
+    private static Brush Halo()
+    {
+        var value = new RadialGradientBrush
+        {
+            Center = new Point(.5, .48),
+            GradientOrigin = new Point(.44, .38),
+            RadiusX = .52, RadiusY = .52
+        };
+        value.GradientStops.Add(new GradientStop(Color.FromArgb(112, 0, 226, 242), 0));
+        value.GradientStops.Add(new GradientStop(Color.FromArgb(35, 0, 226, 242), .52));
+        value.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 226, 242), 1));
+        value.Freeze();
+        return value;
+    }
+    private static Pen MakePen(Color color, double thickness)
+    {
+        var pen = new Pen(new SolidColorBrush(color), thickness)
+        {
+            LineJoin = PenLineJoin.Miter
+        };
+        pen.Freeze();
+        return pen;
+    }
+    private static Geometry Shape(string path)
+    {
+        var geometry = Geometry.Parse(path);
+        geometry.Freeze();
+        return geometry;
+    }
+    private static readonly Geometry Badge = Shape("M 21,4 L 43,4 L 60,21 L 60,43 L 43,60 L 21,60 L 4,43 L 4,21 Z");
+    private static readonly Geometry BadgeLip = Shape("M 23,9 L 41,9 L 55,23 L 55,41 L 41,55 L 23,55 L 9,41 L 9,23 Z");
+    private static readonly Geometry BadgeGloss = Shape("M 21,5 L 44,5 L 56,18 L 42,22 L 13,22 L 8,17 Z");
+    private static readonly Geometry ChipBody = Shape("M 18,19 L 45,19 L 45,46 L 18,46 Z");
+    private static readonly Geometry ChipTop = Shape("M 19,19 L 45,19 L 40,24 L 20,24 Z");
+    private static readonly Geometry DownArrow = Shape("M 32,23 L 32,39 M 25,33 L 32,40 L 39,33 M 24,43 L 40,43");
+    private static readonly Geometry StartRing = Shape("M 22,18 C 12,23 11,35 17,44 C 23,54 40,54 47,44 C 53,35 51,24 42,18");
+    private static readonly Geometry DataTop = Shape("M 14,23 L 32,14 L 50,23 L 32,32 Z");
+    private static readonly Geometry DataSide = Shape("M 14,23 L 32,32 L 32,39 L 14,30 Z");
+    private static readonly Geometry DataRight = Shape("M 32,32 L 50,23 L 50,30 L 32,39 Z");
+    private static readonly Geometry DataLower = Shape("M 14,38 L 32,47 L 50,38 M 14,44 L 32,53 L 50,44");
+    private static readonly Geometry DataIn = Shape("M 6,30 L 22,30 M 16,24 L 23,30 L 16,36");
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        if (RenderSize.Width < 2 || RenderSize.Height < 2) return;
+        dc.PushTransform(new ScaleTransform(RenderSize.Width / 64.0, RenderSize.Height / 64.0));
+        dc.DrawEllipse(Glow, null, new Point(32, 32), 31, 31);
+        dc.DrawGeometry(Plate, new Pen(new SolidColorBrush(Color.FromRgb(21, 127, 147)), 1.4), Badge);
+        dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb(126, 222, 251, 255)), 1.0), BadgeLip);
+        dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(45, 231, 255, 255)), null, BadgeGloss);
+        dc.DrawLine(YellowEdge, new Point(10, 20), new Point(20, 10));
+        dc.DrawLine(CyanEdge, new Point(44, 55), new Point(54, 45));
+        dc.DrawEllipse(Brushes.Black, IceEdge, new Point(13, 46), 2.1, 2.1);
+        dc.DrawEllipse(Brushes.Black, YellowEdge, new Point(51, 18), 1.7, 1.7);
+        switch (Kind)
+        {
+            case StageEmblemKind.Chip:
+                dc.DrawGeometry(Slate, YellowEdge, ChipBody);
+                dc.DrawGeometry(new SolidColorBrush(Color.FromArgb(115, 255, 255, 255)),
+                                null, ChipTop);
+                for (int i = 0; i < 3; i++)
+                {
+                    var pos = 24 + i * 8;
+                    dc.DrawLine(CyanEdge, new Point(pos, 14), new Point(pos, 19));
+                    dc.DrawLine(CyanEdge, new Point(pos, 46), new Point(pos, 51));
+                    dc.DrawLine(CyanEdge, new Point(13, pos), new Point(18, pos));
+                    dc.DrawLine(CyanEdge, new Point(45, pos), new Point(51, pos));
+                }
+                dc.DrawGeometry(null, new Pen(Gold, 3.3)
+                    { LineJoin = PenLineJoin.Miter }, DownArrow);
+                dc.DrawLine(IceEdge, new Point(30, 27), new Point(30, 34));
+                break;
+            case StageEmblemKind.Ignition:
+                dc.DrawEllipse(Slate, new Pen(new SolidColorBrush(
+                    Color.FromArgb(108, 0, 226, 242)), 2), new Point(32, 34), 21, 21);
+                dc.DrawGeometry(null, new Pen(Steel, 5.2)
+                    { LineJoin = PenLineJoin.Miter }, StartRing);
+                dc.DrawGeometry(null, new Pen(new SolidColorBrush(
+                    Color.FromRgb(190, 253, 255)), 1.2), StartRing);
+                dc.DrawLine(new Pen(Gold, 5.5), new Point(32, 13), new Point(32, 34));
+                dc.DrawLine(IceEdge, new Point(30, 15), new Point(30, 27));
+                dc.DrawLine(YellowEdge, new Point(43, 37), new Point(49, 32));
+                break;
+            case StageEmblemKind.Data:
+                dc.DrawGeometry(Steel, CyanEdge, DataTop);
+                dc.DrawGeometry(Slate, new Pen(new SolidColorBrush(
+                    Color.FromRgb(11, 83, 99)), 1.6), DataSide);
+                dc.DrawGeometry(Slate, CyanEdge, DataRight);
+                dc.DrawLine(IceEdge, new Point(20, 23), new Point(32, 17));
+                dc.DrawGeometry(null, CyanEdge, DataLower);
+                dc.DrawGeometry(null, new Pen(Gold, 3.6)
+                    { LineJoin = PenLineJoin.Miter }, DataIn);
+                dc.DrawEllipse(Gold, null, new Point(7, 30), 2.2, 2.2);
+                break;
+        }
+        dc.Pop();
     }
 }
 

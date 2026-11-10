@@ -30,8 +30,53 @@
             <GradientStop Color="#00D9F5" Offset=".83"/>
             <GradientStop Color="#00D9F5" Offset="1"/>
         </LinearGradientBrush>
+        <!-- Layered anodized metal faces: specular/bevel overlay is painted
+             separately by ChamferOutline, not by adding image assets. -->
+        <LinearGradientBrush x:Key="ButtonMetal" StartPoint=".08,0" EndPoint=".72,1">
+            <GradientStop Color="#304A4E" Offset="0"/>
+            <GradientStop Color="#1B3339" Offset=".15"/>
+            <GradientStop Color="#14262B" Offset=".37"/>
+            <GradientStop Color="#0A171B" Offset=".75"/>
+            <GradientStop Color="#060D12" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ButtonMetalHot" StartPoint="0,0" EndPoint=".78,1">
+            <GradientStop Color="#466C77" Offset="0"/>
+            <GradientStop Color="#274D56" Offset=".22"/>
+            <GradientStop Color="#15353C" Offset=".55"/>
+            <GradientStop Color="#0A1C22" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ButtonMetalPressed" StartPoint="0,0" EndPoint=".8,1">
+            <GradientStop Color="#101C22" Offset="0"/>
+            <GradientStop Color="#24454A" Offset=".42"/>
+            <GradientStop Color="#101F25" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ButtonMetalDark" StartPoint="0,0" EndPoint=".3,1">
+            <GradientStop Color="#202E32" Offset="0"/>
+            <GradientStop Color="#131F23" Offset=".2"/>
+            <GradientStop Color="#0B161B" Offset=".65"/>
+            <GradientStop Color="#070F14" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GoldenMetal" StartPoint=".02,0" EndPoint=".82,1">
+            <GradientStop Color="#FFFFC8" Offset="0"/>
+            <GradientStop Color="#FFF664" Offset=".17"/>
+            <GradientStop Color="#FFF000" Offset=".42"/>
+            <GradientStop Color="#BEA300" Offset=".82"/>
+            <GradientStop Color="#8D7200" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GoldenMetalHot" StartPoint="0,0" EndPoint=".75,1">
+            <GradientStop Color="#FFFFFF" Offset="0"/>
+            <GradientStop Color="#FFFFA4" Offset=".22"/>
+            <GradientStop Color="#FFF000" Offset=".61"/>
+            <GradientStop Color="#D6AE00" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="CardMetal" StartPoint="0,0" EndPoint=".12,1">
+            <GradientStop Color="#112126" Offset="0"/>
+            <GradientStop Color="#0B1A1E" Offset=".16"/>
+            <GradientStop Color="#081316" Offset=".52"/>
+            <GradientStop Color="#040B0E" Offset="1"/>
+        </LinearGradientBrush>
         <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Background" Value="#151C1C"/>
+            <Setter Property="Background" Value="{StaticResource ButtonMetal}"/>
             <Setter Property="Foreground" Value="#FFF000"/>
             <Setter Property="BorderBrush" Value="#858A28"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -47,7 +92,7 @@
                             <fx:ChamferOutline x:Name="ButtonFrame"
                                                Fill="{TemplateBinding Background}"
                                                Stroke="{TemplateBinding BorderBrush}"
-                                               StrokeThickness="1.6" CornerCut="6" IsHitTestVisible="False"/>
+                                               StrokeThickness="1.6" CornerCut="6" MetallicFinish="True" IsHitTestVisible="False"/>
                             <Path x:Name="ButtonTrace" Data="M 0,5 L 6,0 L 26,0"
                                   Stroke="#FFF000" StrokeThickness="1.2" Width="27" Height="6"
                                   HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -63,10 +108,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#00E2F2"/>
-                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#1B292B"/>
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="{StaticResource ButtonMetalHot}"/>
+                                <Setter TargetName="ButtonFrame" Property="Glow" Value="True"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#263C40"/>
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="{StaticResource ButtonMetalPressed}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#FFF000"/>
@@ -74,7 +120,9 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#788588"/>
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#304347"/>
-                                <Setter TargetName="ButtonFrame" Property="Fill" Value="#10191B"/>
+                                <Setter TargetName="ButtonFrame" Property="Fill" Value="{StaticResource ButtonMetalDark}"/>
+                                <Setter TargetName="ButtonFrame" Property="Lit" Value="False"/>
+                                <Setter TargetName="ButtonFrame" Property="Glow" Value="False"/>
                                 <Setter TargetName="ButtonTrace" Property="Opacity" Value="0.22"/>
                                 <Setter TargetName="ButtonTail" Property="Opacity" Value="0.25"/>
                             </Trigger>
@@ -85,6 +133,7 @@
         </Style>
         <Style x:Key="MinorButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
             <Setter Property="Foreground" Value="#00E2F2"/>
+            <Setter Property="BorderBrush" Value="#00AFC4"/>
             <Setter Property="Padding" Value="9,5"/>
             <Setter Property="FontSize" Value="11"/>
         </Style>
@@ -137,7 +186,7 @@
         </Style>
         <Style x:Key="ContinueStyle" TargetType="Button">
             <Setter Property="Foreground" Value="#071012"/>
-            <Setter Property="Background" Value="#FFF000"/>
+            <Setter Property="Background" Value="{StaticResource GoldenMetal}"/>
             <Setter Property="FontFamily" Value="{StaticResource Oxanium}"/>
             <Setter Property="FontWeight" Value="ExtraBold"/>
             <Setter Property="FontSize" Value="17"/>
@@ -149,7 +198,7 @@
                             <fx:ChamferOutline x:Name="ContinueShape"
                                                Fill="{TemplateBinding Background}"
                                                Stroke="#E8D800" StrokeThickness="2.1"
-                                               CornerCut="9" IsHitTestVisible="False"/>
+                                               CornerCut="9" MetallicFinish="True" IsHitTestVisible="False"/>
                             <Path Data="M 0,5 L 7,0 L 25,0" Stroke="#00E2F2"
                                   StrokeThickness="1.6" Width="26" Height="6"
                                   HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -160,10 +209,14 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ContinueShape" Property="Stroke" Value="#00E2F2"/>
+                                <Setter TargetName="ContinueShape" Property="Fill" Value="{StaticResource GoldenMetalHot}"/>
+                                <Setter TargetName="ContinueShape" Property="Glow" Value="True"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#718386"/>
-                                <Setter TargetName="ContinueShape" Property="Fill" Value="#182527"/>
+                                <Setter TargetName="ContinueShape" Property="Fill" Value="{StaticResource ButtonMetalDark}"/>
+                                <Setter TargetName="ContinueShape" Property="Lit" Value="False"/>
+                                <Setter TargetName="ContinueShape" Property="Glow" Value="False"/>
                                 <Setter TargetName="ContinueShape" Property="Stroke" Value="#36565F"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -229,7 +282,7 @@
         <!-- Official logo aligns its black slope/squares with the raster frame;
              it alone sits ABOVE the original outer PNG and all other UI. -->
         <Image x:Name="GcoHeaderLogo" Grid.RowSpan="2" Panel.ZIndex="50"
-               Width="274" Height="76" Margin="12,7,0,0"
+               Width="274" Height="76" Margin="2,12,0,0"
                HorizontalAlignment="Left" VerticalAlignment="Top"
                Stretch="Fill" IsHitTestVisible="False"
                RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -255,8 +308,8 @@
               Margin="250,0,29,0" IsHitTestVisible="False">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
             <Grid Width="246" Height="44" Margin="0,0,12,0">
-                <fx:SlantedTabShape x:Name="CaptureTabShape"
-                                    Fill="#FFF000" Stroke="#FFF000"
+                <fx:SlantedTabShape x:Name="CaptureTabShape" Lit="True"
+                                    Fill="{StaticResource GoldenMetal}" Stroke="#FFF000"
                                     StrokeThickness="1.8" IsHitTestVisible="False"/>
                 <Path x:Name="CaptureTabMarks" Data="M 0,8 L 6,0 M 10,8 L 16,0 M 20,8 L 26,0"
                       Stroke="#061014" StrokeThickness="2" Width="27" Height="9"
@@ -272,8 +325,8 @@
                            VerticalAlignment="Center"/>
             </Grid>
             <Grid Width="246" Height="44">
-                <fx:SlantedTabShape x:Name="AnalyzeTabShape"
-                                    Fill="#0D171B" Stroke="#91ABB4"
+                <fx:SlantedTabShape x:Name="AnalyzeTabShape" Lit="False"
+                                    Fill="{StaticResource ButtonMetalDark}" Stroke="#91ABB4"
                                     StrokeThickness="1.8" IsHitTestVisible="False"/>
                 <Path x:Name="AnalyzeTabMarks" Data="M 0,8 L 6,0 M 10,8 L 16,0 M 20,8 L 26,0"
                       Stroke="#00E2F2" StrokeThickness="2" Width="27" Height="9"
@@ -376,18 +429,41 @@
 
                         <!-- White heading outside a height-constrained Game Root box. -->
                         <!-- Restore the original Game Root X alignment. -->
-                        <StackPanel Margin="0,37,0,9">
+                        <StackPanel Margin="0,12,0,9">
                             <Grid Height="27" Margin="2,0,0,5">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                           Stroke="#00E2F2" StrokeThickness="2.7"
                                           Width="18" Height="20" Margin="0,0,9,0"/>
-                                    <Viewbox x:Name="GameRootFolderIcon" Width="24" Height="20" Margin="0,0,8,0" VerticalAlignment="Center">
-                                         <Grid Width="34" Height="26">
-                                             <Path Data="M 2,7 L 12,7 L 16,11 L 32,11 L 32,24 L 2,24 Z"
-                                                   Fill="#11191A" Stroke="#FFF000" StrokeThickness="2.2"/>
-                                             <Path Data="M 2,11 L 32,11 L 29,20 L 5,20 Z"
-                                                   Fill="#192222" Stroke="#FFF000" StrokeThickness="1.5"/>
+                                    <Viewbox x:Name="GameRootFolderIcon" Width="26" Height="21"
+                                              Margin="0,0,8,0" VerticalAlignment="Center"
+                                              IsHitTestVisible="False">
+                                         <Grid Width="36" Height="28">
+                                             <!-- Brushed bright metal lid, black recessed pocket. -->
+                                             <Path Data="M 2,8 L 12,8 L 17,12 L 34,12 L 34,25 L 2,25 Z"
+                                                   Stroke="#B89E00" StrokeThickness="2">
+                                                 <Path.Fill>
+                                                     <LinearGradientBrush StartPoint="0,0" EndPoint=".34,1">
+                                                         <GradientStop Color="#FFFEC2" Offset="0"/>
+                                                         <GradientStop Color="#FFF000" Offset=".27"/>
+                                                         <GradientStop Color="#8C7400" Offset="1"/>
+                                                     </LinearGradientBrush>
+                                                 </Path.Fill>
+                                             </Path>
+                                             <Path Data="M 3,13 L 34,13 L 31,23 L 5,23 Z"
+                                                   Stroke="#FFF000" StrokeThickness="1.7">
+                                                 <Path.Fill>
+                                                     <LinearGradientBrush StartPoint="0,0" EndPoint=".2,1">
+                                                         <GradientStop Color="#31474C" Offset="0"/>
+                                                         <GradientStop Color="#0B1B22" Offset=".56"/>
+                                                         <GradientStop Color="#041015" Offset="1"/>
+                                                     </LinearGradientBrush>
+                                                 </Path.Fill>
+                                             </Path>
+                                             <Path Data="M 5,15 L 28,15" Stroke="#FFFFFF"
+                                                   StrokeThickness="1.1" Opacity=".9"/>
+                                             <Path Data="M 6,21 L 28,21" Stroke="#775F00"
+                                                   StrokeThickness="1.5"/>
                                          </Grid>
                                      </Viewbox>
                                      <TextBlock Text="GAME ROOT / CYBERPUNK 2077"
@@ -458,7 +534,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid Grid.Column="0" Margin="8,0,13,0">
-                                <fx:ChamferOutline x:Name="StepOneOutline" Fill="#081012"
+                                <fx:ChamferOutline x:Name="StepOneOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -472,18 +548,9 @@
                                         <TextBlock Text="01" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="InstallStageIcon" HorizontalAlignment="Center" Width="42" Height="36">
-                                             <Grid Width="48" Height="44">
-                                                 <Path Data="M 10,7 L 38,7 L 38,35 L 10,35 Z"
-                                                       Fill="#0B1A1C" Stroke="#FFF000" StrokeThickness="2.3"/>
-                                                 <Path Data="M 15,3 L 15,7 M 24,3 L 24,7 M 33,3 L 33,7
-                                                                 M 15,35 L 15,40 M 24,35 L 24,40 M 33,35 L 33,40
-                                                                 M 5,13 L 10,13 M 5,22 L 10,22 M 5,30 L 10,30
-                                                                 M 38,13 L 43,13 M 38,22 L 43,22 M 38,30 L 43,30"
-                                                       Stroke="#00E2F2" StrokeThickness="2.1"/>
-                                                 <Path Data="M 24,12 L 24,27 M 18,22 L 24,28 L 30,22 M 18,32 L 30,32"
-                                                       Stroke="#FFF000" StrokeThickness="2.4"/>
-                                             </Grid>
+                                        <Viewbox x:Name="InstallStageIcon" HorizontalAlignment="Center" Width="52" Height="42"
+                                                  IsHitTestVisible="False">
+                                             <fx:StageEmblem Kind="Chip" Width="64" Height="64"/>
                                          </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepOneTitle" Grid.Row="1" Text="Install Profilers"
@@ -502,7 +569,7 @@
                             </Grid>
 
                             <Grid Grid.Column="1" Margin="13,0,13,0">
-                                <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#081012"
+                                <fx:ChamferOutline x:Name="StepTwoOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -516,15 +583,9 @@
                                         <TextBlock Text="02" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="42" Height="36">
-                                             <Grid Width="48" Height="44">
-                                                 <Path Data="M 24,3 L 24,21" Stroke="#FFF000"
-                                                       StrokeThickness="3.4"/>
-                                                 <Path Data="M 13,10 C 3,17 4,30 13,36 C 20,42 33,41 39,34 C 46,25 41,15 35,10"
-                                                       Stroke="#00E2F2" StrokeThickness="3" Fill="Transparent"/>
-                                                 <Path Data="M 30,28 L 42,16 M 32,16 L 42,16 L 42,26"
-                                                       Stroke="#FFF000" StrokeThickness="2.2" Fill="Transparent"/>
-                                             </Grid>
+                                        <Viewbox x:Name="LaunchStageIcon" HorizontalAlignment="Center" Width="52" Height="42"
+                                                  IsHitTestVisible="False">
+                                             <fx:StageEmblem Kind="Ignition" Width="64" Height="64"/>
                                          </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepTwoTitle" Grid.Row="1" Text="Start Cyberpunk"
@@ -543,7 +604,7 @@
                             </Grid>
 
                             <Grid Grid.Column="2" Margin="13,0,8,0">
-                                <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#081012"
+                                <fx:ChamferOutline x:Name="StepThreeOutline" Fill="{StaticResource CardMetal}" MetallicFinish="True"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
                                 <Grid Margin="12,10,12,12">
@@ -557,16 +618,9 @@
                                         <TextBlock Text="03" HorizontalAlignment="Left"
                                                    Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                    FontSize="22" FontWeight="ExtraBold"/>
-                                        <Viewbox x:Name="CollectStageIcon" HorizontalAlignment="Center" Width="43" Height="36">
-                                             <Grid Width="50" Height="44">
-                                                 <Path Data="M 14,10 L 30,4 L 46,10 L 30,16 Z
-                                                                 M 14,17 L 30,23 L 46,17
-                                                                 M 14,24 L 30,30 L 46,24
-                                                                 M 14,31 L 30,37 L 46,31"
-                                                       Stroke="#00E2F2" StrokeThickness="2.5" Fill="Transparent"/>
-                                                 <Path Data="M 2,20 L 20,20 M 15,14 L 21,20 L 15,26"
-                                                       Stroke="#FFF000" StrokeThickness="3" Fill="Transparent"/>
-                                             </Grid>
+                                        <Viewbox x:Name="CollectStageIcon" HorizontalAlignment="Center" Width="54" Height="42"
+                                                  IsHitTestVisible="False">
+                                             <fx:StageEmblem Kind="Data" Width="64" Height="64"/>
                                          </Viewbox>
                                     </Grid>
                                     <TextBlock x:Name="StepThreeTitle" Grid.Row="1" Text="Collect Results"

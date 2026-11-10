@@ -206,8 +206,28 @@ public partial class MainWindow : Window
 
     private void SetActiveTab(bool results)
     {
-        var active = new SolidColorBrush(Color.FromRgb(255, 240, 0));
-        var inactive = new SolidColorBrush(Color.FromRgb(13, 23, 27));
+        // Two genuinely illuminated surface states rather than one flat paint.
+        // SlantedTabShape draws its own clipped specular lip and inset shadow.
+        var active = new LinearGradientBrush
+        {
+            StartPoint = new Point(.08, 0), EndPoint = new Point(.86, 1)
+        };
+        active.GradientStops.Add(new GradientStop(Color.FromRgb(255, 255, 206), 0));
+        active.GradientStops.Add(new GradientStop(Color.FromRgb(255, 246, 90), .24));
+        active.GradientStops.Add(new GradientStop(Color.FromRgb(255, 240, 0), .58));
+        active.GradientStops.Add(new GradientStop(Color.FromRgb(171, 138, 0), 1));
+        active.Freeze();
+        var inactive = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0), EndPoint = new Point(.56, 1)
+        };
+        inactive.GradientStops.Add(new GradientStop(Color.FromRgb(39, 69, 78), 0));
+        inactive.GradientStops.Add(new GradientStop(Color.FromRgb(18, 37, 43), .28));
+        inactive.GradientStops.Add(new GradientStop(Color.FromRgb(8, 19, 24), .75));
+        inactive.GradientStops.Add(new GradientStop(Color.FromRgb(2, 9, 14), 1));
+        inactive.Freeze();
+        CaptureTabShape.Lit = !results;
+        AnalyzeTabShape.Lit = results;
         CaptureTabShape.Fill = results ? inactive : active;
         CaptureTabShape.Stroke = results ? new SolidColorBrush(Color.FromRgb(145, 171, 180)) : active;
         CaptureTabLabel.Foreground = results ? Brushes.White : new SolidColorBrush(Color.FromRgb(6, 16, 20));
