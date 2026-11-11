@@ -245,18 +245,50 @@ public sealed class UnifiedProfilerWorkflow
 
     // A new attempt uses a fresh identity, so a previous partial or complete
     // archive cannot accidentally qualify the next capture. Old evidence remains.
-    public string BeginCaptureAttempt(string game)
+    public string BeginCaptureAttempt(string game, bool observedGameAlreadyRunning = false,
+        LiveProfilerState? ownerBeforeCapture = null)
     {
-        if (GameRunning()) throw new InvalidOperationException("Cyberpunk is running.");
+        var gameRunning = GameRunning();
+        if (gameRunning && !observedGameAlreadyRunning)
+            throw new InvalidOperationException("Cyberpunk is running.");
         if (!HasRecoveryJournal || !OwnsSession(game))
             throw new InvalidOperationException("No matching GCO profiler installation.");
+        // The external-game branch is used only after WPF detected a fresh
+        // stopped->running process transition and verified owner state.
+        if (observedGameAlreadyRunning && !gameRunning)
+            throw new InvalidOperationException("No running Cyberpunk process to attach.");
+        if (HasCaptureAttempt(game))
+        {
+            var prior = ReadCollected(game);
+            if (prior is not null && (!prior.CollectionAttempted || !prior.PresentMonStopVerified))
+                throw new InvalidOperationException("Previous capture is still pending. Stop/collect or abandon its owned output first.");
+        }
         var id = Guid.NewGuid().ToString("N");
-        // Make one immutable, readable RESULTS folder for this attempt.
-        // Its name is resolved from the session ID later, including after
-        // the owner journal is removed by verified restoration.
-        CollectedCaptureStore.CreateDatedSessionFolder(packageRoot, id, DateTimeOffset.Now);
+        // Create a short, readable folder and durable identity before writing
+        // the journal; previous captures remain immutable and independently
+        // readable even after owner restoration.
+        CollectedCaptureStore.CreateDatedSessionFolder(
+            packageRoot, id, DateTimeOffset.Now, game,
+            ownerBeforeCapture?.CetCaptureReady == true,
+            ownerBeforeCapture?.GrspCaptureReady == true);
         WriteJournal(game, "capture-attempt", id);
         return id;
+    }
+
+    // Safe to run only after GCO's PresentMon was stopped/verified.
+    // No file outside GCO/RESULTS is modified; native owner data remains
+    // source-owned. The journal and the install/restore transaction survive.
+    public bool AbandonCurrentUncollected(string game)
+    {
+        if (!HasRecoveryJournal || !OwnsSession(game) || !HasCaptureAttempt(game))
+            return false;
+        var id = SessionId();
+        var state = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
+        if (state.CollectionAttempted || state.HasAny || state.Restored)
+            return false;
+        var discarded = CollectedCaptureStore.DiscardUncollected(packageRoot, game, id);
+        WriteJournal(game, "both-installed");
+        return discarded;
     }
 
     public CollectedCaptureIndex RecordCollectionAttempt(string game, bool presentMonStopped)
@@ -383,13 +415,19 @@ public sealed class UnifiedProfilerWorkflow
 
         try
         {
-            if (state.CetCaptureReady && saved.Cet is null)
+            // The owner status is only a Boolean: if native results were
+            // already ready before this launch, that old result cannot be
+            // attributed to this attempt. Do not collect/admit it under a
+            // new GCO identity without source-owner proof of a fresh capture.
+            if (state.CetCaptureReady && saved.Cet is null &&
+                !saved.CetReadyBeforeAttempt)
             {
                 var c = Require(await Run(BackendKind.Cet, "collect", game, token));
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
                     BackendKind.Cet, c.ArchivePath);
             }
-            if (state.GrspCaptureReady && saved.Redscript is null)
+            if (state.GrspCaptureReady && saved.Redscript is null &&
+                !saved.RedscriptReadyBeforeAttempt)
             {
                 var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
@@ -404,10 +442,17 @@ public sealed class UnifiedProfilerWorkflow
                 saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"));
         }
 
+        var staleNotice = (saved.CetReadyBeforeAttempt
+                ? " CET had pre-existing native results; excluded from this attempt."
+                : "") +
+            (saved.RedscriptReadyBeforeAttempt
+                ? " REDscript had pre-existing native results; excluded from this attempt."
+                : "");
         return new(saved.HasAny, "Collected " +
             (saved.Cet is null ? "no CET" : "CET") + " / " +
             (saved.Redscript is null ? "no REDscript" : "REDscript") +
-            ". Original game files are still instrumented until Continue or explicit Restore.",
+            ". Original game files are still instrumented until Continue or explicit Restore." +
+            staleNotice,
             saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
             saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"),
             CaptureVerified: saved.HasAny, RestoreVerified: false);

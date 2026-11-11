@@ -10,7 +10,8 @@ public sealed record CollectedCaptureIndex(
     string SessionId, string GameRoot, CollectedOwner? Cet, CollectedOwner? Redscript,
     string? FrameTimeCsv, bool Restored = false, List<string>? Skipped = null,
     CollectedFile? FrameTimeEvidence = null, bool CollectionAttempted = false,
-    bool PresentMonStopVerified = false)
+    bool PresentMonStopVerified = false,
+    bool CetReadyBeforeAttempt = false, bool RedscriptReadyBeforeAttempt = false)
 {
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
@@ -35,59 +36,165 @@ public static class CollectedCaptureStore
                 format, CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
     }
 
-    // A captured session is resolved from its immutable 32-hex identity. New
-    // sessions have readable clock names, while every existing unmodified
-    // GCO-Capture-<id> directory remains readable by the same APIs.
+    private static bool IsReadableSessionName(string name) =>
+        name.StartsWith("GCO-Capture-", StringComparison.OrdinalIgnoreCase) &&
+        name.Length == "GCO-Capture-".Length + "ddMMyyyy_HHmmss".Length &&
+        DateTime.TryParseExact(name["GCO-Capture-".Length..],
+            "ddMMyyyy_HHmmss", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out _);
+
+    // New session folders carry a human timestamp only. collection.json is
+    // created at launch with the immutable ID/game root, so the real identity
+    // can be recovered after an app restart or verified profiler restore.
+    // Read old GUID-only and yyyyMMdd-HHmmss-GUID capture folders unchanged.
     public static string SessionFolder(string root, string id)
     {
         CheckId(id);
         var results = Path.Combine(Path.GetFullPath(root), "RESULTS");
         var legacy = Path.Combine(results, "GCO-Capture-" + id);
         if (!Directory.Exists(results)) return legacy;
-
-        var dated = Directory.EnumerateDirectories(results, "GCO-Capture-*",
-                SearchOption.TopDirectoryOnly)
-            .Where(dir => IsDatedSessionName(Path.GetFileName(dir), id))
-            .Take(2).ToArray();
-        if (dated.Length > 1 || (dated.Length > 0 && Directory.Exists(legacy)))
-            throw new InvalidDataException("Ambiguous GCO capture folder identity; preserve both directories for recovery.");
-        var folder = dated.Length == 1 ? dated[0] : legacy;
+        var matches = new List<string>();
+        if (Directory.Exists(legacy)) matches.Add(legacy);
+        foreach (var dir in Directory.EnumerateDirectories(results, "GCO-Capture-*",
+                     SearchOption.TopDirectoryOnly))
+        {
+            var name = Path.GetFileName(dir);
+            if (string.Equals(dir, legacy, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (IsDatedSessionName(name, id))
+                matches.Add(dir);
+            else if (IsReadableSessionName(name))
+            {
+                if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+                    continue;
+                var index = Path.Combine(dir, "collection.json");
+                if (!File.Exists(index) ||
+                    (File.GetAttributes(index) & FileAttributes.ReparsePoint) != 0)
+                    continue;
+                // A malformed unrelated index is not evidence that it owns
+                // this session; no directory may be guessed from its name.
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(index));
+                    if (doc.RootElement.TryGetProperty("SessionId", out var identity) &&
+                        identity.ValueKind == JsonValueKind.String &&
+                        string.Equals(identity.GetString(), id,
+                            StringComparison.OrdinalIgnoreCase))
+                        matches.Add(dir);
+                }
+                catch (JsonException) { }
+            }
+            if (matches.Count > 1)
+                throw new InvalidDataException("Ambiguous GCO capture identity; preserve both directories for recovery.");
+        }
+        var folder = matches.Count == 1 ? matches[0] : legacy;
         if (Directory.Exists(folder) &&
             (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidDataException("Linked GCO capture folder is not accepted.");
         return folder;
     }
 
-    // Provision only at the moment a new attempt starts, before PresentMon
-    // writes. The existing journal retains the identity, not a mutable folder
-    // path; previous archives can be reopened even after owner restoration.
+    // Provision once, before PresentMon starts, and create the index BEFORE
+    // reporting success so timestamp-only folders remain session-addressable.
+    // A same-second name collision refuses instead of inventing a hash/suffix.
     public static string CreateDatedSessionFolder(string root, string id,
-        DateTimeOffset started)
+        DateTimeOffset started, string game, bool cetReadyBeforeAttempt = false,
+        bool redscriptReadyBeforeAttempt = false)
     {
         CheckId(id);
         var results = Path.Combine(Path.GetFullPath(root), "RESULTS");
         Directory.CreateDirectory(results);
-        var existing = SessionFolder(root, id);
-        if (Directory.Exists(existing))
-            throw new InvalidDataException("Capture session identity already exists; refusing to mix data.");
+        if (Directory.Exists(SessionFolder(root, id)))
+            throw new InvalidDataException("Capture session identity already exists.");
         var name = "GCO-Capture-" +
-            started.ToLocalTime().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) +
-            "-" + id;
+            started.ToLocalTime().ToString("ddMMyyyy_HHmmss", CultureInfo.InvariantCulture);
         var folder = Path.Combine(results, name);
+        if (Directory.Exists(folder) || File.Exists(folder))
+            throw new InvalidDataException("Capture timestamp already exists; retry after the next second.");
         Directory.CreateDirectory(folder);
+        var initial = new CollectedCaptureIndex(id, Path.GetFullPath(game),
+            null, null, null, CetReadyBeforeAttempt: cetReadyBeforeAttempt,
+            RedscriptReadyBeforeAttempt: redscriptReadyBeforeAttempt);
+        var file = Path.Combine(folder, "collection.json");
+        var temp = file + ".tmp";
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(initial, Json));
+            File.Move(temp, file);
+        }
+        catch
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+            // Only our empty, newly provisioned folder can be removed here.
+            if (!File.Exists(file) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                Directory.Delete(folder);
+            throw;
+        }
         return folder;
     }
 
-    public static bool UsesDatedLayout(string root, string id) =>
-        IsDatedSessionName(Path.GetFileName(SessionFolder(root, id)), id);
+    // Abandon ONLY the temporary output of a launch that was never collected.
+    // An explicit Collect always wins: incomplete / zero / failed-stop
+    // collection records are preserved, as is any indexed owner evidence.
+    // We never delete native-owner game files or third-party paths.
+    public static bool DiscardUncollected(string root, string game, string id)
+    {
+        var folder = SessionFolder(root, id);
+        if (!Directory.Exists(folder)) return false;
+        var index = Read(root, game, id, verifyHashes: true);
+        if (index.CollectionAttempted || index.HasAny || index.Restored)
+            return false;
+        static void CheckTree(string directory)
+        {
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked capture directory cannot be discarded.");
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+            {
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("Linked capture entry cannot be discarded.");
+                if (Directory.Exists(entry)) CheckTree(entry);
+            }
+        }
+        CheckTree(folder);
+        // Refuse extra manual evidence even when the session was never
+        // explicitly collected; only GCO's known temporary files qualify.
+        foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
+        {
+            if (Directory.Exists(entry) &&
+                Path.GetFileName(entry) is not ("PresentMon" or "FrameTime"))
+                throw new InvalidDataException(
+                    "Unrecognized capture directory; preserving contents: " + entry);
+            if (File.Exists(entry) &&
+                !Path.GetFileName(entry).Equals("collection.json",
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "Unrecognized capture evidence; preserving: " + entry);
+        }
+        foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+            if (Path.GetFileName(file) is not ("PresentMon.csv" or "PresentMon-controller.json"
+                                              or "collection.json"))
+                throw new InvalidDataException(
+                    "Unrecognized uncollected capture file; preserving: " + file);
+        Directory.Delete(folder, recursive: true);
+        return true;
+    }
+
+    public static bool UsesDatedLayout(string root, string id)
+    {
+        var name = Path.GetFileName(SessionFolder(root, id));
+        return IsReadableSessionName(name) || IsDatedSessionName(name, id);
+    }
+
+    public static bool UsesFlatLayout(string root, string id) =>
+        IsReadableSessionName(Path.GetFileName(SessionFolder(root, id)));
 
     public static string DomainFolder(string root, string id, string domain)
     {
         if (domain is not ("CET" or "REDscript"))
             throw new InvalidDataException("Unknown profiler domain.");
-        var newer = UsesDatedLayout(root, id);
-        var name = newer
-            ? (domain == "CET" ? "G-CET" : "G-RED")
+        var name = UsesDatedLayout(root, id)
+            ? (domain == "CET" ? "G-CET" :
+                UsesFlatLayout(root, id) ? "G-REDscript" : "G-RED")
             : domain;
         return Path.Combine(SessionFolder(root, id), name);
     }

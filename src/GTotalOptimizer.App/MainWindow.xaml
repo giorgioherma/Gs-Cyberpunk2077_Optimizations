@@ -9,7 +9,7 @@
         Background="#000000" Foreground="#F1F5F6"
         FontFamily="./Fonts/Rajdhani/#Rajdhani" FontSize="14"
         Loaded="Window_Loaded" Activated="Window_Activated" StateChanged="Window_StateChanged"
-        SizeChanged="Window_SizeChanged" Closed="Window_Closed">
+        SizeChanged="Window_SizeChanged" Closing="Window_Closing" Closed="Window_Closed">
     <Window.Resources>
         <FontFamily x:Key="Rajdhani">./Fonts/Rajdhani/#Rajdhani</FontFamily>
         <FontFamily x:Key="Oxanium">./Fonts/Oxanium/#Oxanium</FontFamily>

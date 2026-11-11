@@ -69,7 +69,18 @@ public static class PresentMonLifecyclePolicy
     public static string NewSessionCsv(string packageRoot, string sessionId)
     {
         var session = CollectedCaptureStore.SessionFolder(packageRoot, sessionId);
-        // New dated captures store PresentMon alongside G-CET/G-REDscript.
+        if (CollectedCaptureStore.UsesFlatLayout(packageRoot, sessionId))
+        {
+            // Current user-approved format: no nested random FrameTime ID.
+            // PresentMon-controller.json is placed beside this CSV.
+            var flat = ValidateOutputCsv(packageRoot,
+                Path.Combine(session, "PresentMon", "PresentMon.csv"));
+            RequireWritableCapturePath(flat);
+            if (File.Exists(flat))
+                throw new InvalidDataException("Current capture already has a PresentMon CSV.");
+            return flat;
+        }
+        // Old dated-ID sessions keep the previous short-ID nesting.
         // Keep FrameTime for all previous session IDs and already saved CSVs.
         var frameDir = CollectedCaptureStore.UsesDatedLayout(packageRoot, sessionId)
             ? "PresentMon" : "FrameTime";

@@ -39,6 +39,10 @@ public partial class MainWindow : Window
     private bool? lastGameRunning;
     private bool pendingGameStateRefresh;
     private bool gameStateRefreshInFlight;
+    private bool pendingExternalGameStart;
+    private int? gcoLaunchedGamePid;
+    private bool closingInProgress;
+    private bool closureCleanupVerified;
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
@@ -269,30 +273,61 @@ public partial class MainWindow : Window
         UpdatePortraitWidth();
         QueueHeaderTabAlignment();
         lastGameRunning = GameRunning();
+        // A game already running when the app opens is not a confirmed new
+        // launch edge; never relabel its old native data as this attempt.
         gameStateTimer.Start();
         _ = RefreshSourceAsync();
     }
 
-    // Trigger CLI status checks only on Cyberpunk process transitions, never
-    // every timer tick. Preserve the pending refresh if an install/collect/
-    // restore transaction owns the UI when the process closes.
+    // Only a real stopped->running transition may automatically restart a
+    // capture. The PID prevents the Start button's own game process from
+    // restarting PresentMon a second time.
     private async void GameStateTimer_Tick(object? sender, EventArgs e)
     {
-        if (!initialized || !IsLoaded) return;
+        if (!initialized || !IsLoaded || closingInProgress) return;
         var running = GameRunning();
         if (lastGameRunning is bool prior && prior != running)
         {
             pendingGameStateRefresh = true;
-            if (prior && !running) captureLaunched = false;
+            if (prior && !running)
+            {
+                captureLaunched = false;
+                gcoLaunchedGamePid = null;
+            }
+            else if (!prior && running)
+            {
+                var launchedByGco = false;
+                if (gcoLaunchedGamePid is int launched)
+                {
+                    foreach (var p in Process.GetProcessesByName("Cyberpunk2077"))
+                    {
+                        using (p) { if (p.Id == launched) launchedByGco = true; }
+                    }
+                }
+                gcoLaunchedGamePid = null;
+                if (!launchedByGco) pendingExternalGameStart = true;
+            }
         }
         lastGameRunning = running;
 
-        if (!pendingGameStateRefresh || busy || gameStateRefreshInFlight ||
-            !inspection.IsValidGame) return;
-        pendingGameStateRefresh = false;
+        if ((!pendingGameStateRefresh && !pendingExternalGameStart) ||
+            busy || gameStateRefreshInFlight || !inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
-        try { await RefreshSourceAsync(); }
-        catch (Exception ex) { Trace.TraceError("Process transition refresh: " + ex); }
+        try
+        {
+            if (pendingExternalGameStart)
+            {
+                pendingExternalGameStart = false;
+                await HandleExternalGameLaunchAsync();
+            }
+            pendingGameStateRefresh = false;
+            await RefreshSourceAsync();
+        }
+        catch (Exception ex)
+        {
+            PinStatus("Game launch reconciliation: " + ex.Message);
+            Trace.TraceError("Game launch reconciliation: " + ex);
+        }
         finally { gameStateRefreshInFlight = false; }
     }
 
@@ -328,6 +363,57 @@ public partial class MainWindow : Window
                 Focus();
             }
         }));
+    }
+
+    // Graceful close must flush our ETW writer BEFORE deleting any temporary
+    // CSV. Cancel the first WPF close event while the owner controller runs.
+    // On failure keep the window open with a console diagnostic, never a popup.
+    private async void Window_Closing(object? sender,
+        System.ComponentModel.CancelEventArgs e)
+    {
+        if (!initialized || closureCleanupVerified) return;
+        e.Cancel = true;
+        if (closingInProgress) return;
+        if (busy)
+        {
+            PinStatus("Finish the active profiler operation before closing GCO.");
+            return;
+        }
+        closingInProgress = true;
+        SetBusy(true);
+        SetStatus("Stopping owned PresentMon and clearing uncollected data before closing...");
+        try
+        {
+            var game = Workflow.ReadRecoveryGameRoot();
+            var id = game is null ? Guid.NewGuid().ToString("N")
+                : Workflow.ReadRecoverySessionId(game) ?? Guid.NewGuid().ToString("N");
+            var stop = await StopOwnedPresentMonAsync(id);
+            if (!stop.Stopped)
+            {
+                PinStatus("Cannot close cleanly: " +
+                    (stop.Error ?? "PresentMon graceful shutdown unverified.") +
+                    " Retry close or use RESTORE PROFILERS.");
+                return;
+            }
+            if (game is not null && Workflow.HasCaptureAttempt(game))
+                Workflow.AbandonCurrentUncollected(game);
+            closureCleanupVerified = true;
+        }
+        catch (Exception ex)
+        {
+            PinStatus("Close cleanup: " + ex.Message +
+                ". Capture and recovery files are preserved. Retry closing.");
+        }
+        finally
+        {
+            closingInProgress = false;
+            SetBusy(false);
+            if (closureCleanupVerified)
+                Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                    new Action(Close));
+            else
+                await RefreshSourceAsync();
+        }
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -551,8 +637,10 @@ public partial class MainWindow : Window
             // Do not start another game while the previous attempt still
             // needs collection; BeginCaptureAttempt creates a fresh identity
             // after collection, which re-enables Collect on the next launch.
-            LaunchButton.IsEnabled = pinnedFramework && !readyToCollect &&
-                !running && !recentLaunch && !state.CetCaptureReady && !state.GrspCaptureReady;
+            // A user may deliberately skip Collect: a later Start discards
+            // ONLY GCO's uncollected attempt after stopping owned PresentMon.
+            LaunchButton.IsEnabled = pinnedFramework &&
+                !running && !recentLaunch;
             CollectButton.IsEnabled = !running && readyToCollect;
             ContinueButton.IsEnabled = !running &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null);
@@ -620,6 +708,71 @@ public partial class MainWindow : Window
         finally { SetBusy(false); await RefreshSourceAsync(); }
     }
 
+    // A new GCO or directly observed Cyberpunk launch follows the exact same
+    // rules: gracefully stop old owned ETW output; discard ONLY uncollected GCO
+    // files; provision a new identity; start fresh PresentMon. Source-owner
+    // native capture state remains untouched, and pre-existing native results
+    // are quarantined from this attempt in collection.json.
+    private async Task<string?> BeginFreshCaptureAsync(string game,
+        LiveProfilerState state, bool gameAlreadyRunning)
+    {
+        if (!Workflow.HasInstalledFrameworkBaseline(game, state))
+            throw new InvalidOperationException(
+                "Verified, game-bound profiler installation is required. RESTORE PROFILERS remains available.");
+        if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
+            throw new InvalidOperationException("Bundled profiler provenance changed.");
+        var oldId = Workflow.ReadRecoverySessionId(game) ??
+                    Guid.NewGuid().ToString("N");
+        var stopped = await StopOwnedPresentMonAsync(oldId);
+        if (!stopped.Stopped)
+            throw new InvalidOperationException("Previous GCO PresentMon must stop before starting a new attempt: " +
+                stopped.Error);
+        // An explicit Collect preserves its evidence and never gets discarded.
+        // Stale native-owner archives are not copied into the next attempt.
+        Workflow.AbandonCurrentUncollected(game);
+        var attemptId = Workflow.BeginCaptureAttempt(game,
+            observedGameAlreadyRunning: gameAlreadyRunning,
+            ownerBeforeCapture: state);
+        captureLaunched = true;
+        lastLaunchRequestedUtc = DateTime.UtcNow;
+        try
+        {
+            var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, attemptId);
+            await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // A PresentMon-only failure does not invent native evidence or
+            // silently reuse old CSVs. CET/GRSP F11 remain independently usable.
+            return ex.Message;
+        }
+    }
+
+    private async Task HandleExternalGameLaunchAsync()
+    {
+        if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
+            !Workflow.HasSessionForGame(inspection.GameRoot)) return;
+        var game = inspection.GameRoot;
+        SetBusy(true);
+        try
+        {
+            var state = await Workflow.InspectAsync(game);
+            var warning = await BeginFreshCaptureAsync(game, state,
+                gameAlreadyRunning: true);
+            SetPortraitStage(PortraitStage.Capturing);
+            PinStatus(warning is null
+                ? "New Cyberpunk launch detected. Previous uncollected GCO capture discarded; PresentMon restarted. F11 controls native captures."
+                : "New Cyberpunk launch detected; native profilers remain installed. PresentMon unavailable: " + warning);
+        }
+        catch (Exception ex)
+        {
+            PinStatus("Automatic capture restart refused: " + ex.Message +
+                ". RESTORE PROFILERS remains available after closing Cyberpunk.");
+        }
+        finally { SetBusy(false); }
+    }
+
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
     private async Task LaunchCaptureAsync()
     {
@@ -627,75 +780,47 @@ public partial class MainWindow : Window
         if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
         if (captureLaunched && DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10))
         {
-            Warn("The previous launch is still being processed. Do not start a second game.", "Start");
+            Warn("The previous launch is still being processed.", "Start");
             return;
         }
         var game = inspection.GameRoot;
+        var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
+        if (!File.Exists(executable))
+        {
+            Warn("Cyberpunk2077.exe is missing.", "Start");
+            return;
+        }
         ClearStatusPin();
         SetBusy(true);
         try
         {
             var state = await Workflow.InspectAsync(game);
-            if (!Workflow.HasInstalledFrameworkBaseline(game, state))
-                throw new InvalidOperationException("Verified, game-bound G-CET and G-REDscript installations are required before Start. RESTORE PROFILERS is available for recovery.");
-            // Owner-ready archives can belong to the preceding attempt. Never
-            // roll the journal to a fresh attempt while either remains pending.
-            // Also require explicit collection of the previous launch, even
-            // when it crashed before any native F11 capture could complete.
-            if (CaptureAdmissionPolicy.CanCollect(
-                Workflow.HasSessionForGame(game), Workflow.HasCaptureAttempt(game),
-                Workflow.ReadCollected(game)))
-                throw new InvalidOperationException("Previous capture attempt is still pending. Use COLLECT RESULTS before starting another game.");
-            if (state.CetCaptureReady || state.GrspCaptureReady)
-                throw new InvalidOperationException("Native profiler results are already pending. Use COLLECT RESULTS, then RESTORE PROFILERS and reinstall before another capture.");
-            var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
-            if (!File.Exists(executable))
-                throw new FileNotFoundException("Cyberpunk2077.exe is missing.", executable);
-            if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
-                throw new InvalidOperationException("Bundled profiler provenance changed.");
-
-            // The elevated PresentMon restart already serializes owners,
-            // gracefully stops old GCO-owned instances, and refuses foreign
-            // processes. A fresh attempt ID prevents mixing old CSVs/results.
-            var previousMon = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
-            var attemptId = Workflow.BeginCaptureAttempt(game);
-            captureLaunched = true;
-            lastLaunchRequestedUtc = DateTime.UtcNow;
-            string? frameWarning = null;
+            var warning = await BeginFreshCaptureAsync(game, state,
+                gameAlreadyRunning: false);
             try
             {
-                var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, attemptId);
-                await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
-            }
-            catch (Exception ex)
-            {
-                if (previousMon is not null)
-                    throw new InvalidOperationException("Previous GCO PresentMon session could not be safely restarted: " + ex.Message);
-                frameWarning = ex.Message;
-            }
-
-            try
-            {
-                _ = Process.Start(new ProcessStartInfo(executable)
+                using var started = Process.Start(new ProcessStartInfo(executable)
                 {
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(executable)!
                 }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
+                gcoLaunchedGamePid = started.Id;
             }
             catch
             {
-                var active = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
-                if (active is not null)
-                {
-                    await PresentMonCaptureController.RunAsync(packageRoot, active, restart: false);
-                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                }
+                // A failed game launch is not a meaningful capture. Flush ETW,
+                // then drop its own uncollected folder without touching CET /
+                // REDscript native files or the recovery journal.
+                var id = Workflow.ReadRecoverySessionId(game) ??
+                         Guid.NewGuid().ToString("N");
+                var stop = await StopOwnedPresentMonAsync(id);
+                if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
                 throw;
             }
             SetPortraitStage(PortraitStage.Capturing);
-            PinStatus(frameWarning is null
+            PinStatus(warning is null
                 ? "Cyberpunk launched. PresentMon recording automatically; F11 starts/stops G-CET and G-REDscript."
-                : "Cyberpunk launched with both native profilers. PresentMon failed: " + frameWarning);
+                : "Cyberpunk launched. Native F11 profiling available; PresentMon failed: " + warning);
         }
         catch (Exception ex) { Warn(ex.Message, "Launch and capture"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
@@ -810,8 +935,11 @@ public partial class MainWindow : Window
             }
             else SetPortraitStage(PortraitStage.Black);
 
+            var nativeWarning = native.Ok &&
+                (saved.CetReadyBeforeAttempt || saved.RedscriptReadyBeforeAttempt)
+                    ? native.Detail : native.Ok ? null : native.Detail;
             PinStatus(CaptureAdmissionPolicy.CollectionStatus(saved, frameWarning,
-                native.Ok ? null : native.Detail));
+                nativeWarning));
         }
         catch (Exception ex)
         {
@@ -934,10 +1062,19 @@ public partial class MainWindow : Window
             var sessionId = Workflow.ReadRecoverySessionId(game) ??
                             Guid.NewGuid().ToString("N");
             var stop = await StopOwnedPresentMonAsync(sessionId);
-            if (!stop.Stopped)
+            string? cleanupWarning = stop.Stopped ? null :
+                "PresentMon could not be stopped: " +
+                (stop.Error ?? "Shutdown unverified.") +
+                " Native owner restoration will still proceed.";
+            // Recover original native files independently from ETW shutdown
+            // and optional cleanup; neither can make RESTORE inaccessible.
+            if (stop.Stopped)
             {
-                Warn(stop.Error ?? "PresentMon shutdown could not be verified.", "Recovery required");
-                return;
+                try { Workflow.AbandonCurrentUncollected(game); }
+                catch (Exception ex)
+                {
+                    cleanupWarning = "Uncollected GCO results preserved: " + ex.Message;
+                }
             }
             var result = await Workflow.RestoreOwnedAsync(game);
             if (!result.RestoreVerified)
@@ -951,7 +1088,8 @@ public partial class MainWindow : Window
             // immediately from RESTORE to INSTALL, and the path unlocks.
             UpdateProfilerAction(game);
             UpdatePathLock();
-            PinStatus("G-CET and G-REDscript original files restored and verified. Game folder unlocked; INSTALL PROFILERS is available. " + result.Detail);
+            PinStatus("G-CET and G-REDscript original files restored and verified. Game folder unlocked; INSTALL PROFILERS is available. " +
+                result.Detail + (cleanupWarning is null ? "" : " | " + cleanupWarning));
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }

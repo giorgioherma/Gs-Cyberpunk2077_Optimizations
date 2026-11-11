@@ -805,70 +805,154 @@ try
     Require(PresentMonLifecyclePolicy.CountVerifiedFrames(automaticCsv) == 2,
         "frame-time evidence has the expected clock column and real Cyberpunk rows");
 
-    // New captures have a readable local date/time, while their 32-hex
-    // identity remains the immutable lookup key after the journal is removed.
-    // Old GUID-only folders must remain readable, with their original names.
+    // Crash/recovery logs are not capture proof and must not flood RESULTS.
+    var diagnosticsGame = Path.Combine(root, "DiagnosticsTestGame");
+    var diagnosticsCet = Path.Combine(diagnosticsGame, "bin", "x64",
+        "plugins", "cyber_engine_tweaks");
+    Directory.CreateDirectory(diagnosticsCet);
+    File.WriteAllText(Path.Combine(diagnosticsCet, "scripting.log"),
+        "game startup error; no F11 capture");
+    var diagnosticsPackage = Path.Combine(root, "DiagnosticsTestGCO");
+    var diagnostics = ProfilerCrashEvidence.Preserve(
+        diagnosticsPackage, diagnosticsGame);
+    Require(diagnostics.FileCount == 1 &&
+        Path.GetRelativePath(Path.Combine(diagnosticsPackage, "RESULTS"),
+            diagnostics.Folder).StartsWith(
+                "Diagnostics" + Path.DirectorySeparatorChar) &&
+        File.Exists(Path.Combine(diagnostics.Folder, "CET", "scripting.log")) &&
+        File.Exists(Path.Combine(diagnostics.Folder, "evidence.json")) &&
+        File.Exists(Path.Combine(diagnosticsCet, "scripting.log")),
+        "recovery diagnostics are preserved separately without deleting game logs");
+
+    // Human-readable capture folders have no GUID suffix; collection.json
+    // binds each date/time folder to the immutable attempt ID and game root.
     var datedPackage = Path.Combine(root, "DatedCapturePackage");
     var datedGame = Path.Combine(root, "DatedCaptureGame");
     Directory.CreateDirectory(datedGame);
     var datedId = Guid.NewGuid().ToString("N");
     var startedLocal = DateTimeOffset.Now;
     var datedFolder = CollectedCaptureStore.CreateDatedSessionFolder(
-        datedPackage, datedId, startedLocal);
+        datedPackage, datedId, startedLocal, datedGame);
     var readableName = "GCO-Capture-" +
-        startedLocal.ToLocalTime().ToString("yyyyMMdd-HHmmss",
-            System.Globalization.CultureInfo.InvariantCulture) + "-" + datedId;
+        startedLocal.ToLocalTime().ToString("ddMMyyyy_HHmmss",
+            System.Globalization.CultureInfo.InvariantCulture);
     Require(Path.GetFileName(datedFolder) == readableName &&
         CollectedCaptureStore.SessionFolder(datedPackage, datedId) == datedFolder &&
-        CollectedCaptureStore.UsesDatedLayout(datedPackage, datedId),
-        "new capture folder has readable local date, timestamp and stable session ID");
+        CollectedCaptureStore.UsesDatedLayout(datedPackage, datedId) &&
+        CollectedCaptureStore.UsesFlatLayout(datedPackage, datedId) &&
+        !Path.GetFileName(datedFolder).Contains(datedId),
+        "new folder has exact local DDMMYYYY_HHMMSS name and no random suffix");
+    Require(CollectedCaptureStore.Read(datedPackage, datedGame, datedId) is
+            { CollectionAttempted: false, Cet: null, Redscript: null },
+        "fresh timestamp-only session has durable identity before PresentMon starts");
     var duplicateDatedRefused = false;
-    try { CollectedCaptureStore.CreateDatedSessionFolder(datedPackage, datedId, startedLocal); }
+    try { CollectedCaptureStore.CreateDatedSessionFolder(
+        datedPackage, Guid.NewGuid().ToString("N"), startedLocal, datedGame); }
     catch (InvalidDataException) { duplicateDatedRefused = true; }
-    Require(duplicateDatedRefused, "existing dated capture identity cannot be overwritten");
+    Require(duplicateDatedRefused,
+        "timestamp collision must refuse rather than invent a suffix or overwrite evidence");
     var datedCsv = PresentMonLifecyclePolicy.NewSessionCsv(datedPackage, datedId);
-    Require(Path.GetRelativePath(datedFolder, datedCsv).StartsWith(
-            "PresentMon" + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-        !Path.GetRelativePath(datedFolder, datedCsv).Contains("FrameTime") &&
+    Require(datedCsv == Path.Combine(datedFolder, "PresentMon", "PresentMon.csv") &&
         datedCsv.Length <= PresentMonLifecyclePolicy.MaxSafeOutputPathLength,
-        "new PresentMon CSV is inside its own sibling directory and native path budget");
+        "new PresentMon output is flat; no nested FrameTime/random directory");
     Directory.CreateDirectory(Path.GetDirectoryName(datedCsv)!);
     File.WriteAllText(datedCsv, frameCsvBody);
+    Require(PresentMonLifecyclePolicy.CountVerifiedFrames(datedCsv) == 2,
+        "flat PresentMon directory contains verifiable Cyberpunk frame rows");
+    var duplicateCsvRefused = false;
+    try { PresentMonLifecyclePolicy.NewSessionCsv(datedPackage, datedId); }
+    catch (InvalidDataException) { duplicateCsvRefused = true; }
+    Require(duplicateCsvRefused, "flat PresentMon capture cannot silently overwrite a CSV");
     var datedCet = CollectedCaptureStore.CopyOwner(
         datedPackage, datedGame, datedId, BackendKind.Cet, cetSource);
     var datedRed = CollectedCaptureStore.CopyOwner(
         datedPackage, datedGame, datedId, BackendKind.Grsp, redSource);
     Require(datedCet.Cet is not null && datedRed.Redscript is not null &&
         File.Exists(Path.Combine(datedFolder, "G-CET", "CET_Summary.json")) &&
-        File.Exists(Path.Combine(datedFolder, "G-RED", "GRSP_Summary.json")),
-        "new CET and REDscript archives appear as separate siblings to PresentMon");
+        File.Exists(Path.Combine(datedFolder, "G-REDscript", "GRSP_Summary.json")),
+        "native owner archives appear as G-CET and G-REDscript siblings");
     var datedMon = CollectedCaptureStore.CollectPresentMon(
         datedPackage, datedGame, datedId, datedCsv);
-    Require(datedMon.FrameTimeEvidence?.Path.StartsWith(
-            "PresentMon/", StringComparison.Ordinal) == true &&
+    Require(datedMon.FrameTimeEvidence?.Path == "PresentMon/PresentMon.csv" &&
         CollectedCaptureStore.Read(datedPackage, datedGame, datedId,
             verifyHashes: true).HasAny,
-        "new PresentMon evidence remains hash-verified under the dated folder");
+        "new frame-time evidence has flat relative path and verified hash");
     var datedCollected = CollectedCaptureStore.MarkCollectionAttempted(
         datedPackage, datedGame, datedId, presentMonStopped: true);
+    Require(!CollectedCaptureStore.DiscardUncollected(datedPackage, datedGame, datedId) &&
+        File.Exists(datedCsv),
+        "COLLECT preserves all captured domains even after the game crashes");
     CollectedCaptureStore.MarkRestored(datedPackage, datedCollected,
         skipCet: false, skipRedscript: false, skipFrameTime: false);
     Require(CollectedCaptureStore.ReadRestored(datedPackage, datedGame, datedId) is
             { Restored: true, Cet: not null, Redscript: not null },
-        "dated capture remains readable after owner recovery journal removal");
+        "dated capture can be reopened after owner restore deleted recovery journal");
+
+    // Every fresh launch may discard the preceding GCO-only uncollected
+    // attempt, but never any explicit Collect or manually added evidence.
+    var abandonedId = Guid.NewGuid().ToString("N");
+    var abandonedFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        datedPackage, abandonedId, startedLocal.AddSeconds(1), datedGame);
+    var abandonedCsv = PresentMonLifecyclePolicy.NewSessionCsv(datedPackage, abandonedId);
+    Directory.CreateDirectory(Path.GetDirectoryName(abandonedCsv)!);
+    File.WriteAllText(abandonedCsv, frameCsvBody);
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(abandonedCsv)!,
+        "PresentMon-controller.json"), "{\\\"ok\\\":true}");
+    Require(CollectedCaptureStore.DiscardUncollected(
+            datedPackage, datedGame, abandonedId) &&
+        !Directory.Exists(abandonedFolder) && File.Exists(datedCsv),
+        "restart/close deletes only uncollected GCO outputs, preserving a collected capture");
+
+    var failedCollectId = Guid.NewGuid().ToString("N");
+    var failedCollectFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        datedPackage, failedCollectId, startedLocal.AddSeconds(2), datedGame);
+    CollectedCaptureStore.MarkCollectionAttempted(
+        datedPackage, datedGame, failedCollectId, presentMonStopped: false);
+    Require(!CollectedCaptureStore.DiscardUncollected(
+            datedPackage, datedGame, failedCollectId) &&
+        Directory.Exists(failedCollectFolder),
+        "even a failed PresentMon stop after an explicit Collect cannot discard results");
+
+    var manualId = Guid.NewGuid().ToString("N");
+    var manualFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        datedPackage, manualId, startedLocal.AddSeconds(3), datedGame,
+        cetReadyBeforeAttempt: true, redscriptReadyBeforeAttempt: true);
+    File.WriteAllText(Path.Combine(manualFolder, "notes.txt"), "not GCO output");
+    var unknownPreserved = false;
+    try { CollectedCaptureStore.DiscardUncollected(datedPackage, datedGame, manualId); }
+    catch (InvalidDataException) { unknownPreserved = true; }
+    Require(unknownPreserved && File.Exists(Path.Combine(manualFolder, "notes.txt")) &&
+        CollectedCaptureStore.Read(datedPackage, datedGame, manualId) is
+            { CetReadyBeforeAttempt: true, RedscriptReadyBeforeAttempt: true },
+        "unknown manually added files are preserved; pre-existing native proof is quarantined");
+
+    // Previous CI #257 dated+GUID folders are still readable unmodified.
+    var oldDatedId = Guid.NewGuid().ToString("N");
+    var oldDatedFolder = Path.Combine(datedPackage, "RESULTS",
+        "GCO-Capture-20261110-105959-" + oldDatedId);
+    Directory.CreateDirectory(oldDatedFolder);
+    File.WriteAllText(Path.Combine(oldDatedFolder, "collection.json"),
+        System.Text.Json.JsonSerializer.Serialize(
+            new CollectedCaptureIndex(oldDatedId, datedGame, null, null, null)));
+    Require(CollectedCaptureStore.SessionFolder(datedPackage, oldDatedId) == oldDatedFolder &&
+        CollectedCaptureStore.DomainFolder(datedPackage, oldDatedId, "REDscript") ==
+            Path.Combine(oldDatedFolder, "G-RED") &&
+        PresentMonLifecyclePolicy.NewSessionCsv(datedPackage, oldDatedId)
+            .Contains("PresentMon" + Path.DirectorySeparatorChar),
+        "CI #257 date-plus-ID sessions retain their original layout");
     Require(!CollectedCaptureStore.UsesDatedLayout(package, sessionId) &&
         CollectedCaptureStore.SessionFolder(package, sessionId).EndsWith(
             "GCO-Capture-" + sessionId, StringComparison.Ordinal) &&
         Directory.Exists(CollectedCaptureStore.DomainFolder(package, sessionId, "CET")),
-        "existing GUID-only sessions preserve their legacy archive layout");
-    var conflictingDated = Path.Combine(Path.GetDirectoryName(datedFolder)!,
-        "GCO-Capture-20261110-105959-" + datedId);
-    Directory.CreateDirectory(conflictingDated);
+        "legacy GUID-only captures remain readable without migration");
+    var duplicateOld = Path.Combine(datedPackage, "RESULTS",
+        "GCO-Capture-20261111-105958-" + datedId);
+    Directory.CreateDirectory(duplicateOld);
     var conflictRefused = false;
     try { CollectedCaptureStore.SessionFolder(datedPackage, datedId); }
     catch (InvalidDataException) { conflictRefused = true; }
-    Require(conflictRefused, "ambiguous dated directories with same session ID refuse silently mixing evidence");
-    Directory.Delete(conflictingDated);
+    Require(conflictRefused, "duplicate session identity refuses mixing dated and legacy captures");
+    Directory.Delete(duplicateOld);
 
     var frameOnlyId = Guid.NewGuid().ToString("N");
     var frameOnlyCsv = PresentMonLifecyclePolicy.NewSessionCsv(pmRoot, frameOnlyId);

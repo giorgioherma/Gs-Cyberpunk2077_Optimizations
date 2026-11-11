@@ -15,7 +15,10 @@ public static class ProfilerCrashEvidence
     public static ProfilerCrashEvidenceResult Preserve(string packageRoot, string gameRoot)
     {
         var resultsRoot = Path.Combine(Path.GetFullPath(packageRoot), "RESULTS");
-        var folder = Path.Combine(resultsRoot,
+        // These are recovery diagnostics, not a collected capture. Keep them
+        // under their own category rather than flooding RESULTS with captures
+        // that contain no valid CET/REDscript profiling evidence.
+        var folder = Path.Combine(resultsRoot, "Diagnostics",
             "GCO-Incomplete-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") +
             "-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(folder);
