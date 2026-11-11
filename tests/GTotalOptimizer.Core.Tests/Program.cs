@@ -632,18 +632,46 @@ try
     Require(CaptureAdmissionPolicy.CanCollect(true, true, newAttempt) &&
         !newAttempt.CollectionAttempted,
         "a distinct new capture attempt re-enables Collect without reusing old evidence");
-    Require(CaptureAdmissionPolicy.CollectionStatus(attemptedDual)
-        .Contains("PresentMon: RESULTS MISSING") &&
-        CaptureAdmissionPolicy.CollectionStatus(attemptedDual)
-        .Contains("CONTINUE enabled"),
-        "missing frame CSV warns in console but does not block native optimization");
-    Require(CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
-        .Contains("G-REDscript Profiler: RESULTS MISSING") &&
-        CaptureAdmissionPolicy.CollectionStatus(attemptedDual with { Redscript = null })
-        .Contains("CONTINUE disabled"),
-        "missing GRSP capture disables Continue and reports exact failing domain");
+    var fullCaptureStatus = CaptureAdmissionPolicy.CollectionStatus(attemptedDual);
+    var missingRedStatus = CaptureAdmissionPolicy.CollectionStatus(
+        attemptedDual with { Redscript = null });
+    Require(fullCaptureStatus.Contains("PresentMon MISSING") &&
+        fullCaptureStatus.Contains("Continue available") &&
+        fullCaptureStatus.Length <= UserFacingConsoleText.MaxLength,
+        "completed capture shows concise, accurate domain status without blocking on PresentMon");
+    Require(missingRedStatus.Contains("REDscript MISSING") &&
+        missingRedStatus.Contains("Continue unavailable") &&
+        missingRedStatus.Length <= UserFacingConsoleText.MaxLength,
+        "missing GRSP capture shows the actual problem without an oversized console essay");
+    var staleStatus = CaptureAdmissionPolicy.CollectionStatus(
+        attemptedDual with { Redscript = null, RedscriptReadyBeforeAttempt = true });
+    Require(staleStatus.Contains("Old native data excluded") &&
+        staleStatus.Length <= UserFacingConsoleText.MaxLength,
+        "stale native captures are still explicitly excluded in user-facing copy");
+    var longError = "RECOVERY REQUIRED: An owner manager reported an unverified restored file at " +
+        @"D:\Games\Cyberpunk 2077\red4ext\plugins\G-REDscript-Profiler.dll" +
+        " and could not confirm the original binary after retrying.";
+    Require(UserFacingConsoleText.Failure("Recovery required", longError)
+            .Contains("files may still be modified") &&
+        UserFacingConsoleText.Failure("Recovery required", longError).Length <=
+            UserFacingConsoleText.MaxLength,
+        "restore errors stay short while warning that original files may still be modified");
+    Require(UserFacingConsoleText.Failure("Start", "Cyberpunk2077.exe is missing.")
+            .Contains("Cyberpunk2077.exe is missing") &&
+        UserFacingConsoleText.Failure("Collection", "Close Cyberpunk before collecting results.")
+            == "Close Cyberpunk before continuing.",
+        "short actionable errors and the close-game requirement stay visible");
+    Require(UserFacingConsoleText.Compact(
+        "This is an overlong internal operation diagnostic. " + new string('x', 180))
+            .Length <= UserFacingConsoleText.MaxLength,
+        "unexpected backend diagnostics cannot overflow the Capture console");
     var failedStop = CollectedCaptureStore.MarkCollectionAttempted(package,
         archiveGame, sessionId, presentMonStopped: false);
+    Require(CaptureAdmissionPolicy.CollectionStatus(failedStop).Contains(
+            "PresentMon stop failed; retry Collect.") &&
+        CaptureAdmissionPolicy.CollectionStatus(failedStop).Length <=
+            UserFacingConsoleText.MaxLength,
+        "failed PresentMon stop remains a short, actionable retry instruction");
     Require(!CaptureAdmissionPolicy.CanContinue(failedStop, presentMonStopped: true) &&
         !CollectedCaptureStore.Read(package, archiveGame, sessionId).PresentMonStopVerified &&
         CaptureAdmissionPolicy.CanCollect(true, true, failedStop),

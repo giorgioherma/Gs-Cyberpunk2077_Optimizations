@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private bool captureLaunched;
     private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
     private string? consolePinned;
+    private string? consolePinnedDetail;
     private bool gameStateRefreshInFlight;
     private bool pendingExternalGameStart;
     private int? pendingExternalGamePid;
@@ -330,8 +331,8 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Trace.TraceWarning("Completed workspace not resumed: " + ex);
-            PinStatus("Saved Analyze workspace not restored: " + ex.Message +
-                ". Existing capture files have not been changed.");
+            PinStatus("Saved Analyze workspace unavailable. Capture files are unchanged.",
+                ex.ToString());
         }
     }
 
@@ -443,7 +444,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            PinStatus("Game process reconciliation: " + ex.Message);
+            PinStatus("Game monitoring failed. Refresh GCO for a new status.", ex.ToString());
             Trace.TraceError("Game process reconciliation: " + ex);
         }
         finally
@@ -471,10 +472,10 @@ public partial class MainWindow : Window
                 clearTracking: false);
             PinStatus(stopped.Stopped
                 ? stopped.Csv is not null
-                    ? "Cyberpunk closed. PresentMon stopped and CSV available for COLLECT RESULTS. Closing GCO discards only uncollected PresentMon, not the saved profiler session."
-                    : "Cyberpunk closed. No GCO PresentMon CSV was recorded. COLLECT RESULTS can still recover available CET and REDscript evidence."
-                : "Cyberpunk closed. PresentMon shutdown unverified: " +
-                  stopped.Error + ". COLLECT RESULTS can retry; no capture was discarded.");
+                    ? "Cyberpunk closed. PresentMon saved. Click COLLECT RESULTS."
+                    : "Cyberpunk closed. Click COLLECT RESULTS."
+                : "Cyberpunk closed. PresentMon stop failed; retry with COLLECT RESULTS.",
+                stopped.Error);
         }
         finally { SetBusy(false); }
     }
@@ -530,7 +531,7 @@ public partial class MainWindow : Window
         }
         closingInProgress = true;
         SetBusy(true);
-        SetStatus("Stopping PresentMon; preserving the profiler session for reopening...");
+        SetStatus("Closing GCO. Keeping your profiler session.");
         try
         {
             var game = Workflow.ReadRecoveryGameRoot();
@@ -541,9 +542,8 @@ public partial class MainWindow : Window
             var stop = await StopOwnedPresentMonAsync(id, clearTracking: false);
             if (!stop.Stopped)
             {
-                PinStatus("Cannot close cleanly: " +
-                    (stop.Error ?? "PresentMon graceful shutdown unverified.") +
-                    " Retry close or use RESTORE PROFILERS.");
+                PinStatus("PresentMon did not stop. Retry closing GCO or use Restore.",
+                    stop.Error);
                 return;
             }
             if (game is not null && Workflow.HasCaptureAttempt(game))
@@ -557,8 +557,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            PinStatus("Close cleanup: " + ex.Message +
-                ". Profiler session and native results are preserved. Retry closing.");
+            Trace.TraceWarning("GCO close cleanup: " + ex);
+            PinStatus("Could not close safely. Capture data preserved; retry.", ex.ToString());
         }
         finally
         {
@@ -594,7 +594,7 @@ public partial class MainWindow : Window
             pathUpdate = true;
             GamePathBox.Text = recoveryRoot;
             pathUpdate = false;
-            PinStatus("Game folder locked for profiler recovery. RESTORE PROFILERS to unlock it.");
+            PinStatus("Game folder locked. Use RESTORE PROFILERS.");
             return;
         }
         ClearStatusPin();
@@ -612,7 +612,7 @@ public partial class MainWindow : Window
     }
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
-        consolePinned = null;
+        ClearStatusPin();
         await RefreshSourceAsync();
     }
 
@@ -620,7 +620,7 @@ public partial class MainWindow : Window
     {
         if (Workflow.HasRecoveryJournal)
         {
-            PinStatus("Game folder is locked until original profiler files are restored. Use RESTORE PROFILERS.");
+            PinStatus("Game folder locked. Use RESTORE PROFILERS.");
             return;
         }
         using var browse = new System.Windows.Forms.FolderBrowserDialog
@@ -655,13 +655,26 @@ public partial class MainWindow : Window
             QueueGameReconciliation();
     }
 
-    private void SetStatus(string message) => StatusText.Text = consolePinned ?? message;
-    private void PinStatus(string message)
+    private void DisplayConsole(string message, string? detail = null)
+    {
+        StatusText.Text = UserFacingConsoleText.Compact(message);
+        // The console stays readable; full owner diagnostics remain available
+        // from hover and tracing without covering the artwork or controls.
+        StatusText.ToolTip = detail ?? message;
+    }
+    private void SetStatus(string message) =>
+        DisplayConsole(consolePinned ?? message, consolePinned is null ? null : consolePinnedDetail);
+    private void PinStatus(string message, string? detail = null)
     {
         consolePinned = message;
-        StatusText.Text = message;
+        consolePinnedDetail = detail;
+        DisplayConsole(message, detail);
     }
-    private void ClearStatusPin() => consolePinned = null;
+    private void ClearStatusPin()
+    {
+        consolePinned = null;
+        consolePinnedDetail = null;
+    }
 
     // Derive the label/surface directly from the actual, game-bound owner
     // journal. Verified restore deletes the journal; switching source roots
@@ -734,8 +747,8 @@ public partial class MainWindow : Window
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
             SetStatus(Workflow.HasRecoveryJournal
-                ? "Profiler recovery remains available even though the selected game folder cannot be validated. Use RESTORE PROFILERS; the owner journal determines its target."
-                : current.Summary);
+                ? "Game folder unavailable. Use RESTORE PROFILERS."
+                : "Select a valid Cyberpunk 2077 game folder.");
             return;
         }
         var redOwners = RedscriptModCounter.CountPhysical(current.GameRoot);
@@ -747,7 +760,8 @@ public partial class MainWindow : Window
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
-            SetStatus("Bundle provenance failed: " + bundle.Detail);
+            SetStatus("GCO package verification failed. Re-extract the official build.");
+            Trace.TraceError("GCO package verification: " + bundle.Detail);
             return;
         }
         try
@@ -811,18 +825,18 @@ public partial class MainWindow : Window
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
             SetStatus(foreignSession
-                ? "An unfinished GCO profiler session belongs to another game folder. Select the original game root and RESTORE PROFILERS before installing here."
-                : !framework.Ready ? framework.Detail
-                : running ? "Cyberpunk running. F11 controls CET + REDscript. Click COLLECT RESULTS after closing the game."
+                ? "Another game session is pending. Restore it before switching games."
+                : !framework.Ready ? "Framework check failed. See requirements above."
+                : running ? "Cyberpunk running. Use F11 to start/stop profiling."
                 : saved?.CollectionAttempted == true
                     ? CaptureAdmissionPolicy.CollectionStatus(saved)
                     : readyToCollect
-                        ? "Click COLLECT RESULTS to stop PresentMon and inspect all three captures."
+                        ? "Game closed. Click COLLECT RESULTS."
                         : state.BothInstalled
-                            ? "G-CET and G-REDscript profilers installed. Ready to start Cyberpunk 2077."
+                            ? "Profilers installed. Ready to start Cyberpunk."
                             : session
-                                ? "Profiler session needs recovery; use RESTORE PROFILERS."
-                                : $"G-CET Profiler: {cetProfiler}  /  G-REDscript Profiler: {redProfiler}.");
+                                ? "Profiler recovery needed. Click RESTORE PROFILERS."
+                                : $"CET: {cetProfiler} | REDscript: {redProfiler}.");
             if (HasNative(saved) && portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
         }
@@ -830,7 +844,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             if (!cancel.IsCancellationRequested && IsLoaded)
-                SetStatus("Owner status unavailable: " + ex.Message);
+            {
+                Trace.TraceWarning("Profiler status inspection: " + ex);
+                SetStatus("Profiler status unavailable. Retry Refresh.");
+            }
         }
     }
 
@@ -850,7 +867,7 @@ public partial class MainWindow : Window
         var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
         if (!frameworks.Ready) { Warn(frameworks.Detail, "Framework preflight"); return; }
         SetBusy(true);
-        SetStatus("Installing G-CET and G-REDscript profilers through their owners...");
+        SetStatus("Installing CET and REDscript profilers...");
         try
         {
             var result = await Workflow.InstallAsync(inspection.GameRoot);
@@ -859,7 +876,7 @@ public partial class MainWindow : Window
                 captureLaunched = false;
                 SetPortraitStage(PortraitStage.Black);
                 // InstallAsync already re-inspects both source-owned managers.
-                PinStatus("G-CET and G-REDscript profilers successfully installed. Ready to start Cyberpunk 2077.");
+                PinStatus("Profilers installed. Ready to start Cyberpunk.");
             }
             else Warn(result.Detail, "Profiler installation");
         }
@@ -927,13 +944,15 @@ public partial class MainWindow : Window
                 pendingGameExitSessionId = Workflow.ReadRecoverySessionId(game);
             SetPortraitStage(PortraitStage.Capturing);
             PinStatus(warning is null
-                ? "New Cyberpunk launch detected. Previous uncollected GCO capture discarded; PresentMon restarted. F11 controls native captures."
-                : "New Cyberpunk launch detected; native profilers remain installed. PresentMon unavailable: " + warning);
+                ? "New game detected. Fresh capture ready. Use F11."
+                : "New game detected. Use F11; PresentMon unavailable.",
+                warning);
         }
         catch (Exception ex)
         {
-            PinStatus("Automatic capture restart refused: " + ex.Message +
-                ". RESTORE PROFILERS remains available after closing Cyberpunk.");
+            Trace.TraceWarning("Automatic capture restart: " + ex);
+            PinStatus("Capture restart failed. Close Cyberpunk and use Restore.",
+                ex.ToString());
         }
         finally { SetBusy(false); }
     }
@@ -985,8 +1004,9 @@ public partial class MainWindow : Window
             }
             SetPortraitStage(PortraitStage.Capturing);
             PinStatus(warning is null
-                ? "Cyberpunk launched. PresentMon recording automatically; F11 starts/stops G-CET and G-REDscript."
-                : "Cyberpunk launched. Native F11 profiling available; PresentMon failed: " + warning);
+                ? "Cyberpunk started. Use F11 to start/stop profiling."
+                : "Cyberpunk started. F11 ready; PresentMon unavailable.",
+                warning);
         }
         catch (Exception ex) { Warn(ex.Message, "Launch and capture"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
@@ -1074,13 +1094,13 @@ public partial class MainWindow : Window
         if (!CaptureAdmissionPolicy.CanCollect(
                 Workflow.HasSessionForGame(game), true, existing))
         {
-            Warn("This capture attempt has already been collected. Start a new capture attempt or RESTORE PROFILERS.", "Collection");
+            Warn("Already collected. Start a new session or Restore.", "Collection");
             return;
         }
         ClearStatusPin();
         SetBusy(true);
         SetPortraitStage(PortraitStage.Collecting);
-        SetStatus("Stopping PresentMon, then collecting CET and REDscript evidence...");
+        SetStatus("Collecting profiler results...");
         try
         {
             var attempt = Workflow.ReadCollected(game) ??
@@ -1128,7 +1148,10 @@ public partial class MainWindow : Window
                 (saved.CetReadyBeforeAttempt || saved.RedscriptReadyBeforeAttempt)
                     ? native.Detail : native.Ok ? null : native.Detail;
             PinStatus(CaptureAdmissionPolicy.CollectionStatus(saved, frameWarning,
-                nativeWarning));
+                nativeWarning),
+                "Collection: " + native.Detail +
+                (frameWarning is null ? "" : " | PresentMon: " + frameWarning) +
+                (nativeWarning is null ? "" : " | Native: " + nativeWarning));
         }
         catch (Exception ex)
         {
@@ -1173,7 +1196,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { Warn("PresentMon state invalid: " + ex.Message, "Collection"); return; }
         if (!CaptureAdmissionPolicy.CanContinue(saved, monStopped))
         {
-            Warn("Both current-attempt G-CET and G-REDscript captures must be verified after COLLECT RESULTS, and PresentMon must be stopped. Use RESTORE PROFILERS for recovery.", "CONTINUE unavailable");
+            Warn("Collect CET and REDscript first, or use Restore.", "Continue");
             return;
         }
         SetBusy(true);
@@ -1198,8 +1221,8 @@ public partial class MainWindow : Window
             try { CollectedCaptureStore.RememberRestored(packageRoot, game, saved.SessionId); }
             catch (Exception ex)
             {
-                workspaceWarning = "Workspace reopening metadata could not be saved: " + ex.Message;
-                Trace.TraceWarning(workspaceWarning);
+                workspaceWarning = "Analyze workspace may not reopen. See details.";
+                Trace.TraceWarning("Workspace reopening metadata: " + ex);
             }
             UpdateResultTexts(saved);
             CapturePage.Visibility = Visibility.Collapsed;
@@ -1241,7 +1264,7 @@ public partial class MainWindow : Window
         var game = Workflow.ReadRecoveryGameRoot();
         if (game is null || !Workflow.HasSessionForGame(game))
         {
-            Warn("Saved profiler recovery path is missing or invalid. Keep the GCO package and recover through the original CET/REDscript owner managers.", "Recovery required");
+            Warn("Recovery location invalid. Use the original profiler managers.", "Recovery required");
             return;
         }
         if (GameRunning())
@@ -1251,7 +1274,7 @@ public partial class MainWindow : Window
         }
         ClearStatusPin();
         SetBusy(true);
-        SetStatus("Restoring original game files through CET and REDscript owners...");
+        SetStatus("Restoring original game files...");
         try
         {
             // No capture index/collection attempt is required. Recover even
@@ -1285,8 +1308,13 @@ public partial class MainWindow : Window
             // immediately from RESTORE to INSTALL, and the path unlocks.
             UpdateProfilerAction(game);
             UpdatePathLock();
-            PinStatus("G-CET and G-REDscript original files restored and verified. Game folder unlocked; INSTALL PROFILERS is available. " +
-                result.Detail + (cleanupWarning is null ? "" : " | " + cleanupWarning));
+            var fullDetails = result.Detail +
+                (cleanupWarning is null ? "" : " | " + cleanupWarning);
+            Trace.TraceInformation("Profiler restore: " + fullDetails);
+            PinStatus(cleanupWarning is null
+                    ? "Restore successful. Original game files restored."
+                    : "Restore successful. Original files restored; see details.",
+                fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
         finally { SetBusy(false); await RefreshSourceAsync(); }
@@ -1300,5 +1328,9 @@ public partial class MainWindow : Window
 
     // The pinned console is the one normal diagnostic channel. No modal popup
     // can interrupt collection/recovery or bypass the verified Continue gate.
-    private void Warn(string message, string title) => PinStatus(title + ": " + message);
+    private void Warn(string message, string title)
+    {
+        Trace.TraceWarning(title + ": " + message);
+        PinStatus(UserFacingConsoleText.Failure(title, message), title + ": " + message);
+    }
 }
