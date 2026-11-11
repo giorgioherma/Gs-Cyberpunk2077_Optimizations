@@ -29,6 +29,7 @@
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Regular.ttf" Link="Fonts/Oxanium/Oxanium-Regular.ttf" />
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-SemiBold.ttf" Link="Fonts/Oxanium/Oxanium-SemiBold.ttf" />
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Bold.ttf" Link="Fonts/Oxanium/Oxanium-Bold.ttf" />
+    <PackageReference Include="System.Management" Version="10.0.0" />
     <ProjectReference Include="../GTotalOptimizer.Core/GTotalOptimizer.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -244,6 +244,33 @@ jobs:
           }
           Write-Host $wpfOut
 
+          # Actual Windows process-notification contract: attach to a real
+          # short-lived child process and observe its exit, plus WMI start
+          # notification when the runner's WMI service permits it.
+          $eventInfo=New-Object System.Diagnostics.ProcessStartInfo
+          $eventInfo.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
+          $eventInfo.ArgumentList.Add('--verify-game-process-events')
+          $eventInfo.WorkingDirectory=$env:RUNNER_TEMP
+          $eventInfo.UseShellExecute=$false
+          $eventInfo.CreateNoWindow=$true
+          $eventInfo.RedirectStandardOutput=$true
+          $eventInfo.RedirectStandardError=$true
+          $eventCheck=New-Object System.Diagnostics.Process
+          $eventCheck.StartInfo=$eventInfo
+          if (!$eventCheck.Start()) { throw 'Cannot start Windows game-process event test' }
+          $eventOutTask=$eventCheck.StandardOutput.ReadToEndAsync()
+          $eventErrTask=$eventCheck.StandardError.ReadToEndAsync()
+          if (!$eventCheck.WaitForExit(45000)) {
+            $eventCheck.Kill()
+            throw 'Windows game-process event test timed out'
+          }
+          $eventOut=$eventOutTask.GetAwaiter().GetResult()
+          $eventErr=$eventErrTask.GetAwaiter().GetResult()
+          if ($eventCheck.ExitCode -ne 0) {
+            throw "Windows game-process events failed: $eventErr $eventOut"
+          }
+          Write-Host $eventOut
+
           # The native launcher now forwards headless control arguments and
           # provides the bundled private .NET10 runtime, including under UAC.
           # This headless path does not request elevation or modify the game.

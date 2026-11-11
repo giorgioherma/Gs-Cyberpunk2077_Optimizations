@@ -20,10 +20,11 @@ public partial class MainWindow : Window
     private enum PortraitStage { Black, Capturing, Collecting, Collected }
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private readonly DispatcherTimer glitchTimer = new();
-    // Game exit is not guaranteed to re-activate the WPF window (e.g. a
-    // second monitor). A cheap transition-only timer refreshes owner status.
+    // Windows start notifications and process-handle exit events are idle
+    // until the game transitions. Only start a slow timer if WMI is unavailable.
+    private readonly GameProcessEvents gameProcesses = new();
     private readonly DispatcherTimer gameStateTimer = new()
-        { Interval = TimeSpan.FromSeconds(2) };
+        { Interval = TimeSpan.FromSeconds(10) };
     private readonly Random glitchRandom = new();
     private CancellationTokenSource? refreshCancellation;
     private GameInspection inspection = GameInspector.Inspect(null);
@@ -36,11 +37,15 @@ public partial class MainWindow : Window
     private bool captureLaunched;
     private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
     private string? consolePinned;
-    private bool? lastGameRunning;
-    private bool pendingGameStateRefresh;
     private bool gameStateRefreshInFlight;
     private bool pendingExternalGameStart;
+    private int? pendingExternalGamePid;
+    private string? pendingGameExitSessionId;
+    private int? observedGamePid;
     private int? gcoLaunchedGamePid;
+    // The last CSV whose ETW stop completed successfully in this process.
+    // Its tracking pointer remains until explicit Collect/abandonment.
+    private string? stoppedPresentMonCsv;
     private bool closingInProgress;
     private bool closureCleanupVerified;
     private bool busy;
@@ -65,6 +70,8 @@ public partial class MainWindow : Window
         BuildVersionText.Text = $"v{version}";
         glitchTimer.Tick += GlitchTick;
         gameStateTimer.Tick += GameStateTimer_Tick;
+        gameProcesses.Started += pid => DispatchGameEvent(() => GameStarted(pid));
+        gameProcesses.Exited += pid => DispatchGameEvent(() => GameExited(pid));
         LoadOriginalArtwork();
         pathUpdate = true;
         // Reopen on the original profiler installation, regardless of the
@@ -272,63 +279,172 @@ public partial class MainWindow : Window
     {
         UpdatePortraitWidth();
         QueueHeaderTabAlignment();
-        lastGameRunning = GameRunning();
-        // A game already running when the app opens is not a confirmed new
-        // launch edge; never relabel its old native data as this attempt.
-        gameStateTimer.Start();
+        // Subscribe before the one-time initial enumeration so no process
+        // launch can fall between enumeration and notification registration.
+        var notificationsAvailable = gameProcesses.TryStartNotifications(out var error);
+        // Already-running game: track its exit, but do not fabricate a new
+        // launch attempt or overwrite existing capture evidence.
+        foreach (var process in Process.GetProcessesByName("Cyberpunk2077"))
+        {
+            using (process)
+            {
+                if (observedGamePid is null)
+                {
+                    observedGamePid = process.Id;
+                    if (!gameProcesses.Track(process.Id)) observedGamePid = null;
+                }
+            }
+        }
+        if (!notificationsAvailable)
+        {
+            Trace.TraceWarning("Cyberpunk start notifications unavailable; 10-second fallback: " + error);
+            gameStateTimer.Start();
+        }
         _ = RefreshSourceAsync();
     }
 
-    // Only a real stopped->running transition may automatically restart a
-    // capture. The PID prevents the Start button's own game process from
-    // restarting PresentMon a second time.
-    private async void GameStateTimer_Tick(object? sender, EventArgs e)
+    private void DispatchGameEvent(Action action)
     {
-        if (!initialized || !IsLoaded || closingInProgress) return;
-        var running = GameRunning();
-        if (lastGameRunning is bool prior && prior != running)
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        try
         {
-            pendingGameStateRefresh = true;
-            if (prior && !running)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
             {
-                captureLaunched = false;
-                gcoLaunchedGamePid = null;
-            }
-            else if (!prior && running)
-            {
-                var launchedByGco = false;
-                if (gcoLaunchedGamePid is int launched)
-                {
-                    foreach (var p in Process.GetProcessesByName("Cyberpunk2077"))
-                    {
-                        using (p) { if (p.Id == launched) launchedByGco = true; }
-                    }
-                }
-                gcoLaunchedGamePid = null;
-                if (!launchedByGco) pendingExternalGameStart = true;
-            }
+                if (IsLoaded && !closingInProgress && !closureCleanupVerified)
+                    action();
+            }));
         }
-        lastGameRunning = running;
+        catch (InvalidOperationException) { /* window already shutting down */ }
+    }
 
-        if ((!pendingGameStateRefresh && !pendingExternalGameStart) ||
-            busy || gameStateRefreshInFlight || !inspection.IsValidGame) return;
+    private void QueueGameReconciliation()
+    {
+        DispatchGameEvent(() => _ = ReconcileGameProcessChangesAsync());
+    }
+
+    private void GameStarted(int pid)
+    {
+        if (observedGamePid == pid) return;
+        if (observedGamePid is not null) return; // existing game is tracked
+        observedGamePid = pid;
+        if (!gameProcesses.Track(pid))
+        {
+            // The process may have failed at startup before we attached.
+            GameExited(pid);
+            return;
+        }
+        if (gcoLaunchedGamePid == pid)
+        {
+            gcoLaunchedGamePid = null;
+        }
+        else
+        {
+            pendingExternalGameStart = true;
+            pendingExternalGamePid = pid;
+        }
+        QueueGameReconciliation();
+    }
+
+    private void GameExited(int pid)
+    {
+        if (observedGamePid != pid) return;
+        gameProcesses.Untrack(pid);
+        observedGamePid = null;
+        gcoLaunchedGamePid = null;
+        captureLaunched = false;
+        // Match the exit to the still-active attempt, not a session that
+        // might already have been superseded by another game launch.
+        try
+        {
+            var game = Workflow.ReadRecoveryGameRoot();
+            if (game is not null && Workflow.HasCaptureAttempt(game))
+                pendingGameExitSessionId = Workflow.ReadRecoverySessionId(game);
+        }
+        catch (Exception ex) { Trace.TraceWarning("Game exit journal inspection: " + ex); }
+        QueueGameReconciliation();
+    }
+
+    // Retained only as a 10-second safety fallback when Windows process-start
+    // notifications cannot be subscribed. No polling occurs on normal systems.
+    private void GameStateTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!initialized || !IsLoaded || closingInProgress || closureCleanupVerified) return;
+        var list = Process.GetProcessesByName("Cyberpunk2077");
+        try
+        {
+            var pid = list.Length == 0 ? (int?)null : list[0].Id;
+            if (pid is int running && observedGamePid is null)
+                GameStarted(running);
+            else if (pid is null && observedGamePid is int previous)
+                GameExited(previous);
+        }
+        finally { foreach (var process in list) process.Dispose(); }
+    }
+
+    private async Task ReconcileGameProcessChangesAsync()
+    {
+        if (!initialized || !IsLoaded || closingInProgress ||
+            closureCleanupVerified || busy || gameStateRefreshInFlight ||
+            !inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
         try
         {
+            // A new game run supersedes the previous exit: its restart
+            // already stops old ETW before beginning a new capture.
             if (pendingExternalGameStart)
             {
+                var pid = pendingExternalGamePid;
                 pendingExternalGameStart = false;
-                await HandleExternalGameLaunchAsync();
+                pendingExternalGamePid = null;
+                if (pid == observedGamePid && GameRunning())
+                {
+                    pendingGameExitSessionId = null;
+                    await HandleExternalGameLaunchAsync();
+                }
             }
-            pendingGameStateRefresh = false;
-            await RefreshSourceAsync();
+
+            if (pendingGameExitSessionId is string exitId)
+            {
+                pendingGameExitSessionId = null;
+                await StopPresentMonAfterGameExitAsync(exitId);
+            }
         }
         catch (Exception ex)
         {
-            PinStatus("Game launch reconciliation: " + ex.Message);
-            Trace.TraceError("Game launch reconciliation: " + ex);
+            PinStatus("Game process reconciliation: " + ex.Message);
+            Trace.TraceError("Game process reconciliation: " + ex);
         }
-        finally { gameStateRefreshInFlight = false; }
+        finally
+        {
+            gameStateRefreshInFlight = false;
+            await RefreshSourceAsync();
+            if (pendingExternalGameStart || pendingGameExitSessionId is not null)
+                QueueGameReconciliation();
+        }
+    }
+
+    private async Task StopPresentMonAfterGameExitAsync(string exitedSessionId)
+    {
+        var game = Workflow.ReadRecoveryGameRoot();
+        if (game is null || !Workflow.HasCaptureAttempt(game) ||
+            !string.Equals(Workflow.ReadRecoverySessionId(game), exitedSessionId,
+                StringComparison.OrdinalIgnoreCase))
+            return;
+        // Never clear GCO-current-PresentMon.txt here. Collect needs the
+        // precise CSV path even after the writer has stopped and flushed.
+        SetBusy(true);
+        try
+        {
+            var stopped = await StopOwnedPresentMonAsync(exitedSessionId,
+                clearTracking: false);
+            PinStatus(stopped.Stopped
+                ? stopped.Csv is not null
+                    ? "Cyberpunk closed. PresentMon stopped, CSV flushed and retained. COLLECT RESULTS preserves available evidence; restarting, closing GCO or RESTORE without Collect discards uncollected data."
+                    : "Cyberpunk closed. No GCO PresentMon CSV was recorded. COLLECT RESULTS can still recover available CET and REDscript evidence."
+                : "Cyberpunk closed. PresentMon shutdown unverified: " +
+                  stopped.Error + ". COLLECT RESULTS can retry; no capture was discarded.");
+        }
+        finally { SetBusy(false); }
     }
 
     private void Window_Activated(object sender, EventArgs e)
@@ -419,6 +535,7 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         gameStateTimer.Stop();
+        gameProcesses.Dispose();
         glitchTimer.Stop();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
@@ -494,6 +611,8 @@ public partial class MainWindow : Window
         UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
+        if (!isBusy && (pendingExternalGameStart || pendingGameExitSessionId is not null))
+            QueueGameReconciliation();
     }
 
     private void SetStatus(string message) => StatusText.Text = consolePinned ?? message;
@@ -739,6 +858,7 @@ public partial class MainWindow : Window
         {
             var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, attemptId);
             await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
+            stoppedPresentMonCsv = null;
             return null;
         }
         catch (Exception ex)
@@ -760,6 +880,11 @@ public partial class MainWindow : Window
             var state = await Workflow.InspectAsync(game);
             var warning = await BeginFreshCaptureAsync(game, state,
                 gameAlreadyRunning: true);
+            // The game may terminate during WMI notification / elevated ETW
+            // startup (e.g. redscript compilation failure). Flush the NEW
+            // attempt, never an old ID read during the earlier exit event.
+            if (!GameRunning() && Workflow.HasCaptureAttempt(game))
+                pendingGameExitSessionId = Workflow.ReadRecoverySessionId(game);
             SetPortraitStage(PortraitStage.Capturing);
             PinStatus(warning is null
                 ? "New Cyberpunk launch detected. Previous uncollected GCO capture discarded; PresentMon restarted. F11 controls native captures."
@@ -805,6 +930,7 @@ public partial class MainWindow : Window
                     WorkingDirectory = Path.GetDirectoryName(executable)!
                 }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
                 gcoLaunchedGamePid = started.Id;
+                GameStarted(started.Id); // Process.Exited, no 2-second polling
             }
             catch
             {
@@ -829,7 +955,8 @@ public partial class MainWindow : Window
     // Collect and independent recovery share ONE PresentMon stop policy:
     // only our named ETW session/process can be stopped, and only a verified
     // graceful exit permits Continue. No F11 handler is installed by GCO.
-    private async Task<(string? Csv, bool Stopped, string? Error)> StopOwnedPresentMonAsync(string sessionId)
+    private async Task<(string? Csv, bool Stopped, string? Error)> StopOwnedPresentMonAsync(
+        string sessionId, bool clearTracking = true)
     {
         string? tracked;
         try { tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot); }
@@ -837,8 +964,22 @@ public partial class MainWindow : Window
 
         try
         {
-            if (tracked is null && !PresentMonCaptureController.HasOwnedRunning(packageRoot))
+            var ownedRunning = PresentMonCaptureController.HasOwnedRunning(packageRoot);
+            if (tracked is null && !ownedRunning)
                 return (null, true, null);
+            // A completed process-exit stop already flushed this exact CSV.
+            // Avoid a second unnecessary elevation on Collect, Restart or Exit.
+            if (tracked is not null && !ownedRunning &&
+                string.Equals(stoppedPresentMonCsv, tracked,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (clearTracking)
+                {
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                    stoppedPresentMonCsv = null;
+                }
+                return (tracked, true, null);
+            }
         }
         catch (Exception ex)
         {
@@ -849,7 +990,15 @@ public partial class MainWindow : Window
         {
             var target = tracked ?? PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, sessionId);
             await PresentMonCaptureController.RunAsync(packageRoot, target, restart: false);
-            if (tracked is not null) PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+            if (tracked is not null)
+            {
+                stoppedPresentMonCsv = tracked;
+                if (clearTracking)
+                {
+                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                    stoppedPresentMonCsv = null;
+                }
+            }
             return (tracked, true, null);
         }
         catch (Exception ex)

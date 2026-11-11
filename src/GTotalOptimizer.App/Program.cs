@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 using GTotalOptimizer.Core;
 
@@ -30,6 +32,9 @@ internal static class Program
             (args[0] == "--verify-wpf-ui" || args[0] == "--verify-border-ui"))
             return VerifyWpfUi();
 
+        if (args.Length == 1 && args[0] == "--verify-game-process-events")
+            return VerifyGameProcessEvents();
+
         if (args.Length == 3 && args[0] == PresentMonCaptureController.CliSwitch)
             return PresentMonCaptureController.ExecuteElevated(args[1], args[2]);
 
@@ -39,6 +44,51 @@ internal static class Program
         };
         app.Run(new MainWindow());
         return 0;
+    }
+
+    // Windows CI: exercise the real OS notification and process-handle exit
+    // semantics without Cyberpunk or elevation. A missing WMI service is
+    // supported: only the StartTrace portion falls back to slow polling.
+    private static int VerifyGameProcessEvents()
+    {
+        try
+        {
+            using var events = new GameProcessEvents("cmd.exe");
+            var starts = new ConcurrentQueue<int>();
+            var exits = new ConcurrentQueue<int>();
+            events.Started += starts.Enqueue;
+            events.Exited += exits.Enqueue;
+            var subscribed = events.TryStartNotifications(out var issue);
+            using var child = Process.Start(new ProcessStartInfo(
+                "cmd.exe", "/D /C ping -n 4 127.0.0.1 >NUL")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }) ?? throw new InvalidOperationException("Could not start Windows child fixture.");
+            var pid = child.Id;
+            if (!events.Track(pid))
+                throw new InvalidOperationException("Could not attach process-exit notification.");
+            if (!child.WaitForExit(15000))
+            {
+                child.Kill(entireProcessTree: true);
+                throw new TimeoutException("Windows child fixture did not exit.");
+            }
+            if (!SpinWait.SpinUntil(() => exits.Contains(pid),
+                    TimeSpan.FromSeconds(8)))
+                throw new InvalidOperationException("Windows process exit notification was missed.");
+            if (subscribed && !SpinWait.SpinUntil(() => starts.Contains(pid),
+                    TimeSpan.FromSeconds(10)))
+                throw new InvalidOperationException("WMI process-start notification was missed.");
+            Console.WriteLine("PASS Windows process-exit event" +
+                (subscribed ? " and WMI start trace" :
+                    " (WMI service unavailable; 10-second fallback applies: " + issue + ")"));
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("FAIL Windows game process notifications: " + ex);
+            return 5;
+        }
     }
 
     // Verify real packaged WPF operation without policing the owner's art.
