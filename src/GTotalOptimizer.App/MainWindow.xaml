@@ -125,101 +125,85 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Layered WPF vector actions, not flat recolors or raster buttons. -->
-        <!-- Original dark-blue metal face, with a separate translucent white
-             top glaze. Restore is not a silver/white flat button. -->
-        <LinearGradientBrush x:Key="RestoreMetal" StartPoint=".06,0" EndPoint=".88,1">
-            <GradientStop Color="#426D7A" Offset="0"/>
-            <GradientStop Color="#294D5B" Offset=".21"/>
-            <GradientStop Color="#1B3946" Offset=".48"/>
-            <GradientStop Color="#102733" Offset=".76"/>
-            <GradientStop Color="#071821" Offset="1"/>
-        </LinearGradientBrush>
-        <LinearGradientBrush x:Key="RestoreTopGlaze" StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#A8FFFFFF" Offset="0"/>
-            <GradientStop Color="#62FFFFFF" Offset=".19"/>
-            <GradientStop Color="#17FFFFFF" Offset=".42"/>
-            <GradientStop Color="#00FFFFFF" Offset=".65"/>
-        </LinearGradientBrush>
+        <!-- Approved 2026-11-11 owner SVGs: yellow v2.8, unavailable v3.2,
+             restore v1.4. Loaded from the original archived vectors, with
+             the SVG label removed so WPF controls live button text and access. -->
         <Style x:Key="StageActionButton" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource GoldenMetal}"/>
-            <Setter Property="Foreground" Value="#071012"/>
-            <Setter Property="BorderBrush" Value="#CFB900"/>
+            <Setter Property="Foreground" Value="#111111"/>
             <Setter Property="FontFamily" Value="{StaticResource Oxanium}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="ExtraBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Padding" Value="9,4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent" SnapsToDevicePixels="True">
-                            <fx:ChamferOutline x:Name="StageShell" Fill="#091316"
-                                               Stroke="{TemplateBinding BorderBrush}"
-                                               StrokeThickness="1.8" CornerCut="8"
-                                               IsHitTestVisible="False"/>
-                            <fx:ChamferOutline x:Name="StageFace" Margin="2"
-                                               Fill="{TemplateBinding Background}"
-                                               Stroke="#FFF6A0" StrokeThickness="1.0"
-                                               CornerCut="6" MetallicFinish="True"
-                                               IsHitTestVisible="False"/>
-                            <fx:ChamferOutline x:Name="StageGlaze" Margin="3"
-                                               Fill="{StaticResource RestoreTopGlaze}"
-                                               StrokeThickness="0" CornerCut="5"
-                                               Opacity="0" IsHitTestVisible="False"/>
-                            <Path x:Name="StageEdge" Data="M 0,4 L 4,0 L 32,0"
-                                  Stroke="#FFFFCE" StrokeThickness="1.35"
-                                  Width="34" Height="6" HorizontalAlignment="Left"
-                                  VerticalAlignment="Top" Margin="12,4,0,0"
-                                  IsHitTestVisible="False"/>
-                            <Path x:Name="StageCorner" Data="M 0,5 L 11,5 L 16,0"
-                                  Stroke="#00E2F2" StrokeThickness="1.25"
-                                  Width="17" Height="7" HorizontalAlignment="Right"
-                                  VerticalAlignment="Bottom" Margin="0,0,12,4"
-                                  IsHitTestVisible="False"/>
+                            <fx:ApprovedStageArtwork x:Name="StageArtwork" Variant="Yellow"
+                                                     IsHitTestVisible="False"/>
+                            <!-- Hover/focus is a separate cyan outline, not another bitmap.
+                                 It follows the same chamfer as all three source SVGs. -->
+                            <fx:ChamferOutline x:Name="StageHover" Fill="Transparent"
+                                               Stroke="#30F2FF" StrokeThickness="2"
+                                               CornerCut="7" Glow="True" Opacity="0"
+                                               IsHitTestVisible="False">
+                                <fx:ChamferOutline.Effect>
+                                    <DropShadowEffect Color="#00E2F2" BlurRadius="8"
+                                                      ShadowDepth="0" Opacity=".7"/>
+                                </fx:ChamferOutline.Effect>
+                            </fx:ChamferOutline>
                             <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              VerticalAlignment="Center"
                                               HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center"
                                               RecognizesAccessKey="True"/>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="StageShell" Property="Stroke" Value="#00E2F2"/>
-                                <Setter TargetName="StageShell" Property="Glow" Value="True"/>
-                                <Setter TargetName="StageFace" Property="Stroke" Value="#B6FFFF"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="StageFace" Property="Fill"
-                                        Value="{StaticResource GoldenMetalHot}"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="StageShell" Property="Stroke" Value="#00E2F2"/>
-                                <Setter TargetName="StageShell" Property="Glow" Value="True"/>
-                            </Trigger>
                             <Trigger Property="Tag" Value="Restore">
-                                <Setter TargetName="StageFace" Property="Stroke" Value="#3899B3"/>
-                                <Setter TargetName="StageEdge" Property="Stroke" Value="#E8FBFF"/>
-                                <Setter TargetName="StageGlaze" Property="Opacity" Value="1"/>
+                                <Setter TargetName="StageArtwork" Property="Variant" Value="Restore"/>
+                                <Setter Property="Foreground" Value="#00DDEB"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="StageArtwork" Property="Variant" Value="Unavailable"/>
+                                <Setter Property="Foreground" Value="#C8D3DB"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="Tag" Value="Restore"/>
-                                    <Condition Property="IsPressed" Value="True"/>
+                                    <Condition Property="IsEnabled" Value="False"/>
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="StageFace" Property="Fill"
-                                        Value="{StaticResource ButtonMetalHot}"/>
+                                <Setter TargetName="StageArtwork" Property="Variant" Value="Unavailable"/>
+                                <Setter Property="Foreground" Value="#C8D3DB"/>
                             </MultiTrigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#78898D"/>
-                                <Setter TargetName="StageShell" Property="Stroke" Value="#304347"/>
-                                <Setter TargetName="StageShell" Property="Glow" Value="False"/>
-                                <Setter TargetName="StageFace" Property="Fill"
-                                        Value="{StaticResource ButtonMetalDark}"/>
-                                <Setter TargetName="StageFace" Property="Stroke" Value="#344C52"/>
-                                <Setter TargetName="StageFace" Property="Lit" Value="False"/>
-                                <Setter TargetName="StageGlaze" Property="Opacity" Value="0"/>
-                                <Setter TargetName="StageEdge" Property="Opacity" Value=".24"/>
-                                <Setter TargetName="StageCorner" Property="Opacity" Value=".24"/>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="StageHover"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.14"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="StageHover"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.18"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="StageHover" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="StageArtwork" Property="Opacity" Value=".85"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -228,9 +212,7 @@
         </Style>
         <Style x:Key="RestoreStageButton" TargetType="Button"
                BasedOn="{StaticResource StageActionButton}">
-            <Setter Property="Background" Value="{StaticResource RestoreMetal}"/>
-            <Setter Property="Foreground" Value="#00E2F2"/>
-            <Setter Property="BorderBrush" Value="#328EA8"/>
+            <Setter Property="Foreground" Value="#00DDEB"/>
             <Setter Property="Tag" Value="Restore"/>
         </Style>
         <Style x:Key="MinorButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">

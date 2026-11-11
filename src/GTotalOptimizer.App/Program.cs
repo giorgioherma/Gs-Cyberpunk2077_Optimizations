@@ -150,6 +150,36 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Capture card is missing the explicit F11 start/stop instructions");
 
+                // Render the actual three owner-approved SVG surfaces and verify
+                // disabled, available, and journal-recovery transitions. WPF,
+                // not the SVG, must own the changing accessible labels.
+                static void CheckStage(System.Windows.Controls.Button button, string variant)
+                {
+                    button.ApplyTemplate();
+                    var skin = button.Template.FindName("StageArtwork", button)
+                        as GTotalOptimizer.App.Visuals.ApprovedStageArtwork;
+                    if (skin is null || skin.Variant != variant ||
+                        string.IsNullOrWhiteSpace(skin.SvgSource) ||
+                        skin.SvgSource.Contains("<text", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException(
+                            "Incorrect approved stage artwork or baked label: " + button.Name + "/" + variant);
+                }
+                foreach (var button in new[] {
+                    window.InstallButton, window.LaunchButton, window.CollectButton
+                })
+                {
+                    button.IsEnabled = false;
+                    CheckStage(button, "Unavailable");
+                    button.IsEnabled = true;
+                    CheckStage(button, "Yellow");
+                    button.IsEnabled = false;
+                }
+                window.InstallButton.Style = (System.Windows.Style)window.FindResource("RestoreStageButton");
+                window.InstallButton.IsEnabled = true;
+                CheckStage(window.InstallButton, "Restore");
+                window.InstallButton.IsEnabled = false;
+                CheckStage(window.InstallButton, "Unavailable");
+
                 // The Capture page is a general-status UI, not a hidden
                 // hover-based diagnostics surface. Check the actual loaded
                 // WPF controls, not merely source text.
