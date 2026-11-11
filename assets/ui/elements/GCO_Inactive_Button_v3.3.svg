@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="760" height="112" viewBox="0 0 760 112" role="img" aria-label="Inactive button v3.3, common 760 by 112 GCO shell">
+  <defs>
+    <path id="outer" d="M31 10H728L750 32V80L728 102H31L9 80V32L31 10Z"/>
+    <path id="inner" d="M40 17H719L741 39V73L719 95H40L18 73V39Z"/>
+
+    <!-- Surface blends progressively into the exact dark base at the lower edge. -->
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#21343B"/>
+      <stop offset="16%" stop-color="#192B32"/>
+      <stop offset="38%" stop-color="#102028"/>
+      <stop offset="68%" stop-color="#0A171D"/>
+      <stop offset="100%" stop-color="#071015"/>
+    </linearGradient>
+    <!-- Wide, low-opacity sheen. It disappears smoothly rather than ending as a bright bar. -->
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A5E9F2" stop-opacity=".18"/>
+      <stop offset="16%" stop-color="#76B6C0" stop-opacity=".10"/>
+      <stop offset="43%" stop-color="#426A73" stop-opacity=".035"/>
+      <stop offset="76%" stop-color="#071015" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#071015" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="innerRecess" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16272F" stop-opacity=".42"/>
+      <stop offset="24%" stop-color="#102028" stop-opacity=".32"/>
+      <stop offset="66%" stop-color="#071015" stop-opacity=".40"/>
+      <stop offset="100%" stop-color="#071015" stop-opacity=".72"/>
+    </linearGradient>
+    <!-- Inset-edge highlight sits ON the existing top-left inner geometry. -->
+    <linearGradient id="insetEdge" gradientUnits="userSpaceOnUse" x1="18" y1="17" x2="183" y2="17">
+      <stop offset="0%" stop-color="#E9FCFF" stop-opacity=".94"/>
+      <stop offset="14%" stop-color="#B6EDF6" stop-opacity=".78"/>
+      <stop offset="38%" stop-color="#78B9C4" stop-opacity=".32"/>
+      <stop offset="72%" stop-color="#5B8A94" stop-opacity=".085"/>
+      <stop offset="100%" stop-color="#071015" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="insetLeft" gradientUnits="userSpaceOnUse" x1="18" y1="39" x2="18" y2="73">
+      <stop offset="0%" stop-color="#D4F9FF" stop-opacity=".62"/>
+      <stop offset="40%" stop-color="#A2D9E3" stop-opacity=".30"/>
+      <stop offset="100%" stop-color="#5A919B" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Tiny bloom shares precisely the same centerline as the crisp inset edge. -->
+    <filter id="insetGlow" x="-30%" y="-100%" width="160%" height="300%">
+      <feGaussianBlur stdDeviation="0.72"/>
+    </filter>
+    <linearGradient id="bottomHighlight" x1="100%" y1="0%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#86D9E8" stop-opacity=".34"/>
+      <stop offset="18%" stop-color="#4A8A96" stop-opacity=".14"/>
+      <stop offset="70%" stop-color="#071015" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#49E6F4"/>
+      <stop offset="40%" stop-color="#27BCCC"/>
+      <stop offset="80%" stop-color="#0D9DAF"/>
+      <stop offset="100%" stop-color="#5AEAF4"/>
+    </linearGradient>
+    <filter id="rimGlow" x="-10%" y="-60%" width="120%" height="220%">
+      <feGaussianBlur stdDeviation="3.0"/>
+    </filter>
+    <!-- V3.1 broad diagonal specular stripe; entirely native SVG geometry. -->
+    <!-- The stripe has soft edges and fades into the surface BEFORE reaching the lower half. -->
+    <linearGradient id="diagonalSheen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8DD8E5" stop-opacity="0"/>
+      <stop offset="16%" stop-color="#91D7E3" stop-opacity=".075"/>
+      <stop offset="42%" stop-color="#A9EAF1" stop-opacity=".18"/>
+      <stop offset="64%" stop-color="#B9EFF6" stop-opacity=".23"/>
+      <stop offset="88%" stop-color="#6EB4C1" stop-opacity=".055"/>
+      <stop offset="100%" stop-color="#6EB4C1" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="sheenFadeVertical" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="72">
+      <stop offset="0%" stop-color="white" stop-opacity=".94"/>
+      <stop offset="29%" stop-color="white" stop-opacity=".82"/>
+      <stop offset="55%" stop-color="white" stop-opacity=".43"/>
+      <stop offset="82%" stop-color="white" stop-opacity=".10"/>
+      <stop offset="100%" stop-color="black" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="sheenHalfFade" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="0" y="0" width="760" height="112" style="mask-type:alpha">
+      <rect x="0" y="0" width="760" height="112" fill="url(#sheenFadeVertical)"/>
+    </mask>
+    <clipPath id="outerClip"><use xlink:href="#outer"/></clipPath>
+  </defs>
+
+  <!-- Subdued halo and single crisp rim (no stacked parallel outline). -->
+  <use xlink:href="#outer" fill="none" stroke="#00DBED" stroke-opacity=".28" stroke-width="3.4" filter="url(#rimGlow)"/>
+  <use xlink:href="#outer" fill="url(#surface)"/>
+  <g clip-path="url(#outerClip)">
+    <rect x="9" y="10" width="741" height="92" fill="url(#sheen)"/>
+    <use xlink:href="#inner" fill="url(#innerRecess)"/>
+    <!-- Diagonal glint: wide at the upper-left; dissolves at the midline. -->
+    <g mask="url(#sheenHalfFade)">
+      <path d="M177 10 H310 L190 102 H55 Z" fill="url(#diagonalSheen)"/>
+    </g>
+    <!-- Highlights integrated against the main bevel; fade directly into background. -->
+    <path d="M318 99 H728" stroke="url(#bottomHighlight)" stroke-width="1.25" fill="none"/>
+    <path d="M540 94 H720" stroke="url(#bottomHighlight)" stroke-width=".75" fill="none"/>
+  </g>
+  <use xlink:href="#outer" fill="none" stroke="url(#outline)" stroke-width="2.2"/>
+  <!-- V3.2: one hairline following the existing inner corner, with a barely-there bloom. -->
+  <path d="M18 59 V39 L40 17 H183" stroke="url(#insetEdge)" stroke-width="1.35" filter="url(#insetGlow)" opacity=".28" stroke-linejoin="round" fill="none"/>
+  <path d="M18 59 V39 L40 17 H183" stroke="url(#insetEdge)" stroke-width="0.92" stroke-linejoin="round" fill="none"/>
+  <path d="M18 59 V73" stroke="url(#insetLeft)" stroke-width="0.72" fill="none"/>
+  <path d="M737 41 V73 L720 91" stroke="#78C2CD" stroke-opacity=".17" stroke-width=".75" fill="none"/>
+
+  <!-- Narrow spacing between two solid // slashes. -->
+  <g fill="#00DDEF">
+    <path d="M667 92L680 75H692L679 92H667Z"/>
+    <path d="M686 92L699 75H711L698 92H686Z"/>
+  </g>
+
+  <!-- Actual center of button is x=210; no icon/ornament affects label centering. -->
+  <text x="380" y="66" text-anchor="middle" font-family="Rajdhani, Oxanium, 'DejaVu Sans Condensed', sans-serif" font-size="26" font-weight="700" letter-spacing=".4" fill="#C8D3DB">START CYBERPUNK</text>
+</svg>
