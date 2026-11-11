@@ -300,7 +300,39 @@ public partial class MainWindow : Window
             Trace.TraceWarning("Cyberpunk start notifications unavailable; 10-second fallback: " + error);
             gameStateTimer.Start();
         }
+        ResumeLastRestoredWorkspace();
         _ = RefreshSourceAsync();
+    }
+
+    private void ResumeLastRestoredWorkspace()
+    {
+        // A pending install/capture journal always takes precedence. A
+        // completed workspace may be resumed only after independent owner
+        // restoration was recorded and every archived file hash verifies.
+        if (Workflow.HasRecoveryJournal ||
+            string.IsNullOrWhiteSpace(GamePathBox.Text)) return;
+        try
+        {
+            var saved = CollectedCaptureStore.ReadLastRestored(
+                packageRoot, GamePathBox.Text);
+            if (saved is null) return;
+            completedSessionId = saved.SessionId;
+            completedGameRoot = saved.GameRoot;
+            captureAndRestoreVerified = true;
+            savedCapture = saved;
+            UpdateResultTexts(saved);
+            SetPortraitStage(PortraitStage.Collected);
+            CapturePage.Visibility = Visibility.Collapsed;
+            ResultsPage.Visibility = Visibility.Visible;
+            SetActiveTab(true);
+            RefreshCompletedWorkspace();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("Completed workspace not resumed: " + ex);
+            PinStatus("Saved Analyze workspace not restored: " + ex.Message +
+                ". Existing capture files have not been changed.");
+        }
     }
 
     private void DispatchGameEvent(Action action)
@@ -439,7 +471,7 @@ public partial class MainWindow : Window
                 clearTracking: false);
             PinStatus(stopped.Stopped
                 ? stopped.Csv is not null
-                    ? "Cyberpunk closed. PresentMon stopped, CSV flushed and retained. COLLECT RESULTS preserves available evidence; restarting, closing GCO or RESTORE without Collect discards uncollected data."
+                    ? "Cyberpunk closed. PresentMon stopped and CSV available for COLLECT RESULTS. Closing GCO discards only uncollected PresentMon, not the saved profiler session."
                     : "Cyberpunk closed. No GCO PresentMon CSV was recorded. COLLECT RESULTS can still recover available CET and REDscript evidence."
                 : "Cyberpunk closed. PresentMon shutdown unverified: " +
                   stopped.Error + ". COLLECT RESULTS can retry; no capture was discarded.");
@@ -481,9 +513,10 @@ public partial class MainWindow : Window
         }));
     }
 
-    // Graceful close must flush our ETW writer BEFORE deleting any temporary
-    // CSV. Cancel the first WPF close event while the owner controller runs.
-    // On failure keep the window open with a console diagnostic, never a popup.
+    // Closing GCO never abandons the capture: its durable journal and native
+    // source-owned results must survive reopening. Only uncollected PresentMon
+    // scratch output is disposable, after its ETW writer has safely stopped.
+    // Keep the window open if that graceful stop or targeted cleanup fails.
     private async void Window_Closing(object? sender,
         System.ComponentModel.CancelEventArgs e)
     {
@@ -497,13 +530,15 @@ public partial class MainWindow : Window
         }
         closingInProgress = true;
         SetBusy(true);
-        SetStatus("Stopping owned PresentMon and clearing uncollected data before closing...");
+        SetStatus("Stopping PresentMon; preserving the profiler session for reopening...");
         try
         {
             var game = Workflow.ReadRecoveryGameRoot();
             var id = game is null ? Guid.NewGuid().ToString("N")
                 : Workflow.ReadRecoverySessionId(game) ?? Guid.NewGuid().ToString("N");
-            var stop = await StopOwnedPresentMonAsync(id);
+            // Do not clear the tracking pointer until its known GCO-owned
+            // temporary files have been deleted successfully.
+            var stop = await StopOwnedPresentMonAsync(id, clearTracking: false);
             if (!stop.Stopped)
             {
                 PinStatus("Cannot close cleanly: " +
@@ -512,13 +547,18 @@ public partial class MainWindow : Window
                 return;
             }
             if (game is not null && Workflow.HasCaptureAttempt(game))
-                Workflow.AbandonCurrentUncollected(game);
+                CollectedCaptureStore.DiscardUncollectedPresentMon(
+                    packageRoot, game, id, stop.Csv);
+            // The app-exit exception applies only to uncollected PresentMon.
+            // CET/GRSP owner results, collected evidence and session journal
+            // are never deleted or reset here.
+            PresentMonCaptureController.ClearTrackedCsv(packageRoot);
             closureCleanupVerified = true;
         }
         catch (Exception ex)
         {
             PinStatus("Close cleanup: " + ex.Message +
-                ". Capture and recovery files are preserved. Retry closing.");
+                ". Profiler session and native results are preserved. Retry closing.");
         }
         finally
         {
@@ -1154,11 +1194,19 @@ public partial class MainWindow : Window
             completedGameRoot = game;
             captureAndRestoreVerified = true;
             refreshCancellation?.Cancel();
+            string? workspaceWarning = null;
+            try { CollectedCaptureStore.RememberRestored(packageRoot, game, saved.SessionId); }
+            catch (Exception ex)
+            {
+                workspaceWarning = "Workspace reopening metadata could not be saved: " + ex.Message;
+                Trace.TraceWarning(workspaceWarning);
+            }
             UpdateResultTexts(saved);
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             SetActiveTab(true);
             RefreshCompletedWorkspace();
+            if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
         finally { SetBusy(false); }

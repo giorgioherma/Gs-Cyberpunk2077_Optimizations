@@ -887,6 +887,12 @@ try
     Require(CollectedCaptureStore.ReadRestored(datedPackage, datedGame, datedId) is
             { Restored: true, Cet: not null, Redscript: not null },
         "dated capture can be reopened after owner restore deleted recovery journal");
+    CollectedCaptureStore.RememberRestored(datedPackage, datedGame, datedId);
+    Require(CollectedCaptureStore.ReadLastRestored(datedPackage, datedGame) is
+            { Restored: true, Cet: not null, Redscript: not null } &&
+        CollectedCaptureStore.ReadLastRestored(datedPackage,
+            Path.Combine(root, "OtherGame")) is null,
+        "reopening Analyze restores the last verified workspace for the same game only");
 
     // Every fresh launch may discard the preceding GCO-only uncollected
     // attempt, but never any explicit Collect or manually added evidence.
@@ -901,17 +907,69 @@ try
     Require(CollectedCaptureStore.DiscardUncollected(
             datedPackage, datedGame, abandonedId) &&
         !Directory.Exists(abandonedFolder) && File.Exists(datedCsv),
-        "restart/close deletes only uncollected GCO outputs, preserving a collected capture");
+        "a deliberate new game launch deletes only uncollected GCO output, preserving completed captures");
+
+    // Closing the GCO window is not a new capture and not owner restoration.
+    // Only uncollected PresentMon scratch output is discarded; reopen must
+    // restore the journal, capture identity and COLLECT RESULTS action.
+    var pendingId = Guid.NewGuid().ToString("N");
+    var pendingFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        datedPackage, pendingId, startedLocal.AddSeconds(4), datedGame);
+    var pendingCsv = PresentMonLifecyclePolicy.NewSessionCsv(datedPackage, pendingId);
+    Directory.CreateDirectory(Path.GetDirectoryName(pendingCsv)!);
+    File.WriteAllText(pendingCsv, frameCsvBody);
+    var pendingController = Path.Combine(Path.GetDirectoryName(pendingCsv)!,
+        "PresentMon-controller.json");
+    File.WriteAllText(pendingController, "controller result fixture");
+    var pendingJournal = Path.Combine(datedPackage, "RESULTS", "GCO-active-profile-session.json");
+    File.WriteAllText(pendingJournal, System.Text.Json.JsonSerializer.Serialize(new
+    {
+        gameRoot = Path.GetFullPath(datedGame), stage = "capture-attempt",
+        sessionId = pendingId
+    }));
+    var pendingWorkflow = new UnifiedProfilerWorkflow(datedPackage);
+    Require(pendingWorkflow.HasCaptureAttempt(datedGame) &&
+        CaptureAdmissionPolicy.CanCollect(true, true, pendingWorkflow.ReadCollected(datedGame)),
+        "a journaled uncollected attempt offers Collect before GCO exit");
+    var otherCsvRefused = false;
+    try { CollectedCaptureStore.DiscardUncollectedPresentMon(
+        datedPackage, datedGame, pendingId, datedCsv); }
+    catch (InvalidDataException) { otherCsvRefused = true; }
+    Require(otherCsvRefused && File.Exists(datedCsv) && File.Exists(pendingCsv),
+        "exit cleanup refuses to delete PresentMon from a different session");
+    Require(CollectedCaptureStore.DiscardUncollectedPresentMon(
+            datedPackage, datedGame, pendingId, pendingCsv) &&
+        !File.Exists(pendingCsv) && !File.Exists(pendingController) &&
+        Directory.Exists(pendingFolder) && File.Exists(pendingJournal) &&
+        File.Exists(datedCsv),
+        "GCO exit deletes only uncollected PresentMon, not journal or collected history");
+    var reopened = new UnifiedProfilerWorkflow(datedPackage);
+    Require(reopened.ReadRecoverySessionId(datedGame) == pendingId &&
+        reopened.HasCaptureAttempt(datedGame) &&
+        reopened.ReadCollected(datedGame) is
+            { CollectionAttempted: false, FrameTimeCsv: null } &&
+        CaptureAdmissionPolicy.CanCollect(true, true, reopened.ReadCollected(datedGame)),
+        "reopening GCO preserves the pending Collect action and same attempt identity");
+    Require(!CollectedCaptureStore.DiscardUncollectedPresentMon(
+            datedPackage, datedGame, pendingId, trackedCsv: null),
+        "failed/missing PresentMon output cannot block closing GCO");
+    File.Delete(pendingJournal);
 
     var failedCollectId = Guid.NewGuid().ToString("N");
     var failedCollectFolder = CollectedCaptureStore.CreateDatedSessionFolder(
         datedPackage, failedCollectId, startedLocal.AddSeconds(2), datedGame);
     CollectedCaptureStore.MarkCollectionAttempted(
         datedPackage, datedGame, failedCollectId, presentMonStopped: false);
+    var failedCollectCsv = PresentMonLifecyclePolicy.NewSessionCsv(
+        datedPackage, failedCollectId);
+    Directory.CreateDirectory(Path.GetDirectoryName(failedCollectCsv)!);
+    File.WriteAllText(failedCollectCsv, frameCsvBody);
     Require(!CollectedCaptureStore.DiscardUncollected(
             datedPackage, datedGame, failedCollectId) &&
-        Directory.Exists(failedCollectFolder),
-        "even a failed PresentMon stop after an explicit Collect cannot discard results");
+        !CollectedCaptureStore.DiscardUncollectedPresentMon(
+            datedPackage, datedGame, failedCollectId, failedCollectCsv) &&
+        File.Exists(failedCollectCsv) && Directory.Exists(failedCollectFolder),
+        "even failed-stop explicit Collect cannot discard evidence on GCO exit");
 
     var manualId = Guid.NewGuid().ToString("N");
     var manualFolder = CollectedCaptureStore.CreateDatedSessionFolder(
