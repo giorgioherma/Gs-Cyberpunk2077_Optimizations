@@ -157,8 +157,6 @@
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
-                                              HorizontalContentAlignment="Center"
-                                              VerticalContentAlignment="Center"
                                               RecognizesAccessKey="True"/>
                         </Grid>
                         <ControlTemplate.Triggers>
