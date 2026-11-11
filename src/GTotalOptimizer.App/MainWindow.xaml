@@ -558,7 +558,6 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="GamePathBox" Grid.Column="0"
                                                  Style="{StaticResource PathInput}"
-                                                 ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                                  LostKeyboardFocus="GamePath_LostKeyboardFocus"
                                                  TextChanged="GamePath_Changed"/>
                                         <Button x:Name="BrowseButton" Grid.Column="1" Content="OPEN"
@@ -573,8 +572,7 @@
                                     </Grid>
                                     <TextBlock x:Name="DependencyText" Foreground="{StaticResource Cyan}"
                                                Height="16" VerticalAlignment="Center"
-                                               FontSize="11.5" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                               FontSize="11.5" TextTrimming="CharacterEllipsis"/>
                                     <StackPanel Orientation="Horizontal" Margin="1,1,0,0" Height="16">
                                         <TextBlock x:Name="CetStatusText" Style="{StaticResource SmallStatus}"
                                                    Width="192" Text="G-CET Profiler · NOT CHECKED"/>
@@ -751,8 +749,7 @@
                                    Margin="25,0,0,0"
                                    Foreground="#BFE0E6" FontSize="12.5"
                                    VerticalAlignment="Center" TextWrapping="Wrap"
-                                   Text="Select the Cyberpunk 2077 game folder."
-                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                                   Text="Select the Cyberpunk 2077 game folder."/>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
                             Margin="-10,-20,10,20"

@@ -460,3 +460,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 - Preserve complete backend details through hover/tooltips and diagnostic tracing. Unexpected technical messages may be shortened on screen, but **never** reinterpret shortened text as success, change safety gates, or lose evidence. Keep screenshot-art/layout unchanged and GCO version **v1.2.2**.
 
 - **Implementation verification:** [GCO Windows CI #262](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42950860568) **SUCCESS 272/272**, tested source [6e8eaa0](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/6e8eaa0ffa4a9d40da1263208a40660ac69f50b1). Verified v1.2.2 package [artifact 13825510033](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42950860568/artifacts/13825510033). Gameplay screenshot confirmation outstanding.
+
+## 2026-11-11 — Owner override: no hovering in Capture
+
+- **Supersedes** the earlier Capture console policy that exposed full manager diagnostics on hover. The Capture footer is a short, non-hoverable status indicator. Remove its tooltip and related UI plumbing; the Game Root input and dependency row must also have no hover tooltips. Optional technical traces may retain original error details without creating a hidden interaction requirement.
+- Preserve brief, accurate visible Restore/Collect/error instructions and all existing safety gates. Resolver/Analyze owns the substantive performance explanations and optimization reports. Product stays **v1.2.2**; do not disturb UI art or native components.

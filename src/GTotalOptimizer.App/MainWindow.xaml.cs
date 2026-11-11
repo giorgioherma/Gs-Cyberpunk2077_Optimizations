@@ -37,7 +37,6 @@ public partial class MainWindow : Window
     private bool captureLaunched;
     private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
     private string? consolePinned;
-    private string? consolePinnedDetail;
     private bool gameStateRefreshInFlight;
     private bool pendingExternalGameStart;
     private int? pendingExternalGamePid;
@@ -655,26 +654,19 @@ public partial class MainWindow : Window
             QueueGameReconciliation();
     }
 
-    private void DisplayConsole(string message, string? detail = null)
-    {
-        StatusText.Text = UserFacingConsoleText.Compact(message);
-        // The console stays readable; full owner diagnostics remain available
-        // from hover and tracing without covering the artwork or controls.
-        StatusText.ToolTip = detail ?? message;
-    }
+    // Capture is a compact general status line, never a hoverable report.
+    // Technical owner details are not displayed; the Resolver/Analyze page
+    // is responsible for substantive diagnostics and optimization findings.
     private void SetStatus(string message) =>
-        DisplayConsole(consolePinned ?? message, consolePinned is null ? null : consolePinnedDetail);
+        StatusText.Text = UserFacingConsoleText.Compact(consolePinned ?? message);
     private void PinStatus(string message, string? detail = null)
     {
         consolePinned = message;
-        consolePinnedDetail = detail;
-        DisplayConsole(message, detail);
+        StatusText.Text = UserFacingConsoleText.Compact(message);
+        if (!string.IsNullOrWhiteSpace(detail))
+            Trace.TraceInformation("GCO capture status detail: " + detail);
     }
-    private void ClearStatusPin()
-    {
-        consolePinned = null;
-        consolePinnedDetail = null;
-    }
+    private void ClearStatusPin() => consolePinned = null;
 
     // Derive the label/surface directly from the actual, game-bound owner
     // journal. Verified restore deletes the journal; switching source roots
@@ -1313,7 +1305,7 @@ public partial class MainWindow : Window
             Trace.TraceInformation("Profiler restore: " + fullDetails);
             PinStatus(cleanupWarning is null
                     ? "Restore successful. Original game files restored."
-                    : "Restore successful. Original files restored; see details.",
+                    : "Restore successful. Original files restored; cleanup warning.",
                 fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }

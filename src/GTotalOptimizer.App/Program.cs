@@ -150,6 +150,15 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Capture card is missing the explicit F11 start/stop instructions");
 
+                // The Capture page is a general-status UI, not a hidden
+                // hover-based diagnostics surface. Check the actual loaded
+                // WPF controls, not merely source text.
+                if (window.StatusText.ToolTip is not null ||
+                    window.GamePathBox.ToolTip is not null ||
+                    window.DependencyText.ToolTip is not null)
+                    throw new InvalidOperationException(
+                        "Capture UI must not display hover tooltips");
+
                 void Render()
                 {
                     var frame = new System.Windows.Media.Imaging.RenderTargetBitmap(

@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace GTotalOptimizer.Core;
 
 // The on-screen Capture console is a short status line, not an archive or a log.
-// Callers retain the original full message for the tooltip and diagnostics.
+// Full owner diagnostics may be traced separately; no Capture hover tooltips.
 public static class UserFacingConsoleText
 {
     public const int MaxLength = 108;
