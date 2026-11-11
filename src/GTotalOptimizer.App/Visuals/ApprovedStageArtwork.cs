@@ -1,23 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
+using System.Linq;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using System.Windows;
+using System.Xml.Linq;
 using SharpVectors.Converters;
 
 namespace GTotalOptimizer.App.Visuals;
 
 /// <summary>
-/// Renders the owner's three approved stage-button SVGs as vector WPF drawings.
-/// Only the artwork is sourced from SVG: a native ContentPresenter controls the
-/// centered label, focus, enabled state and existing button command.
+/// Renders the owner's three standardized stage SVGs as native WPF vector drawings.
+/// The SVGs own the shape, gradients and rim. WPF owns dynamic text and interactions.
 /// </summary>
 public sealed class ApprovedStageArtwork : SvgViewbox
 {
     private static readonly Lazy<IReadOnlyDictionary<string, string>> Sources =
         new(ReadApprovedSources, isThreadSafe: true);
+
+    private static readonly XNamespace SvgNamespace = "http://www.w3.org/2000/svg";
 
     public static readonly DependencyProperty VariantProperty =
         DependencyProperty.Register(nameof(Variant), typeof(string),
@@ -33,7 +34,9 @@ public sealed class ApprovedStageArtwork : SvgViewbox
     public ApprovedStageArtwork()
     {
         IsHitTestVisible = false;
-        Stretch = System.Windows.Media.Stretch.Fill;
+        // The owner standardized all three SVGs to one aspect ratio and shell.
+        // Never distort the 45-degree chamfers or stroke widths to fill a slot.
+        Stretch = System.Windows.Media.Stretch.Uniform;
         TextAsGeometry = false;
         ApplyVariant();
     }
@@ -50,82 +53,49 @@ public sealed class ApprovedStageArtwork : SvgViewbox
 
     private static IReadOnlyDictionary<string, string> ReadApprovedSources()
     {
-        var resource = System.Windows.Application.GetResourceStream(
-            new Uri("pack://application:,,,/StageButtons/Approved.zip"))
-            ?? throw new InvalidOperationException("Approved stage button artwork is missing from the package.");
-
-        using var source = resource.Stream;
-        using var zip = new ZipArchive(source, ZipArchiveMode.Read);
-        var names = new Dictionary<string, string>
+        // GitHub commit 465565d introduced the individual standardized sources.
+        // Do not recreate the deleted ZIP or patch one button's border at runtime.
+        var assets = new[]
         {
-            ["Yellow"] = "GCO_Active_Yellow_Button_v2.8.svg",
-            ["Unavailable"] = "GCO_Inactive_Button_v3.2.svg",
-            ["Restore"] = "GCO_Restore_Profilers_Button_v1.4.svg"
+            (Variant: "Yellow", File: "GCO_Active_Yellow_Button_v2.9.svg", Shell: "buttonShape"),
+            (Variant: "Unavailable", File: "GCO_Inactive_Button_v3.3.svg", Shell: "outer"),
+            (Variant: "Restore", File: "GCO_Restore_Profilers_Button_v1.4.svg", Shell: "shell")
         };
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var pair in names)
-        {
-            var entry = zip.GetEntry(pair.Value)
-                ?? throw new InvalidDataException("Missing approved SVG: " + pair.Value);
-            using var reader = new StreamReader(entry.Open());
-            var xml = reader.ReadToEnd();
-            if (!xml.Contains("<svg", StringComparison.Ordinal) ||
-                !xml.Contains("</svg>", StringComparison.Ordinal))
-                throw new InvalidDataException("Invalid approved SVG: " + pair.Value);
 
-            // WPF text is bound to the current session state, never baked into art.
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        string? canonicalViewBox = null;
+        string? canonicalShell = null;
+
+        foreach (var asset in assets)
+        {
+            var uri = new Uri("pack://application:,,,/StageButtons/" + asset.File);
+            var resource = System.Windows.Application.GetResourceStream(uri)
+                ?? throw new InvalidDataException("Missing packaged stage SVG: " + asset.File);
+
+            using var reader = new StreamReader(resource.Stream);
+            var xml = reader.ReadToEnd();
+            var svg = XDocument.Parse(xml);
+            if (svg.Root?.Name != SvgNamespace + "svg")
+                throw new InvalidDataException("Invalid stage SVG root: " + asset.File);
+
+            var viewBox = (string?)svg.Root.Attribute("viewBox");
+            var shell = svg.Descendants(SvgNamespace + "path")
+                .SingleOrDefault(e => (string?)e.Attribute("id") == asset.Shell);
+            var shellGeometry = (string?)shell?.Attribute("d");
+            if (string.IsNullOrWhiteSpace(viewBox) || string.IsNullOrWhiteSpace(shellGeometry))
+                throw new InvalidDataException("Missing viewBox or shell geometry: " + asset.File);
+
+            canonicalViewBox ??= viewBox;
+            canonicalShell ??= shellGeometry;
+            if (viewBox != canonicalViewBox || shellGeometry != canonicalShell)
+                throw new InvalidDataException(
+                    "Stage SVGs must share the exact same viewBox and outer shell: " + asset.File);
+
+            // WPF controls the current label, including the user's cyan active text.
             xml = Regex.Replace(xml, @"<text\b[^>]*>.*?</text>", "",
                 RegexOptions.Singleline | RegexOptions.CultureInvariant);
-            result.Add(pair.Key, xml);
+            result.Add(asset.Variant, xml);
         }
-        // Preserve the three approved source SVGs, but make the active yellow
-        // outer rim use the inactive design's own SVG paint definitions.
-        // No extra WPF outline: the cyan rim is drawn on the exact SVG path.
-        result["Yellow"] = UseInactiveSvgRim(result["Yellow"], result["Unavailable"]);
         return result;
-    }
-
-    private static string UseInactiveSvgRim(string yellowSvg, string inactiveSvg)
-    {
-        XNamespace svg = "http://www.w3.org/2000/svg";
-        var yellow = XDocument.Parse(yellowSvg, LoadOptions.PreserveWhitespace);
-        var inactive = XDocument.Parse(inactiveSvg);
-        var defs = yellow.Root?.Element(svg + "defs")
-            ?? throw new InvalidDataException("Yellow SVG definitions missing.");
-        var inactiveDefs = inactive.Root?.Element(svg + "defs")
-            ?? throw new InvalidDataException("Inactive SVG definitions missing.");
-
-        // Reuse the original v3.2 cyan gradient and soft halo verbatim.
-        foreach (var id in new[] { "outline", "rimGlow" })
-        {
-            var source = inactiveDefs.Elements().SingleOrDefault(
-                e => (string?)e.Attribute("id") == id)
-                ?? throw new InvalidDataException("Inactive rim definition missing: " + id);
-            if (defs.Elements().Any(e => (string?)e.Attribute("id") == id))
-                throw new InvalidDataException("Duplicate yellow rim definition: " + id);
-            defs.Add(new XElement(source));
-        }
-
-        var oldGoldRim = yellow.Root!.Elements(svg + "use").SingleOrDefault(
-            e => (string?)e.Attribute("stroke") == "#F5D528")
-            ?? throw new InvalidDataException("Yellow SVG outer rim changed unexpectedly.");
-        oldGoldRim.SetAttributeValue("stroke", "#00DBED");
-        oldGoldRim.SetAttributeValue("stroke-opacity", ".28");
-        oldGoldRim.SetAttributeValue("stroke-width", "2.4");
-        oldGoldRim.SetAttributeValue("filter", "url(#rimGlow)");
-        defs.Elements(svg + "filter").SingleOrDefault(
-            e => (string?)e.Attribute("id") == "outerGlow")?.Remove();
-
-        // Exactly one fine cyan rim over the body, following the same
-        // buttonShape geometry as the original yellow fill.
-        var sheen = yellow.Root.Elements(svg + "g").SingleOrDefault(
-            e => (string?)e.Attribute("mask") == "url(#stripeFade)")
-            ?? throw new InvalidDataException("Yellow SVG sheen anchor changed unexpectedly.");
-        sheen.AddAfterSelf(new XElement(svg + "use",
-            new XAttribute("href", "#buttonShape"),
-            new XAttribute("fill", "none"),
-            new XAttribute("stroke", "url(#outline)"),
-            new XAttribute("stroke-width", "1.2")));
-        return yellow.ToString(SaveOptions.DisableFormatting);
     }
 }

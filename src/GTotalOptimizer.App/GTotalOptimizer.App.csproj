@@ -31,8 +31,12 @@
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Bold.ttf" Link="Fonts/Oxanium/Oxanium-Bold.ttf" />
     <!-- SVG artwork remains vector in WPF; SharpVectors 1.8.6 supports .NET 10. -->
     <PackageReference Include="SharpVectors.Wpf" Version="1.8.6" />
-    <Resource Include="../../assets/ui/elements/GCO_StageButtons_Approved.zip"
-              Link="StageButtons/Approved.zip" />
+    <Resource Include="../../assets/ui/elements/GCO_Active_Yellow_Button_v2.9.svg"
+              Link="StageButtons/GCO_Active_Yellow_Button_v2.9.svg" />
+    <Resource Include="../../assets/ui/elements/GCO_Inactive_Button_v3.3.svg"
+              Link="StageButtons/GCO_Inactive_Button_v3.3.svg" />
+    <Resource Include="../../assets/ui/elements/GCO_Restore_Profilers_Button_v1.4.svg"
+              Link="StageButtons/GCO_Restore_Profilers_Button_v1.4.svg" />
     <PackageReference Include="System.Management" Version="10.0.0" />
     <ProjectReference Include="../GTotalOptimizer.Core/GTotalOptimizer.Core.csproj" />
   </ItemGroup>

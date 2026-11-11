@@ -125,11 +125,10 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Approved 2026-11-11 owner SVGs: yellow v2.8, unavailable v3.2,
-             restore v1.4. Loaded from the original archived vectors, with
-             the SVG label removed so WPF controls live button text and access. -->
+        <!-- Owner-standardized 760x112 SVGs: active yellow v2.9, inactive v3.3,
+             restore v1.4. One shared shell, uniform scaling, live WPF text. -->
         <Style x:Key="StageActionButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#111111"/>
+            <Setter Property="Foreground" Value="#00DDEB"/>
             <Setter Property="FontFamily" Value="{StaticResource Oxanium}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="ExtraBold"/>
