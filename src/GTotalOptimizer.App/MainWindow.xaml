@@ -15,6 +15,13 @@
         <FontFamily x:Key="Oxanium">./Fonts/Oxanium/#Oxanium</FontFamily>
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
         <SolidColorBrush x:Key="Cyan" Color="#00E2F2"/>
+        <!-- Match the approved inactive SVG v3.2 outer rim on enabled yellow stages. -->
+        <LinearGradientBrush x:Key="StageCyanRimBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#49E6F4" Offset="0"/>
+            <GradientStop Color="#27BCCC" Offset=".40"/>
+            <GradientStop Color="#0D9DAF" Offset=".80"/>
+            <GradientStop Color="#5AEAF4" Offset="1"/>
+        </LinearGradientBrush>
         <SolidColorBrush x:Key="Muted" Color="#A8B3B5"/>
         <!-- Fallback for non-spatial outlines. The framed UI below uses
              one spatial color field anchored to V and the cyan skyline. -->
@@ -143,6 +150,17 @@
                         <Grid Background="Transparent" SnapsToDevicePixels="True">
                             <fx:ApprovedStageArtwork x:Name="StageArtwork" Variant="Yellow"
                                                      IsHitTestVisible="False"/>
+                            <!-- Persistent inactive-v3.2 cyan rim for AVAILABLE yellow buttons only.
+                                 Drawn over the former gold SVG stroke; hover remains independent. -->
+                            <fx:ChamferOutline x:Name="StageYellowCyanRim" Fill="Transparent"
+                                               Stroke="{StaticResource StageCyanRimBrush}"
+                                               StrokeThickness="2.2" CornerCut="7"
+                                               Margin="2,3,2,3" IsHitTestVisible="False">
+                                <fx:ChamferOutline.Effect>
+                                    <DropShadowEffect Color="#00DBED" ShadowDepth="0"
+                                                      BlurRadius="2.15" Opacity=".28"/>
+                                </fx:ChamferOutline.Effect>
+                            </fx:ChamferOutline>
                             <!-- Hover/focus is a separate cyan outline, not another bitmap.
                                  It follows the same chamfer as all three source SVGs. -->
                             <fx:ChamferOutline x:Name="StageHover" Fill="Transparent"
@@ -161,10 +179,12 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="Tag" Value="Restore">
+                                <Setter TargetName="StageYellowCyanRim" Property="Opacity" Value="0"/>
                                 <Setter TargetName="StageArtwork" Property="Variant" Value="Restore"/>
                                 <Setter Property="Foreground" Value="#00DDEB"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="StageYellowCyanRim" Property="Opacity" Value="0"/>
                                 <Setter TargetName="StageArtwork" Property="Variant" Value="Unavailable"/>
                                 <Setter Property="Foreground" Value="#C8D3DB"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
