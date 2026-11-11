@@ -49,7 +49,7 @@ public sealed class ApprovedStageArtwork : SvgViewbox
 
     private static IReadOnlyDictionary<string, string> ReadApprovedSources()
     {
-        var resource = Application.GetResourceStream(
+        var resource = System.Windows.Application.GetResourceStream(
             new Uri("pack://application:,,,/StageButtons/Approved.zip"))
             ?? throw new InvalidOperationException("Approved stage button artwork is missing from the package.");
 
