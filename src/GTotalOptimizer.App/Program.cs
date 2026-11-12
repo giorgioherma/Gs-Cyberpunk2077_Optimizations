@@ -273,109 +273,171 @@ internal static class Program
             }
 
 
-            // WPF-rendered 96-DPI round-trip proof: the original 1280x760
-            // Normal pixels must survive two fullscreen cycles byte-for-byte.
-            // This checks functionality, not owner-selected decorative colors.
-            static byte[] Snapshot(MainWindow window, double width, double height)
+            // Layout contract: maximize modifies existing section properties
+            // only, without inserting/reparenting controls or transforming art.
+            static void ArrangeOffscreen(MainWindow window, double width, double height)
             {
-                var root = window.Content as System.Windows.FrameworkElement
-                    ?? throw new InvalidOperationException("Missing WPF root");
+                var root = window.RootLayout;
                 root.Measure(new System.Windows.Size(width, height));
                 root.Arrange(new System.Windows.Rect(0, 0, width, height));
                 root.UpdateLayout();
-                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                    (int)width, (int)height, 96, 96,
-                    System.Windows.Media.PixelFormats.Pbgra32);
-                bmp.Render(root);
-                var pixels = new byte[(int)width * (int)height * 4];
-                bmp.CopyPixels(pixels, (int)width * 4, 0);
-                return pixels;
             }
 
-            var roundTrip = new MainWindow();
-            var originalTree = roundTrip.CapturePage.Content;
-            var originalConsoleMargin = roundTrip.ConsoleTextHost.Margin;
-            static System.Windows.Point Origin(MainWindow w, System.Windows.FrameworkElement element)
-            {
-                var root = (System.Windows.FrameworkElement)w.Content;
-                return element.TranslatePoint(new System.Windows.Point(0, 0), root);
-            }
-            // First rendering can initialize WPF's embedded SVG brushes.
-            // Require a stable second Normal render before round-trip testing.
-            var warmPixels = Snapshot(roundTrip, 1280, 760);
-            var baselinePixels = Snapshot(roundTrip, 1280, 760);
-            if (!warmPixels.AsSpan().SequenceEqual(baselinePixels))
-                throw new InvalidOperationException(
-                    "Offscreen Normal rendering is not stable even before maximizing");
-            var referenceCardOrigin = Origin(roundTrip, roundTrip.StepOneOutline);
-            var referenceRootOrigin = Origin(roundTrip, roundTrip.GameRootOutline);
-            var baselineCut = GTotalOptimizer.App.Visuals.ChamferGeometry.ScaledCut(
-                roundTrip.StepOneOutline, 14);
-            var baselineWindowSize = new System.Windows.Size(roundTrip.ActualWidth, roundTrip.ActualHeight);
-            var baselineRootSize = new System.Windows.Size(roundTrip.RootLayout.ActualWidth, roundTrip.RootLayout.ActualHeight);
-            var baselineCardHeight = roundTrip.StepOneOutline.ActualHeight;
-            var baselineIconHeight = roundTrip.InstallStageIcon.ActualHeight;
-            var baselineButtonHeight = roundTrip.InstallButton.ActualHeight;
+            var structural = new MainWindow();
+            ArrangeOffscreen(structural, 1280, 760);
+            var originalPanel = structural.CapturePage.Content
+                as System.Windows.Controls.StackPanel
+                ?? throw new InvalidOperationException("Normal Capture StackPanel missing");
+            var gameSection = (System.Windows.FrameworkElement)originalPanel.Children[1];
+            var cards = (System.Windows.Controls.Grid)originalPanel.Children[3];
+            var heroMargin = structural.HeroSection.Margin;
+            var gameMargin = gameSection.Margin;
+            var headingMargin = structural.CaptureWorkflowHeading.Margin;
+            var statusMargin = structural.ConsoleTextHost.Margin;
+            var cardHeight = cards.Height;
+            var cardMinHeight = cards.MinHeight;
+            var iconHeight = structural.InstallStageIcon.ActualHeight;
+            var buttonHeight = structural.InstallButton.ActualHeight;
+
             for (var cycle = 0; cycle < 2; cycle++)
             {
-                // Offscreen windows do not always deliver native StateChanged.
-                roundTrip.WindowState = System.Windows.WindowState.Maximized;
-                roundTrip.ApplyMaximizedCaptureLayout();
-                Snapshot(roundTrip, 1700, 900);
-                if (!ReferenceEquals(originalTree, roundTrip.CapturePage.Content) ||
-                    roundTrip.CapturePage.Content is not System.Windows.Controls.StackPanel ||
-                    roundTrip.StepOneOutline.ActualHeight <= baselineCardHeight + 15 ||
-                    Math.Abs(roundTrip.InstallStageIcon.ActualHeight - baselineIconHeight) > .1 ||
-                    Math.Abs(roundTrip.InstallButton.ActualHeight - baselineButtonHeight) > .1 ||
-                    !roundTrip.StepOneOutline.SpatialStroke ||
-                    !roundTrip.StepTwoOutline.SpatialStroke ||
-                    !roundTrip.StepThreeOutline.SpatialStroke)
+                structural.WindowState = System.Windows.WindowState.Maximized;
+                structural.ApplyMaximizedCaptureLayout();
+                ArrangeOffscreen(structural, 1700, 900);
+                structural.ApplyMaximizedCaptureLayout();
+                ArrangeOffscreen(structural, 1700, 900);
+                if (!ReferenceEquals(structural.CapturePage.Content, originalPanel) ||
+                    originalPanel.Children.Count != 4 ||
+                    cards.Height <= cardHeight + 15 ||
+                    Math.Abs(structural.InstallStageIcon.ActualHeight - iconHeight) > .1 ||
+                    Math.Abs(structural.InstallButton.ActualHeight - buttonHeight) > .1 ||
+                    !structural.StepOneOutline.SpatialStroke ||
+                    !structural.StepTwoOutline.SpatialStroke ||
+                    !structural.StepThreeOutline.SpatialStroke)
                     throw new InvalidOperationException(
-                        "Maximized layout did not grow cards while preserving native icon/button sizes and shared neon: " +
-                        $"container={roundTrip.CapturePage.Content?.GetType().Name}, " +
-                        $"viewport={roundTrip.CapturePage.ActualHeight:F1}, " +
-                        $"card={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
-                        $"icon={roundTrip.InstallStageIcon.ActualHeight:F1}/{baselineIconHeight:F1}, " +
-                        $"button={roundTrip.InstallButton.ActualHeight:F1}/{baselineButtonHeight:F1}, " +
-                        $"spatial={roundTrip.StepOneOutline.SpatialStroke}/" +
-                        $"{roundTrip.StepTwoOutline.SpatialStroke}/{roundTrip.StepThreeOutline.SpatialStroke}");
+                        $"Maximized must grow the same three cards with unscaled controls: " +
+                        $"children={originalPanel.Children.Count}, " +
+                        $"height={cards.Height:F1}/{cardHeight:F1}, " +
+                        $"icon={structural.InstallStageIcon.ActualHeight:F1}/{iconHeight:F1}, " +
+                        $"button={structural.InstallButton.ActualHeight:F1}/{buttonHeight:F1}");
 
-                roundTrip.WindowState = System.Windows.WindowState.Normal;
-                roundTrip.ApplyMaximizedCaptureLayout();
-                var restoredPixels = Snapshot(roundTrip, 1280, 760);
-                var sameTree = ReferenceEquals(originalTree, roundTrip.CapturePage.Content);
-                var sameConsole = roundTrip.ConsoleTextHost.Margin == originalConsoleMargin;
-                var sameCard = Math.Abs(roundTrip.StepOneOutline.ActualHeight - baselineCardHeight) <= .1;
-                var samePixels = baselinePixels.AsSpan().SequenceEqual(restoredPixels);
-                if (!sameTree || !sameConsole || !sameCard || !samePixels)
-                {
-                    var changed = 0;
-                    var minX = 1280; var maxX = -1; var minY = 760; var maxY = -1;
-                    for (var offset = 0; offset < baselinePixels.Length; offset += 4)
-                    {
-                        if (baselinePixels[offset] == restoredPixels[offset] &&
-                            baselinePixels[offset + 1] == restoredPixels[offset + 1] &&
-                            baselinePixels[offset + 2] == restoredPixels[offset + 2] &&
-                            baselinePixels[offset + 3] == restoredPixels[offset + 3])
-                            continue;
-                        changed++;
-                        var px = offset / 4 % 1280;
-                        var py = offset / 4 / 1280;
-                        minX = Math.Min(minX, px); maxX = Math.Max(maxX, px);
-                        minY = Math.Min(minY, py); maxY = Math.Max(maxY, py);
-                    }
+                structural.WindowState = System.Windows.WindowState.Normal;
+                structural.ApplyMaximizedCaptureLayout();
+                ArrangeOffscreen(structural, 1280, 760);
+                if (!ReferenceEquals(structural.CapturePage.Content, originalPanel) ||
+                    originalPanel.Children.Count != 4 ||
+                    structural.HeroSection.Margin != heroMargin ||
+                    gameSection.Margin != gameMargin ||
+                    structural.CaptureWorkflowHeading.Margin != headingMargin ||
+                    structural.ConsoleTextHost.Margin != statusMargin ||
+                    cards.Height != cardHeight || cards.MinHeight != cardMinHeight)
                     throw new InvalidOperationException(
-                        $"Normal restore cycle {cycle + 1}: tree={sameTree}, " +
-                        $"console={sameConsole}, card={sameCard}, pixels={samePixels}, " +
-                        $"changed={changed}, bounds=({minX},{minY})-({maxX},{maxY}), " +
-                        $"scroll={roundTrip.CapturePage.VerticalOffset:F1}, " +
-                        $"cardHeight={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
-                        $"cardOrigin={Origin(roundTrip, roundTrip.StepOneOutline)}/{referenceCardOrigin}, " +
-                        $"gameOrigin={Origin(roundTrip, roundTrip.GameRootOutline)}/{referenceRootOrigin}, " +
-                        $"cut={GTotalOptimizer.App.Visuals.ChamferGeometry.ScaledCut(roundTrip.StepOneOutline, 14):F3}/{baselineCut:F3}, " +
-                        $"window={roundTrip.ActualWidth:F1}x{roundTrip.ActualHeight:F1}/{baselineWindowSize}, " +
-                        $"root={roundTrip.RootLayout.ActualWidth:F1}x{roundTrip.RootLayout.ActualHeight:F1}/{baselineRootSize}");
+                        "Normal local XAML values or original Capture tree changed after maximize/restore cycle " +
+                        (cycle + 1));
+            }
+
+            // An unshown WPF Window has ActualWidth=0 even if its root was
+            // manually arranged at 1280x760. That produced false pixel
+            // differences from retained scene-space neon drawings in #284-290.
+            // For actual screenshot identity use a native shown window and
+            // real WindowState transitions, preserving the same client size.
+            static void DrainDispatcher()
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                    new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+            }
+
+            static (byte[] Pixels, int Width, int Height) SnapshotShown(MainWindow window)
+            {
+                window.RootLayout.UpdateLayout();
+                var root = window.RootLayout;
+                int width = (int)Math.Round(root.ActualWidth);
+                int height = (int)Math.Round(root.ActualHeight);
+                if (width < 900 || height < 500 ||
+                    window.ActualWidth <= 0 || window.ActualHeight <= 0)
+                    throw new InvalidOperationException(
+                        $"Native WPF viewport invalid: root={width}x{height}, " +
+                        $"window={window.ActualWidth:F1}x{window.ActualHeight:F1}");
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    width, height, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                bmp.Render(root);
+                var pixels = new byte[checked(width * height * 4)];
+                bmp.CopyPixels(pixels, width * 4, 0);
+                return (pixels, width, height);
+            }
+
+            var shown = new MainWindow
+            {
+                WpfVerificationMode = true,
+                ShowActivated = false,
+                ShowInTaskbar = false,
+                Left = 80,
+                Top = 80
+            };
+            try
+            {
+                shown.Show();
+                DrainDispatcher();
+                DrainDispatcher();
+                var baseline = SnapshotShown(shown);
+                var stable = SnapshotShown(shown);
+                if (!baseline.Pixels.AsSpan().SequenceEqual(stable.Pixels))
+                    throw new InvalidOperationException(
+                        "Native baseline WPF render unstable before maximizing");
+
+                for (var cycle = 0; cycle < 2; cycle++)
+                {
+                    shown.WindowState = System.Windows.WindowState.Maximized;
+                    DrainDispatcher();
+                    DrainDispatcher();
+                    shown.ApplyMaximizedCaptureLayout();
+                    if (shown.WindowState != System.Windows.WindowState.Maximized ||
+                        shown.CapturePage.Content is not System.Windows.Controls.StackPanel panel ||
+                        panel.Children.Count != 4)
+                        throw new InvalidOperationException(
+                            "Real native WPF maximize did not preserve original Capture tree");
+                    SnapshotShown(shown);
+
+                    shown.WindowState = System.Windows.WindowState.Normal;
+                    DrainDispatcher();
+                    DrainDispatcher();
+                    shown.ApplyMaximizedCaptureLayout();
+                    var restored = SnapshotShown(shown);
+                    if (restored.Width != baseline.Width ||
+                        restored.Height != baseline.Height)
+                        throw new InvalidOperationException(
+                            $"Normal native window size drift after cycle {cycle + 1}: " +
+                            $"{restored.Width}x{restored.Height} vs {baseline.Width}x{baseline.Height}");
+                    if (!baseline.Pixels.AsSpan().SequenceEqual(restored.Pixels))
+                    {
+                        int different = 0, minX = baseline.Width, minY = baseline.Height,
+                            maxX = -1, maxY = -1;
+                        for (int px = 0; px < baseline.Pixels.Length; px += 4)
+                        {
+                            if (baseline.Pixels[px] == restored.Pixels[px] &&
+                                baseline.Pixels[px + 1] == restored.Pixels[px + 1] &&
+                                baseline.Pixels[px + 2] == restored.Pixels[px + 2] &&
+                                baseline.Pixels[px + 3] == restored.Pixels[px + 3])
+                                continue;
+                            different++;
+                            int x = (px / 4) % baseline.Width;
+                            int y = (px / 4) / baseline.Width;
+                            minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                            minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                        }
+                        throw new InvalidOperationException(
+                            $"Native Normal pixel difference after cycle {cycle + 1}: " +
+                            $"{different} pixels, bounds=({minX},{minY})-({maxX},{maxY})");
+                    }
                 }
+            }
+            finally
+            {
+                shown.Close();
+                DrainDispatcher();
             }
 
             var normal = new MainWindow();
@@ -389,7 +451,7 @@ internal static class Program
             VerifyAtSize(new MainWindow(), 1920, 1080);
 
             Console.WriteLine(
-                "PASS packaged WPF Normal-Maximized-Normal pixel identity, expanded cards, and both pages");
+                "PASS packaged native WPF Normal-Maximized-Normal pixel identity, maximized-only card growth and both pages");
             app.Shutdown();
             return 0;
         }

@@ -51,15 +51,19 @@ public partial class MainWindow : Window
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
-    // Maximized mode rearranges existing controls, never the locked normal XAML.
-    private StackPanel? normalCaptureLayout;
-    private Grid[]? maximizedSectionGaps;
+    // The normal XAML tree is permanent. Maximize only overrides values on
+    // existing sections and restores the exact saved local values afterward.
+    private StackPanel? maximizedGameRootSection;
     private Grid? maximizedWorkflowCards;
+    private Thickness normalHeroMargin;
+    private Thickness normalGameRootMargin;
+    private Thickness normalHeadingMargin;
     private double normalWorkflowHeight;
     private double normalWorkflowMinHeight;
     private double normalCaptureScrollOffset;
-    private double expandedMinimumContentHeight;
+    private double normalCaptureContentHeight;
     private readonly Thickness originalConsoleMargin;
+    internal bool WpfVerificationMode { get; set; }
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
 
@@ -228,7 +232,7 @@ public partial class MainWindow : Window
         UpdatePortraitWidth();
         UpdateMaximizedCaptureGeometry();
         if (WindowState == System.Windows.WindowState.Normal &&
-            maximizedSectionGaps is null)
+            maximizedWorkflowCards is null)
             InvalidateSceneNeon();
     }
 
@@ -257,14 +261,14 @@ public partial class MainWindow : Window
 
 
 
-    // The original four Capture sections retain their StackPanel parent in
-    // BOTH modes. Reparenting made 12k Normal pixels differ after restore.
-    // Maximized inserts only inert gaps and expands the original card surfaces.
+    // The four original Capture sections keep their exact XAML parent and
+    // ordering in both window states. Only Height and Margin local values are
+    // different while maximized: no reparenting, spacer controls or Viewboxes.
     internal void ApplyMaximizedCaptureLayout()
     {
         if (WindowState == System.Windows.WindowState.Maximized)
         {
-            if (maximizedSectionGaps is not null)
+            if (maximizedWorkflowCards is not null)
             {
                 UpdateMaximizedCaptureGeometry();
                 return;
@@ -273,52 +277,45 @@ public partial class MainWindow : Window
             if (CapturePage.Content is not StackPanel baseline ||
                 baseline.Children.Count != 4 ||
                 !ReferenceEquals(baseline.Children[0], HeroSection) ||
+                baseline.Children[1] is not StackPanel gameRootSection ||
                 !ReferenceEquals(baseline.Children[2], CaptureWorkflowHeading) ||
                 baseline.Children[3] is not Grid cards ||
                 !double.IsFinite(cards.Height))
                 return;
 
-            normalCaptureLayout = baseline;
+            normalHeroMargin = HeroSection.Margin;
+            normalGameRootMargin = gameRootSection.Margin;
+            normalHeadingMargin = CaptureWorkflowHeading.Margin;
             normalWorkflowHeight = cards.Height;
             normalWorkflowMinHeight = cards.MinHeight;
             normalCaptureScrollOffset = CapturePage.VerticalOffset;
-            expandedMinimumContentHeight = Math.Max(1,
-                baseline.DesiredSize.Height - baseline.Margin.Top - baseline.Margin.Bottom);
+            // DesiredSize describes the unmodified normal sections. Never
+            // recalculate the baseline from already-expanded measurements.
+            normalCaptureContentHeight = baseline.DesiredSize.Height;
+            maximizedGameRootSection = gameRootSection;
             maximizedWorkflowCards = cards;
-
-            var gaps = new[]
-            {
-                new Grid { Height = 0, IsHitTestVisible = false },
-                new Grid { Height = 0, IsHitTestVisible = false },
-                new Grid { Height = 0, IsHitTestVisible = false }
-            };
-            baseline.Children.Insert(1, gaps[0]);
-            baseline.Children.Insert(3, gaps[1]);
-            baseline.Children.Insert(5, gaps[2]);
-            maximizedSectionGaps = gaps;
             UpdateMaximizedCaptureGeometry();
             return;
         }
 
-        if (normalCaptureLayout is null || maximizedSectionGaps is null ||
-            maximizedWorkflowCards is null)
+        if (maximizedWorkflowCards is null || maximizedGameRootSection is null)
             return;
 
-        foreach (var gap in maximizedSectionGaps)
-            normalCaptureLayout.Children.Remove(gap);
+        HeroSection.Margin = normalHeroMargin;
+        maximizedGameRootSection.Margin = normalGameRootMargin;
+        CaptureWorkflowHeading.Margin = normalHeadingMargin;
         maximizedWorkflowCards.Height = normalWorkflowHeight;
         maximizedWorkflowCards.MinHeight = normalWorkflowMinHeight;
         ConsoleTextHost.Margin = originalConsoleMargin;
         var scrollOffset = normalCaptureScrollOffset;
-        maximizedSectionGaps = null;
+        maximizedGameRootSection = null;
         maximizedWorkflowCards = null;
-        normalCaptureLayout = null;
         InvalidateSceneNeon();
         CapturePage.ScrollToVerticalOffset(scrollOffset);
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             if (WindowState == System.Windows.WindowState.Normal &&
-                maximizedSectionGaps is null)
+                maximizedWorkflowCards is null)
                 CapturePage.ScrollToVerticalOffset(scrollOffset);
         }));
     }
@@ -339,33 +336,37 @@ public partial class MainWindow : Window
     private void UpdateMaximizedCaptureGeometry()
     {
         if (WindowState != System.Windows.WindowState.Maximized ||
-            maximizedSectionGaps is null || normalCaptureLayout is null ||
-            maximizedWorkflowCards is null || CapturePage.ActualHeight <= 0)
+            maximizedGameRootSection is null || maximizedWorkflowCards is null ||
+            CapturePage.ActualHeight <= 0)
             return;
 
-        // Distribute additional viewport height only in Maximized:
-        // 70% larger card surfaces, 10% for each section gap.
-        var margin = normalCaptureLayout.Margin;
-        var extra = Math.Max(0, CapturePage.ActualHeight -
-            margin.Top - margin.Bottom - expandedMinimumContentHeight);
-        var desiredHeight = normalWorkflowHeight + extra * .70;
-        if (Math.Abs(maximizedWorkflowCards.Height - desiredHeight) > .1)
-            maximizedWorkflowCards.Height = desiredHeight;
-        foreach (var gap in maximizedSectionGaps)
-        {
-            var desiredGap = extra * .10;
-            if (Math.Abs(gap.Height - desiredGap) > .1)
-                gap.Height = desiredGap;
-        }
+        // The original four sections remain in the same StackPanel. Vertical
+        // surplus is split 10/10/10 percent into their existing bottom margins
+        // and 70 percent into the existing three-card surface. Text, SVG
+        // buttons, icons and the shared spatial-neon mapping are not scaled.
+        var extra = Math.Max(0, CapturePage.ActualHeight - normalCaptureContentHeight);
+        static Thickness WithBottom(Thickness original, double added) =>
+            new(original.Left, original.Top, original.Right, original.Bottom + added);
+        var gap = extra * 0.10;
+        var hero = WithBottom(normalHeroMargin, gap);
+        var root = WithBottom(normalGameRootMargin, gap);
+        var heading = WithBottom(normalHeadingMargin, gap);
+        if (HeroSection.Margin != hero) HeroSection.Margin = hero;
+        if (maximizedGameRootSection.Margin != root) maximizedGameRootSection.Margin = root;
+        if (CaptureWorkflowHeading.Margin != heading) CaptureWorkflowHeading.Margin = heading;
+        var cardHeight = normalWorkflowHeight + extra * 0.70;
+        if (Math.Abs(maximizedWorkflowCards.Height - cardHeight) > .1)
+            maximizedWorkflowCards.Height = cardHeight;
 
-        // Offset only the maximized console from V's taller painted footprint.
+        // The tall V silhouette occupies more horizontal space on fullscreen.
+        // This offset applies exclusively to the maximized status text.
         var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
         var shift = Math.Max(0, overhang - 24);
-        var desired = new Thickness(originalConsoleMargin.Left + shift,
+        var console = new Thickness(originalConsoleMargin.Left + shift,
             originalConsoleMargin.Top, originalConsoleMargin.Right,
             originalConsoleMargin.Bottom);
-        if (ConsoleTextHost.Margin != desired)
-            ConsoleTextHost.Margin = desired;
+        if (ConsoleTextHost.Margin != console)
+            ConsoleTextHost.Margin = console;
     }
 
     private void SetActiveTab(bool results)
@@ -409,6 +410,7 @@ public partial class MainWindow : Window
         UpdatePortraitWidth();
         ApplyMaximizedCaptureLayout();
         QueueHeaderTabAlignment();
+        if (WpfVerificationMode) return; // Visual-only native CI window.
         // Subscribe before the one-time initial enumeration so no process
         // launch can fall between enumeration and notification registration.
         var notificationsAvailable = gameProcesses.TryStartNotifications(out var error);
@@ -611,6 +613,7 @@ public partial class MainWindow : Window
 
     private void Window_Activated(object sender, EventArgs e)
     {
+        if (WpfVerificationMode) return;
         if (!initialized || busy ||
             WindowState == System.Windows.WindowState.Minimized) return;
         if (portraitStage is PortraitStage.Capturing or PortraitStage.Collecting)
@@ -628,6 +631,7 @@ public partial class MainWindow : Window
     private void Window_StateChanged(object sender, EventArgs e)
     {
         ApplyMaximizedCaptureLayout();
+        if (WpfVerificationMode) return;
         if (WindowState == System.Windows.WindowState.Minimized)
         {
             glitchTimer.Stop();
@@ -651,6 +655,7 @@ public partial class MainWindow : Window
     private async void Window_Closing(object? sender,
         System.ComponentModel.CancelEventArgs e)
     {
+        if (WpfVerificationMode) return;
         if (!initialized || closureCleanupVerified) return;
         e.Cancel = true;
         if (closingInProgress) return;
