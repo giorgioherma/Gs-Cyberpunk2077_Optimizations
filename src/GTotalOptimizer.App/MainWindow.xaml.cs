@@ -53,8 +53,7 @@ public partial class MainWindow : Window
     private bool initialized;
     // Maximized mode rearranges existing controls, never the locked normal XAML.
     private StackPanel? normalCaptureLayout;
-    private UIElement[]? normalCaptureSections;
-    private Grid? maximizedCaptureLayout;
+    private Grid[]? maximizedSectionGaps;
     private Grid? maximizedWorkflowCards;
     private double normalWorkflowHeight;
     private double normalWorkflowMinHeight;
@@ -229,7 +228,7 @@ public partial class MainWindow : Window
         UpdatePortraitWidth();
         UpdateMaximizedCaptureGeometry();
         if (WindowState == System.Windows.WindowState.Normal &&
-            maximizedCaptureLayout is null)
+            maximizedSectionGaps is null)
             InvalidateSceneNeon();
     }
 
@@ -257,14 +256,15 @@ public partial class MainWindow : Window
     }
 
 
-    // Use the original StackPanel unchanged in Normal. In Maximized only,
-    // arrange its four existing sections in a weighted Grid. No duplicated
-    // controls, Viewboxes, style changes or scaled card contents.
+
+    // The original four Capture sections retain their StackPanel parent in
+    // BOTH modes. Reparenting made 12k Normal pixels differ after restore.
+    // Maximized inserts only inert gaps and expands the original card surfaces.
     internal void ApplyMaximizedCaptureLayout()
     {
         if (WindowState == System.Windows.WindowState.Maximized)
         {
-            if (maximizedCaptureLayout is not null)
+            if (maximizedSectionGaps is not null)
             {
                 UpdateMaximizedCaptureGeometry();
                 return;
@@ -276,11 +276,9 @@ public partial class MainWindow : Window
                 !ReferenceEquals(baseline.Children[2], CaptureWorkflowHeading) ||
                 baseline.Children[3] is not Grid cards ||
                 !double.IsFinite(cards.Height))
-                return; // Fail safe if a future normal layout changes.
+                return;
 
             normalCaptureLayout = baseline;
-            normalCaptureSections = new UIElement[baseline.Children.Count];
-            baseline.Children.CopyTo(normalCaptureSections, 0);
             normalWorkflowHeight = cards.Height;
             normalWorkflowMinHeight = cards.MinHeight;
             normalCaptureScrollOffset = CapturePage.VerticalOffset;
@@ -288,70 +286,42 @@ public partial class MainWindow : Window
                 baseline.DesiredSize.Height - baseline.Margin.Top - baseline.Margin.Bottom);
             maximizedWorkflowCards = cards;
 
-            // Reserve proportional slack for each section, but prioritize
-            // real card growth before any extra whitespace between sections.
-            var expanded = new Grid { Margin = baseline.Margin };
-            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
-            expanded.RowDefinitions.Add(new RowDefinition
+            var gaps = new[]
             {
-                Height = new GridLength(4, GridUnitType.Star),
-                MinHeight = normalWorkflowHeight
-            });
-
-            CapturePage.Content = null;
-            baseline.Children.Clear();
-            for (var index = 0; index < normalCaptureSections.Length; index++)
-            {
-                var element = normalCaptureSections[index];
-                Grid.SetRow(element, index * 2);
-                expanded.Children.Add(element);
-            }
-            cards.Height = double.NaN;
-            cards.MinHeight = normalWorkflowHeight;
-            maximizedCaptureLayout = expanded;
-            CapturePage.Content = expanded;
+                new Grid { Height = 0, IsHitTestVisible = false },
+                new Grid { Height = 0, IsHitTestVisible = false },
+                new Grid { Height = 0, IsHitTestVisible = false }
+            };
+            baseline.Children.Insert(1, gaps[0]);
+            baseline.Children.Insert(3, gaps[1]);
+            baseline.Children.Insert(5, gaps[2]);
+            maximizedSectionGaps = gaps;
             UpdateMaximizedCaptureGeometry();
             return;
         }
 
-        if (maximizedCaptureLayout is null || normalCaptureLayout is null ||
-            normalCaptureSections is null || maximizedWorkflowCards is null)
+        if (normalCaptureLayout is null || maximizedSectionGaps is null ||
+            maximizedWorkflowCards is null)
             return;
 
-        CapturePage.Content = null;
-        maximizedCaptureLayout.Children.Clear();
-        foreach (var element in normalCaptureSections)
-        {
-            element.ClearValue(Grid.RowProperty);
-            normalCaptureLayout.Children.Add(element);
-        }
+        foreach (var gap in maximizedSectionGaps)
+            normalCaptureLayout.Children.Remove(gap);
         maximizedWorkflowCards.Height = normalWorkflowHeight;
         maximizedWorkflowCards.MinHeight = normalWorkflowMinHeight;
         ConsoleTextHost.Margin = originalConsoleMargin;
         var scrollOffset = normalCaptureScrollOffset;
-        CapturePage.Content = normalCaptureLayout;
-        // SpatialNeonField brushes sample absolute root coordinates at render
-        // time. A parent/position change with unchanged element size does not
-        // automatically invalidate WPF's retained drawing instructions.
-        InvalidateSceneNeon();
-        maximizedCaptureLayout = null;
+        maximizedSectionGaps = null;
         maximizedWorkflowCards = null;
-        normalCaptureSections = null;
         normalCaptureLayout = null;
+        InvalidateSceneNeon();
         CapturePage.ScrollToVerticalOffset(scrollOffset);
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             if (WindowState == System.Windows.WindowState.Normal &&
-                maximizedCaptureLayout is null)
+                maximizedSectionGaps is null)
                 CapturePage.ScrollToVerticalOffset(scrollOffset);
         }));
     }
-
 
     private void InvalidateSceneNeon()
     {
@@ -369,23 +339,28 @@ public partial class MainWindow : Window
     private void UpdateMaximizedCaptureGeometry()
     {
         if (WindowState != System.Windows.WindowState.Maximized ||
-            maximizedCaptureLayout is null || normalCaptureLayout is null ||
-            CapturePage.ActualHeight <= 0)
+            maximizedSectionGaps is null || normalCaptureLayout is null ||
+            maximizedWorkflowCards is null || CapturePage.ActualHeight <= 0)
             return;
 
-        // ScrollViewer measures with infinite height; supply its real viewport
-        // height only in maximized mode to activate weighted Grid rows.
+        // Distribute additional viewport height only in Maximized:
+        // 70% larger card surfaces, 10% for each section gap.
         var margin = normalCaptureLayout.Margin;
-        var height = Math.Max(expandedMinimumContentHeight,
-            CapturePage.ActualHeight - margin.Top - margin.Bottom);
-        if (double.IsNaN(maximizedCaptureLayout.Height) ||
-            Math.Abs(maximizedCaptureLayout.Height - height) > .1)
-            maximizedCaptureLayout.Height = height;
+        var extra = Math.Max(0, CapturePage.ActualHeight -
+            margin.Top - margin.Bottom - expandedMinimumContentHeight);
+        var desiredHeight = normalWorkflowHeight + extra * .70;
+        if (Math.Abs(maximizedWorkflowCards.Height - desiredHeight) > .1)
+            maximizedWorkflowCards.Height = desiredHeight;
+        foreach (var gap in maximizedSectionGaps)
+        {
+            var desiredGap = extra * .10;
+            if (Math.Abs(gap.Height - desiredGap) > .1)
+                gap.Height = desiredGap;
+        }
 
-        // Keep the bottom console clear of the tall V without moving its
-        // original Normal placement or the compact Continue button.
-        var portraitOverhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
-        var shift = Math.Max(0, portraitOverhang - 24);
+        // Offset only the maximized console from V's taller painted footprint.
+        var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
+        var shift = Math.Max(0, overhang - 24);
         var desired = new Thickness(originalConsoleMargin.Left + shift,
             originalConsoleMargin.Top, originalConsoleMargin.Right,
             originalConsoleMargin.Bottom);

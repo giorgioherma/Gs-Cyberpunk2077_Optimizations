@@ -322,7 +322,8 @@ internal static class Program
                 roundTrip.WindowState = System.Windows.WindowState.Maximized;
                 roundTrip.ApplyMaximizedCaptureLayout();
                 Snapshot(roundTrip, 1700, 900);
-                if (roundTrip.CapturePage.Content is not System.Windows.Controls.Grid ||
+                if (!ReferenceEquals(originalTree, roundTrip.CapturePage.Content) ||
+                    roundTrip.CapturePage.Content is not System.Windows.Controls.StackPanel ||
                     roundTrip.StepOneOutline.ActualHeight <= baselineCardHeight + 15 ||
                     Math.Abs(roundTrip.InstallStageIcon.ActualHeight - baselineIconHeight) > .1 ||
                     Math.Abs(roundTrip.InstallButton.ActualHeight - baselineButtonHeight) > .1 ||
@@ -333,7 +334,6 @@ internal static class Program
                         "Maximized layout did not grow cards while preserving native icon/button sizes and shared neon: " +
                         $"container={roundTrip.CapturePage.Content?.GetType().Name}, " +
                         $"viewport={roundTrip.CapturePage.ActualHeight:F1}, " +
-                        $"gridHeight={(roundTrip.CapturePage.Content as System.Windows.Controls.Grid)?.Height:F1}, " +
                         $"card={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
                         $"icon={roundTrip.InstallStageIcon.ActualHeight:F1}/{baselineIconHeight:F1}, " +
                         $"button={roundTrip.InstallButton.ActualHeight:F1}/{baselineButtonHeight:F1}, " +
