@@ -10,6 +10,7 @@ on:
       - 'Directory.Build.props'
       - 'integrations/three-profiler-test/Build-Test.ps1'
       - 'src/GTotalOptimizer.App/**'
+      - 'assets/ui/elements/**'
       - 'src/GTotalOptimizer.Launcher/**'
       - 'src/GTotalOptimizer.Core/**'
       - 'tests/GTotalOptimizer.Core.Tests/**'
