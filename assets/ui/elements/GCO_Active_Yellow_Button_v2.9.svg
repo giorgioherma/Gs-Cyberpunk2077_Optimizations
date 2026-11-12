@@ -128,7 +128,7 @@
   <!-- One continuous lower-right inner highlight, tucked inside outer shell -->
   <path d="M550 94H724L740 78V64" stroke="url(#lowerRightLine)" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <use href="#buttonShape" fill="none" stroke="url(#outline)" stroke-width="3.8"/>
+  <use href="#buttonShape" fill="none" stroke="url(#outline)" stroke-width="3.2"/>
   <path d="M667 92L680 75H692L679 92H667Z" fill="#00DDEF"/>
   <path d="M686 92L699 75H711L698 92H686Z" fill="#00DDEF"/>
 
