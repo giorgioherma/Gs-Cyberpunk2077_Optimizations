@@ -285,16 +285,18 @@ public partial class MainWindow : Window
                 baseline.DesiredSize.Height - baseline.Margin.Top - baseline.Margin.Bottom);
             maximizedWorkflowCards = cards;
 
+            // Reserve proportional slack for each section, but prioritize
+            // real card growth before any extra whitespace between sections.
             var expanded = new Grid { Margin = baseline.Margin };
             expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
             expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
             expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.5, GridUnitType.Star) });
             expanded.RowDefinitions.Add(new RowDefinition
             {
-                Height = new GridLength(2, GridUnitType.Star),
+                Height = new GridLength(4, GridUnitType.Star),
                 MinHeight = normalWorkflowHeight
             });
 
