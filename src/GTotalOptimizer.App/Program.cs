@@ -313,7 +313,15 @@ internal static class Program
                     !roundTrip.StepTwoOutline.SpatialStroke ||
                     !roundTrip.StepThreeOutline.SpatialStroke)
                     throw new InvalidOperationException(
-                        "Maximized layout did not grow cards while preserving native icon/button sizes and shared neon");
+                        "Maximized layout did not grow cards while preserving native icon/button sizes and shared neon: " +
+                        $"container={roundTrip.CapturePage.Content?.GetType().Name}, " +
+                        $"viewport={roundTrip.CapturePage.ActualHeight:F1}, " +
+                        $"gridHeight={(roundTrip.CapturePage.Content as System.Windows.Controls.Grid)?.Height:F1}, " +
+                        $"card={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
+                        $"icon={roundTrip.InstallStageIcon.ActualHeight:F1}/{baselineIconHeight:F1}, " +
+                        $"button={roundTrip.InstallButton.ActualHeight:F1}/{baselineButtonHeight:F1}, " +
+                        $"spatial={roundTrip.StepOneOutline.SpatialStroke}/" +
+                        $"{roundTrip.StepTwoOutline.SpatialStroke}/{roundTrip.StepThreeOutline.SpatialStroke}");
 
                 roundTrip.WindowState = System.Windows.WindowState.Normal;
                 roundTrip.ApplyMaximizedCaptureLayout();
