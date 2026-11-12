@@ -82,18 +82,20 @@
       <stop offset="0%" stop-color="#7F5708" stop-opacity="0.12"/>
       <stop offset="100%" stop-color="#7F5708" stop-opacity="0"/>
     </linearGradient>
-  <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#49E6F4"/>
-      <stop offset="40%" stop-color="#27BCCC"/>
-      <stop offset="80%" stop-color="#0D9DAF"/>
-      <stop offset="100%" stop-color="#5AEAF4"/>
+    <!-- Deep graphite-to-black rim: contrast against the gold, no cyan. -->
+    <linearGradient id="outline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080B0D"/>
+      <stop offset="40%" stop-color="#1B1D1C"/>
+      <stop offset="80%" stop-color="#05090B"/>
+      <stop offset="100%" stop-color="#121618"/>
     </linearGradient>
     <filter id="rimGlow" x="-10%" y="-60%" width="120%" height="220%">
-      <feGaussianBlur stdDeviation="3.0"/>
+      <feGaussianBlur stdDeviation="4.8"/>
     </filter>
     </defs>
 
-  <use href="#buttonShape" fill="none" stroke="#00DBED" stroke-width="3.4" filter="url(#rimGlow)" stroke-opacity=".28"/>
+  <!-- Soft outer dark halo, on the actual shell path rather than a new inset outline. -->
+  <use href="#buttonShape" fill="none" stroke="#020406" stroke-width="8.4" filter="url(#rimGlow)" stroke-opacity=".82"/>
   <use href="#buttonShape" fill="url(#bodyGradient)"/>
   <use href="#buttonShape" fill="url(#topLight)"/>
   <use href="#buttonShape" fill="url(#lowerShade)"/>
@@ -102,6 +104,14 @@
   <g clip-path="url(#buttonClip)" mask="url(#stripeFade)">
     <path d="M169 10H293L155 102H30Z" fill="#FFD51C" opacity="0.42" filter="url(#sheenSoftGlow)"/>
     <path d="M169 10H293L155 102H30Z" fill="url(#diagonalSheen)"/>
+  </g>
+
+  <!-- Graduated dark edge shading *inside* the gold. The three translucent
+       strokes share exactly the same shell path: no offset/stacked outline. -->
+  <g clip-path="url(#buttonClip)" fill="none" stroke="#030608" stroke-linejoin="round">
+    <use href="#buttonShape" stroke-width="20" stroke-opacity=".10"/>
+    <use href="#buttonShape" stroke-width="13" stroke-opacity=".12"/>
+    <use href="#buttonShape" stroke-width="7" stroke-opacity=".17"/>
   </g>
 
   <!-- Layered glow is emitted by the exact 1.4 corner path, with brighter white near the source
@@ -118,8 +128,9 @@
   <!-- One continuous lower-right inner highlight, tucked inside outer shell -->
   <path d="M550 94H724L740 78V64" stroke="url(#lowerRightLine)" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <use href="#buttonShape" fill="none" stroke="url(#outline)" stroke-width="2.2"/><path d="M667 92L680 75H692L679 92H667Z" fill="#11DDF8"/>
-  <path d="M686 92L699 75H711L698 92H686Z" fill="#11DDF8"/>
+  <use href="#buttonShape" fill="none" stroke="url(#outline)" stroke-width="2.8"/>
+  <path d="M667 92L680 75H692L679 92H667Z" fill="#090D0F"/>
+  <path d="M686 92L699 75H711L698 92H686Z" fill="#090D0F"/>
 
-  <text x="380" y="66" text-anchor="middle" font-family="Rajdhani, Oxanium, Arial Narrow, sans-serif" font-size="26" font-weight="700" letter-spacing="1.0" fill="#00DDEB">INSTALL PROFILERS</text>
+  <text x="380" y="66" text-anchor="middle" font-family="Rajdhani, Oxanium, Arial Narrow, sans-serif" font-size="26" font-weight="700" letter-spacing="1.0" fill="#090D0F">INSTALL PROFILERS</text>
 </svg>

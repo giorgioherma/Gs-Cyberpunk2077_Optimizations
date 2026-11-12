@@ -128,7 +128,7 @@
         <!-- Owner-standardized 760x112 SVGs: active yellow v2.9, inactive v3.3,
              restore v1.4. One shared shell, uniform scaling, live WPF text. -->
         <Style x:Key="StageActionButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#00DDEB"/>
+            <Setter Property="Foreground" Value="#090D0F"/>
             <Setter Property="FontFamily" Value="{StaticResource Oxanium}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="ExtraBold"/>
