@@ -300,8 +300,6 @@ internal static class Program
                 var root = (System.Windows.FrameworkElement)w.Content;
                 return element.TranslatePoint(new System.Windows.Point(0, 0), root);
             }
-            var referenceCardOrigin = Origin(roundTrip, roundTrip.StepOneOutline);
-            var referenceRootOrigin = Origin(roundTrip, roundTrip.GameRootOutline);
             // First rendering can initialize WPF's embedded SVG brushes.
             // Require a stable second Normal render before round-trip testing.
             var warmPixels = Snapshot(roundTrip, 1280, 760);
@@ -309,6 +307,12 @@ internal static class Program
             if (!warmPixels.AsSpan().SequenceEqual(baselinePixels))
                 throw new InvalidOperationException(
                     "Offscreen Normal rendering is not stable even before maximizing");
+            var referenceCardOrigin = Origin(roundTrip, roundTrip.StepOneOutline);
+            var referenceRootOrigin = Origin(roundTrip, roundTrip.GameRootOutline);
+            var baselineCut = GTotalOptimizer.App.Visuals.ChamferGeometry.ScaledCut(
+                roundTrip.StepOneOutline, 14);
+            var baselineWindowSize = new System.Windows.Size(roundTrip.ActualWidth, roundTrip.ActualHeight);
+            var baselineRootSize = new System.Windows.Size(roundTrip.RootLayout.ActualWidth, roundTrip.RootLayout.ActualHeight);
             var baselineCardHeight = roundTrip.StepOneOutline.ActualHeight;
             var baselineIconHeight = roundTrip.InstallStageIcon.ActualHeight;
             var baselineButtonHeight = roundTrip.InstallButton.ActualHeight;
@@ -367,7 +371,10 @@ internal static class Program
                         $"scroll={roundTrip.CapturePage.VerticalOffset:F1}, " +
                         $"cardHeight={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
                         $"cardOrigin={Origin(roundTrip, roundTrip.StepOneOutline)}/{referenceCardOrigin}, " +
-                        $"gameOrigin={Origin(roundTrip, roundTrip.GameRootOutline)}/{referenceRootOrigin}");
+                        $"gameOrigin={Origin(roundTrip, roundTrip.GameRootOutline)}/{referenceRootOrigin}, " +
+                        $"cut={GTotalOptimizer.App.Visuals.ChamferGeometry.ScaledCut(roundTrip.StepOneOutline, 14):F3}/{baselineCut:F3}, " +
+                        $"window={roundTrip.ActualWidth:F1}x{roundTrip.ActualHeight:F1}/{baselineWindowSize}, " +
+                        $"root={roundTrip.RootLayout.ActualWidth:F1}x{roundTrip.RootLayout.ActualHeight:F1}/{baselineRootSize}");
                 }
             }
 
