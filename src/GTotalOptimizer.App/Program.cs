@@ -295,7 +295,13 @@ internal static class Program
             var roundTrip = new MainWindow();
             var originalTree = roundTrip.CapturePage.Content;
             var originalConsoleMargin = roundTrip.ConsoleTextHost.Margin;
+            // First rendering can initialize WPF's embedded SVG brushes.
+            // Require a stable second Normal render before round-trip testing.
+            var warmPixels = Snapshot(roundTrip, 1280, 760);
             var baselinePixels = Snapshot(roundTrip, 1280, 760);
+            if (!warmPixels.AsSpan().SequenceEqual(baselinePixels))
+                throw new InvalidOperationException(
+                    "Offscreen Normal rendering is not stable even before maximizing");
             var baselineCardHeight = roundTrip.StepOneOutline.ActualHeight;
             var baselineIconHeight = roundTrip.InstallStageIcon.ActualHeight;
             var baselineButtonHeight = roundTrip.InstallButton.ActualHeight;
@@ -326,12 +332,34 @@ internal static class Program
                 roundTrip.WindowState = System.Windows.WindowState.Normal;
                 roundTrip.ApplyMaximizedCaptureLayout();
                 var restoredPixels = Snapshot(roundTrip, 1280, 760);
-                if (!ReferenceEquals(originalTree, roundTrip.CapturePage.Content) ||
-                    roundTrip.ConsoleTextHost.Margin != originalConsoleMargin ||
-                    Math.Abs(roundTrip.StepOneOutline.ActualHeight - baselineCardHeight) > .1 ||
-                    !baselinePixels.AsSpan().SequenceEqual(restoredPixels))
+                var sameTree = ReferenceEquals(originalTree, roundTrip.CapturePage.Content);
+                var sameConsole = roundTrip.ConsoleTextHost.Margin == originalConsoleMargin;
+                var sameCard = Math.Abs(roundTrip.StepOneOutline.ActualHeight - baselineCardHeight) <= .1;
+                var samePixels = baselinePixels.AsSpan().SequenceEqual(restoredPixels);
+                if (!sameTree || !sameConsole || !sameCard || !samePixels)
+                {
+                    var changed = 0;
+                    var minX = 1280; var maxX = -1; var minY = 760; var maxY = -1;
+                    for (var offset = 0; offset < baselinePixels.Length; offset += 4)
+                    {
+                        if (baselinePixels[offset] == restoredPixels[offset] &&
+                            baselinePixels[offset + 1] == restoredPixels[offset + 1] &&
+                            baselinePixels[offset + 2] == restoredPixels[offset + 2] &&
+                            baselinePixels[offset + 3] == restoredPixels[offset + 3])
+                            continue;
+                        changed++;
+                        var px = offset / 4 % 1280;
+                        var py = offset / 4 / 1280;
+                        minX = Math.Min(minX, px); maxX = Math.Max(maxX, px);
+                        minY = Math.Min(minY, py); maxY = Math.Max(maxY, py);
+                    }
                     throw new InvalidOperationException(
-                        "Normal UI pixels or original panel changed after maximize/restore cycle " + (cycle + 1));
+                        $"Normal restore cycle {cycle + 1}: tree={sameTree}, " +
+                        $"console={sameConsole}, card={sameCard}, pixels={samePixels}, " +
+                        $"changed={changed}, bounds=({minX},{minY})-({maxX},{maxY}), " +
+                        $"scroll={roundTrip.CapturePage.VerticalOffset:F1}, " +
+                        $"cardHeight={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}");
+                }
             }
 
             var normal = new MainWindow();
