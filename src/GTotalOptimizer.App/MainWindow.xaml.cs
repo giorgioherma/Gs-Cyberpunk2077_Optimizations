@@ -654,15 +654,14 @@ public partial class MainWindow : Window
             QueueGameReconciliation();
     }
 
-    // Capture is a compact general status line, never a hoverable report.
-    // Technical owner details are not displayed; the Resolver/Analyze page
-    // is responsible for substantive diagnostics and optimization findings.
+    // The Capture console is the main workflow guide: brief normal statuses,
+    // distinct action rows for framework blockers and missing capture evidence.
     private void SetStatus(string message) =>
-        StatusText.Text = UserFacingConsoleText.Compact(consolePinned ?? message);
+        StatusText.Text = UserFacingConsoleText.Render(consolePinned ?? message);
     private void PinStatus(string message, string? detail = null)
     {
         consolePinned = message;
-        StatusText.Text = UserFacingConsoleText.Compact(message);
+        StatusText.Text = UserFacingConsoleText.Render(message);
         if (!string.IsNullOrWhiteSpace(detail))
             Trace.TraceInformation("GCO capture status detail: " + detail);
     }
@@ -740,7 +739,7 @@ public partial class MainWindow : Window
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
             SetStatus(Workflow.HasRecoveryJournal
                 ? "Game folder unavailable. Use RESTORE PROFILERS."
-                : "Select a valid Cyberpunk 2077 game folder.");
+                : "Select the Cyberpunk 2077 game folder containing bin/x64/Cyberpunk2077.exe.");
             return;
         }
         var redOwners = RedscriptModCounter.CountPhysical(current.GameRoot);
@@ -818,16 +817,16 @@ public partial class MainWindow : Window
 
             SetStatus(foreignSession
                 ? "Another game session is pending. Restore it before switching games."
-                : !framework.Ready ? "Framework check failed. See requirements above."
-                : running ? "Cyberpunk running. Use F11 to start/stop profiling."
+                : !framework.Ready ? UserFacingConsoleText.FrameworkGuidance(framework)
+                : running ? "Cyberpunk running. F11 starts profiling; F11 again stops it.\nClose the game, then COLLECT RESULTS."
                 : saved?.CollectionAttempted == true
-                    ? CaptureAdmissionPolicy.CollectionStatus(saved)
+                    ? UserFacingConsoleText.CollectionGuidance(saved)
                     : readyToCollect
                         ? "Game closed. Click COLLECT RESULTS."
                         : state.BothInstalled
-                            ? "Profilers installed. Ready to start Cyberpunk."
+                            ? "Profilers installed. Click START CYBERPUNK.\nIn-game: F11 start, F11 stop."
                             : session
-                                ? "Profiler recovery needed. Click RESTORE PROFILERS."
+                                ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
                                 : $"CET: {cetProfiler} | REDscript: {redProfiler}.");
             if (HasNative(saved) && portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
@@ -857,7 +856,12 @@ public partial class MainWindow : Window
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         ClearStatusPin();
         var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
-        if (!frameworks.Ready) { Warn(frameworks.Detail, "Framework preflight"); return; }
+        if (!frameworks.Ready)
+        {
+            Trace.TraceWarning("Framework preflight: " + frameworks.Detail);
+            PinStatus(UserFacingConsoleText.FrameworkGuidance(frameworks));
+            return;
+        }
         SetBusy(true);
         SetStatus("Installing CET and REDscript profilers...");
         try
@@ -1139,8 +1143,7 @@ public partial class MainWindow : Window
             var nativeWarning = native.Ok &&
                 (saved.CetReadyBeforeAttempt || saved.RedscriptReadyBeforeAttempt)
                     ? native.Detail : native.Ok ? null : native.Detail;
-            PinStatus(CaptureAdmissionPolicy.CollectionStatus(saved, frameWarning,
-                nativeWarning),
+            PinStatus(UserFacingConsoleText.CollectionGuidance(saved),
                 "Collection: " + native.Detail +
                 (frameWarning is null ? "" : " | PresentMon: " + frameWarning) +
                 (nativeWarning is null ? "" : " | Native: " + nativeWarning));

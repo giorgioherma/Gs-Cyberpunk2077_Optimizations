@@ -665,6 +665,52 @@ try
         "This is an overlong internal operation diagnostic. " + new string('x', 180))
             .Length <= UserFacingConsoleText.MaxLength,
         "unexpected backend diagnostics cannot overflow the Capture console");
+    // The Capture console is the only ordinary step-by-step diagnostic panel.
+    // Preserve all preflight blockers and next actions, not just a vague error.
+    var frameworkGuide = UserFacingConsoleText.FrameworkGuidance(new(
+        new[]
+        {
+            "Cyberpunk 2077 2.31 is required; found 2.5",
+            "CET requires 1.37.1; found 1.38.1",
+            "0-Engine is missing from CET mods (expected 0-Engine/init.lua)",
+            "RED4ext requires 1.30.0; found 1.31.0",
+            "redscript requires 0.5.31; found 0.5.32"
+        }));
+    Require(frameworkGuide.Split('\n').Length == 6 &&
+        frameworkGuide.Contains("Cyberpunk 2077 2.31 required; found 2.5") &&
+        frameworkGuide.Contains("CET requires 1.37.1; found 1.38.1") &&
+        frameworkGuide.Contains("0-Engine: missing init.lua") &&
+        frameworkGuide.Contains("RED4ext requires 1.30.0; found 1.31.0") &&
+        frameworkGuide.Contains("redscript requires 0.5.31; found 0.5.32") &&
+        frameworkGuide.Split('\n').All(line => line.Length <= UserFacingConsoleText.MaxLength),
+        "console lists every blocker and required/found framework version in separate bounded rows");
+    Require(UserFacingConsoleText.FrameworkGuidance(new(Array.Empty<string>()))
+            == "Frameworks verified. Click INSTALL PROFILERS." &&
+        UserFacingConsoleText.FrameworkGuidance(new(
+            new[] { "redscript 0.5.31 scc.exe recognized, but scc_lib.dll does not match the official 0.5.31 release." }))
+            .Contains("Reinstall official 0.5.31 files.") &&
+        UserFacingConsoleText.FrameworkGuidance(new(
+            new[] { "CET 1.37.1 is missing" })).Contains("Install the required version."),
+        "verified preflight allows install; missing or mismatched dependencies give exact fixes");
+
+    var captureGuide = UserFacingConsoleText.CollectionGuidance(
+        attemptedDual with { Redscript = null });
+    Require(captureGuide.Contains("REDscript MISSING") &&
+        captureGuide.Contains("START CYBERPUNK") && captureGuide.Contains("F11 start") &&
+        UserFacingConsoleText.CollectionGuidance(attemptedDual).Contains("Click CONTINUE") &&
+        UserFacingConsoleText.CollectionGuidance(
+            attemptedDual with { PresentMonStopVerified = false }).Contains("retry COLLECT RESULTS"),
+        "console guides missing native evidence, verified success and unverified PresentMon stop");
+    Require(UserFacingConsoleText.Render("First action.\nSecond action.") ==
+            "First action.\nSecond action." &&
+        UserFacingConsoleText.Render(string.Join("\n", Enumerable.Repeat(new string('x', 150), 9)))
+            .Split('\n').Length == UserFacingConsoleText.MaxGuidanceLines &&
+        UserFacingConsoleText.Render(string.Join("\n", Enumerable.Repeat(new string('x', 150), 9)))
+            .Split('\n').All(line => line.Length <= UserFacingConsoleText.MaxLength) &&
+        !UserFacingConsoleText.Failure("Start", new string('x', 300))
+            .Contains("Hover", StringComparison.OrdinalIgnoreCase),
+        "console preserves bounded multi-row instructions and never relies on hover-only diagnostics");
+
     var failedStop = CollectedCaptureStore.MarkCollectionAttempted(package,
         archiveGame, sessionId, presentMonStopped: false);
     Require(CaptureAdmissionPolicy.CollectionStatus(failedStop).Contains(

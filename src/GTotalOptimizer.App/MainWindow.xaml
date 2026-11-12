@@ -481,7 +481,7 @@
             <Grid Grid.Column="1" Panel.ZIndex="2" Background="Transparent" ClipToBounds="True">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="63"/>
+                    <RowDefinition Height="88"/>
                 </Grid.RowDefinitions>
                 <ScrollViewer x:Name="CapturePage" Grid.Row="0"
                               VerticalScrollBarVisibility="Auto"
@@ -719,16 +719,19 @@
                     </Grid.ColumnDefinitions>
                     <!-- RESTORE reuses the first stage action, not a footer button. -->
                     <Grid x:Name="ConsoleTextHost" Grid.Column="0"
-                          Margin="-7,-30,9,19" Background="Transparent">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="StatusText" Grid.Column="0"
-                                   Margin="25,0,0,0"
-                                   Foreground="#BFE0E6" FontSize="12.5"
-                                   VerticalAlignment="Center" TextWrapping="Wrap"
-                                   Text="Select the Cyberpunk 2077 game folder."/>
+                          Margin="-7,-6,9,4" Background="Transparent">
+                        <!-- Restore multiple visible guidance rows; allow scrolling
+                             if all five framework gates fail at once. Keep the
+                             standard one-line status centered in this space. -->
+                        <ScrollViewer Margin="25,0,5,0" MaxHeight="80"
+                                      VerticalAlignment="Center"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock x:Name="StatusText" Foreground="#BFE0E6"
+                                       FontSize="12.5" LineHeight="16.5"
+                                       TextWrapping="Wrap"
+                                       Text="Select the Cyberpunk 2077 game folder."/>
+                        </ScrollViewer>
                     </Grid>
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
                             Margin="-10,-20,10,20"
