@@ -27,6 +27,16 @@ public sealed record GameInspection(
 
 public static class GameInspector
 {
+    // A refresh of the SAME verified installation is read-only: it should
+    // never briefly revoke already presented actions while owner status
+    // is loading. A changed, invalid, or unavailable root must invalidate
+    // those actions immediately before awaiting the next status inspection.
+    public static bool SameVerifiedGameRoot(GameInspection previous, GameInspection next) =>
+        previous.IsValidGame && next.IsValidGame &&
+        !string.IsNullOrWhiteSpace(previous.GameRoot) &&
+        !string.IsNullOrWhiteSpace(next.GameRoot) &&
+        string.Equals(previous.GameRoot, next.GameRoot, StringComparison.OrdinalIgnoreCase);
+
     public static GameInspection Inspect(string? selection)
     {
         if (string.IsNullOrWhiteSpace(selection))

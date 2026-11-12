@@ -14,6 +14,26 @@ try
     Require(!Mo2FeatureGate.Enabled,
         "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
 
+    // Focus revalidation of the same verified root must preserve visible
+    // workflow states until fresh owner evidence arrives. Different/invalid
+    // roots must revoke cached button permissions immediately.
+    var verifiedRoot = new GameInspection(true, Array.Empty<ComponentCheck>(),
+        @"D:\\Games\\Cyberpunk 2077", SourceKind: SourceKind.GameRoot);
+    Require(GameInspector.SameVerifiedGameRoot(verifiedRoot,
+            verifiedRoot with { CetModCount = 42 }) &&
+        GameInspector.SameVerifiedGameRoot(verifiedRoot,
+            verifiedRoot with { GameRoot = @"d:\\games\\CYBERPUNK 2077" }),
+        "focus refresh preserves action visuals for the same verified game root");
+    Require(!GameInspector.SameVerifiedGameRoot(verifiedRoot,
+            verifiedRoot with { GameRoot = @"D:\\Games\\AnotherCyberpunk" }) &&
+        !GameInspector.SameVerifiedGameRoot(verifiedRoot,
+            verifiedRoot with { IsValidGame = false }) &&
+        !GameInspector.SameVerifiedGameRoot(verifiedRoot with { IsValidGame = false },
+            verifiedRoot) &&
+        !GameInspector.SameVerifiedGameRoot(verifiedRoot,
+            verifiedRoot with { GameRoot = null }),
+        "changed/invalid/recovered source must revoke stale action permissions");
+
     Require(SetupCopy.CapFrameXProcess ==
         "PresentMon records without a hotkey; only CET and REDscript use F11.",
         "instructions name CapX process detection exactly");

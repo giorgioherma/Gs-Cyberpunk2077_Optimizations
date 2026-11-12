@@ -724,9 +724,15 @@ public partial class MainWindow : Window
         // prevents identification of its game root. The click then reports
         // actionable recovery instructions in the console without writing.
         var recovery = Workflow.HasRecoveryJournal;
-        InstallButton.Content = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
-        InstallButton.Style = (Style)FindResource(
+        var label = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
+        var style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
+        // Re-applying the same template on focus refresh would redraw its
+        // SVG even if IsEnabled does not change.
+        if (!string.Equals(InstallButton.Content as string, label, StringComparison.Ordinal))
+            InstallButton.Content = label;
+        if (!ReferenceEquals(InstallButton.Style, style))
+            InstallButton.Style = style;
         return recovery;
     }
 
@@ -763,18 +769,25 @@ public partial class MainWindow : Window
             GamePathBox.ScrollToHorizontalOffset(0);
             pathUpdate = false;
         }
+        var sourceChanged = !GameInspector.SameVerifiedGameRoot(inspection, current);
         inspection = current;
-        liveState = null;
-        savedCapture = null;
-        InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
-            ContinueButton.IsEnabled = false;
-        LaunchButton.Content = "START CYBERPUNK";
-        CollectButton.Content = "COLLECT RESULTS";
+        // Focus refresh on the same valid game must not briefly force the
+        // buttons to "Unavailable". New source/invalid source DOES revoke
+        // cached permissions before awaiting any owner status.
+        if (sourceChanged)
+        {
+            liveState = null;
+            savedCapture = null;
+            InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
+                ContinueButton.IsEnabled = false;
+            LaunchButton.Content = "START CYBERPUNK";
+        }
         var recoveryMode = UpdateProfilerAction(
             current.IsValidGame ? current.GameRoot : GamePathBox.Text);
-        // Recovery is always clickable; when the game is open its handler
-        // gives a console instruction instead of touching the loaded files.
-        if (recoveryMode) InstallButton.IsEnabled = true;
+        // Recovery is always callable for a durable journal, independent of
+        // failed source inspection. Its handler enforces game-closed safety.
+        if (recoveryMode && !InstallButton.IsEnabled)
+            InstallButton.IsEnabled = true;
 
         UserSettings.WriteGameRoot(GamePathBox.Text);
         if (!current.IsValidGame)
@@ -799,6 +812,11 @@ public partial class MainWindow : Window
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready)
         {
+            // Unlike a normal focus refresh, failed provenance inspection
+            // is a real new failure: invalidate stale actions immediately.
+            InstallButton.IsEnabled = recoveryMode;
+            LaunchButton.IsEnabled = CollectButton.IsEnabled =
+                ContinueButton.IsEnabled = false;
             SetStatus("GCO package verification failed. Re-extract the official build.");
             Trace.TraceError("GCO package verification: " + bundle.Detail);
             return;
@@ -884,6 +902,11 @@ public partial class MainWindow : Window
         {
             if (!cancel.IsCancellationRequested && IsLoaded)
             {
+                // A failed inspection cannot leave stale actions enabled.
+                // Keep the owner's emergency Restore action available.
+                InstallButton.IsEnabled = Workflow.HasRecoveryJournal;
+                LaunchButton.IsEnabled = CollectButton.IsEnabled =
+                    ContinueButton.IsEnabled = false;
                 Trace.TraceWarning("Profiler status inspection: " + ex);
                 SetStatus("Profiler status unavailable. Retry Refresh.");
             }
