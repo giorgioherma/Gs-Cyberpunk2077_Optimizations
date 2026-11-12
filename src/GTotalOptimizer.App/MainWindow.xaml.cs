@@ -228,6 +228,9 @@ public partial class MainWindow : Window
     {
         UpdatePortraitWidth();
         UpdateMaximizedCaptureGeometry();
+        if (WindowState == System.Windows.WindowState.Normal &&
+            maximizedCaptureLayout is null)
+            InvalidateSceneNeon();
     }
 
     private void UpdatePortraitWidth()
@@ -332,6 +335,10 @@ public partial class MainWindow : Window
         ConsoleTextHost.Margin = originalConsoleMargin;
         var scrollOffset = normalCaptureScrollOffset;
         CapturePage.Content = normalCaptureLayout;
+        // SpatialNeonField brushes sample absolute root coordinates at render
+        // time. A parent/position change with unchanged element size does not
+        // automatically invalidate WPF's retained drawing instructions.
+        InvalidateSceneNeon();
         maximizedCaptureLayout = null;
         maximizedWorkflowCards = null;
         normalCaptureSections = null;
@@ -343,6 +350,20 @@ public partial class MainWindow : Window
                 maximizedCaptureLayout is null)
                 CapturePage.ScrollToVerticalOffset(scrollOffset);
         }));
+    }
+
+
+    private void InvalidateSceneNeon()
+    {
+        GameRootOutline.InvalidateVisual();
+        StepOneOutline.InvalidateVisual();
+        StepTwoOutline.InvalidateVisual();
+        StepThreeOutline.InvalidateVisual();
+        foreach (UIElement child in RootLayout.Children)
+        {
+            if (child is GTotalOptimizer.App.Visuals.ContentChassisOutline frame)
+                frame.InvalidateVisual();
+        }
     }
 
     private void UpdateMaximizedCaptureGeometry()

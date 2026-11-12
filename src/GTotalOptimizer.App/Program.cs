@@ -295,6 +295,13 @@ internal static class Program
             var roundTrip = new MainWindow();
             var originalTree = roundTrip.CapturePage.Content;
             var originalConsoleMargin = roundTrip.ConsoleTextHost.Margin;
+            static System.Windows.Point Origin(MainWindow w, System.Windows.FrameworkElement element)
+            {
+                var root = (System.Windows.FrameworkElement)w.Content;
+                return element.TranslatePoint(new System.Windows.Point(0, 0), root);
+            }
+            var referenceCardOrigin = Origin(roundTrip, roundTrip.StepOneOutline);
+            var referenceRootOrigin = Origin(roundTrip, roundTrip.GameRootOutline);
             // First rendering can initialize WPF's embedded SVG brushes.
             // Require a stable second Normal render before round-trip testing.
             var warmPixels = Snapshot(roundTrip, 1280, 760);
@@ -358,7 +365,9 @@ internal static class Program
                         $"console={sameConsole}, card={sameCard}, pixels={samePixels}, " +
                         $"changed={changed}, bounds=({minX},{minY})-({maxX},{maxY}), " +
                         $"scroll={roundTrip.CapturePage.VerticalOffset:F1}, " +
-                        $"cardHeight={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}");
+                        $"cardHeight={roundTrip.StepOneOutline.ActualHeight:F1}/{baselineCardHeight:F1}, " +
+                        $"cardOrigin={Origin(roundTrip, roundTrip.StepOneOutline)}/{referenceCardOrigin}, " +
+                        $"gameOrigin={Origin(roundTrip, roundTrip.GameRootOutline)}/{referenceRootOrigin}");
                 }
             }
 
