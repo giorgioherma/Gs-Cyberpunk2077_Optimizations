@@ -438,11 +438,10 @@
             <Grid Grid.Column="0" Background="Transparent"/>
 
             <!-- Updated owner skyline is already balanced to pure black. -->
-                <!-- Same named new header image, existing 174-DIP skyline slot. -->
+                <!-- Show skyline without cropping extra height on resize. -->
             <Grid x:Name="SkylineHost" Grid.Column="1" Panel.ZIndex="0" Height="174"
                       VerticalAlignment="Top" ClipToBounds="True" IsHitTestVisible="False">
                     <Image x:Name="CityImage"
-                           Width="{Binding ActualWidth, ElementName=SkylineHost}"
                            Stretch="Uniform" StretchDirection="Both"
                            HorizontalAlignment="Right" VerticalAlignment="Top"
                            SnapsToDevicePixels="True"/>
@@ -507,6 +506,7 @@
                                        Foreground="#EDF3F5" FontSize="14.5"
                                        Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
+                        <Border x:Name="HeroToRootSpacer" Height="0" Background="Transparent"/>
 
                         <!-- White heading outside a height-constrained Game Root box. -->
                         <!-- Restore the original Game Root X alignment. -->
@@ -563,6 +563,7 @@
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
+                        <Border x:Name="RootToWorkflowSpacer" Height="0" Background="Transparent"/>
 
                         <StackPanel x:Name="CaptureWorkflowHeading" Orientation="Horizontal" Margin="32,15,0,9" Height="24">
                             <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
@@ -573,15 +574,20 @@
                                        FontFamily="{StaticResource Oxanium}" FontSize="15.5"
                                        FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
+                        <Border x:Name="WorkflowToCardsSpacer" Height="0" Background="Transparent"/>
 
-                        <!-- Large compact step cards. Buttons are inside each card. -->
-                        <Grid Height="228" Margin="30,0,0,0">
+                        <!-- Stage cards scale uniformly (including typography, artwork and geometry). -->
+                        <Grid x:Name="WorkflowCardsHost" Height="228" Margin="30,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0" Margin="19,0,24,0">
+                            <Viewbox x:Name="InstallCardViewbox" Grid.Column="0"
+                                     Width="272" Height="228"
+                                     Stretch="Uniform" StretchDirection="Both"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="272" Height="228">
                                 <fx:ChamferOutline x:Name="StepOneOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -619,9 +625,14 @@
                                             Style="{StaticResource StageActionButton}" Click="Install_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                            </Grid>
+                                </Grid>
+                            </Viewbox>
 
-                            <Grid Grid.Column="1" Margin="24,0,24,0">
+                            <Viewbox x:Name="LaunchCardViewbox" Grid.Column="1"
+                                     Width="272" Height="228"
+                                     Stretch="Uniform" StretchDirection="Both"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="272" Height="228">
                                 <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -666,9 +677,14 @@
                                             Style="{StaticResource StageActionButton}" Click="Launch_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                            </Grid>
+                                </Grid>
+                            </Viewbox>
 
-                            <Grid Grid.Column="2" Margin="24,0,19,0">
+                            <Viewbox x:Name="CollectCardViewbox" Grid.Column="2"
+                                     Width="272" Height="228"
+                                     Stretch="Uniform" StretchDirection="Both"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="272" Height="228">
                                 <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -706,8 +722,10 @@
                                             Style="{StaticResource StageActionButton}" Click="Collect_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                            </Grid>
+                                </Grid>
+                            </Viewbox>
                         </Grid>
+                        <Border x:Name="WorkflowBottomSpacer" Height="0" Background="Transparent"/>
                     </StackPanel>
                 </ScrollViewer>
 

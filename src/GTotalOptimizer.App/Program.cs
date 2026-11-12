@@ -146,6 +146,33 @@ internal static class Program
                             "Essential WPF control failed layout: " + control.Name);
                 }
 
+                // Structural resize contract: card controls retain their
+                // proportional shape, and the console never sits under V.
+                // Test actual arranged WPF elements, not subjective artwork pixels.
+                var cardViews = new System.Windows.Controls.Viewbox[]
+                {
+                    window.InstallCardViewbox, window.LaunchCardViewbox,
+                    window.CollectCardViewbox
+                };
+                foreach (var view in cardViews)
+                {
+                    if (view.ActualWidth <= 0 || view.ActualHeight <= 0 ||
+                        Math.Abs(view.ActualWidth / view.ActualHeight - 272.0 / 228.0) > .025)
+                        throw new InvalidOperationException(
+                            "Workflow card aspect ratio distorted on resize: " + view.Name);
+                }
+                if (width >= 1280 && height >= 760)
+                {
+                    var portraitRight = window.VPortraitHost.TranslatePoint(
+                        new System.Windows.Point(window.VPortraitHost.ActualWidth, 0), root).X;
+                    var consoleLeft = window.StatusText.TranslatePoint(
+                        new System.Windows.Point(0, 0), root).X;
+                    if (consoleLeft < portraitRight + 2)
+                        throw new InvalidOperationException(
+                            "Capture console overlaps the scaled V portrait: " +
+                            consoleLeft + " versus " + portraitRight);
+                }
+
                 if (window.StepTwoHotkey.Text != "STOP / START — F11")
                     throw new InvalidOperationException(
                         "Capture card is missing the explicit F11 start/stop instructions");
@@ -211,8 +238,13 @@ internal static class Program
             var minimum = new MainWindow();
             VerifyAtSize(minimum, minimum.MinWidth, minimum.MinHeight);
 
+            // Fullscreen-like and widescreen client viewports: test the real
+            // arranged cards/console, not only the compact initial window.
+            VerifyAtSize(new MainWindow(), 1700, 900);
+            VerifyAtSize(new MainWindow(), 1920, 1080);
+
             Console.WriteLine(
-                "PASS packaged WPF assets, essential controls and both pages render at configured sizes");
+                "PASS packaged WPF assets, workflow proportions, console clearance and both pages at multiple sizes");
             app.Shutdown();
             return 0;
         }
