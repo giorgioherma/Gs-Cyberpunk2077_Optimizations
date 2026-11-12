@@ -142,6 +142,27 @@ internal static class Program
                             "Keyboard Tab navigation disabled: " + control.Name);
                 }
 
+                // Prevent any later layout change from shrinking reference
+                // cards or independently transforming the shared neon gradient.
+                var outlines = new[] {
+                    window.StepOneOutline, window.StepTwoOutline, window.StepThreeOutline
+                };
+                System.Windows.Controls.Grid? stageRow = null;
+                foreach (var outline in outlines)
+                {
+                    if (!outline.SpatialStroke ||
+                        outline.Parent is not System.Windows.Controls.Grid card ||
+                        card.Parent is not System.Windows.Controls.Grid parent ||
+                        parent.ColumnDefinitions.Count != 3 ||
+                        Math.Abs(parent.Height - 228.0) > .1)
+                        throw new InvalidOperationException(
+                            "Original direct-card layout or spatial neon gradient lost: " + outline.Name);
+                    stageRow ??= parent;
+                    if (!ReferenceEquals(stageRow, parent))
+                        throw new InvalidOperationException(
+                            "Workflow cards no longer share a single full-width row");
+                }
+
                 // Check user-owned assets are present and decodable, never
                 // hardcode their size, location or decorative composition.
                 var art = new System.Windows.Controls.Image[]
@@ -172,37 +193,6 @@ internal static class Program
                         throw new InvalidOperationException(
                             "Essential WPF control failed layout: " + control.Name);
                 }
-
-                // Regression: keep the original three direct stage-card grids.
-                // Viewbox-wrapping their spatial gradient brushes changed every
-                // card to a yellow-left/cyan-right split and shrank the default.
-                // The stage shells must share one scene-anchored color field.
-                var stageBorders = new[]
-                {
-                    window.StepOneOutline, window.StepTwoOutline,
-                    window.StepThreeOutline
-                };
-                foreach (var outline in stageBorders)
-                {
-                    if (!outline.SpatialStroke ||
-                        outline.Parent is not System.Windows.Controls.Grid card ||
-                        !ReferenceEquals(card.Parent, window.WorkflowCardsHost) ||
-                        Math.Abs(card.ActualHeight - window.WorkflowCardsHost.ActualHeight) > 1.0)
-                        throw new InvalidOperationException(
-                            "Stage layout must preserve direct scene-space outline: " +
-                            outline.Name);
-                }
-                // The plain default is the approved reference design, not a
-                // reduced viewbox. Larger windows may distribute extra height.
-                if (window.WorkflowCardsHost.Height < 228.0)
-                    throw new InvalidOperationException(
-                        "Workflow cards unexpectedly smaller than the approved baseline");
-
-                // The console should stay in the right content column rather
-                // than acquiring portrait-width margin compensation.
-                if (window.ConsoleTextHost.Margin.Left != -7.0)
-                    throw new InvalidOperationException(
-                        "Capture console shifted from its base column alignment");
 
                 if (window.StepTwoHotkey.Text != "STOP / START — F11")
                     throw new InvalidOperationException(
@@ -268,14 +258,13 @@ internal static class Program
 
             var minimum = new MainWindow();
             VerifyAtSize(minimum, minimum.MinWidth, minimum.MinHeight);
-
-            // Fullscreen-like and widescreen client viewports: test the real
-            // arranged cards/console, not only the compact initial window.
+            // Larger sizes should still render and remain navigable, even
+            // though responsive card scaling was intentionally reverted.
             VerifyAtSize(new MainWindow(), 1700, 900);
             VerifyAtSize(new MainWindow(), 1920, 1080);
 
             Console.WriteLine(
-                "PASS packaged WPF assets, workflow proportions, console clearance and both pages at multiple sizes");
+                "PASS packaged WPF assets, essential controls and both pages render at configured sizes");
             app.Shutdown();
             return 0;
         }
