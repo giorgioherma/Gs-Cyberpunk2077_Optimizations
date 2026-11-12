@@ -171,24 +171,21 @@ public partial class MainWindow : Window
         glitchTimer.Interval = TimeSpan.FromMilliseconds(next);
     }
 
-    // The original 482:928 owner layers scale uniformly with content height.
-    // At the reference 1280x760 layout, preserve the approved compact spacing.
-    // Extra width/height grows the V reservation and proportionate cards,
-    // instead of allowing a wide but fixed-height row to fill the screen.
+    // Preserve the old narrow V content-column reservation. The new
+    // 482:928 owner image pair retains the old top/left/height anchor and
+    // extends its extra transition pixels rightwards without shifting UI.
     private const double PortraitBottomOverhang = 6.0;
     private const double ReservedVAspect = 743.0 / 2117.0;
     private const double NewVAspect = 482.0 / 928.0;
-    private const double ReferenceImageHeight = 669.0;
-    private const double ReferenceCardWidth = 272.0;
-    private const double ReferenceCardHeight = 228.0;
-
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdateResponsiveLayout();
         QueueHeaderTabAlignment();
     }
 
-    // Keep the header tabs centered between the actual logo and REFRESH.
+    // Keep the tab pair centered between the real, arranged logo and REFRESH,
+    // rather than centering relative to the full window or right content area.
+    // Loaded priority measures positions after WPF has arranged on resize.
     private void QueueHeaderTabAlignment()
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(AlignTabsBetweenHeaderControls));
@@ -203,6 +200,8 @@ public partial class MainWindow : Window
         var logoRight = GcoHeaderLogo.TranslatePoint(
             new Point(GcoHeaderLogo.ActualWidth, 0), RootLayout).X;
         var refreshLeft = RefreshButton.TranslatePoint(new Point(0, 0), RootLayout).X;
+        // The supported minimum window leaves enough room for both 246-DIP tabs
+        // and their 12-DIP gap between these two header anchors.
         if (refreshLeft - logoRight < 504)
             return;
 
@@ -217,74 +216,76 @@ public partial class MainWindow : Window
         UpdateResponsiveLayout();
     }
 
+    private const double BaselineViewportWidth = 1280.0;
+    private const double BaselineViewportHeight = 760.0;
+    private const double BaselineCardHeight = 228.0;
+    private const double BaselineSkylineHeight = 174.0;
+
     private void UpdateResponsiveLayout()
     {
         if (ContentRegion is null || ArtworkColumn is null ||
-            ContentRegion.ActualWidth <= 0 || ContentRegion.ActualHeight <= 0)
+            ContentRegion.ActualHeight <= 0 || RootLayout.ActualWidth <= 0)
             return;
 
-        var imageHeight = ContentRegion.ActualHeight + PortraitBottomOverhang;
-        var portraitWidth = imageHeight * NewVAspect + 3.0;
-        // Retain the reference column at 1280x760. Distribute increased
-        // viewport space to V and three content columns, not just the cards.
-        var baseReserved = Math.Clamp(imageHeight * ReservedVAspect, 170.0, 245.0);
-        var widthGrowth = Math.Max(0.0, RootLayout.ActualWidth - 1280.0);
-        var heightGrowth = Math.Max(0.0, imageHeight - ReferenceImageHeight);
-        var reservation = Math.Min(ContentRegion.ActualWidth * .38,
-            baseReserved + widthGrowth * .18 + heightGrowth * .48);
-        reservation = Math.Max(170.0, reservation);
-        if (Math.Abs(ArtworkColumn.Width.Value - reservation) > .25)
-            ArtworkColumn.Width = new GridLength(reservation);
+        // The approved 1280x760 page is the exact baseline: original cards,
+        // 0-DIP section gaps, skyline height, portrait reservation and console
+        // margin. Only grow the layout when BOTH viewport axes have room.
+        var extraWidth = Math.Max(0.0, RootLayout.ActualWidth - BaselineViewportWidth);
+        var extraHeight = Math.Max(0.0, RootLayout.ActualHeight - BaselineViewportHeight);
+        var canExpand = extraWidth > 0.5 && extraHeight > 0.5;
 
+        var imageHeight = Math.Max(1.0,
+            ContentRegion.ActualHeight + PortraitBottomOverhang);
+        var reservedWidth = Math.Clamp(
+            imageHeight * ReservedVAspect, 170.0, 245.0);
+        var portraitWidth = imageHeight * NewVAspect + 3.0;
+
+        if (canExpand)
+        {
+            // Reserve some of the additional space for the taller V source.
+            // The owner art still paints its semi-transparent fade independently.
+            var portraitBleed = Math.Max(0.0, portraitWidth - reservedWidth - 32.0);
+            reservedWidth += Math.Min(portraitBleed, extraWidth * 0.32);
+        }
+
+        if (Math.Abs(ArtworkColumn.Width.Value - reservedWidth) > .25)
+            ArtworkColumn.Width = new GridLength(reservedWidth);
         if (Math.Abs(VPortraitHost.Width - portraitWidth) > .25)
             VPortraitHost.Width = portraitWidth;
-        // Owner-supplied bottom overflow must stay registered with V's
-        // 482x928 source as the window grows. No synthetic or stretched PNG.
+
+        // The bottom puddle continues to use the identical 482x928 source scale.
         PuddleOverflowHost.Width = imageHeight * 365.0 / 928.0;
         PuddleOverflowHost.Height = imageHeight * 49.0 / 928.0;
 
-        // Fit the original skyline proportionally; never scale its width
-        // independently and cut away more of its height at full screen.
-        var skylineHeight = Math.Clamp(174.0 * imageHeight / ReferenceImageHeight,
-            145.0, 300.0);
-        if (Math.Abs(SkylineHost.Height - skylineHeight) > .25)
-            SkylineHost.Height = skylineHeight;
-
-        // The portrait's alpha transition may overlap the content backdrop,
-        // but the user-facing console must always start beyond its footprint.
-        var portraitBleed = Math.Max(0.0, portraitWidth - reservation);
-        var consoleMargin = new Thickness(-7.0 + portraitBleed + 16.0, -6, 9, 4);
-        if (ConsoleTextHost.Margin != consoleMargin)
-            ConsoleTextHost.Margin = consoleMargin;
-
-        // Each stage has a single fixed intrinsic design: uniform Viewbox
-        // scaling grows borders, icon, title, text and action in lockstep.
-        // Unused width stays evenly distributed between the three columns.
-        var rightWidth = Math.Max(0.0, ContentRegion.ActualWidth - reservation);
-        var captureHeight = Math.Max(0.0, ContentRegion.ActualHeight - 88.0);
-        var cellWidth = Math.Max(1.0, (rightWidth - 45.0) / 3.0);
-        var widthScale = (cellWidth - 44.0) / ReferenceCardWidth;
-        var heightScale = (captureHeight - 347.0) / ReferenceCardHeight;
-        var scale = Math.Clamp(Math.Min(widthScale, heightScale), .78, 2.3);
-        var cardWidth = ReferenceCardWidth * scale;
-        var cardHeight = ReferenceCardHeight * scale;
-        foreach (var card in new[] { InstallCardViewbox, LaunchCardViewbox, CollectCardViewbox })
-        {
-            if (Math.Abs(card.Width - cardWidth) > .25) card.Width = cardWidth;
-            if (Math.Abs(card.Height - cardHeight) > .25) card.Height = cardHeight;
-        }
+        // Keep direct card Grids and SpatialStroke rendering. A Viewbox would
+        // rescale the globally anchored cyan/yellow stroke into three local
+        // gradients and shrink the approved default cards.
+        var cardGrowth = canExpand
+            ? Math.Max(0.0, Math.Min(extraWidth * 0.24, extraHeight * 0.56))
+            : 0.0;
+        var cardHeight = BaselineCardHeight + cardGrowth;
         if (Math.Abs(WorkflowCardsHost.Height - cardHeight) > .25)
             WorkflowCardsHost.Height = cardHeight;
 
-        // Share unused height between hero, root, workflow and footer rather
-        // than leaving all of it in the empty area under fixed-height cards.
-        // Minimum windows continue to scroll instead of clipping content.
-        var extra = Math.Max(0.0,
-            captureHeight - (575.0 + cardHeight - ReferenceCardHeight));
-        var spacer = extra / 4.0;
-        foreach (var gap in new[]
-                 { HeroToRootSpacer, RootToWorkflowSpacer, WorkflowToCardsSpacer, WorkflowBottomSpacer })
-            if (Math.Abs(gap.Height - spacer) > .25) gap.Height = spacer;
+        // Small, evenly shared additions between existing sections. No extra
+        // gaps in the default or minimum layout, where scrolling remains native.
+        var sectionGap = canExpand ? Math.Min(16.0, extraHeight * 0.04) : 0.0;
+        foreach (var spacer in new[]
+                 { HeroToRootSpacer, RootToWorkflowSpacer,
+                   WorkflowToCardsSpacer, WorkflowBottomSpacer })
+        {
+            if (Math.Abs(spacer.Height - sectionGap) > .25)
+                spacer.Height = sectionGap;
+        }
+
+        // Preserve the original width-bound skyline at default size.
+        var skylineHeight = BaselineSkylineHeight +
+            (canExpand ? Math.Min(100.0, extraHeight * 0.20) : 0.0);
+        if (Math.Abs(SkylineHost.Height - skylineHeight) > .25)
+            SkylineHost.Height = skylineHeight;
+
+        // Important: the footer stays at its original content-column anchor.
+        // Do not add portrait-width compensation to ConsoleTextHost.Margin.
     }
 
     private void SetActiveTab(bool results)

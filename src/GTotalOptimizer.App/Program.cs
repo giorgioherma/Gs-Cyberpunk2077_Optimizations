@@ -173,32 +173,36 @@ internal static class Program
                             "Essential WPF control failed layout: " + control.Name);
                 }
 
-                // Structural resize contract: card controls retain their
-                // proportional shape, and the console never sits under V.
-                // Test actual arranged WPF elements, not subjective artwork pixels.
-                var cardViews = new System.Windows.Controls.Viewbox[]
+                // Regression: keep the original three direct stage-card grids.
+                // Viewbox-wrapping their spatial gradient brushes changed every
+                // card to a yellow-left/cyan-right split and shrank the default.
+                // The stage shells must share one scene-anchored color field.
+                var stageBorders = new[]
                 {
-                    window.InstallCardViewbox, window.LaunchCardViewbox,
-                    window.CollectCardViewbox
+                    window.StepOneOutline, window.StepTwoOutline,
+                    window.StepThreeOutline
                 };
-                foreach (var view in cardViews)
+                foreach (var outline in stageBorders)
                 {
-                    if (view.ActualWidth <= 0 || view.ActualHeight <= 0 ||
-                        Math.Abs(view.ActualWidth / view.ActualHeight - 272.0 / 228.0) > .025)
+                    if (!outline.SpatialStroke ||
+                        outline.Parent is not System.Windows.Controls.Grid card ||
+                        !ReferenceEquals(card.Parent, window.WorkflowCardsHost) ||
+                        Math.Abs(card.ActualHeight - window.WorkflowCardsHost.ActualHeight) > 1.0)
                         throw new InvalidOperationException(
-                            "Workflow card aspect ratio distorted on resize: " + view.Name);
+                            "Stage layout must preserve direct scene-space outline: " +
+                            outline.Name);
                 }
-                if (width >= 1280 && height >= 760)
-                {
-                    var portraitRight = window.VPortraitHost.TranslatePoint(
-                        new System.Windows.Point(window.VPortraitHost.ActualWidth, 0), root).X;
-                    var consoleLeft = window.StatusText.TranslatePoint(
-                        new System.Windows.Point(0, 0), root).X;
-                    if (consoleLeft < portraitRight + 2)
-                        throw new InvalidOperationException(
-                            "Capture console overlaps the scaled V portrait: " +
-                            consoleLeft + " versus " + portraitRight);
-                }
+                // The plain default is the approved reference design, not a
+                // reduced viewbox. Larger windows may distribute extra height.
+                if (window.WorkflowCardsHost.Height < 228.0)
+                    throw new InvalidOperationException(
+                        "Workflow cards unexpectedly smaller than the approved baseline");
+
+                // The console should stay in the right content column rather
+                // than acquiring portrait-width margin compensation.
+                if (window.ConsoleTextHost.Margin.Left != -7.0)
+                    throw new InvalidOperationException(
+                        "Capture console shifted from its base column alignment");
 
                 if (window.StepTwoHotkey.Text != "STOP / START — F11")
                     throw new InvalidOperationException(

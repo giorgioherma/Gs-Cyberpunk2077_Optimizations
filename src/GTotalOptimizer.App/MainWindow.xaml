@@ -442,6 +442,7 @@
             <Grid x:Name="SkylineHost" Grid.Column="1" Panel.ZIndex="0" Height="174"
                       VerticalAlignment="Top" ClipToBounds="True" IsHitTestVisible="False">
                     <Image x:Name="CityImage"
+                           Width="{Binding ActualWidth, ElementName=SkylineHost}"
                            Stretch="Uniform" StretchDirection="Both"
                            HorizontalAlignment="Right" VerticalAlignment="Top"
                            SnapsToDevicePixels="True"/>
@@ -579,18 +580,14 @@
                         </StackPanel>
                         <Border x:Name="WorkflowToCardsSpacer" Height="0" Background="Transparent"/>
 
-                        <!-- Stage cards scale uniformly (including typography, artwork and geometry). -->
+                        <!-- Large compact step cards. Buttons are inside each card. -->
                         <Grid x:Name="WorkflowCardsHost" Height="228" Margin="30,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Viewbox x:Name="InstallCardViewbox" Grid.Column="0"
-                                     Width="272" Height="228"
-                                     Stretch="Uniform" StretchDirection="Both"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="272" Height="228">
+                            <Grid Grid.Column="0" Margin="19,0,24,0">
                                 <fx:ChamferOutline x:Name="StepOneOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -628,14 +625,9 @@
                                             Style="{StaticResource StageActionButton}" Click="Install_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                                </Grid>
-                            </Viewbox>
+                            </Grid>
 
-                            <Viewbox x:Name="LaunchCardViewbox" Grid.Column="1"
-                                     Width="272" Height="228"
-                                     Stretch="Uniform" StretchDirection="Both"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="272" Height="228">
+                            <Grid Grid.Column="1" Margin="24,0,24,0">
                                 <fx:ChamferOutline x:Name="StepTwoOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -680,14 +672,9 @@
                                             Style="{StaticResource StageActionButton}" Click="Launch_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                                </Grid>
-                            </Viewbox>
+                            </Grid>
 
-                            <Viewbox x:Name="CollectCardViewbox" Grid.Column="2"
-                                     Width="272" Height="228"
-                                     Stretch="Uniform" StretchDirection="Both"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="272" Height="228">
+                            <Grid Grid.Column="2" Margin="24,0,19,0">
                                 <fx:ChamferOutline x:Name="StepThreeOutline" Fill="#0B1518"
                                                    Stroke="{StaticResource NeonStroke}" SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14" IsHitTestVisible="False"/>
@@ -725,8 +712,7 @@
                                             Style="{StaticResource StageActionButton}" Click="Collect_Click"
                                             IsEnabled="False"/>
                                 </Grid>
-                                </Grid>
-                            </Viewbox>
+                            </Grid>
                         </Grid>
                         <Border x:Name="WorkflowBottomSpacer" Height="0" Background="Transparent"/>
                     </StackPanel>
