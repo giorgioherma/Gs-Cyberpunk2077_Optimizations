@@ -115,6 +115,33 @@ internal static class Program
                 root.Arrange(new System.Windows.Rect(0, 0, width, height));
                 root.UpdateLayout();
 
+                // Scrollable panels must not paint a dotted focus rectangle over
+                // the owner artwork; keyboard focus and scrolling stay enabled.
+                foreach (var scroll in new[]
+                         {
+                             window.CapturePage, window.CaptureConsoleScroll,
+                             window.ResultsScrollViewer
+                         })
+                {
+                    if (scroll.FocusVisualStyle is not null)
+                        throw new InvalidOperationException(
+                            "Unexpected scroll-pane focus adorner: " + scroll.Name);
+                }
+
+                // Buttons and the editable game path must retain Tab focus.
+                foreach (var control in new System.Windows.Controls.Control[]
+                         {
+                             window.RefreshButton, window.BrowseButton,
+                             window.GamePathBox, window.InstallButton,
+                             window.LaunchButton, window.CollectButton,
+                             window.ContinueButton, window.OpenResultsButton
+                         })
+                {
+                    if (!control.Focusable || !control.IsTabStop)
+                        throw new InvalidOperationException(
+                            "Keyboard Tab navigation disabled: " + control.Name);
+                }
+
                 // Check user-owned assets are present and decodable, never
                 // hardcode their size, location or decorative composition.
                 var art = new System.Windows.Controls.Image[]

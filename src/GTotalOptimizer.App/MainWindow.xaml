@@ -482,7 +482,10 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="88"/>
                 </Grid.RowDefinitions>
+                <!-- Suppress only the giant page-level dotted focus rectangle.
+                     Focus, Tab and keyboard scrolling remain unchanged. -->
                 <ScrollViewer x:Name="CapturePage" Grid.Row="0"
+                              FocusVisualStyle="{x:Null}"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <ScrollViewer.Resources>
@@ -741,7 +744,8 @@
                         <!-- Restore multiple visible guidance rows; allow scrolling
                              if all five framework gates fail at once. Keep the
                              standard one-line status centered in this space. -->
-                        <ScrollViewer Margin="25,0,5,0" MaxHeight="80"
+                        <ScrollViewer x:Name="CaptureConsoleScroll" FocusVisualStyle="{x:Null}"
+                                      Margin="25,0,5,0" MaxHeight="80"
                                       VerticalAlignment="Center"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
@@ -759,7 +763,8 @@
 
                 <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
                       Background="#000000" Margin="0,3,0,3">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="ResultsScrollViewer" FocusVisualStyle="{x:Null}"
+                                  VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="{x:Type ScrollBar}"
                                    BasedOn="{StaticResource NeonScrollBar}"/>
