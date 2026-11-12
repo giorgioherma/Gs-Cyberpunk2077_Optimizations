@@ -194,6 +194,25 @@ internal static class Program
                             "Essential WPF control failed layout: " + control.Name);
                 }
 
+                // The taller multiline-console footer must not enlarge Continue
+                // or pull it into the workflow cards. Its intrinsic height stays
+                // compact, but enabled/disabled gating and keyboard focus remain.
+                if (window.ContinueButton.VerticalAlignment != System.Windows.VerticalAlignment.Bottom ||
+                    window.ContinueButton.ActualHeight > 54)
+                    throw new InvalidOperationException(
+                        "Continue enlarged by the console footer instead of retaining compact size");
+
+                if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1)
+                {
+                    var cardBottom = window.StepThreeOutline.TranslatePoint(
+                        new System.Windows.Point(0, window.StepThreeOutline.ActualHeight), root).Y;
+                    var continueTop = window.ContinueButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), root).Y;
+                    if (continueTop - cardBottom < 10)
+                        throw new InvalidOperationException(
+                            "Continue overlaps or crowds the original Capture workflow cards");
+                }
+
                 if (window.StepTwoHotkey.Text != "STOP / START — F11")
                     throw new InvalidOperationException(
                         "Capture card is missing the explicit F11 start/stop instructions");

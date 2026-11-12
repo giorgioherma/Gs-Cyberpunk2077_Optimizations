@@ -735,7 +735,10 @@
                                        Text="Select the Cyberpunk 2077 game folder."/>
                         </ScrollViewer>
                     </Grid>
+                    <!-- Keep the original compact Continue size and card clearance
+                         even with the taller multiline-console footer. -->
                     <Button x:Name="ContinueButton" Grid.Column="1" Content="CONTINUE  →"
+                            Height="49" VerticalAlignment="Bottom"
                             Margin="-10,-20,10,20"
                             Style="{StaticResource ContinueStyle}" Click="Continue_Click"
                             IsEnabled="False"/>
