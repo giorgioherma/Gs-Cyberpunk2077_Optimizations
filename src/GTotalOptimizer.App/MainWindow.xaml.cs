@@ -51,6 +51,16 @@ public partial class MainWindow : Window
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
+    // Maximized mode rearranges existing controls, never the locked normal XAML.
+    private StackPanel? normalCaptureLayout;
+    private UIElement[]? normalCaptureSections;
+    private Grid? maximizedCaptureLayout;
+    private Grid? maximizedWorkflowCards;
+    private double normalWorkflowHeight;
+    private double normalWorkflowMinHeight;
+    private double normalCaptureScrollOffset;
+    private double expandedMinimumContentHeight;
+    private readonly Thickness originalConsoleMargin;
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
 
@@ -63,6 +73,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        originalConsoleMargin = ConsoleTextHost.Margin;
+        CapturePage.SizeChanged += (_, _) => UpdateMaximizedCaptureGeometry();
         initialized = true;
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3)
             ?? throw new InvalidOperationException("GCO assembly version unavailable.");
@@ -180,6 +192,7 @@ public partial class MainWindow : Window
     private void Window_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdatePortraitWidth();
+        UpdateMaximizedCaptureGeometry();
         QueueHeaderTabAlignment();
     }
 
@@ -214,6 +227,7 @@ public partial class MainWindow : Window
     private void ContentRegion_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
         UpdatePortraitWidth();
+        UpdateMaximizedCaptureGeometry();
     }
 
     private void UpdatePortraitWidth()
@@ -237,6 +251,123 @@ public partial class MainWindow : Window
             PuddleOverflowHost.Width = imageHeight * 365.0 / 928.0;
             PuddleOverflowHost.Height = imageHeight * 49.0 / 928.0;
         }
+    }
+
+
+    // Use the original StackPanel unchanged in Normal. In Maximized only,
+    // arrange its four existing sections in a weighted Grid. No duplicated
+    // controls, Viewboxes, style changes or scaled card contents.
+    internal void ApplyMaximizedCaptureLayout()
+    {
+        if (WindowState == System.Windows.WindowState.Maximized)
+        {
+            if (maximizedCaptureLayout is not null)
+            {
+                UpdateMaximizedCaptureGeometry();
+                return;
+            }
+
+            if (CapturePage.Content is not StackPanel baseline ||
+                baseline.Children.Count != 4 ||
+                !ReferenceEquals(baseline.Children[0], HeroSection) ||
+                !ReferenceEquals(baseline.Children[2], CaptureWorkflowHeading) ||
+                baseline.Children[3] is not Grid cards ||
+                !double.IsFinite(cards.Height))
+                return; // Fail safe if a future normal layout changes.
+
+            normalCaptureLayout = baseline;
+            normalCaptureSections = new UIElement[baseline.Children.Count];
+            baseline.Children.CopyTo(normalCaptureSections, 0);
+            normalWorkflowHeight = cards.Height;
+            normalWorkflowMinHeight = cards.MinHeight;
+            normalCaptureScrollOffset = CapturePage.VerticalOffset;
+            expandedMinimumContentHeight = Math.Max(1,
+                baseline.DesiredSize.Height - baseline.Margin.Top - baseline.Margin.Bottom);
+            maximizedWorkflowCards = cards;
+
+            var expanded = new Grid { Margin = baseline.Margin };
+            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            expanded.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            expanded.RowDefinitions.Add(new RowDefinition
+            {
+                Height = new GridLength(2, GridUnitType.Star),
+                MinHeight = normalWorkflowHeight
+            });
+
+            CapturePage.Content = null;
+            baseline.Children.Clear();
+            for (var index = 0; index < normalCaptureSections.Length; index++)
+            {
+                var element = normalCaptureSections[index];
+                Grid.SetRow(element, index * 2);
+                expanded.Children.Add(element);
+            }
+            cards.Height = double.NaN;
+            cards.MinHeight = normalWorkflowHeight;
+            maximizedCaptureLayout = expanded;
+            CapturePage.Content = expanded;
+            UpdateMaximizedCaptureGeometry();
+            return;
+        }
+
+        if (maximizedCaptureLayout is null || normalCaptureLayout is null ||
+            normalCaptureSections is null || maximizedWorkflowCards is null)
+            return;
+
+        CapturePage.Content = null;
+        maximizedCaptureLayout.Children.Clear();
+        foreach (var element in normalCaptureSections)
+        {
+            element.ClearValue(Grid.RowProperty);
+            normalCaptureLayout.Children.Add(element);
+        }
+        maximizedWorkflowCards.Height = normalWorkflowHeight;
+        maximizedWorkflowCards.MinHeight = normalWorkflowMinHeight;
+        ConsoleTextHost.Margin = originalConsoleMargin;
+        var scrollOffset = normalCaptureScrollOffset;
+        CapturePage.Content = normalCaptureLayout;
+        maximizedCaptureLayout = null;
+        maximizedWorkflowCards = null;
+        normalCaptureSections = null;
+        normalCaptureLayout = null;
+        CapturePage.ScrollToVerticalOffset(scrollOffset);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (WindowState == System.Windows.WindowState.Normal &&
+                maximizedCaptureLayout is null)
+                CapturePage.ScrollToVerticalOffset(scrollOffset);
+        }));
+    }
+
+    private void UpdateMaximizedCaptureGeometry()
+    {
+        if (WindowState != System.Windows.WindowState.Maximized ||
+            maximizedCaptureLayout is null || normalCaptureLayout is null ||
+            CapturePage.ActualHeight <= 0)
+            return;
+
+        // ScrollViewer measures with infinite height; supply its real viewport
+        // height only in maximized mode to activate weighted Grid rows.
+        var margin = normalCaptureLayout.Margin;
+        var height = Math.Max(expandedMinimumContentHeight,
+            CapturePage.ActualHeight - margin.Top - margin.Bottom);
+        if (double.IsNaN(maximizedCaptureLayout.Height) ||
+            Math.Abs(maximizedCaptureLayout.Height - height) > .1)
+            maximizedCaptureLayout.Height = height;
+
+        // Keep the bottom console clear of the tall V without moving its
+        // original Normal placement or the compact Continue button.
+        var portraitOverhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
+        var shift = Math.Max(0, portraitOverhang - 24);
+        var desired = new Thickness(originalConsoleMargin.Left + shift,
+            originalConsoleMargin.Top, originalConsoleMargin.Right,
+            originalConsoleMargin.Bottom);
+        if (ConsoleTextHost.Margin != desired)
+            ConsoleTextHost.Margin = desired;
     }
 
     private void SetActiveTab(bool results)
@@ -278,6 +409,7 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         UpdatePortraitWidth();
+        ApplyMaximizedCaptureLayout();
         QueueHeaderTabAlignment();
         // Subscribe before the one-time initial enumeration so no process
         // launch can fall between enumeration and notification registration.
@@ -497,6 +629,7 @@ public partial class MainWindow : Window
 
     private void Window_StateChanged(object sender, EventArgs e)
     {
+        ApplyMaximizedCaptureLayout();
         if (WindowState == System.Windows.WindowState.Minimized)
         {
             glitchTimer.Stop();

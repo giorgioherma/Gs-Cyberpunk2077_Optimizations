@@ -272,6 +272,60 @@ internal static class Program
                 root.UpdateLayout();
             }
 
+
+            // WPF-rendered 96-DPI round-trip proof: the original 1280x760
+            // Normal pixels must survive two fullscreen cycles byte-for-byte.
+            // This checks functionality, not owner-selected decorative colors.
+            static byte[] Snapshot(MainWindow window, double width, double height)
+            {
+                var root = window.Content as System.Windows.FrameworkElement
+                    ?? throw new InvalidOperationException("Missing WPF root");
+                root.Measure(new System.Windows.Size(width, height));
+                root.Arrange(new System.Windows.Rect(0, 0, width, height));
+                root.UpdateLayout();
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)width, (int)height, 96, 96,
+                    System.Windows.Media.PixelFormats.Pbgra32);
+                bmp.Render(root);
+                var pixels = new byte[(int)width * (int)height * 4];
+                bmp.CopyPixels(pixels, (int)width * 4, 0);
+                return pixels;
+            }
+
+            var roundTrip = new MainWindow();
+            var originalTree = roundTrip.CapturePage.Content;
+            var originalConsoleMargin = roundTrip.ConsoleTextHost.Margin;
+            var baselinePixels = Snapshot(roundTrip, 1280, 760);
+            var baselineCardHeight = roundTrip.StepOneOutline.ActualHeight;
+            var baselineIconHeight = roundTrip.InstallStageIcon.ActualHeight;
+            var baselineButtonHeight = roundTrip.InstallButton.ActualHeight;
+            for (var cycle = 0; cycle < 2; cycle++)
+            {
+                // Offscreen windows do not always deliver native StateChanged.
+                roundTrip.WindowState = System.Windows.WindowState.Maximized;
+                roundTrip.ApplyMaximizedCaptureLayout();
+                Snapshot(roundTrip, 1700, 900);
+                if (roundTrip.CapturePage.Content is not System.Windows.Controls.Grid ||
+                    roundTrip.StepOneOutline.ActualHeight <= baselineCardHeight + 15 ||
+                    Math.Abs(roundTrip.InstallStageIcon.ActualHeight - baselineIconHeight) > .1 ||
+                    Math.Abs(roundTrip.InstallButton.ActualHeight - baselineButtonHeight) > .1 ||
+                    !roundTrip.StepOneOutline.SpatialStroke ||
+                    !roundTrip.StepTwoOutline.SpatialStroke ||
+                    !roundTrip.StepThreeOutline.SpatialStroke)
+                    throw new InvalidOperationException(
+                        "Maximized layout did not grow cards while preserving native icon/button sizes and shared neon");
+
+                roundTrip.WindowState = System.Windows.WindowState.Normal;
+                roundTrip.ApplyMaximizedCaptureLayout();
+                var restoredPixels = Snapshot(roundTrip, 1280, 760);
+                if (!ReferenceEquals(originalTree, roundTrip.CapturePage.Content) ||
+                    roundTrip.ConsoleTextHost.Margin != originalConsoleMargin ||
+                    Math.Abs(roundTrip.StepOneOutline.ActualHeight - baselineCardHeight) > .1 ||
+                    !baselinePixels.AsSpan().SequenceEqual(restoredPixels))
+                    throw new InvalidOperationException(
+                        "Normal UI pixels or original panel changed after maximize/restore cycle " + (cycle + 1));
+            }
+
             var normal = new MainWindow();
             VerifyAtSize(normal, normal.Width, normal.Height);
 
@@ -283,7 +337,7 @@ internal static class Program
             VerifyAtSize(new MainWindow(), 1920, 1080);
 
             Console.WriteLine(
-                "PASS packaged WPF assets, essential controls and both pages render at configured sizes");
+                "PASS packaged WPF Normal-Maximized-Normal pixel identity, expanded cards, and both pages");
             app.Shutdown();
             return 0;
         }
