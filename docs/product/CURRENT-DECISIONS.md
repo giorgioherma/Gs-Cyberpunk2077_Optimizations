@@ -497,3 +497,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 
 - Owner explicitly clarified the stage-button cyan hover outline needs a modest enlargement **only in fullscreen/maximized mode**. The approved Normal window hover, 760×112 native owner SVGs, actual button size and all card/section layout properties remain locked. Width is still constrained by the real button slot to prevent the earlier full-row overflow.
 - Implemented in source `f96ecea` with the original shared hover converter receiving `Window.WindowState`; Windows [CI #305](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43491019935) **SUCCESS**, 282/282 contracts and the native WPF normal/maximized/normal pixel-identity smoke. The adjusted fullscreen visual itself remains subject to owner screenshot approval. v1.2.5 unchanged.
+
+## 2026-11-13 — fullscreen stage-hover must surround SVG shell on *all* sides
+
+- The owner clarified the maximized stage hover stroke must be **outside**, not on top of the button. Preserve the previously approved Normal hover pixel footprint, original active/inactive/Restore SVGs, card backgrounds and the app's full normal/maximized layout. Source `ed0ff2d` retains the +18-DIP maximized width allowance and adds +12 total height, centered, through the same WPF stage hover converter. No duplicated control or corrective post-render pass.
+- [Windows CI #306](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43494292319) **SUCCESS**, 282/282 contracts, real packaged WPF tests for maximized external hover and normal restores, artifact **14071651109**, v1.2.5. Final visual acceptance on the owner's desktop still pending.
