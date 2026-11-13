@@ -22,22 +22,25 @@
                      UriSource="pack://application:,,,/CardArtwork/Active_card_background.png"/>
         <BitmapImage x:Key="InactiveCardBitmap"
                      UriSource="pack://application:,,,/CardArtwork/Inactive_card_background.png"/>
-        <!-- The same source PNGs render beneath each card's existing chamfer.
-             IsEnabled + Restore Tag are read from the original stage button. -->
-        <Style x:Key="WorkflowCardArtwork" TargetType="{x:Type Image}">
-            <Setter Property="Stretch" Value="UniformToFill"/>
-            <Setter Property="StretchDirection" Value="Both"/>
+        <!-- WPF Image.UniformToFill can arrange wider than its explicit Width.
+             Paint the bitmap on a shape whose exact card bounds own the clip.
+             TileBrush handles proportional center crop, not layout sizing. -->
+        <ImageBrush x:Key="ActiveCardBrush" ImageSource="{StaticResource ActiveCardBitmap}"
+                    Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"/>
+        <ImageBrush x:Key="InactiveCardBrush" ImageSource="{StaticResource InactiveCardBitmap}"
+                    Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center"/>
+        <Style x:Key="WorkflowCardArtwork" TargetType="{x:Type Rectangle}">
             <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
             <Setter Property="ClipToBounds" Value="True"/>
-            <Setter Property="Source" Value="{StaticResource InactiveCardBitmap}"/>
+            <Setter Property="Fill" Value="{StaticResource InactiveCardBrush}"/>
             <Style.Triggers>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding Tag.IsEnabled, RelativeSource={RelativeSource Self}}" Value="True"/>
                         <Condition Binding="{Binding Tag.Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Source" Value="{StaticResource ActiveCardBitmap}"/>
+                    <Setter Property="Fill" Value="{StaticResource ActiveCardBrush}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
@@ -722,7 +725,7 @@
                                 <!-- UniformToFill crops the user's fullscreen bitmap symmetrically;
                                      the original source remains unmodified. The reused chamfer
                                      clip sits inside the existing perimeter stroke. -->
-                                <Image x:Name="StepOneCardArtwork" Tag="{Binding ElementName=InstallButton}"
+                                <Rectangle x:Name="StepOneCardArtwork" Tag="{Binding ElementName=InstallButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
                                        Width="{Binding ActualWidth, ElementName=StepOneOutline}"
                                        Height="{Binding ActualHeight, ElementName=StepOneOutline}"
@@ -772,7 +775,7 @@
                                 <!-- UniformToFill crops the user's fullscreen bitmap symmetrically;
                                      the original source remains unmodified. The reused chamfer
                                      clip sits inside the existing perimeter stroke. -->
-                                <Image x:Name="StepTwoCardArtwork" Tag="{Binding ElementName=LaunchButton}"
+                                <Rectangle x:Name="StepTwoCardArtwork" Tag="{Binding ElementName=LaunchButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
                                        Width="{Binding ActualWidth, ElementName=StepTwoOutline}"
                                        Height="{Binding ActualHeight, ElementName=StepTwoOutline}"
@@ -829,7 +832,7 @@
                                 <!-- UniformToFill crops the user's fullscreen bitmap symmetrically;
                                      the original source remains unmodified. The reused chamfer
                                      clip sits inside the existing perimeter stroke. -->
-                                <Image x:Name="StepThreeCardArtwork" Tag="{Binding ElementName=CollectButton}"
+                                <Rectangle x:Name="StepThreeCardArtwork" Tag="{Binding ElementName=CollectButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
                                        Width="{Binding ActualWidth, ElementName=StepThreeOutline}"
                                        Height="{Binding ActualHeight, ElementName=StepThreeOutline}"

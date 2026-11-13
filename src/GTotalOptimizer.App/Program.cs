@@ -169,9 +169,7 @@ internal static class Program
                 {
                     window.OuterBorderArtwork, window.GcoHeaderLogo,
                     window.VColorImage, window.VBlackImage,
-                    window.CityImage, window.PuddleOverflowImage,
-                    window.StepOneCardArtwork, window.StepTwoCardArtwork,
-                    window.StepThreeCardArtwork
+                    window.CityImage, window.PuddleOverflowImage
                 };
                 foreach (var image in art)
                 {
@@ -317,17 +315,21 @@ internal static class Program
                             "Incorrect approved stage artwork or baked label: " + button.Name + "/" + variant);
                 }
                 static void CheckCard(System.Windows.Controls.Button button,
-                    System.Windows.Controls.Image card,
+                    System.Windows.Shapes.Rectangle card,
                     GTotalOptimizer.App.Visuals.ChamferOutline outline, bool active)
                 {
                     button.UpdateLayout();
                     card.UpdateLayout();
                     var name = active ? "ActiveCardBitmap" : "InactiveCardBitmap";
-                    var expected = (System.Windows.Media.Imaging.BitmapSource)
-                        card.FindResource(name);
-                    var sameSource = ReferenceEquals(card.Source, expected);
+                    var brushName = active ? "ActiveCardBrush" : "InactiveCardBrush";
+                    var expected = (System.Windows.Media.Imaging.BitmapSource)card.FindResource(name);
+                    var bitmapBrush = card.Fill as System.Windows.Media.ImageBrush;
+                    var sameSource = ReferenceEquals(bitmapBrush?.ImageSource, expected) &&
+                        ReferenceEquals(bitmapBrush, card.FindResource(brushName));
                     var sameButton = ReferenceEquals(card.Tag, button);
-                    var crop = card.Stretch == System.Windows.Media.Stretch.UniformToFill;
+                    var crop = bitmapBrush?.Stretch == System.Windows.Media.Stretch.UniformToFill &&
+                        bitmapBrush.AlignmentX == System.Windows.Media.AlignmentX.Center &&
+                        bitmapBrush.AlignmentY == System.Windows.Media.AlignmentY.Center;
                     var fillsCard = card.ActualWidth > 0 && card.ActualHeight > 0 &&
                         Math.Abs(card.ActualWidth - outline.ActualWidth) < 1 &&
                         Math.Abs(card.ActualHeight - outline.ActualHeight) < 1 &&
@@ -342,7 +344,7 @@ internal static class Program
                         throw new InvalidOperationException(
                             $"Card artwork state/crop/clip mismatch: {card.Name}, " +
                             $"button={sameButton}, bitmap={sameSource}, crop={crop}, clip={clipped}, fillsCard={fillsCard}, " +
-                            $"imageType={card.Source?.GetType().Name}, " +
+                            $"brushType={card.Fill?.GetType().Name}, " +
                             $"expectedType={expected.GetType().Name}, " +
                             $"size={card.ActualWidth:F2}x{card.ActualHeight:F2}, " +
                             $"outline={outline.ActualWidth:F2}x{outline.ActualHeight:F2}, " +
