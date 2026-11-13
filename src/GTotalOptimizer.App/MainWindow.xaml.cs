@@ -92,7 +92,18 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         originalConsoleMargin = ConsoleTextHost.Margin;
-        CapturePage.SizeChanged += (_, _) => UpdateMaximizedCaptureGeometry();
+        CapturePage.SizeChanged += (_, _) =>
+        {
+            UpdateMaximizedCaptureGeometry();
+            UpdateExpandedStageButtons();
+        };
+        // Only the existing bottom-row buttons grow; the card shells, margins
+        // and normal/small layout remain authored by the original XAML.
+        foreach (var button in new[] { InstallButton, LaunchButton, CollectButton })
+        {
+            if (button.Parent is Grid cardContent)
+                cardContent.SizeChanged += (_, _) => UpdateExpandedStageButton(button);
+        }
         initialized = true;
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3)
             ?? throw new InvalidOperationException("GCO assembly version unavailable.");
@@ -211,6 +222,7 @@ public partial class MainWindow : Window
     {
         UpdatePortraitWidth();
         UpdateMaximizedCaptureGeometry();
+        UpdateExpandedStageButtons();
         QueueHeaderTabAlignment();
     }
 
@@ -246,6 +258,7 @@ public partial class MainWindow : Window
     {
         UpdatePortraitWidth();
         UpdateMaximizedCaptureGeometry();
+        UpdateExpandedStageButtons();
         if (WindowState == System.Windows.WindowState.Normal &&
             maximizedWorkflowCards is null)
             InvalidateSceneNeon();
@@ -275,6 +288,53 @@ public partial class MainWindow : Window
     }
 
 
+
+    // Keep the approved 38-DIP stage row bit-for-bit at default/smaller widths.
+    // Above 1280 DIPs, the card's fixed-height row used to make a wide button
+    // while its 760:112 SVG and hover both stopped at ~258 DIPs. Give the
+    // EXISTING bottom row enough height to scale the entire author SVG instead
+    // of independently stretching its hover or moving the card.
+    private const double StageBaseHeight = 38.0;
+    private const double StageSvgWidth = 760.0;
+    private const double StageSvgHeight = 112.0;
+
+    private void UpdateExpandedStageButtons()
+    {
+        UpdateExpandedStageButton(InstallButton);
+        UpdateExpandedStageButton(LaunchButton);
+        UpdateExpandedStageButton(CollectButton);
+    }
+
+    private void UpdateExpandedStageButton(Button button)
+    {
+        if (button.Parent is not Grid content || content.RowDefinitions.Count != 4 ||
+            content.ActualWidth <= 0 || content.ActualHeight <= 0)
+            return;
+
+        var bottom = content.RowDefinitions[3];
+        var desiredHeight = StageBaseHeight;
+        var maxWidth = double.PositiveInfinity;
+        if (RootLayout.ActualWidth > 1280.5)
+        {
+            // Preserve room for the existing emblem, heading and instructions.
+            // At very wide resolutions, constrain the BUTTON together with its
+            // SVG/hover instead of allowing the aspect ratio to break again.
+            var availableHeight = Math.Max(StageBaseHeight,
+                content.ActualHeight - content.RowDefinitions[0].ActualHeight
+                - content.RowDefinitions[1].ActualHeight - 44.0);
+            var naturalHeight = Math.Max(StageBaseHeight,
+                content.ActualWidth * StageSvgHeight / StageSvgWidth);
+            desiredHeight = Math.Min(naturalHeight, availableHeight);
+            if (naturalHeight > availableHeight + 0.1)
+                maxWidth = desiredHeight * StageSvgWidth / StageSvgHeight;
+        }
+
+        if (button.MaxWidth != maxWidth)
+            button.MaxWidth = maxWidth;
+        if (bottom.Height.GridUnitType != GridUnitType.Pixel ||
+            Math.Abs(bottom.Height.Value - desiredHeight) > 0.1)
+            bottom.Height = new GridLength(desiredHeight);
+    }
 
     // The four original Capture sections keep their exact XAML parent and
     // ordering in both window states. Only Height and Margin local values are

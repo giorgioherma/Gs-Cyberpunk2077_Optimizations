@@ -423,6 +423,27 @@ internal static class Program
                 };
                 foreach (var stage in stages)
                 {
+                    // Normal and smaller windows retain the original row; wide
+                    // windows must display virtually all of the SVG's shell,
+                    // not a short uniformly-letterboxed outline.
+                    if (width <= 1280.5 &&
+                        (Math.Abs(stage.Button.ActualHeight - 38) > 0.2 ||
+                         !double.IsPositiveInfinity(stage.Button.MaxWidth)))
+                        throw new InvalidOperationException(
+                            $"Default/small stage geometry changed: {stage.Button.Name}, " +
+                            $"button={stage.Button.ActualWidth:F1}x{stage.Button.ActualHeight:F1}");
+                    if (width > 1280.5 && stage.Button.ActualWidth > 260)
+                    {
+                        var shell = GTotalOptimizer.App.Visuals.ApprovedStageArtwork.RenderedShell(
+                            new System.Windows.Size(stage.Button.ActualWidth,
+                                stage.Button.ActualHeight));
+                        if (shell.Bounds.Width < stage.Button.ActualWidth * 0.96 ||
+                            stage.Button.ActualHeight < 38.5)
+                            throw new InvalidOperationException(
+                                $"Expanded stage button is wider than its SVG/hover: " +
+                                $"{stage.Button.Name}, button={stage.Button.ActualWidth:F1}x" +
+                                $"{stage.Button.ActualHeight:F1}, shell={shell.Bounds}");
+                    }
                     stage.Button.IsEnabled = false;
                     CheckStage(stage.Button, "Unavailable");
                     CheckCard(stage.Button, stage.Card, stage.Outline, active: false);
@@ -510,7 +531,8 @@ internal static class Program
                         card.Margin.Right < originalCardMargins[Array.IndexOf(cardPanels, card)].Right + 18) ||
                     structural.CaptureWorkflowHeading.Margin.Bottom > 3 ||
                     Math.Abs(structural.InstallStageIcon.ActualHeight - iconHeight) > .1 ||
-                    Math.Abs(structural.InstallButton.ActualHeight - buttonHeight) > .1 ||
+                    (structural.InstallButton.ActualWidth > 260 &&
+                     structural.InstallButton.ActualHeight <= buttonHeight + .3) ||
                     !structural.StepOneOutline.SpatialStroke ||
                     !structural.StepTwoOutline.SpatialStroke ||
                     !structural.StepThreeOutline.SpatialStroke)
@@ -535,7 +557,9 @@ internal static class Program
                     structural.ConsoleTextHost.Margin != statusMargin ||
                     structural.GameRootPanel.Height != originalGameRootHeight ||
                     cardPanels.Where((card, index) => card.Margin != originalCardMargins[index]).Any() ||
-                    cards.Height != cardHeight || cards.MinHeight != cardMinHeight)
+                    cards.Height != cardHeight || cards.MinHeight != cardMinHeight ||
+                    Math.Abs(structural.InstallButton.ActualHeight - buttonHeight) > .1 ||
+                    !double.IsPositiveInfinity(structural.InstallButton.MaxWidth))
                     throw new InvalidOperationException(
                         "Normal local XAML values or original Capture tree changed after maximize/restore cycle " +
                         (cycle + 1));
