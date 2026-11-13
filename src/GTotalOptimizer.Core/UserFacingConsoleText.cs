@@ -109,7 +109,7 @@ public static class UserFacingConsoleText
         if (detail.Contains("Original profiler files restored", StringComparison.OrdinalIgnoreCase))
             return "Original files restored. PresentMon still stopping; retry RESTORE.";
         if (detail.Contains("RECOVERY REQUIRED", StringComparison.OrdinalIgnoreCase))
-            return "Restore incomplete. Retry RESTORE PROFILERS.";
+            return "Restore incomplete. Game files may still be modified. Retry RESTORE.";
         if (detail.Contains("previous capture", StringComparison.OrdinalIgnoreCase) &&
             detail.Contains("pending", StringComparison.OrdinalIgnoreCase))
             return "Previous capture pending. Collect or start a fresh session.";
