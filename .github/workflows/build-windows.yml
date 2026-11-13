@@ -144,10 +144,43 @@ jobs:
             if (!$installed.ok) { throw 'GRSP fixture installer failed' }
             $mid=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
             if (!$mid.ok -or $mid.result.State -ne 'INSTALLED_CURRENT') { throw 'GRSP installed state not confirmed' }
+            $live=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler/RESULTS'
+            $cap=Join-Path $live 'Capture_0001_CI_1000'
+            New-Item -ItemType Directory -Force $cap | Out-Null
+            'capture,rows' | Set-Content (Join-Path $cap 'GRSP_Summary.csv')
+            'COMPLETE' | Set-Content (Join-Path $cap 'GRSP_Status.txt')
+            $crashed=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if ($crashed.result.CompletedCaptureCount -ne 0) {
+              throw 'GCO GRSP accepted shutdown/crash CSVs without explicit F11 completion proof'
+            }
+            'F11_STOP' | Set-Content (Join-Path $cap 'GCO-F11-Complete.flag')
+            $complete=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if ($complete.result.CompletedCaptureCount -ne 1) {
+              throw 'GCO GRSP did not recognize verified F11-stop marker'
+            }
+            $discard=(ExecVerified $grsp ('--discard-live --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            $clean=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if (!$discard.ok -or $discard.result.discarded -lt 1 -or
+                $clean.result.CompletedCaptureCount -ne 0 -or
+                $clean.result.State -ne 'INSTALLED_CURRENT' -or
+                (Get-ChildItem $live -Force).Count -ne 0) {
+              throw 'GRSP discard failed to reset live data while retaining installed profiler'
+            }
+            New-Item -ItemType Directory -Force $cap | Out-Null
+            'capture,rows' | Set-Content (Join-Path $cap 'GRSP_Summary.csv')
+            'COMPLETE' | Set-Content (Join-Path $cap 'GRSP_Status.txt')
+            'F11_STOP' | Set-Content (Join-Path $cap 'GCO-F11-Complete.flag')
+            $standaloneArchives=Join-Path $root 'components/grsp/RESULTS'
+            $before=@(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count
+            Write-Host 'PASS bundled GRSP: implicit/crash export refused; F11 completion accepted; discard is source owned'
           }
           finally {
             $restored=(ExecVerified $grsp ('--restore --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
             if (!$restored.ok) { throw 'GRSP fixture restore failed' }
+            $after=@(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count
+            if ($after -ne $before) {
+              throw 'GCO GRSP Restore incorrectly archived uncollected live output'
+            }
           }
           $post=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
           if ($post.result.State -ne 'NOT_INSTALLED') { throw 'GRSP fixture state remains after restore' }
