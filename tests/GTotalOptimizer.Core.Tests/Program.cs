@@ -1152,6 +1152,27 @@ try
     catch (InvalidDataException) { wrongProcessRejected = true; }
     Require(wrongProcessRejected, "non-Cyberpunk CSV cannot satisfy frame-time capture");
 
+    // A user who attempted Collect without a valid F11 native capture may
+    // have a hash-indexed PresentMon CSV, but that is still disposable scratch.
+    // Capture Again must not get trapped by its presence or reuse stale rows.
+    var replayRoot = Path.Combine(root, "ReplayScratch");
+    var replayGame = Path.Combine(root, "ReplayGame");
+    Directory.CreateDirectory(replayGame);
+    var replayId = Guid.NewGuid().ToString("N");
+    var replayFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        replayRoot, replayId, new DateTimeOffset(2026, 11, 13, 19, 15, 0,
+            TimeSpan.FromHours(1)), replayGame);
+    var replayCsv = Path.Combine(replayFolder, "PresentMon", "PresentMon.csv");
+    Directory.CreateDirectory(Path.GetDirectoryName(replayCsv)!);
+    File.WriteAllText(replayCsv, frameCsvBody);
+    var replayIndexed = CollectedCaptureStore.CollectPresentMon(
+        replayRoot, replayGame, replayId, replayCsv);
+    Require(replayIndexed.FrameTimeCsv == replayCsv &&
+        !replayIndexed.CollectionAttempted &&
+        CollectedCaptureStore.DiscardUncollected(replayRoot, replayGame, replayId) &&
+        !Directory.Exists(replayFolder),
+        "hash-indexed PresentMon-only evidence remains discardable before successful Collect");
+
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
         "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");
