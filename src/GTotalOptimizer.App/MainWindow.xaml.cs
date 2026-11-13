@@ -1576,7 +1576,8 @@ public partial class MainWindow : Window
                     cleanupWarning = "Uncollected GCO results preserved: " + ex.Message;
                 }
             }
-            var result = await Workflow.RestoreOwnedAsync(game);
+            var result = await Workflow.RestoreOwnedAsync(game,
+                preserveIncompleteEvidence: false);
             if (!result.RestoreVerified)
             {
                 Warn(result.Detail, "Recovery required");
