@@ -196,32 +196,71 @@ internal static class Program
                             "Essential WPF control failed layout: " + control.Name);
                 }
 
-                // Framework readiness indicators use the owner's native vector
-                // resources directly under Game Root, never reconstructed icons.
-                var successIcon = window.FrameworkStatusSuccessIcon;
-                var failureIcon = window.FrameworkStatusFailureIcon;
-                if (successIcon.Width != 16 || successIcon.Height != 16 ||
-                    failureIcon.Width != 16 || failureIcon.Height != 16 ||
-                    !ReferenceEquals(successIcon.Source, window.FindResource("GcoStatusSuccessIcon")) ||
-                    !ReferenceEquals(failureIcon.Source, window.FindResource("GcoStatusFailureIcon")) ||
-                    successIcon.Parent is not System.Windows.Controls.Grid iconRow ||
-                    !ReferenceEquals(failureIcon.Parent, iconRow) ||
-                    !ReferenceEquals(window.DependencyText.Parent, iconRow))
+                // Four native vector indicators use the same source preflight
+                // as installation admission; no independently parsed versions.
+                var frameworkIcons = new[]
+                {
+                    (Good: window.CetFrameworkSuccessIcon, Bad: window.CetFrameworkFailureIcon,
+                        Text: window.CetFrameworkLabel, Name: "CET"),
+                    (Good: window.ZeroEngineFrameworkSuccessIcon, Bad: window.ZeroEngineFrameworkFailureIcon,
+                        Text: window.ZeroEngineFrameworkLabel, Name: "0-Engine"),
+                    (Good: window.Red4extFrameworkSuccessIcon, Bad: window.Red4extFrameworkFailureIcon,
+                        Text: window.Red4extFrameworkLabel, Name: "RED4ext"),
+                    (Good: window.RedscriptFrameworkSuccessIcon, Bad: window.RedscriptFrameworkFailureIcon,
+                        Text: window.RedscriptFrameworkLabel, Name: "redscript")
+                };
+                foreach (var gate in frameworkIcons)
+                {
+                    if (gate.Good.Width != 16 || gate.Good.Height != 16 ||
+                        gate.Bad.Width != 16 || gate.Bad.Height != 16 ||
+                        !ReferenceEquals(gate.Good.Source, window.FindResource("GcoStatusSuccessIcon")) ||
+                        !ReferenceEquals(gate.Bad.Source, window.FindResource("GcoStatusFailureIcon")) ||
+                        gate.Good.Parent is not System.Windows.Controls.Grid parent ||
+                        !ReferenceEquals(gate.Bad.Parent, parent) ||
+                        !ReferenceEquals(gate.Text.Parent, parent) ||
+                        !ReferenceEquals(parent.Parent, window.FrameworkChecksRow))
+                        throw new InvalidOperationException(
+                            "Missing 16x16 native per-framework indicator or label: " + gate.Name);
+                }
+                void AssertFrameworkIcons(params bool?[] values)
+                {
+                    for (var k = 0; k < frameworkIcons.Length; k++)
+                    {
+                        var item = frameworkIcons[k];
+                        var success = item.Good.Visibility == System.Windows.Visibility.Visible;
+                        var failure = item.Bad.Visibility == System.Windows.Visibility.Visible;
+                        if (success != (values[k] == true) || failure != (values[k] == false) ||
+                            !item.Text.Text.StartsWith(item.Name, StringComparison.Ordinal))
+                            throw new InvalidOperationException(
+                                $"Incorrect {item.Name} status: expected={values[k]}, " +
+                                $"success={success}, failure={failure}, text={item.Text.Text}");
+                    }
+                }
+
+                static GTotalOptimizer.Core.FrameworkEvidence Evidence(
+                    string? version, bool present = true) => new(present, version);
+                window.SetFrameworkStatuses(null);
+                AssertFrameworkIcons(null, null, null, null);
+                var passing = GTotalOptimizer.Core.FrameworkPreflight.Evaluate(new(
+                    Evidence("2.3.1"), Evidence("1.37.1"), Evidence(null),
+                    Evidence("1.30.0"), Evidence("0.5.31")));
+                window.SetFrameworkStatuses(passing);
+                AssertFrameworkIcons(true, true, true, true);
+                var failing = GTotalOptimizer.Core.FrameworkPreflight.Evaluate(new(
+                    Evidence("2.5"), Evidence("1.38.1"), Evidence(null, false),
+                    Evidence("1.30.0"), Evidence("0.5.32")));
+                window.SetFrameworkStatuses(failing);
+                AssertFrameworkIcons(false, false, true, false);
+                if (failing.Ready ||
+                    !window.CetFrameworkLabel.Text.Contains("1.37.1") ||
+                    !window.RedscriptFrameworkLabel.Text.Contains("0.5.31") ||
+                    !window.ZeroEngineFrameworkLabel.Text.Contains("MISSING"))
                     throw new InvalidOperationException(
-                        "Native 16x16 success/failure icons not registered on the framework status line");
-                window.SetFrameworkStatusIcon(null);
-                if (successIcon.Visibility != System.Windows.Visibility.Collapsed ||
-                    failureIcon.Visibility != System.Windows.Visibility.Collapsed)
-                    throw new InvalidOperationException("Unknown framework must hide both icons");
-                window.SetFrameworkStatusIcon(true);
-                if (successIcon.Visibility != System.Windows.Visibility.Visible ||
-                    failureIcon.Visibility != System.Windows.Visibility.Collapsed)
-                    throw new InvalidOperationException("Compatible framework did not show green check");
-                window.SetFrameworkStatusIcon(false);
-                if (successIcon.Visibility != System.Windows.Visibility.Collapsed ||
-                    failureIcon.Visibility != System.Windows.Visibility.Visible)
-                    throw new InvalidOperationException("Incompatible framework did not show red X");
-                window.SetFrameworkStatusIcon(null);
+                        "Framework icons misrepresent required/found versions or admission");
+                window.SetFrameworkStatuses(
+                    GTotalOptimizer.Core.FrameworkPreflightResult.FromVerifiedInstalledBaseline());
+                AssertFrameworkIcons(true, true, true, true);
+                window.SetFrameworkStatuses(null);
 
                 // The short normal message and longer structured framework
                 // guidance both use the full native ScrollViewer viewport.
@@ -278,7 +317,8 @@ internal static class Program
                             "Incorrect approved stage artwork or baked label: " + button.Name + "/" + variant);
                 }
                 static void CheckCard(System.Windows.Controls.Button button,
-                    System.Windows.Controls.Image card, bool active)
+                    System.Windows.Controls.Image card,
+                    GTotalOptimizer.App.Visuals.ChamferOutline outline, bool active)
                 {
                     button.UpdateLayout();
                     card.UpdateLayout();
@@ -288,15 +328,20 @@ internal static class Program
                     var sameSource = ReferenceEquals(card.Source, expected);
                     var sameButton = ReferenceEquals(card.Tag, button);
                     var crop = card.Stretch == System.Windows.Media.Stretch.UniformToFill;
+                    var fillsCard = card.ActualWidth > 0 && card.ActualHeight > 0 &&
+                        Math.Abs(card.ActualWidth - outline.ActualWidth) < 1 &&
+                        Math.Abs(card.ActualHeight - outline.ActualHeight) < 1 &&
+                        Math.Abs(card.TranslatePoint(new System.Windows.Point(0, 0), outline).X) < 1 &&
+                        Math.Abs(card.TranslatePoint(new System.Windows.Point(0, 0), outline).Y) < 1;
                     var clipped = card.Clip is not null &&
                         card.ActualWidth > 0 && card.ActualHeight > 0 &&
                         card.Clip.FillContains(new System.Windows.Point(card.ActualWidth / 2,
                             card.ActualHeight / 2)) &&
                         !card.Clip.FillContains(new System.Windows.Point(0, 0));
-                    if (!sameButton || !sameSource || !crop || !clipped)
+                    if (!sameButton || !sameSource || !crop || !clipped || !fillsCard)
                         throw new InvalidOperationException(
                             $"Card artwork state/crop/clip mismatch: {card.Name}, " +
-                            $"button={sameButton}, bitmap={sameSource}, crop={crop}, clip={clipped}, " +
+                            $"button={sameButton}, bitmap={sameSource}, crop={crop}, clip={clipped}, fillsCard={fillsCard}, " +
                             $"imageType={card.Source?.GetType().Name}, " +
                             $"expectedType={expected.GetType().Name}, " +
                             $"size={card.ActualWidth:F1}x{card.ActualHeight:F1}, state={name}");
@@ -310,34 +355,34 @@ internal static class Program
                             "Stage hover outline extends beyond the real scaled SVG shell: " + button.Name);
                 }
                 var stages = new[] {
-                    (Button: window.InstallButton, Card: window.StepOneCardArtwork),
-                    (Button: window.LaunchButton, Card: window.StepTwoCardArtwork),
-                    (Button: window.CollectButton, Card: window.StepThreeCardArtwork)
+                    (Button: window.InstallButton, Card: window.StepOneCardArtwork, Outline: window.StepOneOutline),
+                    (Button: window.LaunchButton, Card: window.StepTwoCardArtwork, Outline: window.StepTwoOutline),
+                    (Button: window.CollectButton, Card: window.StepThreeCardArtwork, Outline: window.StepThreeOutline)
                 };
                 foreach (var stage in stages)
                 {
                     stage.Button.IsEnabled = false;
                     CheckStage(stage.Button, "Unavailable");
-                    CheckCard(stage.Button, stage.Card, active: false);
+                    CheckCard(stage.Button, stage.Card, stage.Outline, active: false);
                     stage.Button.IsEnabled = true;
                     CheckStage(stage.Button, "Yellow");
-                    CheckCard(stage.Button, stage.Card, active: true);
+                    CheckCard(stage.Button, stage.Card, stage.Outline, active: true);
                     stage.Button.IsEnabled = false;
                 }
                 window.InstallButton.Style = (System.Windows.Style)window.FindResource("RestoreStageButton");
                 window.InstallButton.IsEnabled = true;
                 CheckStage(window.InstallButton, "Restore");
-                CheckCard(window.InstallButton, window.StepOneCardArtwork, active: false);
+                CheckCard(window.InstallButton, window.StepOneCardArtwork, window.StepOneOutline, active: false);
                 window.InstallButton.IsEnabled = false;
                 CheckStage(window.InstallButton, "Unavailable");
-                CheckCard(window.InstallButton, window.StepOneCardArtwork, active: false);
+                CheckCard(window.InstallButton, window.StepOneCardArtwork, window.StepOneOutline, active: false);
 
                 // The Capture page is a general-status UI, not a hidden
                 // hover-based diagnostics surface. Check the actual loaded
                 // WPF controls, not merely source text.
                 if (window.StatusText.ToolTip is not null ||
                     window.GamePathBox.ToolTip is not null ||
-                    window.DependencyText.ToolTip is not null)
+                    frameworkIcons.Any(gate => gate.Text.ToolTip is not null))
                     throw new InvalidOperationException(
                         "Capture UI must not display hover tooltips");
 
