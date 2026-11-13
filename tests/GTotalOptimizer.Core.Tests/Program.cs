@@ -1175,6 +1175,45 @@ try
         !Directory.Exists(interruptedFolder),
         "partially copied but unsealed native archive is discardable only on an explicit new run");
 
+    // A managed collector can finish writing its temporary owner archive,
+    // then WPF can be terminated before it copies/marks the final session.
+    // Reopening must recover the SAME session identity from that stage.
+    var stagedId = Guid.NewGuid().ToString("N");
+    var stagedIndex = CollectedCaptureStore.CreateDatedSessionFolder(
+        replayRoot, stagedId, new DateTimeOffset(2026, 11, 13, 19, 15, 2,
+            TimeSpan.FromHours(1)), replayGame);
+    var stagedRoot = Path.Combine(replayRoot, "RESULTS", ".staging", stagedId);
+    var stagedOwner = Path.Combine(stagedRoot, "CET", "CET-20261113-191502");
+    Directory.CreateDirectory(stagedOwner);
+    File.Copy(Path.Combine(cetSource, "CET_Summary.json"),
+        Path.Combine(stagedOwner, "CET_Summary.json"));
+    var replayJournal = Path.Combine(replayRoot, "RESULTS",
+        "GCO-active-profile-session.json");
+    File.WriteAllText(replayJournal, System.Text.Json.JsonSerializer.Serialize(new
+    {
+        gameRoot = Path.GetFullPath(replayGame),
+        stage = "capture-attempt",
+        sessionId = stagedId
+    }));
+    var replayWorkflow = new UnifiedProfilerWorkflow(replayRoot);
+    Require(replayWorkflow.HasPendingStagedNativeArchive(replayGame) &&
+        !replayWorkflow.HasPendingStagedNativeArchive(Path.Combine(root, "OtherGame")),
+        "completed owner stage survives GUI crash and belongs only to its current session");
+
+    var unknownStageFile = Path.Combine(stagedRoot, "manual.txt");
+    File.WriteAllText(unknownStageFile, "not GCO data");
+    var stagingRefused = false;
+    try { replayWorkflow.AbandonCurrentUncollected(replayGame); }
+    catch (InvalidDataException) { stagingRefused = true; }
+    Require(stagingRefused && File.Exists(unknownStageFile) &&
+        File.Exists(replayJournal) && Directory.Exists(stagedIndex),
+        "unknown staging data prevents discard without mutating the pending journal");
+    File.Delete(unknownStageFile);
+    Require(replayWorkflow.AbandonCurrentUncollected(replayGame) &&
+        !Directory.Exists(stagedRoot) && !Directory.Exists(stagedIndex) &&
+        !replayWorkflow.HasCaptureAttempt(replayGame),
+        "Capture Again safely removes the current unsealed owner stage and resets journal");
+
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
         "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");
