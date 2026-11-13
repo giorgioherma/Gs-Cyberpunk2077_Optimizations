@@ -136,17 +136,597 @@ foreach ($family in @('Rajdhani','Oxanium')) {
 Write-Host 'PASS WPF Rajdhani + Oxanium font licenses bundled'
 # Never package 02_cityline_header.png or GCO_approved_blue_skyline_crop.png.
 
-# One private Microsoft .NET 10 Core and WindowsDesktop runtime.
+# One private Microsoft .NET 10 Core + WindowsDesktop runtime.
+# actions/setup-dotnet installs the current official x64 Windows SDK before
+# this script. Bundle its matching, locally verified *runtime* components
+# instead of redownloading dotnet-install.ps1 (remote script repeatedly ended
+# mid-response in CI #294/#296). This is the same Microsoft-supplied runtime,
+# not a second managed app/SDK or another installer implementation.
 $runtime=Join-Path $root 'runtime'
-$installer=Join-Path $temp 'dotnet-install.ps1'
-Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer
-& $installer -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $runtime -NoPath
-if ($LASTEXITCODE -ne 0) { throw 'Private .NET Core 10 runtime installation failed' }
-& $installer -Channel 10.0 -Runtime windowsdesktop -Architecture x64 -InstallDir $runtime -NoPath
-if ($LASTEXITCODE -ne 0) { throw 'Private .NET Desktop 10 runtime installation failed' }
+$dotnetCommand=Get-Command dotnet -CommandType Application -ErrorAction Stop
+$dotnetHome=Split-Path -Parent $dotnetCommand.Source
+$coreSource=Join-Path $dotnetHome 'shared/Microsoft.NETCore.App'
+$desktopSource=Join-Path $dotnetHome 'shared/Microsoft.WindowsDesktop.App'
+$fxrSource=Join-Path $dotnetHome 'host/fxr'
+foreach ($required in @($coreSource,$desktopSource,$fxrSource)) {
+  if (!(Test-Path -LiteralPath $required -PathType Container)) {
+    throw "setup-dotnet SDK is missing required private runtime source: $required"
+  }
+}
+$coreVersions=@(Get-ChildItem $coreSource -Directory | Where-Object { $_.Name -match '^10\.\d+\.\d+
+
+# Build the existing source-owned native root launcher.
+$vswhere=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+$vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+if (-not $vs) { throw 'Required x64 compiler missing on runner' }
+$vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+$rcPath=Join-Path $temp 'launcher.rc'
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version).Replace('@ICON_PATH@',$iconSource.Replace('\','\\'))
+Set-Content $rcPath $rcTxt -Encoding ascii
+$nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
+$nativeRes=Join-Path $temp 'launcher.res'
+$nativeObj=Join-Path $temp 'launcher.obj'
+$nativeExe=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+$cmdPath=Join-Path $temp 'build.cmd'
+$buildLines=@(
+  '@echo off'
+  ('call "{0}" >nul' -f $vcvars)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  'exit /b %errorlevel%'
+)
+Set-Content $cmdPath $buildLines -Encoding ascii
+& $cmdPath
+if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Assert version identity in the built native launcher and managed application.
+foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+  if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") { throw "Unified executable version mismatch: $exe" }
+}
+
+# Verify Windows Explorer would extract the exact same owner ICO from both
+# the public native launcher and the internal managed WPF application.
+Add-Type -AssemblyName System.Drawing
+$expectedIcon=[System.Drawing.Icon]::new($iconSource,[System.Drawing.Size]::new(32,32))
+try {
+  $expectedBitmap=$expectedIcon.ToBitmap()
+  try {
+    foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+      $actualIcon=[System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+      if ($null -eq $actualIcon) { throw "Windows icon missing from $exe" }
+      try {
+        $bitmap=$actualIcon.ToBitmap()
+        try {
+          if ($bitmap.Width -ne $expectedBitmap.Width -or $bitmap.Height -ne $expectedBitmap.Height) {
+            throw "Windows icon dimensions differ from owner ICO for $exe"
+          }
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              if ($bitmap.GetPixel($x,$y).ToArgb() -ne $expectedBitmap.GetPixel($x,$y).ToArgb()) {
+                throw "Windows icon pixel mismatch at ($x,$y) in $exe"
+              }
+            }
+          }
+        } finally { $bitmap.Dispose() }
+      } finally { $actualIcon.Dispose() }
+    }
+  } finally { $expectedBitmap.Dispose() }
+} finally { $expectedIcon.Dispose() }
+Write-Host 'PASS both packaged EXEs expose the exact owner GOT LAG 32px icon'
+# Native PresentMon CLI, exact release digest. No 160 MB MSI.
+$pm=Join-Path $components 'presentmon'
+New-Item -ItemType Directory -Force $pm | Out-Null
+$pmExe=Join-Path $pm 'PresentMon.exe'
+GetExact 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe' $pmExe 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile (Join-Path $pm 'LICENSE-PresentMon.txt')
+Write-Host 'PASS official PresentMon CLI 2.6.0'
+
+# One coreclr in entire bundle. Stable released GRSP and CET native DLLs were
+# not recompiled, and no original third-party mod source is shipped.
+$core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
+if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Expected one shared .NET runtime; found $($core.Count)"
+}
+foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'))) {
+  if (!(Test-Path $exe)) { throw "Manager executable absent $exe" }
+  $json=Get-Content ([IO.Path]::ChangeExtension($exe,'.runtimeconfig.json')) -Raw
+  if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
+}
+New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
+if (!$Integrated) { Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1') }
+if (!$Integrated) { Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii }
+Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
+$provenance=@{
+  testOnly=$true
+  cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
+  presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
+}
+$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
+if (!$Integrated) {
+Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
+CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
+Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
+It uses both profiler owners' original install/collect/restore headless CLIs.
+PresentMon starts with F11 capture targeting Cyberpunk2077.exe and asks for UAC.
+Start/stop F11 twice in the game. CLOSE game before collecting/restore.
+Retain RESULTS/Triple-* logs and raw data to report success or errors.
+The ordinary G-Total GUI install/generate buttons remain gated.
+No third-party mod source or optimization output is distributed.
+'@ -Encoding UTF8
+}
+if ($Integrated) {
+  $entries=@(
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+  )
+  foreach ($entry in $entries) {
+    $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+  $payloadPaths=@(
+    'components/cet/payload/cyber_engine_tweaks.PROFILER.dll',
+    'components/cet/payload/0-Engine/modules/G-CET/Scheduler.lua',
+    'components/cet/payload/CETProfilerControls/init.lua',
+    'components/grsp/payload/G-REDscript-Profiler.dll',
+    'components/presentmon/PresentMon.exe'
+  )
+  $payloads=@($payloadPaths | ForEach-Object {
+    @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
+  })
+  VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
+  VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
+  VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+  @{ schemaVersion=2; components=$entries; payloads=$payloads } |
+    ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
+  # The GitHub artifact contains ONE portable app directory plus a short
+  # adjacent user guide. Never copy the guide into the game optimization ZIP.
+  $releaseRoot=Join-Path (Get-Location) 'publish/release'
+  New-Item -ItemType Directory -Force $releaseRoot | Out-Null
+  $finalApp=Join-Path $releaseRoot "G's Cyberpunk 2077 Optimization"
+  if (Test-Path $finalApp) { throw 'Existing final app folder would be overwritten' }
+  Move-Item -LiteralPath $root -Destination $finalApp
+  $root=$finalApp
+  # Generate the visible version directly from the canonical MSBuild value.
+  # Keep this alongside the app, not inside the game's optimization output.
+  @"
+GOT LAG? - G's Cyberpunk 2077 Optimizer v$version
+=======================================
+
+QUICK START
+1. Extract the complete ZIP to a writable folder. Keep the app folder intact.
+2. Open "G's Cyberpunk 2077 Optimization" and run:
+   Gs-Cyberpunk2077_Optimizer.exe
+3. Select the Cyberpunk 2077 game installation folder (containing bin/x64).
+4. Click INSTALL PROFILERS. CET and REDscript install through their own managers.
+5. Click START CYBERPUNK / CAPTURE. PresentMon records automatically.
+6. In the game world, press F11 once to start CET + REDscript and again to stop.
+   Sample movement, driving and combat. A few minutes is sufficient.
+7. Exit Cyberpunk completely. Click COLLECT RESULTS.
+8. Click CONTINUE. Confirm any missing-capture skip boxes if necessary.
+   GCO verifies the current session and restores the original profiler files.
+
+IMPORTANT
+- Keep the entire folder together; do not run the launcher from inside the ZIP.
+- If the game or a profiler is still running, close it before Collect/Continue.
+- PresentMon is optional. It records automatically and does not use F11.
+- If a capture is missing, the app identifies the missing domain before Continue.
+- Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
+  recovery action if interrupted during profiling.
+- The optimization generator/combined ZIP feature is not yet enabled.
+- Your captured data is under the app folder's RESULTS directory.
+
+VERSION $version (portable build). No system .NET installation required.
+"@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  # Per-build provenance: same version can have multiple CI attempts with
+  # different ZIP SHA-256 hashes. Do not infer a unique hash from a version.
+  [ordered]@{
+    product='Gs-Cyberpunk2077_Optimizer'
+    version=$version
+    sourceCommit=[string]$env:GITHUB_SHA
+    githubRunId=[string]$env:GITHUB_RUN_ID
+    githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
+  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
+  Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
+  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
+} else {
+  Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
+}
+ } | ForEach-Object Name)
+$desktopVersions=@(Get-ChildItem $desktopSource -Directory | Where-Object { $_.Name -match '^10\.\d+\.\d+
+
+# Build the existing source-owned native root launcher.
+$vswhere=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+$vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+if (-not $vs) { throw 'Required x64 compiler missing on runner' }
+$vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+$rcPath=Join-Path $temp 'launcher.rc'
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version).Replace('@ICON_PATH@',$iconSource.Replace('\','\\'))
+Set-Content $rcPath $rcTxt -Encoding ascii
+$nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
+$nativeRes=Join-Path $temp 'launcher.res'
+$nativeObj=Join-Path $temp 'launcher.obj'
+$nativeExe=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+$cmdPath=Join-Path $temp 'build.cmd'
+$buildLines=@(
+  '@echo off'
+  ('call "{0}" >nul' -f $vcvars)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  'exit /b %errorlevel%'
+)
+Set-Content $cmdPath $buildLines -Encoding ascii
+& $cmdPath
+if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Assert version identity in the built native launcher and managed application.
+foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+  if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") { throw "Unified executable version mismatch: $exe" }
+}
+
+# Verify Windows Explorer would extract the exact same owner ICO from both
+# the public native launcher and the internal managed WPF application.
+Add-Type -AssemblyName System.Drawing
+$expectedIcon=[System.Drawing.Icon]::new($iconSource,[System.Drawing.Size]::new(32,32))
+try {
+  $expectedBitmap=$expectedIcon.ToBitmap()
+  try {
+    foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+      $actualIcon=[System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+      if ($null -eq $actualIcon) { throw "Windows icon missing from $exe" }
+      try {
+        $bitmap=$actualIcon.ToBitmap()
+        try {
+          if ($bitmap.Width -ne $expectedBitmap.Width -or $bitmap.Height -ne $expectedBitmap.Height) {
+            throw "Windows icon dimensions differ from owner ICO for $exe"
+          }
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              if ($bitmap.GetPixel($x,$y).ToArgb() -ne $expectedBitmap.GetPixel($x,$y).ToArgb()) {
+                throw "Windows icon pixel mismatch at ($x,$y) in $exe"
+              }
+            }
+          }
+        } finally { $bitmap.Dispose() }
+      } finally { $actualIcon.Dispose() }
+    }
+  } finally { $expectedBitmap.Dispose() }
+} finally { $expectedIcon.Dispose() }
+Write-Host 'PASS both packaged EXEs expose the exact owner GOT LAG 32px icon'
+# Native PresentMon CLI, exact release digest. No 160 MB MSI.
+$pm=Join-Path $components 'presentmon'
+New-Item -ItemType Directory -Force $pm | Out-Null
+$pmExe=Join-Path $pm 'PresentMon.exe'
+GetExact 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe' $pmExe 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile (Join-Path $pm 'LICENSE-PresentMon.txt')
+Write-Host 'PASS official PresentMon CLI 2.6.0'
+
+# One coreclr in entire bundle. Stable released GRSP and CET native DLLs were
+# not recompiled, and no original third-party mod source is shipped.
+$core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
+if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Expected one shared .NET runtime; found $($core.Count)"
+}
+foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'))) {
+  if (!(Test-Path $exe)) { throw "Manager executable absent $exe" }
+  $json=Get-Content ([IO.Path]::ChangeExtension($exe,'.runtimeconfig.json')) -Raw
+  if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
+}
+New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
+if (!$Integrated) { Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1') }
+if (!$Integrated) { Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii }
+Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
+$provenance=@{
+  testOnly=$true
+  cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
+  presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
+}
+$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
+if (!$Integrated) {
+Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
+CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
+Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
+It uses both profiler owners' original install/collect/restore headless CLIs.
+PresentMon starts with F11 capture targeting Cyberpunk2077.exe and asks for UAC.
+Start/stop F11 twice in the game. CLOSE game before collecting/restore.
+Retain RESULTS/Triple-* logs and raw data to report success or errors.
+The ordinary G-Total GUI install/generate buttons remain gated.
+No third-party mod source or optimization output is distributed.
+'@ -Encoding UTF8
+}
+if ($Integrated) {
+  $entries=@(
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+  )
+  foreach ($entry in $entries) {
+    $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+  $payloadPaths=@(
+    'components/cet/payload/cyber_engine_tweaks.PROFILER.dll',
+    'components/cet/payload/0-Engine/modules/G-CET/Scheduler.lua',
+    'components/cet/payload/CETProfilerControls/init.lua',
+    'components/grsp/payload/G-REDscript-Profiler.dll',
+    'components/presentmon/PresentMon.exe'
+  )
+  $payloads=@($payloadPaths | ForEach-Object {
+    @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
+  })
+  VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
+  VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
+  VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+  @{ schemaVersion=2; components=$entries; payloads=$payloads } |
+    ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
+  # The GitHub artifact contains ONE portable app directory plus a short
+  # adjacent user guide. Never copy the guide into the game optimization ZIP.
+  $releaseRoot=Join-Path (Get-Location) 'publish/release'
+  New-Item -ItemType Directory -Force $releaseRoot | Out-Null
+  $finalApp=Join-Path $releaseRoot "G's Cyberpunk 2077 Optimization"
+  if (Test-Path $finalApp) { throw 'Existing final app folder would be overwritten' }
+  Move-Item -LiteralPath $root -Destination $finalApp
+  $root=$finalApp
+  # Generate the visible version directly from the canonical MSBuild value.
+  # Keep this alongside the app, not inside the game's optimization output.
+  @"
+GOT LAG? - G's Cyberpunk 2077 Optimizer v$version
+=======================================
+
+QUICK START
+1. Extract the complete ZIP to a writable folder. Keep the app folder intact.
+2. Open "G's Cyberpunk 2077 Optimization" and run:
+   Gs-Cyberpunk2077_Optimizer.exe
+3. Select the Cyberpunk 2077 game installation folder (containing bin/x64).
+4. Click INSTALL PROFILERS. CET and REDscript install through their own managers.
+5. Click START CYBERPUNK / CAPTURE. PresentMon records automatically.
+6. In the game world, press F11 once to start CET + REDscript and again to stop.
+   Sample movement, driving and combat. A few minutes is sufficient.
+7. Exit Cyberpunk completely. Click COLLECT RESULTS.
+8. Click CONTINUE. Confirm any missing-capture skip boxes if necessary.
+   GCO verifies the current session and restores the original profiler files.
+
+IMPORTANT
+- Keep the entire folder together; do not run the launcher from inside the ZIP.
+- If the game or a profiler is still running, close it before Collect/Continue.
+- PresentMon is optional. It records automatically and does not use F11.
+- If a capture is missing, the app identifies the missing domain before Continue.
+- Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
+  recovery action if interrupted during profiling.
+- The optimization generator/combined ZIP feature is not yet enabled.
+- Your captured data is under the app folder's RESULTS directory.
+
+VERSION $version (portable build). No system .NET installation required.
+"@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  # Per-build provenance: same version can have multiple CI attempts with
+  # different ZIP SHA-256 hashes. Do not infer a unique hash from a version.
+  [ordered]@{
+    product='Gs-Cyberpunk2077_Optimizer'
+    version=$version
+    sourceCommit=[string]$env:GITHUB_SHA
+    githubRunId=[string]$env:GITHUB_RUN_ID
+    githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
+  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
+  Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
+  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
+} else {
+  Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
+}
+ } | ForEach-Object Name)
+$matchingVersions=@($coreVersions | Where-Object { $_ -in $desktopVersions } |
+  Sort-Object { [version]$_ } -Descending)
+if ($matchingVersions.Count -lt 1) {
+  throw "No matching official .NET 10 Core/Desktop runtime: core=$($coreVersions -join ',') desktop=$($desktopVersions -join ',')"
+}
+$runtimeVersion=$matchingVersions[0]
+$fxrVersion=@(Get-ChildItem $fxrSource -Directory |
+  Where-Object { $_.Name -match '^10\.\d+\.\d+
+
+# Build the existing source-owned native root launcher.
+$vswhere=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
+$vs=(& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+if (-not $vs) { throw 'Required x64 compiler missing on runner' }
+$vcvars=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
+$rcPath=Join-Path $temp 'launcher.rc'
+$rcTxt=(Get-Content 'src/GTotalOptimizer.Launcher/launcher.rc.in' -Raw).Replace('@VERSION_COMMAS@',$version.Replace('.',',')).Replace('@VERSION_DOTS@',$version).Replace('@ICON_PATH@',$iconSource.Replace('\','\\'))
+Set-Content $rcPath $rcTxt -Encoding ascii
+$nativeSource=(Resolve-Path 'src/GTotalOptimizer.Launcher/launcher.c').Path
+$nativeRes=Join-Path $temp 'launcher.res'
+$nativeObj=Join-Path $temp 'launcher.obj'
+$nativeExe=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+$cmdPath=Join-Path $temp 'build.cmd'
+$buildLines=@(
+  '@echo off'
+  ('call "{0}" >nul' -f $vcvars)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
+  'if errorlevel 1 exit /b %errorlevel%'
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  'exit /b %errorlevel%'
+)
+Set-Content $cmdPath $buildLines -Encoding ascii
+& $cmdPath
+if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Assert version identity in the built native launcher and managed application.
+foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+  if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") { throw "Unified executable version mismatch: $exe" }
+}
+
+# Verify Windows Explorer would extract the exact same owner ICO from both
+# the public native launcher and the internal managed WPF application.
+Add-Type -AssemblyName System.Drawing
+$expectedIcon=[System.Drawing.Icon]::new($iconSource,[System.Drawing.Size]::new(32,32))
+try {
+  $expectedBitmap=$expectedIcon.ToBitmap()
+  try {
+    foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {
+      $actualIcon=[System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+      if ($null -eq $actualIcon) { throw "Windows icon missing from $exe" }
+      try {
+        $bitmap=$actualIcon.ToBitmap()
+        try {
+          if ($bitmap.Width -ne $expectedBitmap.Width -or $bitmap.Height -ne $expectedBitmap.Height) {
+            throw "Windows icon dimensions differ from owner ICO for $exe"
+          }
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              if ($bitmap.GetPixel($x,$y).ToArgb() -ne $expectedBitmap.GetPixel($x,$y).ToArgb()) {
+                throw "Windows icon pixel mismatch at ($x,$y) in $exe"
+              }
+            }
+          }
+        } finally { $bitmap.Dispose() }
+      } finally { $actualIcon.Dispose() }
+    }
+  } finally { $expectedBitmap.Dispose() }
+} finally { $expectedIcon.Dispose() }
+Write-Host 'PASS both packaged EXEs expose the exact owner GOT LAG 32px icon'
+# Native PresentMon CLI, exact release digest. No 160 MB MSI.
+$pm=Join-Path $components 'presentmon'
+New-Item -ItemType Directory -Force $pm | Out-Null
+$pmExe=Join-Path $pm 'PresentMon.exe'
+GetExact 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe' $pmExe 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile (Join-Path $pm 'LICENSE-PresentMon.txt')
+Write-Host 'PASS official PresentMon CLI 2.6.0'
+
+# One coreclr in entire bundle. Stable released GRSP and CET native DLLs were
+# not recompiled, and no original third-party mod source is shipped.
+$core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
+if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Expected one shared .NET runtime; found $($core.Count)"
+}
+foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'))) {
+  if (!(Test-Path $exe)) { throw "Manager executable absent $exe" }
+  $json=Get-Content ([IO.Path]::ChangeExtension($exe,'.runtimeconfig.json')) -Raw
+  if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
+}
+New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
+if (!$Integrated) { Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1') }
+if (!$Integrated) { Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii }
+Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
+$provenance=@{
+  testOnly=$true
+  cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
+  presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
+}
+$provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
+if (!$Integrated) {
+Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
+CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
+Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
+It uses both profiler owners' original install/collect/restore headless CLIs.
+PresentMon starts with F11 capture targeting Cyberpunk2077.exe and asks for UAC.
+Start/stop F11 twice in the game. CLOSE game before collecting/restore.
+Retain RESULTS/Triple-* logs and raw data to report success or errors.
+The ordinary G-Total GUI install/generate buttons remain gated.
+No third-party mod source or optimization output is distributed.
+'@ -Encoding UTF8
+}
+if ($Integrated) {
+  $entries=@(
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+  )
+  foreach ($entry in $entries) {
+    $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+  $payloadPaths=@(
+    'components/cet/payload/cyber_engine_tweaks.PROFILER.dll',
+    'components/cet/payload/0-Engine/modules/G-CET/Scheduler.lua',
+    'components/cet/payload/CETProfilerControls/init.lua',
+    'components/grsp/payload/G-REDscript-Profiler.dll',
+    'components/presentmon/PresentMon.exe'
+  )
+  $payloads=@($payloadPaths | ForEach-Object {
+    @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
+  })
+  VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
+  VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
+  VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
+  @{ schemaVersion=2; components=$entries; payloads=$payloads } |
+    ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
+  # The GitHub artifact contains ONE portable app directory plus a short
+  # adjacent user guide. Never copy the guide into the game optimization ZIP.
+  $releaseRoot=Join-Path (Get-Location) 'publish/release'
+  New-Item -ItemType Directory -Force $releaseRoot | Out-Null
+  $finalApp=Join-Path $releaseRoot "G's Cyberpunk 2077 Optimization"
+  if (Test-Path $finalApp) { throw 'Existing final app folder would be overwritten' }
+  Move-Item -LiteralPath $root -Destination $finalApp
+  $root=$finalApp
+  # Generate the visible version directly from the canonical MSBuild value.
+  # Keep this alongside the app, not inside the game's optimization output.
+  @"
+GOT LAG? - G's Cyberpunk 2077 Optimizer v$version
+=======================================
+
+QUICK START
+1. Extract the complete ZIP to a writable folder. Keep the app folder intact.
+2. Open "G's Cyberpunk 2077 Optimization" and run:
+   Gs-Cyberpunk2077_Optimizer.exe
+3. Select the Cyberpunk 2077 game installation folder (containing bin/x64).
+4. Click INSTALL PROFILERS. CET and REDscript install through their own managers.
+5. Click START CYBERPUNK / CAPTURE. PresentMon records automatically.
+6. In the game world, press F11 once to start CET + REDscript and again to stop.
+   Sample movement, driving and combat. A few minutes is sufficient.
+7. Exit Cyberpunk completely. Click COLLECT RESULTS.
+8. Click CONTINUE. Confirm any missing-capture skip boxes if necessary.
+   GCO verifies the current session and restores the original profiler files.
+
+IMPORTANT
+- Keep the entire folder together; do not run the launcher from inside the ZIP.
+- If the game or a profiler is still running, close it before Collect/Continue.
+- PresentMon is optional. It records automatically and does not use F11.
+- If a capture is missing, the app identifies the missing domain before Continue.
+- Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
+  recovery action if interrupted during profiling.
+- The optimization generator/combined ZIP feature is not yet enabled.
+- Your captured data is under the app folder's RESULTS directory.
+
+VERSION $version (portable build). No system .NET installation required.
+"@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  # Per-build provenance: same version can have multiple CI attempts with
+  # different ZIP SHA-256 hashes. Do not infer a unique hash from a version.
+  [ordered]@{
+    product='Gs-Cyberpunk2077_Optimizer'
+    version=$version
+    sourceCommit=[string]$env:GITHUB_SHA
+    githubRunId=[string]$env:GITHUB_RUN_ID
+    githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
+  } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
+  Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
+  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
+} else {
+  Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
+}
+ } |
+  Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1)
+if ($fxrVersion.Count -ne 1) { throw "No official .NET 10 hostfxr in $fxrSource" }
+$dotnetExe=Join-Path $dotnetHome 'dotnet.exe'
+if (!(Test-Path -LiteralPath $dotnetExe -PathType Leaf)) { throw "Missing official .NET host: $dotnetExe" }
+New-Item -ItemType Directory -Force $runtime,
+  (Join-Path $runtime 'host/fxr'), (Join-Path $runtime 'shared/Microsoft.NETCore.App'),
+  (Join-Path $runtime 'shared/Microsoft.WindowsDesktop.App') | Out-Null
+Copy-Item -LiteralPath $dotnetExe -Destination (Join-Path $runtime 'dotnet.exe')
+Copy-Item -LiteralPath (Join-Path $fxrSource $fxrVersion[0].Name) -Destination (Join-Path $runtime 'host/fxr') -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $coreSource $runtimeVersion) -Destination (Join-Path $runtime 'shared/Microsoft.NETCore.App') -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $desktopSource $runtimeVersion) -Destination (Join-Path $runtime 'shared/Microsoft.WindowsDesktop.App') -Recurse -Force
+foreach ($notice in @('LICENSE.txt','ThirdPartyNotices.txt')) {
+  $source=Join-Path $dotnetHome $notice
+  if (Test-Path -LiteralPath $source -PathType Leaf) {
+    Copy-Item -LiteralPath $source -Destination (Join-Path $runtime $notice)
+  }
+}
 $runtimes=& (Join-Path $runtime 'dotnet.exe') --list-runtimes
-if (-not ($runtimes | Select-String 'Microsoft.NETCore.App 10\.') -or -not ($runtimes | Select-String 'Microsoft.WindowsDesktop.App 10\.')) { throw 'Private .NET 10 Desktop layout incomplete' }
-Write-Host "PASS private runtime: $($runtimes -join '; ')"
+if ($LASTEXITCODE -ne 0 -or
+    -not ($runtimes | Select-String ("Microsoft.NETCore.App " + [regex]::Escape($runtimeVersion) + " ")) -or
+    -not ($runtimes | Select-String ("Microsoft.WindowsDesktop.App " + [regex]::Escape($runtimeVersion) + " "))) {
+  throw "Private .NET 10 Core/Desktop runtime layout or version incomplete: $($runtimes -join '; ')"
+}
+Write-Host "PASS official single private .NET 10 Desktop runtime $runtimeVersion from setup-dotnet SDK"
 
 # Build the existing source-owned native root launcher.
 $vswhere=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
