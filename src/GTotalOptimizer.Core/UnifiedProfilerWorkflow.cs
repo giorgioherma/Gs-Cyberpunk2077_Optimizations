@@ -497,7 +497,7 @@ public sealed class UnifiedProfilerWorkflow
     }
 
     public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default,
-        bool preserveIncompleteEvidence = true, bool pendingPresentMonStopped = true)
+        bool preserveIncompleteEvidence = false, bool pendingPresentMonStopped = true)
     {
         if (GameRunning()) return new(false, "Close Cyberpunk before profiler restoration.");
         try
