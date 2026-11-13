@@ -504,10 +504,16 @@ public sealed class UnifiedProfilerWorkflow
         {
             if (!OwnsSession(game))
                 return new(false, "No matching GCO ownership journal. Use the authoritative standalone manager for recovery.");
-            var status = await InspectAsync(game, token);
+            // Always attempt BOTH owner restores. A damaged status journal or
+            // failure in one owner must never prevent restoring the other.
+            // The only success authority is the independently re-inspected
+            // original game state after both operations.
+            LiveProfilerState? before = null;
+            try { before = await InspectAsync(game, token); }
+            catch { /* owner restore must run even if status parsing failed */ }
             string? evidenceFolder = null;
             string? evidenceWarning = null;
-            if (preserveIncompleteEvidence && !status.BothCaptured)
+            if (preserveIncompleteEvidence && before is { BothCaptured: false })
             {
                 try
                 {
@@ -516,33 +522,40 @@ public sealed class UnifiedProfilerWorkflow
                 }
                 catch (Exception ex)
                 {
-                    // Recover original native files even if supplemental crash
-                    // diagnostics cannot be copied. Saved collected capture
-                    // archives are separate and are never deleted here.
                     evidenceWarning = "Diagnostic snapshot failed: " + ex.Message;
                 }
             }
             var problems = new List<string>();
-            if (status.GrspManaged)
+            foreach (var kind in new[] { BackendKind.Grsp, BackendKind.Cet })
             {
-                var result = await Run(BackendKind.Grsp, "restore", game, token);
-                if (!result.Ok) problems.Add("REDscript restore: " + result.Detail);
+                var installed = kind == BackendKind.Grsp
+                    ? before?.GrspManaged : before?.CetManaged;
+                if (installed == false) continue;
+                try
+                {
+                    var result = await Run(kind, "restore", game, token);
+                    if (!result.Ok)
+                        problems.Add(kind + ": " + result.Detail);
+                }
+                catch (Exception ex)
+                {
+                    problems.Add(kind + ": " + ex.Message);
+                }
             }
-            if (status.CetManaged)
+            LiveProfilerState after;
+            try { after = await InspectAsync(game, token); }
+            catch (Exception ex)
             {
-                var result = await Run(BackendKind.Cet, "restore", game, token);
-                if (!result.Ok) problems.Add("CET restore: " + result.Detail);
+                return new(false, "RECOVERY REQUIRED: Restore attempted for both profilers. " +
+                    "Original file verification unavailable: " + ex.Message +
+                    ". Retry Restore; journal preserved.");
             }
-            var end = await InspectAsync(game, token);
-            if (end.CetManaged || end.GrspManaged || end.Cet != "OFFICIAL" ||
-                end.Grsp != "NOT_INSTALLED" || problems.Count != 0)
-                return new(false, "RECOVERY REQUIRED: " + string.Join("; ", problems) +
-                    $" Owner status CET={end.Cet}; GRSP={end.Grsp}. Journal preserved.");
-            // Restore is a FULL reset, not merely a native file operation.
-            // If PresentMon stop has not been verified, restore the original
-            // native files above but keep the journal and pending data for a
-            // safe retry. Never claim INSTALL-ready while an owned recorder
-            // may still be writing its CSV.
+            if (!after.CleanForInstall)
+                return new(false, "RECOVERY REQUIRED: Original files not fully restored. " +
+                    $"CET={after.Cet}; REDscript={after.Grsp}. " +
+                    string.Join("; ", problems) + " Retry Restore; journal preserved.");
+            // A manager might report an error after successfully restoring its
+            // files. A clean authoritative post-state takes precedence.
             if (!pendingPresentMonStopped)
                 return new(false,
                     "Original profiler files restored. PresentMon shutdown is not verified; " +
