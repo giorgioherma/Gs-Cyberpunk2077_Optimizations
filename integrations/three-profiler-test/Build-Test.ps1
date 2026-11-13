@@ -230,7 +230,7 @@ $buildLines=@(
   'if errorlevel 1 exit /b %errorlevel%'
   ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
   'if errorlevel 1 exit /b %errorlevel%'
-  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib shell32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
   'exit /b %errorlevel%'
 )
 Set-Content $cmdPath $buildLines -Encoding ascii
