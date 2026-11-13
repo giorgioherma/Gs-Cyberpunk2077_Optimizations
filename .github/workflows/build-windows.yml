@@ -329,17 +329,6 @@ jobs:
           # Real native tray lifecycle: close the full managed GUI while keeping
           # the native host alive, reopen the same WPF page, then cleanly exit.
           # No game, UAC, profiler install or capture fixture is needed here.
-          Add-Type -TypeDefinition @'
-          using System;
-          using System.Runtime.InteropServices;
-          public static class GcoNativeTraySmoke {
-              [DllImport("user32.dll", CharSet=CharSet.Unicode)]
-              public static extern IntPtr FindWindow(string cls, string title);
-              [DllImport("user32.dll")]
-              [return: MarshalAs(UnmanagedType.Bool)]
-              public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
-          }
-          '@
           $launcherPath=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
           $tray=$null
           $opened=$null
@@ -392,11 +381,15 @@ jobs:
             if (!$reopened.CloseMainWindow() -or !$reopened.WaitForExit(15000)) {
               throw 'Rebuilt managed WPF GUI did not shut down cleanly'
             }
-            $window=[GcoNativeTraySmoke]::FindWindow('GCO.Native.Tray.Window',$null)
-            if ($window -eq [IntPtr]::Zero -or
-                ![GcoNativeTraySmoke]::PostMessage($window,0x111,[IntPtr]1002,[IntPtr]::Zero)) {
-              throw 'Native tray command window was missing after WPF exit'
+            if ($tray.HasExited) {
+              throw 'Native host exited unexpectedly when the second managed WPF window closed'
             }
+            $trayExit=Start-Process -FilePath $launcherPath -ArgumentList '--tray-exit' -WorkingDirectory $root -PassThru
+            try {
+              if (!$trayExit.WaitForExit(10000) -or $trayExit.ExitCode -ne 0) {
+                throw 'Native package-bound tray-exit command could not find its own host'
+              }
+            } finally { $trayExit.Dispose() }
             if (!$tray.WaitForExit(10000)) {
               throw 'Native tray did not exit cleanly when explicitly requested'
             }

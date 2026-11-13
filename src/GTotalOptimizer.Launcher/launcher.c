@@ -290,6 +290,17 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
         return 2;
     }
 
+    if (commandLine && wcscmp(commandLine, L"--tray-exit") == 0) {
+        // Headless native control path. Reuse the exact package-bound
+        // window name and never initialize the CLR to close an idle tray.
+        wchar_t name[80];
+        swprintf_s(name, ARRAYSIZE(name),
+                   L"Local\\GCO_Tray_%016llX", (unsigned long long)RootHash(g_root));
+        HWND owner = FindWindowW(L"GCO.Native.Tray.Window", name);
+        if (!owner) return 6;
+        return PostMessageW(owner, WM_COMMAND, TRAY_EXIT, 0) ? 0 : 7;
+    }
+
     if (commandLine && *commandLine) {
         wchar_t cmd[MAX_PATH * 4 + 16] = {0};
         if (swprintf_s(cmd, ARRAYSIZE(cmd), L"\"%ls\" %ls", g_app, commandLine) < 0)
