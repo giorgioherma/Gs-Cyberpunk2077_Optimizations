@@ -140,9 +140,41 @@ public sealed class UnifiedProfilerWorkflow
     private static string Normalize(string game) => Path.GetFullPath(game).TrimEnd(Path.DirectorySeparatorChar);
     private string Exe(BackendKind kind) => BackendLocator.Executable(packageRoot, kind);
 
+    private string OwnerStaging(string id, BackendKind kind) =>
+        Path.Combine(packageRoot, "RESULTS", ".staging", id,
+            kind == BackendKind.Cet ? "CET" : "REDscript");
+
     private async Task<ComponentCommandResult> Run(BackendKind kind, string command,
         string game, CancellationToken token) =>
-        await owner.RunAsync(kind, Exe(kind), command, game, token);
+        await owner.RunAsync(kind, Exe(kind), command, game, token,
+            resultsRoot: command == "collect" ? OwnerStaging(SessionId(), kind) : null);
+
+    // Only a verified owner-produced staging archive can be deleted after GCO
+    // has copied and hashed its complete payload into the collected session.
+    private void RetireStagedArchive(string id, BackendKind kind, string? archive)
+    {
+        if (string.IsNullOrWhiteSpace(archive))
+            throw new InvalidDataException("No owner collection archive to retire.");
+        var root = Path.GetFullPath(OwnerStaging(id, kind))
+            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var target = Path.GetFullPath(archive);
+        if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+            !Directory.Exists(target))
+            throw new InvalidDataException("Owner archive is outside the GCO staging root.");
+        void Check(string dir)
+        {
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked owner staging directory refused.");
+            foreach (var entry in Directory.EnumerateFileSystemEntries(dir))
+            {
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("Linked owner staging entry refused.");
+                if (Directory.Exists(entry)) Check(entry);
+            }
+        }
+        Check(target);
+        Directory.Delete(target, recursive: true);
+    }
 
     private static ComponentCommandResult Require(ComponentCommandResult result)
     {
@@ -273,6 +305,33 @@ public sealed class UnifiedProfilerWorkflow
             ownerBeforeCapture?.GrspCaptureReady == true);
         WriteJournal(game, "capture-attempt", id);
         return id;
+    }
+
+    // Owner-owned live files only: every new game run and explicit Restore
+    // starts from an empty CET + GRSP recording state. Never call from a game
+    // process or without an admitted GCO managed installation.
+    public async Task<ProfilerWorkflowResult> ResetNativeOutputAsync(string game,
+        CancellationToken token = default)
+    {
+        if (GameRunning()) return new(false, "Close Cyberpunk before resetting captures.");
+        if (!OwnsSession(game)) return new(false, "GCO capture ownership is not verified.");
+        try
+        {
+            var state = await InspectAsync(game, token);
+            if (!state.BothInstalled)
+                return new(false, "Profiler ownership changed; preserve results and restore safely.");
+            Require(await Run(BackendKind.Cet, "discard-live", game, token));
+            Require(await Run(BackendKind.Grsp, "discard-live", game, token));
+            var after = await InspectAsync(game, token);
+            if (!after.BothInstalled || after.CetCaptureReady || after.GrspCaptureReady)
+                return new(false, "Native capture reset could not be verified. No game launch authorized.");
+            return new(true, "Uncollected CET and REDscript native output reset.");
+        }
+        catch (Exception ex)
+        {
+            return new(false, "Native capture reset incomplete: " + ex.Message +
+                ". Session journal preserved for recovery.");
+        }
     }
 
     // Safe to run only after GCO's PresentMon was stopped/verified.
@@ -425,6 +484,7 @@ public sealed class UnifiedProfilerWorkflow
                 var c = Require(await Run(BackendKind.Cet, "collect", game, token));
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
                     BackendKind.Cet, c.ArchivePath);
+                RetireStagedArchive(id, BackendKind.Cet, c.ArchivePath);
             }
             if (state.GrspCaptureReady && saved.Redscript is null &&
                 !saved.RedscriptReadyBeforeAttempt)
@@ -432,7 +492,12 @@ public sealed class UnifiedProfilerWorkflow
                 var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
                     BackendKind.Grsp, g.ArchivePath);
+                RetireStagedArchive(id, BackendKind.Grsp, g.ArchivePath);
             }
+            // Partial/uncompleted output must not remain in the game for the
+            // next capture, even if only one native domain was collected.
+            var reset = await ResetNativeOutputAsync(game, token);
+            if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
         }
         catch (Exception ex)
         {
