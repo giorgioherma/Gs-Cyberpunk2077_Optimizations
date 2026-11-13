@@ -1577,27 +1577,20 @@ public partial class MainWindow : Window
             var sessionId = Workflow.ReadRecoverySessionId(game) ??
                             Guid.NewGuid().ToString("N");
             var stop = await StopOwnedPresentMonAsync(sessionId);
-            string? cleanupWarning = stop.Stopped ? null :
-                "PresentMon could not be stopped: " +
-                (stop.Error ?? "Shutdown unverified.") +
-                " Native owner restoration will still proceed.";
-            // Recover original native files independently from ETW shutdown
-            // and optional cleanup; neither can make RESTORE inaccessible.
-            if (stop.Stopped)
-            {
-                try { Workflow.AbandonCurrentUncollected(game); }
-                catch (Exception ex)
-                {
-                    cleanupWarning = "Uncollected GCO results preserved: " + ex.Message;
-                }
-            }
+            // Restore original source files even when stopping PresentMon
+            // fails, but keep the durable journal and uncollected results
+            // until the full reset can be verified on a subsequent click.
+            // The owner restores and GCO scratch disposal are completed by
+            // the same workflow, not independently in the UI.
             var result = await Workflow.RestoreOwnedAsync(game,
-                preserveIncompleteEvidence: false);
+                preserveIncompleteEvidence: false,
+                pendingPresentMonStopped: stop.Stopped);
             if (!result.RestoreVerified)
             {
                 Warn(result.Detail, "Recovery required");
                 return;
             }
+            string? cleanupWarning = null;
             try { CollectedCaptureStore.ForgetLastRestored(packageRoot); }
             catch (Exception ex)
             {
