@@ -144,6 +144,71 @@ public sealed class UnifiedProfilerWorkflow
         Path.Combine(packageRoot, "RESULTS", ".staging", id,
             kind == BackendKind.Cet ? "CET" : "REDscript");
 
+    // Only the one owner archive in the current session's GCO-private stage
+    // can be recovered after an interrupted Collect. Never scan older sessions.
+    private string? StagedArchive(string id, BackendKind kind)
+    {
+        var root = OwnerStaging(id, kind);
+        if (!Directory.Exists(root)) return null;
+        if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0 ||
+            Directory.EnumerateFiles(root).Any())
+            throw new InvalidDataException("GCO owner staging root changed; refusing to reuse it.");
+        var candidates = Directory.EnumerateDirectories(root).ToArray();
+        if (candidates.Length == 0) return null;
+        if (candidates.Length != 1 ||
+            (File.GetAttributes(candidates[0]) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Ambiguous or linked owner staging output; refusing collection.");
+        var expected = kind == BackendKind.Cet ? "CET_Summary.json" : "GRSP_Summary.json";
+        return File.Exists(Path.Combine(candidates[0], expected)) ? candidates[0] : null;
+    }
+
+    public bool HasPendingStagedNativeArchive(string game)
+    {
+        if (!HasCaptureAttempt(game)) return false;
+        try
+        {
+            var id = SessionId();
+            return StagedArchive(id, BackendKind.Cet) is not null ||
+                StagedArchive(id, BackendKind.Grsp) is not null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException
+            or UnauthorizedAccessException)
+        {
+            return false; // Collect will report exact issue; no false ready state
+        }
+    }
+
+    // Called only after a deliberate Capture Again, never on GUI unload.
+    // Stage ID is the verified journal identity; fail closed on unknown files.
+    private void DiscardPendingStaging(string id)
+    {
+        var root = Path.Combine(packageRoot, "RESULTS", ".staging", id);
+        if (!Directory.Exists(root)) return;
+        void Check(string folder, bool directChild = false)
+        {
+            if ((File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked GCO staging directory cannot be discarded.");
+            foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
+            {
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("Linked GCO staging entry cannot be discarded.");
+                if (directChild &&
+                    (!Directory.Exists(entry) ||
+                     Path.GetFileName(entry) is not ("CET" or "REDscript")))
+                    throw new InvalidDataException("Unexpected file in GCO staging root; preserving.");
+                if (Directory.Exists(entry)) Check(entry);
+            }
+        }
+        var parent = Path.GetDirectoryName(root)!;
+        if (!Directory.Exists(parent) ||
+            (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Linked owner staging parent refused.");
+        Check(root, directChild: true);
+        Directory.Delete(root, recursive: true);
+        if (!Directory.EnumerateFileSystemEntries(parent).Any())
+            Directory.Delete(parent);
+    }
+
     private async Task<ComponentCommandResult> Run(BackendKind kind, string command,
         string game, CancellationToken token) =>
         await owner.RunAsync(kind, Exe(kind), command, game, token,
@@ -374,6 +439,9 @@ public sealed class UnifiedProfilerWorkflow
         var state = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
         if (state.CollectionAttempted || state.Restored)
             return false; // incomplete/partially copied evidence stays abandonable
+        // Verify staging safety first; then remove the unsealed indexed
+        // session and any GCO-private owner archives from the same attempt.
+        DiscardPendingStaging(id);
         var discarded = CollectedCaptureStore.DiscardUncollected(packageRoot, game, id);
         WriteJournal(game, "both-installed");
         return discarded;
@@ -494,7 +562,10 @@ public sealed class UnifiedProfilerWorkflow
         catch (Exception ex) { return new(false, "Owner capture status unavailable: " + ex.Message); }
         if (!state.BothInstalled && !saved.HasAny)
             return new(false, "Profiler owners are not both installed and no frame-time evidence was saved.");
-        if (!state.CetCaptureReady && !state.GrspCaptureReady && !saved.HasAny)
+        var stagedCet = StagedArchive(id, BackendKind.Cet);
+        var stagedRed = StagedArchive(id, BackendKind.Grsp);
+        if (!state.CetCaptureReady && !state.GrspCaptureReady &&
+            stagedCet is null && stagedRed is null && !saved.HasAny)
             return new(false, "No completed CET, REDscript or frame-time capture.");
         if (!state.BothInstalled)
             return new(true, "Only verified frame-time evidence collected; profiler owner state requires recovery. " +
@@ -507,21 +578,31 @@ public sealed class UnifiedProfilerWorkflow
             // already ready before this launch, that old result cannot be
             // attributed to this attempt. Do not collect/admit it under a
             // new GCO identity without source-owner proof of a fresh capture.
-            if (state.CetCaptureReady && saved.Cet is null &&
-                !saved.CetReadyBeforeAttempt)
+            if ((state.CetCaptureReady || stagedCet is not null) &&
+                saved.Cet is null && !saved.CetReadyBeforeAttempt)
             {
-                var c = Require(await Run(BackendKind.Cet, "collect", game, token));
+                var archive = stagedCet;
+                if (archive is null)
+                {
+                    var c = Require(await Run(BackendKind.Cet, "collect", game, token));
+                    archive = c.ArchivePath;
+                }
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
-                    BackendKind.Cet, c.ArchivePath);
-                RetireStagedArchive(id, BackendKind.Cet, c.ArchivePath);
+                    BackendKind.Cet, archive);
+                RetireStagedArchive(id, BackendKind.Cet, archive);
             }
-            if (state.GrspCaptureReady && saved.Redscript is null &&
-                !saved.RedscriptReadyBeforeAttempt)
+            if ((state.GrspCaptureReady || stagedRed is not null) &&
+                saved.Redscript is null && !saved.RedscriptReadyBeforeAttempt)
             {
-                var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
+                var archive = stagedRed;
+                if (archive is null)
+                {
+                    var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
+                    archive = g.ArchivePath;
+                }
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
-                    BackendKind.Grsp, g.ArchivePath);
-                RetireStagedArchive(id, BackendKind.Grsp, g.ArchivePath);
+                    BackendKind.Grsp, archive);
+                RetireStagedArchive(id, BackendKind.Grsp, archive);
             }
             // Partial/uncompleted output must not remain in the game for the
             // next capture, even if only one native domain was collected.
