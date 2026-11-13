@@ -110,23 +110,21 @@ internal static class PresentMonCaptureController
             !item.TryGetProperty("pid", out var pidNode) ||
             !pidNode.TryGetInt32(out var pid) || pid <= 0)
             throw new InvalidDataException("PresentMon startup proof is incomplete.");
-        try
+        // Enumerate PIDs instead of opening an elevated process handle.
+        // PROCESS_SYNCHRONIZE/MainModule can be denied to non-admin WPF;
+        // enumeration of the exact startup-reported PID does not require
+        // a second elevation and has no dependency on other PresentMon PIDs.
+        for (var attempt = 0; attempt < 80; attempt++)
         {
-            using var writer = Process.GetProcessById(pid);
-            if (!writer.ProcessName.Equals("PresentMon", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("PresentMon PID was reused; writer ownership cannot be verified.");
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-            timeout.CancelAfter(TimeSpan.FromSeconds(20));
-            try { await writer.WaitForExitAsync(timeout.Token); }
-            catch (OperationCanceledException) when (!token.IsCancellationRequested)
-            {
-                throw new TimeoutException("PresentMon is still recording. Close Cyberpunk and retry.");
-            }
+            token.ThrowIfCancellationRequested();
+            var processes = Process.GetProcessesByName("PresentMon");
+            bool ownedStillRunning;
+            try { ownedStillRunning = processes.Any(p => p.Id == pid); }
+            finally { foreach (var p in processes) p.Dispose(); }
+            if (!ownedStillRunning) return;
+            await Task.Delay(250, token);
         }
-        catch (ArgumentException)
-        {
-            // The exact verified writer PID has already exited and flushed.
-        }
+        throw new TimeoutException("PresentMon is still recording. Close Cyberpunk and retry.");
     }
 
     // Share process ownership classification with the elevated start
