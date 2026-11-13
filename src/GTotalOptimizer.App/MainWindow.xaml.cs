@@ -1387,7 +1387,11 @@ public partial class MainWindow : Window
             }
             // Only a completed native capture authorizes permanent collection.
             // A failed run keeps PresentMon temporary until restart/restore.
-            var stop = await StopOwnedPresentMonAsync(attempt.SessionId);
+            // Do not discard the durable PresentMon pointer before a verified
+            // native collection. Failed Collect must remain retryable after
+            // closing or reopening the WPF interface.
+            var stop = await StopOwnedPresentMonAsync(attempt.SessionId,
+                clearTracking: false);
             string? frameWarning = stop.Error;
             if (stop.Stopped && stop.Csv is not null)
             {
@@ -1419,6 +1423,11 @@ public partial class MainWindow : Window
                     native.Detail + (frameWarning is null ? "" : " | PresentMon: " + frameWarning));
                 return;
             }
+            // Retire the temporary PresentMon pointer only after the CET/GRSP
+            // archives are durable, hashes verify, and ETW is stopped. If this
+            // cleanup fails, do not seal Collect; the same session can retry.
+            PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+            stoppedPresentMonCsv = null;
             var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
