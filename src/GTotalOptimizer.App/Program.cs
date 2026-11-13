@@ -102,6 +102,60 @@ internal static class Program
                 ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
             };
 
+            // The source-SVG chamfer path is the hover's only shape.
+            // Test actual perimeter coverage at normal, wide and intermediate
+            // button slots, including horizontal letterboxing by Uniform.
+            static void CheckShellAtSize(System.Windows.Size size, string context)
+            {
+                var shell = GTotalOptimizer.App.Visuals.ApprovedStageArtwork.RenderedShell(size);
+                var band = GTotalOptimizer.App.Visuals.StageShellHover.OuterBand(size);
+                var b = shell.Bounds;
+                double x = b.Left + b.Width / 2;
+                double y = b.Top + b.Height / 2;
+                const double probe = 1.5;
+                var sample = new[]
+                {
+                    new System.Windows.Point(x, b.Top - probe),
+                    new System.Windows.Point(x, b.Bottom + probe),
+                    new System.Windows.Point(b.Left - probe, y),
+                    new System.Windows.Point(b.Right + probe, y)
+                };
+                if (b.Width < 30 || b.Height < 10 ||
+                    sample.Any(point => !band.FillContains(point)) ||
+                    band.FillContains(new System.Windows.Point(x, b.Top + probe)) ||
+                    band.FillContains(new System.Windows.Point(x, y)) ||
+                    // A rectangular hover would fill this empty corner;
+                    // the actual source SVG has a 45-degree chamfer here.
+                    band.FillContains(new System.Windows.Point(
+                        b.Left - probe, b.Top - probe)))
+                    throw new InvalidOperationException(
+                        $"Hover no longer follows the owner SVG shell at {context}: " +
+                        $"slot={size}, shell={b}, rim={band.Bounds}");
+            }
+
+            static void CheckLiveStageHover(System.Windows.Controls.Button button)
+            {
+                button.ApplyTemplate();
+                button.UpdateLayout();
+                var hover = button.Template.FindName("StageHover", button)
+                    as GTotalOptimizer.App.Visuals.StageShellHover
+                    ?? throw new InvalidOperationException(
+                        "Source-derived SVG stage hover not found: " + button.Name);
+                var origin = hover.TranslatePoint(new System.Windows.Point(0, 0), button);
+                if (button.ActualWidth <= 0 || button.ActualHeight <= 0 ||
+                    Math.Abs(hover.ActualWidth - button.ActualWidth) > 0.6 ||
+                    Math.Abs(hover.ActualHeight - button.ActualHeight) > 0.6 ||
+                    Math.Abs(origin.X) > 0.6 || Math.Abs(origin.Y) > 0.6)
+                    throw new InvalidOperationException(
+                        $"Hover must occupy the exact SVG viewport, never resize " +
+                        $"independently: {button.Name}, button={button.ActualWidth:F2}x" +
+                        $"{button.ActualHeight:F2}, hover={hover.ActualWidth:F2}x" +
+                        $"{hover.ActualHeight:F2}, origin={origin}");
+                CheckShellAtSize(new System.Windows.Size(hover.ActualWidth,
+                    hover.ActualHeight), button.Name);
+            }
+
+
             static void VerifyAtSize(MainWindow window, double width, double height)
             {
                 var root = window.Content as System.Windows.FrameworkElement
@@ -314,59 +368,6 @@ internal static class Program
                         throw new InvalidOperationException(
                             "Incorrect approved stage artwork or baked label: " + button.Name + "/" + variant);
                 }
-                // The source-SVG chamfer path is the hover's only shape.
-                // Test actual perimeter coverage at normal, wide and intermediate
-                // button slots, including horizontal letterboxing by Uniform.
-                static void CheckShellAtSize(System.Windows.Size size, string context)
-                {
-                    var shell = GTotalOptimizer.App.Visuals.ApprovedStageArtwork.RenderedShell(size);
-                    var band = GTotalOptimizer.App.Visuals.StageShellHover.OuterBand(size);
-                    var b = shell.Bounds;
-                    double x = b.Left + b.Width / 2;
-                    double y = b.Top + b.Height / 2;
-                    const double probe = 1.5;
-                    var sample = new[]
-                    {
-                        new System.Windows.Point(x, b.Top - probe),
-                        new System.Windows.Point(x, b.Bottom + probe),
-                        new System.Windows.Point(b.Left - probe, y),
-                        new System.Windows.Point(b.Right + probe, y)
-                    };
-                    if (b.Width < 30 || b.Height < 10 ||
-                        sample.Any(point => !band.FillContains(point)) ||
-                        band.FillContains(new System.Windows.Point(x, b.Top + probe)) ||
-                        band.FillContains(new System.Windows.Point(x, y)) ||
-                        // A rectangular hover would fill this empty corner;
-                        // the actual source SVG has a 45-degree chamfer here.
-                        band.FillContains(new System.Windows.Point(
-                            b.Left - probe, b.Top - probe)))
-                        throw new InvalidOperationException(
-                            $"Hover no longer follows the owner SVG shell at {context}: " +
-                            $"slot={size}, shell={b}, rim={band.Bounds}");
-                }
-
-                static void CheckLiveStageHover(System.Windows.Controls.Button button)
-                {
-                    button.ApplyTemplate();
-                    button.UpdateLayout();
-                    var hover = button.Template.FindName("StageHover", button)
-                        as GTotalOptimizer.App.Visuals.StageShellHover
-                        ?? throw new InvalidOperationException(
-                            "Source-derived SVG stage hover not found: " + button.Name);
-                    var origin = hover.TranslatePoint(new System.Windows.Point(0, 0), button);
-                    if (button.ActualWidth <= 0 || button.ActualHeight <= 0 ||
-                        Math.Abs(hover.ActualWidth - button.ActualWidth) > 0.6 ||
-                        Math.Abs(hover.ActualHeight - button.ActualHeight) > 0.6 ||
-                        Math.Abs(origin.X) > 0.6 || Math.Abs(origin.Y) > 0.6)
-                        throw new InvalidOperationException(
-                            $"Hover must occupy the exact SVG viewport, never resize " +
-                            $"independently: {button.Name}, button={button.ActualWidth:F2}x" +
-                            $"{button.ActualHeight:F2}, hover={hover.ActualWidth:F2}x" +
-                            $"{hover.ActualHeight:F2}, origin={origin}");
-                    CheckShellAtSize(new System.Windows.Size(hover.ActualWidth,
-                        hover.ActualHeight), button.Name);
-                }
-
                 foreach (var viewport in new[]
                 {
                     new System.Windows.Size(240, 32),

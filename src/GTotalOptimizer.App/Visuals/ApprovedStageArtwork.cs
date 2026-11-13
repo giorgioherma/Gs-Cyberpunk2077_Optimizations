@@ -130,8 +130,8 @@ public sealed class ApprovedStageArtwork : SvgViewbox
             throw new InvalidDataException("Invalid standardized stage SVG viewBox");
         var numbers = components.Select(part =>
             double.Parse(part, NumberStyles.Float, CultureInfo.InvariantCulture)).ToArray();
-        var viewBox = new Rect(numbers[0], numbers[1], numbers[2], numbers[3]);
-        if (!(viewBox.Width > 0 && viewBox.Height > 0))
+        var parsedViewport = new Rect(numbers[0], numbers[1], numbers[2], numbers[3]);
+        if (!(parsedViewport.Width > 0 && parsedViewport.Height > 0))
             throw new InvalidDataException("Nonpositive standardized stage SVG viewBox");
 
         // WPF and SVG share the M/L/H/V/Z path syntax used by this canonical
@@ -139,7 +139,7 @@ public sealed class ApprovedStageArtwork : SvgViewbox
         var geometry = Geometry.Parse(canonicalShell
             ?? throw new InvalidDataException("Missing canonical stage shell"));
         geometry.Freeze();
-        return new ApprovedSources(result, viewBox, geometry);
+        return new ApprovedSources(result, parsedViewport, geometry);
     }
 }
 
@@ -169,9 +169,9 @@ public sealed class StageShellHover : FrameworkElement
         // A widened closed SVG shell produces an inside AND an outside band.
         // Subtract the actual filled shell, then the inner widened band, so
         // the bright hover never paints on the button body or SVG rim.
-        var outer = shell.GetWidenedPathGeometry(new Pen(Brushes.White,
+        var outer = shell.GetWidenedPathGeometry(new System.Windows.Media.Pen(System.Windows.Media.Brushes.White,
             2 * (OutsideGap + BandWidth)) { LineJoin = PenLineJoin.Miter });
-        var inside = shell.GetWidenedPathGeometry(new Pen(Brushes.White,
+        var inside = shell.GetWidenedPathGeometry(new System.Windows.Media.Pen(System.Windows.Media.Brushes.White,
             2 * OutsideGap) { LineJoin = PenLineJoin.Miter });
         var external = Geometry.Combine(outer, shell, GeometryCombineMode.Exclude, null);
         var band = Geometry.Combine(external, inside, GeometryCombineMode.Exclude, null);
