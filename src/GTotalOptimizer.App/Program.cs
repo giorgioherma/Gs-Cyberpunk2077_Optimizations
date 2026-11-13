@@ -344,7 +344,10 @@ internal static class Program
                             $"button={sameButton}, bitmap={sameSource}, crop={crop}, clip={clipped}, fillsCard={fillsCard}, " +
                             $"imageType={card.Source?.GetType().Name}, " +
                             $"expectedType={expected.GetType().Name}, " +
-                            $"size={card.ActualWidth:F1}x{card.ActualHeight:F1}, state={name}");
+                            $"size={card.ActualWidth:F2}x{card.ActualHeight:F2}, " +
+                            $"outline={outline.ActualWidth:F2}x{outline.ActualHeight:F2}, " +
+                            $"imageOrigin={card.TranslatePoint(new System.Windows.Point(0, 0), outline)}, " +
+                            $"imageBindingWidth={card.Width:F2}, imageBindingHeight={card.Height:F2}, state={name}");
                     button.ApplyTemplate();
                     var hover = button.Template.FindName("StageHover", button)
                         as GTotalOptimizer.App.Visuals.ChamferOutline;
