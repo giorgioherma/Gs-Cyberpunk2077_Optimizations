@@ -169,7 +169,9 @@ internal static class Program
                 {
                     window.OuterBorderArtwork, window.GcoHeaderLogo,
                     window.VColorImage, window.VBlackImage,
-                    window.CityImage, window.PuddleOverflowImage
+                    window.CityImage, window.PuddleOverflowImage,
+                    window.StepOneCardArtwork, window.StepTwoCardArtwork,
+                    window.StepThreeCardArtwork
                 };
                 foreach (var image in art)
                 {
@@ -231,21 +233,55 @@ internal static class Program
                         throw new InvalidOperationException(
                             "Incorrect approved stage artwork or baked label: " + button.Name + "/" + variant);
                 }
-                foreach (var button in new[] {
-                    window.InstallButton, window.LaunchButton, window.CollectButton
-                })
+                static void CheckCard(System.Windows.Controls.Button button,
+                    System.Windows.Controls.Image card, bool active)
                 {
-                    button.IsEnabled = false;
-                    CheckStage(button, "Unavailable");
-                    button.IsEnabled = true;
-                    CheckStage(button, "Yellow");
-                    button.IsEnabled = false;
+                    button.UpdateLayout();
+                    card.UpdateLayout();
+                    var name = active ? "Active_card_background.png" : "Inactive_card_background.png";
+                    if (!ReferenceEquals(card.Tag, button) ||
+                        card.Source is not System.Windows.Media.Imaging.BitmapImage bitmap ||
+                        bitmap.UriSource is null ||
+                        !bitmap.UriSource.OriginalString.EndsWith(name, StringComparison.Ordinal) ||
+                        card.Stretch != System.Windows.Media.Stretch.UniformToFill ||
+                        card.Clip is null ||
+                        !card.Clip.FillContains(new System.Windows.Point(card.ActualWidth / 2,
+                            card.ActualHeight / 2)) ||
+                        card.Clip.FillContains(new System.Windows.Point(0, 0)))
+                        throw new InvalidOperationException(
+                            "Card image must use the correct button state, centered proportional crop and a chamfer clip: " +
+                            card.Name + "/" + name);
+                    button.ApplyTemplate();
+                    var hover = button.Template.FindName("StageHover", button)
+                        as GTotalOptimizer.App.Visuals.ChamferOutline;
+                    if (hover is null ||
+                        hover.ActualWidth > button.ActualWidth + 0.5 ||
+                        hover.ActualWidth > button.ActualHeight * (760.0 / 112.0) + 0.5)
+                        throw new InvalidOperationException(
+                            "Stage hover outline extends beyond the real scaled SVG shell: " + button.Name);
+                }
+                var stages = new[] {
+                    (Button: window.InstallButton, Card: window.StepOneCardArtwork),
+                    (Button: window.LaunchButton, Card: window.StepTwoCardArtwork),
+                    (Button: window.CollectButton, Card: window.StepThreeCardArtwork)
+                };
+                foreach (var stage in stages)
+                {
+                    stage.Button.IsEnabled = false;
+                    CheckStage(stage.Button, "Unavailable");
+                    CheckCard(stage.Button, stage.Card, active: false);
+                    stage.Button.IsEnabled = true;
+                    CheckStage(stage.Button, "Yellow");
+                    CheckCard(stage.Button, stage.Card, active: true);
+                    stage.Button.IsEnabled = false;
                 }
                 window.InstallButton.Style = (System.Windows.Style)window.FindResource("RestoreStageButton");
                 window.InstallButton.IsEnabled = true;
                 CheckStage(window.InstallButton, "Restore");
+                CheckCard(window.InstallButton, window.StepOneCardArtwork, active: false);
                 window.InstallButton.IsEnabled = false;
                 CheckStage(window.InstallButton, "Unavailable");
+                CheckCard(window.InstallButton, window.StepOneCardArtwork, active: false);
 
                 // The Capture page is a general-status UI, not a hidden
                 // hover-based diagnostics surface. Check the actual loaded

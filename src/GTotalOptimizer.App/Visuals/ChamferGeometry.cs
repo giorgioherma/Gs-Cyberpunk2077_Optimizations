@@ -348,6 +348,18 @@ public static class ChamferClip
         DependencyProperty.RegisterAttached("CornerCut", typeof(double), typeof(ChamferClip),
             new PropertyMetadata(0.0, Changed));
 
+    // The portrait continues to use the existing left-only geometry.
+    // Card artwork explicitly selects the same four-corner shape as its
+    // original ChamferOutline, inset enough not to paint over its stroke.
+    public static readonly DependencyProperty AllCornersProperty =
+        DependencyProperty.RegisterAttached("AllCorners", typeof(bool), typeof(ChamferClip),
+            new PropertyMetadata(false, Changed));
+
+    public static void SetAllCorners(DependencyObject obj, bool value) =>
+        obj.SetValue(AllCornersProperty, value);
+    public static bool GetAllCorners(DependencyObject obj) =>
+        (bool)obj.GetValue(AllCornersProperty);
+
     public static void SetCornerCut(DependencyObject obj, double value) =>
         obj.SetValue(CornerCutProperty, value);
     public static double GetCornerCut(DependencyObject obj) =>
@@ -370,8 +382,10 @@ public static class ChamferClip
     {
         if (e.ActualWidth < 1 || e.ActualHeight < 1) return;
         var cut = ChamferGeometry.ScaledCut(e, GetCornerCut(e));
-        e.Clip = ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight,
-            cut, clipLowerLeft: true);
+        e.Clip = GetAllCorners(e)
+            ? ChamferGeometry.Create(e.ActualWidth, e.ActualHeight, cut, inset: 2.5)
+            : ChamferGeometry.CreatePortraitClip(e.ActualWidth, e.ActualHeight,
+                cut, clipLowerLeft: true);
     }
 }
 

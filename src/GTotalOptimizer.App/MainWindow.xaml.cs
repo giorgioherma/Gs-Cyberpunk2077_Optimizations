@@ -77,6 +77,7 @@ public partial class MainWindow : Window
     private const double ExpandedRootGapRatio = 0.28;
     private const double ExpandedWorkflowHeadingBottom = 2.0;
     private const double ExpandedConsolePortraitClearance = 112.0;
+    private const double ExpandedConsoleRaise = 19.0;
     internal bool WpfVerificationMode { get; set; }
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
@@ -409,8 +410,8 @@ public partial class MainWindow : Window
         var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
         var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
         var console = new Thickness(originalConsoleMargin.Left + shift,
-            originalConsoleMargin.Top, originalConsoleMargin.Right,
-            originalConsoleMargin.Bottom);
+            originalConsoleMargin.Top - ExpandedConsoleRaise, originalConsoleMargin.Right,
+            originalConsoleMargin.Bottom + ExpandedConsoleRaise);
         if (ConsoleTextHost.Margin != console)
             ConsoleTextHost.Margin = console;
     }
@@ -1047,7 +1048,7 @@ public partial class MainWindow : Window
                             ? "Profilers installed. Click START CYBERPUNK.\nIn-game: F11 start, F11 stop."
                             : session
                                 ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
-                                : $"CET: {cetProfiler} | REDscript: {redProfiler}.");
+                                : $"G-CET Profiler: {cetProfiler} | G-REDscript Profiler: {redProfiler}");
             if (HasNative(saved) && portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
         }

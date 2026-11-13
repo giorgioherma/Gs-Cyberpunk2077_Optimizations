@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Windows.Data;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -98,4 +100,27 @@ public sealed class ApprovedStageArtwork : SvgViewbox
         }
         return result;
     }
+}
+
+/// <summary>
+/// Match the visible 760:112 SVG within its WPF button's row.
+/// The SVG uses Uniform scaling, so a fullscreen-wide Button is NOT
+/// the same width as its drawn chamfer; hover must never span the row.
+/// </summary>
+public sealed class StageHoverWidthConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length != 2 ||
+            values[0] is not double availableWidth ||
+            values[1] is not double height ||
+            !double.IsFinite(availableWidth) || !double.IsFinite(height) ||
+            availableWidth <= 0 || height <= 0)
+            return DependencyProperty.UnsetValue;
+
+        return Math.Min(availableWidth, height * (760.0 / 112.0));
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter,
+        CultureInfo culture) => throw new NotSupportedException();
 }

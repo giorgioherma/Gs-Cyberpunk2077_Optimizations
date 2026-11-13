@@ -32,6 +32,12 @@
     <!-- Owner-supplied native WPF status vector geometry, embedded as BAML. -->
     <Page Include="../../assets/ui/elements/GcoStatusIcons.xaml"
           Link="Status/GcoStatusIcons.xaml" />
+    <!-- The author's active/inactive card PNGs are embedded byte-for-byte
+         and selected by the real stage-button state, with no loose-file dependency. -->
+    <Resource Include="../../assets/ui/images/Active_card_background.png"
+              Link="CardArtwork/Active_card_background.png" />
+    <Resource Include="../../assets/ui/images/Inactive_card_background.png"
+              Link="CardArtwork/Inactive_card_background.png" />
     <!-- SVG artwork remains vector in WPF; SharpVectors 1.8.6 supports .NET 10. -->
     <PackageReference Include="SharpVectors.Wpf" Version="1.8.6" />
     <Resource Include="../../assets/ui/elements/GCO_Active_Yellow_Button_v2.9.svg"
