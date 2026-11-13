@@ -29,6 +29,9 @@
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Regular.ttf" Link="Fonts/Oxanium/Oxanium-Regular.ttf" />
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-SemiBold.ttf" Link="Fonts/Oxanium/Oxanium-SemiBold.ttf" />
     <Resource Include="../../assets/ui/fonts/Oxanium/static/Oxanium-Bold.ttf" Link="Fonts/Oxanium/Oxanium-Bold.ttf" />
+    <!-- Owner-supplied native WPF status vector geometry, embedded as BAML. -->
+    <Page Include="../../assets/ui/elements/GcoStatusIcons.xaml"
+          Link="Status/GcoStatusIcons.xaml" />
     <!-- SVG artwork remains vector in WPF; SharpVectors 1.8.6 supports .NET 10. -->
     <PackageReference Include="SharpVectors.Wpf" Version="1.8.6" />
     <Resource Include="../../assets/ui/elements/GCO_Active_Yellow_Button_v2.9.svg"
