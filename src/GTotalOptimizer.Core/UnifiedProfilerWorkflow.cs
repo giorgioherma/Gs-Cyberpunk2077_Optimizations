@@ -496,7 +496,8 @@ public sealed class UnifiedProfilerWorkflow
         }
     }
 
-    public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default, bool preserveIncompleteEvidence = true)
+    public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default,
+        bool preserveIncompleteEvidence = true, bool pendingPresentMonStopped = true)
     {
         if (GameRunning()) return new(false, "Close Cyberpunk before profiler restoration.");
         try
@@ -537,6 +538,21 @@ public sealed class UnifiedProfilerWorkflow
                 end.Grsp != "NOT_INSTALLED" || problems.Count != 0)
                 return new(false, "RECOVERY REQUIRED: " + string.Join("; ", problems) +
                     $" Owner status CET={end.Cet}; GRSP={end.Grsp}. Journal preserved.");
+            // Restore is a FULL reset, not merely a native file operation.
+            // If PresentMon stop has not been verified, restore the original
+            // native files above but keep the journal and pending data for a
+            // safe retry. Never claim INSTALL-ready while an owned recorder
+            // may still be writing its CSV.
+            if (HasCaptureAttempt(game))
+            {
+                if (!pendingPresentMonStopped)
+                    return new(false,
+                        "Original profiler files restored. PresentMon shutdown is not verified; " +
+                        "retry RESTORE to finish discarding this capture. Recovery journal preserved.");
+                // Only unsealed output is disposable. An explicitly COLLECTED
+                // archive remains immutable in the app's RESULTS directory.
+                AbandonCurrentUncollected(game);
+            }
             File.Delete(Journal);
             return new(true, "Both owners verified restoration of original game state." +
                 (evidenceFolder is null ? "" : " Diagnostics preserved at: " + evidenceFolder) +
