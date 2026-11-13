@@ -11,6 +11,10 @@
         Loaded="Window_Loaded" Activated="Window_Activated" StateChanged="Window_StateChanged"
         SizeChanged="Window_SizeChanged" Closing="Window_Closing" Closed="Window_Closed">
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Status/GcoStatusIcons.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
         <FontFamily x:Key="Rajdhani">./Fonts/Rajdhani/#Rajdhani</FontFamily>
         <FontFamily x:Key="Oxanium">./Fonts/Oxanium/#Oxanium</FontFamily>
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
@@ -344,6 +348,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
     <!-- Compact default window: 1280x760 DIPs. At 1080x640 the right
          content scrolls rather than clipping; native profilers are unaffected. -->
@@ -550,9 +555,22 @@
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </Grid>
-                                    <TextBlock x:Name="DependencyText" Foreground="{StaticResource Cyan}"
-                                               Height="16" VerticalAlignment="Center"
-                                               FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                    <!-- Keep the existing 16-DIP framework line; only
+                                         insert the icon in the line itself. -->
+                                    <Grid Height="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Image x:Name="FrameworkStatusIcon"
+                                               Width="14" Height="14" Margin="0,0,4,0"
+                                               VerticalAlignment="Center" SnapsToDevicePixels="True"
+                                               IsHitTestVisible="False" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="DependencyText" Grid.Column="1"
+                                                   Foreground="{StaticResource Cyan}"
+                                                   Height="16" VerticalAlignment="Center"
+                                                   FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
                                     <StackPanel Orientation="Horizontal" Margin="1,1,0,0" Height="16">
                                         <TextBlock x:Name="CetStatusText" Style="{StaticResource SmallStatus}"
                                                    Width="192" Text="G-CET Profiler · NOT CHECKED"/>

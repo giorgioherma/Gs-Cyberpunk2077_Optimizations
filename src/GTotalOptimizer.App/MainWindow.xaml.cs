@@ -849,6 +849,22 @@ public partial class MainWindow : Window
     }
     private void ClearStatusPin() => consolePinned = null;
 
+    // Green means verified framework compatibility, red means preflight
+    // reported missing/incompatible components. Unknown remains icon-free.
+    private void SetFrameworkStatusIcon(bool? ready)
+    {
+        if (ready is null)
+        {
+            FrameworkStatusIcon.Visibility = Visibility.Collapsed;
+            FrameworkStatusIcon.Source = null;
+            return;
+        }
+
+        FrameworkStatusIcon.Source = (ImageSource)FindResource(
+            ready.Value ? "GcoStatusSuccessIcon" : "GcoStatusFailureIcon");
+        FrameworkStatusIcon.Visibility = Visibility.Visible;
+    }
+
     // Derive the label/surface directly from the actual, game-bound owner
     // journal. Verified restore deletes the journal; switching source roots
     // never inherits another game's recovery control.
@@ -910,6 +926,7 @@ public partial class MainWindow : Window
         // cached permissions before awaiting any owner status.
         if (sourceChanged)
         {
+            SetFrameworkStatusIcon(null);
             liveState = null;
             savedCapture = null;
             InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
@@ -929,6 +946,7 @@ public partial class MainWindow : Window
             ModCountText.Text = "Select the Cyberpunk 2077 game folder";
             DependencyText.Text = "CET, 0-Engine, r6/scripts and RED4ext have not been checked.";
             DependencyText.Foreground = (Brush)FindResource("Cyan");
+            SetFrameworkStatusIcon(null);
             CetStatusText.Text = "G-CET Profiler  ·  NOT CHECKED";
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
@@ -951,6 +969,7 @@ public partial class MainWindow : Window
             InstallButton.IsEnabled = recoveryMode;
             LaunchButton.IsEnabled = CollectButton.IsEnabled =
                 ContinueButton.IsEnabled = false;
+            SetFrameworkStatusIcon(null);
             SetStatus("GCO package verification failed. Re-extract the official build.");
             Trace.TraceError("GCO package verification: " + bundle.Detail);
             return;
@@ -975,6 +994,7 @@ public partial class MainWindow : Window
                 ? "CET 1.37.1  ·  0-Engine present  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
                 : framework.Detail;
             DependencyText.Foreground = (Brush)FindResource(framework.Ready ? "Yellow" : "Cyan");
+            SetFrameworkStatusIcon(framework.Ready);
             var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
             savedCapture = saved;
             var frame = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
@@ -1041,6 +1061,7 @@ public partial class MainWindow : Window
                 InstallButton.IsEnabled = Workflow.HasRecoveryJournal;
                 LaunchButton.IsEnabled = CollectButton.IsEnabled =
                     ContinueButton.IsEnabled = false;
+                SetFrameworkStatusIcon(null);
                 Trace.TraceWarning("Profiler status inspection: " + ex);
                 SetStatus("Profiler status unavailable. Retry Refresh.");
             }
