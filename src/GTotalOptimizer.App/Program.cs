@@ -296,6 +296,9 @@ internal static class Program
             var statusMargin = structural.ConsoleTextHost.Margin;
             var cardHeight = cards.Height;
             var cardMinHeight = cards.MinHeight;
+            var originalGameRootHeight = structural.GameRootPanel.Height;
+            var cardPanels = cards.Children.Cast<System.Windows.Controls.Grid>().ToArray();
+            var originalCardMargins = cardPanels.Select(card => card.Margin).ToArray();
             var iconHeight = structural.InstallStageIcon.ActualHeight;
             var buttonHeight = structural.InstallButton.ActualHeight;
 
@@ -309,6 +312,11 @@ internal static class Program
                 if (!ReferenceEquals(structural.CapturePage.Content, originalPanel) ||
                     originalPanel.Children.Count != 4 ||
                     cards.Height <= cardHeight + 15 ||
+                    cards.Height > cardHeight + 57 ||
+                    structural.GameRootPanel.Height <= originalGameRootHeight + 10 ||
+                    cardPanels.Any((card) => card.Margin.Left < originalCardMargins[Array.IndexOf(cardPanels, card)].Left + 18 ||
+                        card.Margin.Right < originalCardMargins[Array.IndexOf(cardPanels, card)].Right + 18) ||
+                    structural.CaptureWorkflowHeading.Margin.Bottom > 3 ||
                     Math.Abs(structural.InstallStageIcon.ActualHeight - iconHeight) > .1 ||
                     Math.Abs(structural.InstallButton.ActualHeight - buttonHeight) > .1 ||
                     !structural.StepOneOutline.SpatialStroke ||
@@ -318,6 +326,9 @@ internal static class Program
                         $"Maximized must grow the same three cards with unscaled controls: " +
                         $"children={originalPanel.Children.Count}, " +
                         $"height={cards.Height:F1}/{cardHeight:F1}, " +
+                        $"gameRoot={structural.GameRootPanel.Height:F1}/{originalGameRootHeight:F1}, " +
+                        $"cardInset={cardPanels[0].Margin.Left:F1}/{originalCardMargins[0].Left:F1}, " +
+                        $"workflowHeadingBottom={structural.CaptureWorkflowHeading.Margin.Bottom:F1}, " +
                         $"icon={structural.InstallStageIcon.ActualHeight:F1}/{iconHeight:F1}, " +
                         $"button={structural.InstallButton.ActualHeight:F1}/{buttonHeight:F1}");
 
@@ -330,6 +341,8 @@ internal static class Program
                     gameSection.Margin != gameMargin ||
                     structural.CaptureWorkflowHeading.Margin != headingMargin ||
                     structural.ConsoleTextHost.Margin != statusMargin ||
+                    structural.GameRootPanel.Height != originalGameRootHeight ||
+                    cardPanels.Where((card, index) => card.Margin != originalCardMargins[index]).Any() ||
                     cards.Height != cardHeight || cards.MinHeight != cardMinHeight)
                     throw new InvalidOperationException(
                         "Normal local XAML values or original Capture tree changed after maximize/restore cycle " +

@@ -62,7 +62,21 @@ public partial class MainWindow : Window
     private double normalWorkflowMinHeight;
     private double normalCaptureScrollOffset;
     private double normalCaptureContentHeight;
+    private double normalGameRootPanelHeight;
+    private Grid[]? maximizedCardColumns;
+    private Thickness[]? normalCardMargins;
     private readonly Thickness originalConsoleMargin;
+
+    // Fullscreen-only visual tuning: fixed normal XAML values are authoritative.
+    // Width/gap/height knobs intentionally do not scale child text or SVGs.
+    private const double ExpandedGameRootHeight = 18.0;
+    private const double ExpandedCardSideInset = 20.0;
+    private const double ExpandedCardGrowthRatio = 0.20;
+    private const double ExpandedCardMaxGrowth = 56.0;
+    private const double ExpandedHeroGapRatio = 0.25;
+    private const double ExpandedRootGapRatio = 0.28;
+    private const double ExpandedWorkflowHeadingBottom = 2.0;
+    private const double ExpandedConsolePortraitClearance = 112.0;
     internal bool WpfVerificationMode { get; set; }
     private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
@@ -280,7 +294,9 @@ public partial class MainWindow : Window
                 baseline.Children[1] is not StackPanel gameRootSection ||
                 !ReferenceEquals(baseline.Children[2], CaptureWorkflowHeading) ||
                 baseline.Children[3] is not Grid cards ||
-                !double.IsFinite(cards.Height))
+                !double.IsFinite(cards.Height) ||
+                cards.Children.Count != 3 ||
+                cards.Children.Cast<UIElement>().Any(child => child is not Grid))
                 return;
 
             normalHeroMargin = HeroSection.Margin;
@@ -288,6 +304,9 @@ public partial class MainWindow : Window
             normalHeadingMargin = CaptureWorkflowHeading.Margin;
             normalWorkflowHeight = cards.Height;
             normalWorkflowMinHeight = cards.MinHeight;
+            normalGameRootPanelHeight = GameRootPanel.Height;
+            maximizedCardColumns = cards.Children.Cast<Grid>().ToArray();
+            normalCardMargins = maximizedCardColumns.Select(card => card.Margin).ToArray();
             normalCaptureScrollOffset = CapturePage.VerticalOffset;
             // DesiredSize describes the unmodified normal sections. Never
             // recalculate the baseline from already-expanded measurements.
@@ -298,9 +317,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (maximizedWorkflowCards is null || maximizedGameRootSection is null)
+        if (maximizedWorkflowCards is null || maximizedGameRootSection is null ||
+            maximizedCardColumns is null || normalCardMargins is null)
             return;
 
+        for (var i = 0; i < maximizedCardColumns.Length; i++)
+            maximizedCardColumns[i].Margin = normalCardMargins[i];
+        GameRootPanel.Height = normalGameRootPanelHeight;
         HeroSection.Margin = normalHeroMargin;
         maximizedGameRootSection.Margin = normalGameRootMargin;
         CaptureWorkflowHeading.Margin = normalHeadingMargin;
@@ -310,6 +333,8 @@ public partial class MainWindow : Window
         var scrollOffset = normalCaptureScrollOffset;
         maximizedGameRootSection = null;
         maximizedWorkflowCards = null;
+        maximizedCardColumns = null;
+        normalCardMargins = null;
         InvalidateSceneNeon();
         CapturePage.ScrollToVerticalOffset(scrollOffset);
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
@@ -340,28 +365,49 @@ public partial class MainWindow : Window
             CapturePage.ActualHeight <= 0)
             return;
 
-        // The original four sections remain in the same StackPanel. Vertical
-        // surplus is split 10/10/10 percent into their existing bottom margins
-        // and 70 percent into the existing three-card surface. Text, SVG
-        // buttons, icons and the shared spatial-neon mapping are not scaled.
-        var extra = Math.Max(0, CapturePage.ActualHeight - normalCaptureContentHeight);
+        // The original 228-DIP cards should not fill the entire window.
+        // Grow them modestly; spend most of the surplus on section separation,
+        // leaving the workflow title close to its own cards. The Game Root
+        // heading and its box always move as a single original StackPanel.
+        var surplus = Math.Max(0, CapturePage.ActualHeight - normalCaptureContentHeight);
+        var rootGrowth = Math.Min(ExpandedGameRootHeight, surplus);
+        var remaining = Math.Max(0, surplus - rootGrowth);
         static Thickness WithBottom(Thickness original, double added) =>
             new(original.Left, original.Top, original.Right, original.Bottom + added);
-        var gap = extra * 0.10;
-        var hero = WithBottom(normalHeroMargin, gap);
-        var root = WithBottom(normalGameRootMargin, gap);
-        var heading = WithBottom(normalHeadingMargin, gap);
+
+        var hero = WithBottom(normalHeroMargin, remaining * ExpandedHeroGapRatio);
+        var root = WithBottom(normalGameRootMargin, remaining * ExpandedRootGapRatio);
+        var heading = new Thickness(normalHeadingMargin.Left,
+            normalHeadingMargin.Top, normalHeadingMargin.Right,
+            Math.Min(normalHeadingMargin.Bottom, ExpandedWorkflowHeadingBottom));
         if (HeroSection.Margin != hero) HeroSection.Margin = hero;
         if (maximizedGameRootSection.Margin != root) maximizedGameRootSection.Margin = root;
         if (CaptureWorkflowHeading.Margin != heading) CaptureWorkflowHeading.Margin = heading;
-        var cardHeight = normalWorkflowHeight + extra * 0.70;
+
+        var rootHeight = normalGameRootPanelHeight + rootGrowth;
+        if (Math.Abs(GameRootPanel.Height - rootHeight) > .1)
+            GameRootPanel.Height = rootHeight;
+        var cardGrowth = Math.Min(ExpandedCardMaxGrowth, remaining * ExpandedCardGrowthRatio);
+        var cardHeight = normalWorkflowHeight + cardGrowth;
         if (Math.Abs(maximizedWorkflowCards.Height - cardHeight) > .1)
             maximizedWorkflowCards.Height = cardHeight;
 
-        // The tall V silhouette occupies more horizontal space on fullscreen.
-        // This offset applies exclusively to the maximized status text.
+        // Make each of the three equal-column cards narrower without changing
+        // their inner controls: wider inter-card gaps and more outer breathing room.
+        if (maximizedCardColumns is not null && normalCardMargins is not null)
+            for (var i = 0; i < maximizedCardColumns.Length; i++)
+            {
+                var margin = normalCardMargins[i];
+                var expanded = new Thickness(margin.Left + ExpandedCardSideInset,
+                    margin.Top, margin.Right + ExpandedCardSideInset, margin.Bottom);
+                if (maximizedCardColumns[i].Margin != expanded)
+                    maximizedCardColumns[i].Margin = expanded;
+            }
+
+        // The current maximized console is unnecessarily far right.
+        // Keep it outside the portrait edge while reducing that extra shift.
         var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
-        var shift = Math.Max(0, overhang - 24);
+        var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
         var console = new Thickness(originalConsoleMargin.Left + shift,
             originalConsoleMargin.Top, originalConsoleMargin.Right,
             originalConsoleMargin.Bottom);
