@@ -305,7 +305,7 @@ public partial class MainWindow : Window
         UpdateExpandedStageButton(CollectButton);
     }
 
-    private void UpdateExpandedStageButton(Button button)
+    private void UpdateExpandedStageButton(System.Windows.Controls.Button button)
     {
         if (button.Parent is not Grid content || content.RowDefinitions.Count != 4 ||
             content.ActualWidth <= 0 || content.ActualHeight <= 0)
