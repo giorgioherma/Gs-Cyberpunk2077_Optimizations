@@ -1355,8 +1355,14 @@ public partial class MainWindow : Window
         {
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
-            // The click is the trigger. Do not gate it on F11, a prior CSV,
-            // or whether PresentMon has already stopped independently.
+            var nativeStatus = await Workflow.InspectAsync(game);
+            if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady)
+            {
+                PinStatus("No completed F11 capture. Start again or restore profilers.");
+                return;
+            }
+            // Only a completed native capture authorizes permanent collection.
+            // A failed run keeps PresentMon temporary until restart/restore.
             var stop = await StopOwnedPresentMonAsync(attempt.SessionId);
             string? frameWarning = stop.Error;
             if (stop.Stopped && stop.Csv is not null)
