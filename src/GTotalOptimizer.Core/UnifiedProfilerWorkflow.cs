@@ -568,7 +568,7 @@ public sealed class UnifiedProfilerWorkflow
         catch (Exception ex) { return new(false, "Cannot inspect native capture state: " + ex.Message); }
 
         var restored = await RestoreOwnedAsync(game, CancellationToken.None,
-            preserveIncompleteEvidence: true);
+            preserveIncompleteEvidence: false);
         if (!restored.RestoreVerified) return restored;
         CollectedCaptureStore.MarkRestored(packageRoot, saved,
             skipCet, skipRedscript, skipFrameTime);
