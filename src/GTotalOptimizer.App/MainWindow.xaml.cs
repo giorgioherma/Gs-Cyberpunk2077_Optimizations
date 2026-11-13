@@ -1293,12 +1293,20 @@ public partial class MainWindow : Window
 
         try
         {
-            var ownedRunning = PresentMonCaptureController.HasOwnedRunning(packageRoot);
-            if (tracked is null && !ownedRunning)
+            // No tracked GCO recorder: do not inspect or touch unrelated
+            // PresentMon processes. The elevated restart owner will independently
+            // refuse any unsafe conflicting session.
+            if (tracked is null)
                 return (null, true, null);
-            // The owned writer has already exited and flushed. This survives
-            // a full WPF unload/reopen; no in-memory stop token is necessary.
-            if (tracked is not null && !ownedRunning)
+            // Merely detect whether a writer with this process name exists.
+            // Non-elevated MainModule/FileName access can be denied for an
+            // elevated PresentMon process. Actual owner identity and shutdown
+            // are verified by the elevated GCO controller below.
+            bool presentMonRunning;
+            var candidates = Process.GetProcessesByName("PresentMon");
+            try { presentMonRunning = candidates.Any(p => !p.HasExited); }
+            finally { foreach (var candidate in candidates) candidate.Dispose(); }
+            if (!presentMonRunning)
             {
                 if (clearTracking)
                 {
