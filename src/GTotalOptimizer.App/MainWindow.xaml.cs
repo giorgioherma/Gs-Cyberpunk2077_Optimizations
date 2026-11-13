@@ -854,7 +854,8 @@ public partial class MainWindow : Window
     // gates, not a second UI compatibility parser or a new version lock.
     // Unknown/invalid root keeps both icons hidden for every component.
     private void ShowFrameworkGate(FrameworkGateStatus? gate, string name,
-        Image success, Image failure, TextBlock label)
+        System.Windows.Controls.Image success,
+        System.Windows.Controls.Image failure, TextBlock label)
     {
         success.Visibility = gate?.Ready == true ? Visibility.Visible : Visibility.Collapsed;
         failure.Visibility = gate is { Ready: false } ? Visibility.Visible : Visibility.Collapsed;
