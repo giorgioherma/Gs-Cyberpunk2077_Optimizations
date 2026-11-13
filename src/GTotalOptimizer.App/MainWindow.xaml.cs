@@ -1358,6 +1358,7 @@ public partial class MainWindow : Window
             var nativeStatus = await Workflow.InspectAsync(game);
             if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady)
             {
+                SetPortraitStage(PortraitStage.Black);
                 PinStatus("No completed F11 capture. Start again or restore profilers.");
                 return;
             }
@@ -1563,6 +1564,12 @@ public partial class MainWindow : Window
             {
                 Warn(result.Detail, "Recovery required");
                 return;
+            }
+            try { CollectedCaptureStore.ForgetLastRestored(packageRoot); }
+            catch (Exception ex)
+            {
+                cleanupWarning = "Saved Analyze pointer could not be cleared: " + ex.Message;
+                Trace.TraceWarning("Restored workspace pointer cleanup: " + ex);
             }
             captureLaunched = false;
             SetPortraitStage(PortraitStage.Black);

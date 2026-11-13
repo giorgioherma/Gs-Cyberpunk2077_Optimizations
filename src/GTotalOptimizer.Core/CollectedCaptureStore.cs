@@ -180,71 +180,6 @@ public static class CollectedCaptureStore
         return true;
     }
 
-    // GCO close is NOT capture abandonment. Only its uncollected PresentMon
-    // file is disposable; the indexed capture identity and native owner
-    // results remain available to COLLECT RESULTS after the app reopens.
-    // The caller must first verify a graceful PresentMon process shutdown.
-    public static bool DiscardUncollectedPresentMon(string root, string game,
-        string id, string? trackedCsv)
-    {
-        var index = Read(root, game, id, verifyHashes: true);
-        if (index.CollectionAttempted || index.HasAny || index.Restored)
-            return false; // explicit Collect permanently owns all evidence
-
-        var folder = SessionFolder(root, id);
-        if (!Directory.Exists(folder)) return false;
-        string? csv = trackedCsv;
-        if (csv is null && UsesFlatLayout(root, id))
-            csv = Path.Combine(folder, "PresentMon", "PresentMon.csv");
-        if (csv is null) return false; // old layouts require a tracked path
-
-        csv = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
-        var relative = Path.GetRelativePath(folder, csv);
-        if (Path.IsPathRooted(relative) || relative == ".." ||
-            relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            throw new InvalidDataException(
-                "Tracked PresentMon file does not belong to the active capture.");
-
-        // A failed PresentMon start may never have created its directory.
-        // Closing GCO must still preserve the journal and remain possible.
-        var parent = Path.GetDirectoryName(csv)!;
-        if (!Directory.Exists(parent)) return false;
-        // No junction/symlink may redirect a cleanup outside its own folder.
-        var scan = parent;
-        while (true)
-        {
-            if (!Directory.Exists(scan) ||
-                (File.GetAttributes(scan) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("Linked or missing PresentMon capture directory.");
-            if (string.Equals(scan, folder, StringComparison.OrdinalIgnoreCase)) break;
-            var next = Path.GetDirectoryName(scan);
-            if (next is null || next.Length >= scan.Length)
-                throw new InvalidDataException("PresentMon path escapes capture folder.");
-            scan = next;
-        }
-
-        var controller = Path.Combine(parent, "PresentMon-controller.json");
-        foreach (var file in new[] { csv, controller })
-        {
-            if (File.Exists(file) &&
-                (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("Linked PresentMon evidence cannot be discarded.");
-        }
-
-        var hadOutput = File.Exists(csv) || File.Exists(controller);
-        if (File.Exists(csv)) File.Delete(csv);
-        if (File.Exists(controller)) File.Delete(controller);
-        // Leave collection.json and the journal untouched. Remove only empty
-        // GCO-generated subfolders, never user-added files.
-        while (!string.Equals(parent, folder, StringComparison.OrdinalIgnoreCase))
-        {
-            if (Directory.EnumerateFileSystemEntries(parent).Any()) break;
-            Directory.Delete(parent);
-            parent = Path.GetDirectoryName(parent)!;
-        }
-        return hadOutput;
-    }
-
     public static bool UsesDatedLayout(string root, string id)
     {
         var name = Path.GetFileName(SessionFolder(root, id));
@@ -338,6 +273,17 @@ public static class CollectedCaptureStore
         {
             if (File.Exists(temp)) File.Delete(temp);
         }
+    }
+
+    // Reset only the Analyze navigation bookmark. The collected session and
+    // its immutable, hash-indexed evidence remain in RESULTS unchanged.
+    public static void ForgetLastRestored(string root)
+    {
+        var pointer = LastRestoredPointer(root);
+        if (!File.Exists(pointer)) return;
+        if ((File.GetAttributes(pointer) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Linked Analyze pointer cannot be reset.");
+        File.Delete(pointer);
     }
 
     public static CollectedCaptureIndex? ReadLastRestored(string root, string game)
