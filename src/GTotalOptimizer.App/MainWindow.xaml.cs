@@ -755,63 +755,20 @@ public partial class MainWindow : Window
         }));
     }
 
-    // Closing GCO never abandons the capture: its durable journal and native
-    // source-owned results must survive reopening. Only uncollected PresentMon
-    // scratch output is disposable, after its ETW writer has safely stopped.
-    // Keep the window open if that graceful stop or targeted cleanup fails.
-    private async void Window_Closing(object? sender,
+    // Closing the managed GUI is not collection, restoration or abandonment.
+    // The lightweight native launcher remains in the tray; the durable session,
+    // F11 native files and the tracked PresentMon CSV stay unchanged.
+    private void Window_Closing(object? sender,
         System.ComponentModel.CancelEventArgs e)
     {
-        if (WpfVerificationMode) return;
-        if (!initialized || closureCleanupVerified) return;
-        e.Cancel = true;
-        if (closingInProgress) return;
+        if (WpfVerificationMode || !initialized) return;
         if (busy)
         {
+            e.Cancel = true;
             PinStatus("Finish the active profiler operation before closing GCO.");
             return;
         }
-        closingInProgress = true;
-        SetBusy(true);
-        SetStatus("Closing GCO. Keeping your profiler session.");
-        try
-        {
-            var game = Workflow.ReadRecoveryGameRoot();
-            var id = game is null ? Guid.NewGuid().ToString("N")
-                : Workflow.ReadRecoverySessionId(game) ?? Guid.NewGuid().ToString("N");
-            // Do not clear the tracking pointer until its known GCO-owned
-            // temporary files have been deleted successfully.
-            var stop = await StopOwnedPresentMonAsync(id, clearTracking: false);
-            if (!stop.Stopped)
-            {
-                PinStatus("PresentMon did not stop. Retry closing GCO or use Restore.",
-                    stop.Error);
-                return;
-            }
-            if (game is not null && Workflow.HasCaptureAttempt(game))
-                CollectedCaptureStore.DiscardUncollectedPresentMon(
-                    packageRoot, game, id, stop.Csv);
-            // The app-exit exception applies only to uncollected PresentMon.
-            // CET/GRSP owner results, collected evidence and session journal
-            // are never deleted or reset here.
-            PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            closureCleanupVerified = true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning("GCO close cleanup: " + ex);
-            PinStatus("Could not close safely. Capture data preserved; retry.", ex.ToString());
-        }
-        finally
-        {
-            closingInProgress = false;
-            SetBusy(false);
-            if (closureCleanupVerified)
-                Dispatcher.BeginInvoke(DispatcherPriority.Background,
-                    new Action(Close));
-            else
-                await RefreshSourceAsync();
-        }
+        closureCleanupVerified = true;
     }
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -1195,12 +1152,15 @@ public partial class MainWindow : Window
         if (!stopped.Stopped)
             throw new InvalidOperationException("Previous GCO PresentMon must stop before starting a new attempt: " +
                 stopped.Error);
-        // An explicit Collect preserves its evidence and never gets discarded.
-        // Stale native-owner archives are not copied into the next attempt.
+        // No new attempt until BOTH owner-managed native live-output scopes
+        // are empty. Discard only the previous UNCOLLECTED GCO session folder.
+        var reset = await Workflow.ResetNativeOutputAsync(game);
+        if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
         Workflow.AbandonCurrentUncollected(game);
+        var clean = await Workflow.InspectAsync(game);
         var attemptId = Workflow.BeginCaptureAttempt(game,
             observedGameAlreadyRunning: gameAlreadyRunning,
-            ownerBeforeCapture: state);
+            ownerBeforeCapture: clean);
         captureLaunched = true;
         lastLaunchRequestedUtc = DateTime.UtcNow;
         try
@@ -1319,11 +1279,9 @@ public partial class MainWindow : Window
             var ownedRunning = PresentMonCaptureController.HasOwnedRunning(packageRoot);
             if (tracked is null && !ownedRunning)
                 return (null, true, null);
-            // A completed process-exit stop already flushed this exact CSV.
-            // Avoid a second unnecessary elevation on Collect, Restart or Exit.
-            if (tracked is not null && !ownedRunning &&
-                string.Equals(stoppedPresentMonCsv, tracked,
-                    StringComparison.OrdinalIgnoreCase))
+            // The owned writer has already exited and flushed. This survives
+            // a full WPF unload/reopen; no in-memory stop token is necessary.
+            if (tracked is not null && !ownedRunning)
             {
                 if (clearTracking)
                 {
@@ -1422,8 +1380,15 @@ public partial class MainWindow : Window
                 }
             }
             var native = await Workflow.CollectResultsAsync(game);
-            // This durable record is written only AFTER the user explicitly
-            // clicks Collect. Even zero captures receive exact diagnostics.
+            // Do not seal a failed/empty native collection. Keep the pending
+            // capture intact so Collect may be retried or the run abandoned.
+            var collected = Workflow.ReadCollected(game, verifyHashes: true);
+            if (!native.Ok || !stop.Stopped || !HasNative(collected))
+            {
+                PinStatus("No verified F11 capture collected. Retry or start a fresh run.",
+                    native.Detail + (frameWarning is null ? "" : " | PresentMon: " + frameWarning));
+                return;
+            }
             var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
