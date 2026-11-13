@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GCO status indicators — native WPF vector assets.
+  Design grid: 24 x 24 DIPs, transparent canvas, angular/chamfered silhouettes.
+  Intended display sizes: 12–24 DIPs (16 or 18 DIPs recommended).
+  Use these DrawingImage resources via Image.Source. No external PNG/SVG dependency.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- SUCCESS: bold, forward-moving check with chiseled ends; lime/green gradient. -->
+  <DrawingImage x:Key="GcoStatusSuccessIcon">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <!-- Transparent 24x24 bounds maintain consistent icon scaling. -->
+        <GeometryDrawing Brush="Transparent" Geometry="M 0,0 L 24,0 24,24 0,24 Z" />
+        <GeometryDrawing Geometry="M 2.4,11.3 L 5.4,8.3 10.1,13.0 18.1,4.3 20.1,4.3 22.1,6.3 10.4,19.7 8.7,19.7 2.4,13.4 Z">
+          <GeometryDrawing.Brush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0.8,1">
+              <GradientStop Color="#79FF8C" Offset="0" />
+              <GradientStop Color="#26F568" Offset="0.46" />
+              <GradientStop Color="#08CE4D" Offset="1" />
+            </LinearGradientBrush>
+          </GeometryDrawing.Brush>
+        </GeometryDrawing>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+
+  <!-- FAILURE: symmetric single-piece X with four chamfered terminals. -->
+  <DrawingImage x:Key="GcoStatusFailureIcon">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="Transparent" Geometry="M 0,0 L 24,0 24,24 0,24 Z" />
+        <GeometryDrawing Geometry="M 2.9,4.6 L 4.6,2.9 6.2,2.9 12,8.7 17.8,2.9 19.4,2.9 21.1,4.6 21.1,6.2 15.3,12 21.1,17.8 21.1,19.4 19.4,21.1 17.8,21.1 12,15.3 6.2,21.1 4.6,21.1 2.9,19.4 2.9,17.8 8.7,12 2.9,6.2 Z">
+          <GeometryDrawing.Brush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0.85,1">
+              <GradientStop Color="#FF777B" Offset="0" />
+              <GradientStop Color="#FF3D4B" Offset="0.44" />
+              <GradientStop Color="#E7162B" Offset="1" />
+            </LinearGradientBrush>
+          </GeometryDrawing.Brush>
+        </GeometryDrawing>
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+</ResourceDictionary>
