@@ -709,10 +709,8 @@ public partial class MainWindow : Window
             var stopped = await StopOwnedPresentMonAsync(exitedSessionId,
                 clearTracking: false);
             PinStatus(stopped.Stopped
-                ? stopped.Csv is not null
-                    ? "Cyberpunk closed. PresentMon saved. Click COLLECT RESULTS."
-                    : "Cyberpunk closed. Click COLLECT RESULTS."
-                : "Cyberpunk closed. PresentMon stop failed; retry with COLLECT RESULTS.",
+                ? "Game closed. COLLECT, START again or RESTORE."
+                : "Game closed. PresentMon still stopping; retry Collect.",
                 stopped.Error);
         }
         finally { SetBusy(false); }
@@ -1585,8 +1583,8 @@ public partial class MainWindow : Window
                 (cleanupWarning is null ? "" : " | " + cleanupWarning);
             Trace.TraceInformation("Profiler restore: " + fullDetails);
             PinStatus(cleanupWarning is null
-                    ? "Restore successful. Original game files restored."
-                    : "Restore successful. Original files restored; cleanup warning.",
+                    ? "Restore complete. Original files restored."
+                    : "Original files restored. Check saved workspace.",
                 fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
