@@ -142,7 +142,8 @@ public static class CollectedCaptureStore
         var folder = SessionFolder(root, id);
         if (!Directory.Exists(folder)) return false;
         var index = Read(root, game, id, verifyHashes: true);
-        if (index.CollectionAttempted || index.HasAny || index.Restored)
+        if (index.CollectionAttempted || index.Cet is not null ||
+            index.Redscript is not null || index.Restored)
             return false;
         static void CheckTree(string directory)
         {
