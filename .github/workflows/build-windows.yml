@@ -325,6 +325,98 @@ jobs:
             throw "Native launcher/private runtime verifier failed with exit $($launcherCheck.ExitCode)"
           }
           Write-Host 'PASS native GCO launcher forwards args and starts verified private runtime'
+
+          # Real native tray lifecycle: close the full managed GUI while keeping
+          # the native host alive, reopen the same WPF page, then cleanly exit.
+          # No game, UAC, profiler install or capture fixture is needed here.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class GcoNativeTraySmoke {
+              [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+              public static extern IntPtr FindWindow(string cls, string title);
+              [DllImport("user32.dll")]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+          }
+          '@
+          $launcherPath=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+          $tray=$null
+          $opened=$null
+          $reopened=$null
+          function FindGcoUi([int]$exclude) {
+            foreach ($p in @(Get-Process -Name 'G-Total-Optimizer.App' -ErrorAction SilentlyContinue)) {
+              try {
+                if ($p.Id -ne $exclude -and
+                    [IO.Path]::GetFullPath($p.Path) -eq (Join-Path $root 'app/G-Total-Optimizer.App.exe')) {
+                  return $p
+                }
+              } finally {
+                if ($p.Id -eq $exclude) { $p.Dispose() }
+              }
+            }
+            return $null
+          }
+          try {
+            $tray=Start-Process -FilePath $launcherPath -WorkingDirectory $root -PassThru
+            $deadline=[Diagnostics.Stopwatch]::StartNew()
+            while ($deadline.Elapsed.TotalSeconds -lt 25) {
+              if ($tray.HasExited) { throw 'Native tray terminated before managed UI launch' }
+              $opened=FindGcoUi 0
+              if ($opened -and $opened.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              if ($opened) { $opened.Dispose(); $opened=$null }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$opened) { throw 'Native tray did not launch a visible WPF process' }
+            $firstPid=$opened.Id
+            if (!$opened.CloseMainWindow() -or !$opened.WaitForExit(15000)) {
+              throw 'Managed GUI did not close independently of the native tray'
+            }
+            if ($tray.HasExited) { throw 'Tray exited when WPF GUI was closed' }
+
+            $secondLauncher=Start-Process -FilePath $launcherPath -WorkingDirectory $root -PassThru
+            try {
+              if (!$secondLauncher.WaitForExit(10000)) {
+                throw 'Second invocation did not find the native single-instance tray'
+              }
+            } finally { $secondLauncher.Dispose() }
+            $deadline.Restart()
+            while ($deadline.Elapsed.TotalSeconds -lt 25) {
+              if ($tray.HasExited) { throw 'Native tray exited before managed UI reopened' }
+              $reopened=FindGcoUi $firstPid
+              if ($reopened -and $reopened.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              if ($reopened) { $reopened.Dispose(); $reopened=$null }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$reopened) { throw 'Native tray did not reconstruct the WPF UI' }
+            if (!$reopened.CloseMainWindow() -or !$reopened.WaitForExit(15000)) {
+              throw 'Rebuilt managed WPF GUI did not shut down cleanly'
+            }
+            $window=[GcoNativeTraySmoke]::FindWindow('GCO.Native.Tray.Window',$null)
+            if ($window -eq [IntPtr]::Zero -or
+                ![GcoNativeTraySmoke]::PostMessage($window,0x111,[IntPtr]1002,[IntPtr]::Zero)) {
+              throw 'Native tray command window was missing after WPF exit'
+            }
+            if (!$tray.WaitForExit(10000)) {
+              throw 'Native tray did not exit cleanly when explicitly requested'
+            }
+            Write-Host 'PASS real native tray: managed GUI close/unload, singleton reopen, verified native exit'
+          }
+          finally {
+            if ($reopened) {
+              if (!$reopened.HasExited) { $reopened.Kill() }
+              $reopened.Dispose()
+            }
+            if ($opened) {
+              if (!$opened.HasExited) { $opened.Kill() }
+              $opened.Dispose()
+            }
+            if ($tray) {
+              if (!$tray.HasExited) { $tray.Kill() }
+              $tray.Dispose()
+            }
+          }
+
           # Artifact is a sibling guide plus one portable application folder.
           $release=Split-Path -Parent $root
           if ((Split-Path $root -Leaf) -ne "G's Cyberpunk 2077 Optimization") {
