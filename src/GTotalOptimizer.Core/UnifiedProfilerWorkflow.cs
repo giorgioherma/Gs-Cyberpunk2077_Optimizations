@@ -574,6 +574,25 @@ public sealed class UnifiedProfilerWorkflow
 
         try
         {
+            // A crash between a successful hash-indexed copy and temporary
+            // archive retirement leaves an already-collected owner and its
+            // exact source archive in GCO staging. Retire that duplicate on
+            // retry, but never delete a different source or another session.
+            if (saved.Cet is not null && stagedCet is not null)
+            {
+                if (!string.Equals(Path.GetFullPath(saved.Cet.SourceArchive),
+                    Path.GetFullPath(stagedCet), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("CET staging no longer matches the indexed capture.");
+                RetireStagedArchive(id, BackendKind.Cet, stagedCet);
+            }
+            if (saved.Redscript is not null && stagedRed is not null)
+            {
+                if (!string.Equals(Path.GetFullPath(saved.Redscript.SourceArchive),
+                    Path.GetFullPath(stagedRed), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("REDscript staging no longer matches the indexed capture.");
+                RetireStagedArchive(id, BackendKind.Grsp, stagedRed);
+            }
+
             // The owner status is only a Boolean: if native results were
             // already ready before this launch, that old result cannot be
             // attributed to this attempt. Do not collect/admit it under a
