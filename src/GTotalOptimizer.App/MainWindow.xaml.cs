@@ -1373,7 +1373,12 @@ public partial class MainWindow : Window
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
             var nativeStatus = await Workflow.InspectAsync(game);
+            // A crash can occur AFTER verified owner copies are indexed and
+            // native live files are cleared, but BEFORE collection is sealed.
+            // Those hash-verified, current-session copies are recoverable.
+            var indexed = Workflow.ReadCollected(game, verifyHashes: true);
             if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady &&
+                indexed?.Cet is null && indexed?.Redscript is null &&
                 !Workflow.HasPendingStagedNativeArchive(game))
             {
                 SetPortraitStage(PortraitStage.Black);
