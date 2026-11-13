@@ -30,6 +30,9 @@ internal static class PresentMonCaptureController
 
     public static async Task RunAsync(string packageRoot, string csv, bool restart)
     {
+        if (!restart)
+            throw new InvalidOperationException(
+                "PresentMon stops automatically with the game; no second elevation is permitted.");
         var safeCsv = PresentMonLifecyclePolicy.ValidateOutputCsv(packageRoot, csv);
         if (restart) PresentMonLifecyclePolicy.RequireWritableCapturePath(safeCsv);
         var resultPath = Path.Combine(Path.GetDirectoryName(safeCsv)!, ResultName);
@@ -90,7 +93,43 @@ internal static class PresentMonCaptureController
         }
     }
 
-    // Share process ownership classification with the elevated stop/restart
+    // The elevated start helper records the exact process PID and session CSV.
+    // Wait for that owned writer to auto-stop; neither Collect, Restore nor
+    // the native tray asks Windows for a second elevation.
+    public static async Task WaitForAutoStopAsync(string root, string csv,
+        CancellationToken token = default)
+    {
+        var ownedCsv = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
+        var resultPath = Path.Combine(Path.GetDirectoryName(ownedCsv)!, ResultName);
+        if (!File.Exists(resultPath))
+            throw new InvalidDataException("PresentMon startup proof is missing. Retry after the game closes.");
+        using var proof = JsonDocument.Parse(File.ReadAllText(resultPath));
+        var item = proof.RootElement;
+        if (!item.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True ||
+            !item.TryGetProperty("action", out var action) || action.GetString() != "restart" ||
+            !item.TryGetProperty("pid", out var pidNode) ||
+            !pidNode.TryGetInt32(out var pid) || pid <= 0)
+            throw new InvalidDataException("PresentMon startup proof is incomplete.");
+        try
+        {
+            using var writer = Process.GetProcessById(pid);
+            if (!writer.ProcessName.Equals("PresentMon", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("PresentMon PID was reused; writer ownership cannot be verified.");
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try { await writer.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested)
+            {
+                throw new TimeoutException("PresentMon is still recording. Close Cyberpunk and retry.");
+            }
+        }
+        catch (ArgumentException)
+        {
+            // The exact verified writer PID has already exited and flushed.
+        }
+    }
+
+    // Share process ownership classification with the elevated start
     // controller. A foreign PresentMon must not block a native-only capture
     // when GCO has no tracked or running collector of its own.
     private static bool IsOwnedExecutable(string root, string livePath, string officialHash)

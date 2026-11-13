@@ -1291,54 +1291,24 @@ public partial class MainWindow : Window
         try { tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot); }
         catch (Exception ex) { return (null, false, "PresentMon tracking invalid: " + ex.Message); }
 
+        if (tracked is null) return (null, true, null);
         try
         {
-            // No tracked GCO recorder: do not inspect or touch unrelated
-            // PresentMon processes. The elevated restart owner will independently
-            // refuse any unsafe conflicting session.
-            if (tracked is null)
-                return (null, true, null);
-            // Merely detect whether a writer with this process name exists.
-            // Non-elevated MainModule/FileName access can be denied for an
-            // elevated PresentMon process. Actual owner identity and shutdown
-            // are verified by the elevated GCO controller below.
-            bool presentMonRunning;
-            var candidates = Process.GetProcessesByName("PresentMon");
-            try { presentMonRunning = candidates.Any(p => !p.HasExited); }
-            finally { foreach (var candidate in candidates) candidate.Dispose(); }
-            if (!presentMonRunning)
+            // PresentMon v2.6.0 auto-exits when Cyberpunk closes. The exact
+            // capture PID was recorded by the one elevated startup helper.
+            // No separate stop process, UAC prompt or foreign-PM inspection.
+            await PresentMonCaptureController.WaitForAutoStopAsync(packageRoot, tracked);
+            stoppedPresentMonCsv = tracked;
+            if (clearTracking)
             {
-                if (clearTracking)
-                {
-                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                    stoppedPresentMonCsv = null;
-                }
-                return (tracked, true, null);
-            }
-        }
-        catch (Exception ex)
-        {
-            return (tracked, false, "Could not verify PresentMon ownership: " + ex.Message);
-        }
-
-        try
-        {
-            var target = tracked ?? PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, sessionId);
-            await PresentMonCaptureController.RunAsync(packageRoot, target, restart: false);
-            if (tracked is not null)
-            {
-                stoppedPresentMonCsv = tracked;
-                if (clearTracking)
-                {
-                    PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                    stoppedPresentMonCsv = null;
-                }
+                PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                stoppedPresentMonCsv = null;
             }
             return (tracked, true, null);
         }
         catch (Exception ex)
         {
-            return (tracked, false, "PresentMon shutdown not verified: " + ex.Message);
+            return (tracked, false, "PresentMon stop pending: " + ex.Message);
         }
     }
 

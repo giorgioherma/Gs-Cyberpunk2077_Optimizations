@@ -15,8 +15,6 @@
 #define TRAY_EVENT (WM_APP + 17)
 #define TRAY_OPEN  1001
 #define TRAY_EXIT  1002
-#define TRAY_TIMER 1
-#define TRAY_STOP_DONE (WM_APP + 18)
 
 static HINSTANCE g_inst;
 static HWND g_window;
@@ -27,7 +25,6 @@ static wchar_t g_launcher[MAX_PATH * 4];
 static wchar_t g_title[160];
 static NOTIFYICONDATAW g_icon;
 static UINT g_taskbar_created;
-static volatile LONG g_stop_started;
 
 static BOOL IsRunning(const wchar_t *name)
 {
@@ -69,10 +66,6 @@ static BOOL CALLBACK FindGuiWindow(HWND hwnd, LPARAM raw)
 
 static BOOL LaunchOrShowGui(void)
 {
-    // Any newly opened GUI can start a fresh game run. The prior worker has
-    // already posted completion by this point; do not carry a spent stop
-    // state across sessions when no timer event fires before GUI closes.
-    InterlockedCompareExchange(&g_stop_started, 0, 2);
     if (GuiRunning()) {
         GuiWindow data = { GetProcessId(g_ui), NULL };
         EnumWindows(FindGuiWindow, (LPARAM)&data);
@@ -128,36 +121,6 @@ static BOOL TrackedCsv(wchar_t *out, size_t outSize)
     return _wcsnicmp(out, prefix, wcslen(prefix)) == 0;
 }
 
-static DWORD WINAPI StopOwnedCapture(LPVOID ignored)
-{
-    (void)ignored;
-    wchar_t csv[MAX_PATH * 4] = {0};
-    DWORD result = 1;
-    if (TrackedCsv(csv, ARRAYSIZE(csv))) {
-        wchar_t args[MAX_PATH * 4 + 96];
-        if (swprintf_s(args, ARRAYSIZE(args),
-                       L"--presentmon-control stop \"%ls\"", csv) >= 0) {
-            SHELLEXECUTEINFOW launch = {0};
-            launch.cbSize = sizeof(launch);
-            launch.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
-            launch.lpVerb = L"runas";
-            launch.lpFile = g_launcher;
-            launch.lpParameters = args;
-            launch.lpDirectory = g_root;
-            launch.nShow = SW_HIDE;
-            if (ShellExecuteExW(&launch) && launch.hProcess) {
-                if (WaitForSingleObject(launch.hProcess, 65000) == WAIT_OBJECT_0) {
-                    DWORD code = 1;
-                    if (GetExitCodeProcess(launch.hProcess, &code)) result = code;
-                }
-                CloseHandle(launch.hProcess);
-            }
-        }
-    }
-    PostMessageW(g_window, TRAY_STOP_DONE, (WPARAM)result, 0);
-    return result;
-}
-
 static void AddTrayIcon(void)
 {
     ZeroMemory(&g_icon, sizeof(g_icon));
@@ -207,36 +170,8 @@ static LRESULT CALLBACK TrayProc(HWND window, UINT message, WPARAM wp, LPARAM lp
                 } else DestroyWindow(window);
             }
             return 0;
-        case WM_TIMER:
-            if (wp == TRAY_TIMER && GuiRunning()) {
-                // GCO may begin another capture after collecting this one.
-                // Re-arm only after the previous stop worker has exited.
-                InterlockedCompareExchange(&g_stop_started, 0, 2);
-                return 0;
-            }
-            if (wp == TRAY_TIMER &&
-                InterlockedCompareExchange(&g_stop_started, 0, 0) == 0) {
-                wchar_t csv[MAX_PATH * 4];
-                // No CLR and no busy spin during gameplay. After game exit,
-                // gracefully flush the existing GCO-owned ETW session.
-                if (!IsRunning(L"Cyberpunk2077.exe") &&
-                    TrackedCsv(csv, ARRAYSIZE(csv)) &&
-                    IsRunning(L"PresentMon.exe")) {
-                    InterlockedExchange(&g_stop_started, 1);
-                    HANDLE worker = CreateThread(NULL, 0, StopOwnedCapture, NULL, 0, NULL);
-                    if (worker) CloseHandle(worker);
-                    else InterlockedExchange(&g_stop_started, 0);
-                }
-            }
-            return 0;
-        case TRAY_STOP_DONE:
-            // A failed/cancelled UAC stop never deletes data or invents a
-            // successful capture. GCO will retry when reopened.
-            InterlockedExchange(&g_stop_started, 2);
-            return 0;
         case WM_DESTROY:
-            KillTimer(window, TRAY_TIMER);
-            Shell_NotifyIconW(NIM_DELETE, &g_icon);
+                    Shell_NotifyIconW(NIM_DELETE, &g_icon);
             PostQuitMessage(0);
             return 0;
     }
@@ -347,7 +282,6 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
                              0, 0, 0, 0, NULL, NULL, inst, NULL);
     if (!g_window) { CloseHandle(single); return 8; }
     AddTrayIcon();
-    SetTimer(g_window, TRAY_TIMER, 5000, NULL);
     if (!LaunchOrShowGui()) {
         DestroyWindow(g_window);
         CloseHandle(single);
