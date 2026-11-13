@@ -53,6 +53,21 @@ internal static class Program
     {
         try
         {
+            // The ordinary stop path must NEVER enter ShellExecute(runas).
+            // This exercises the shipped managed entrypoint, not a text scan.
+            var extraElevationRefused = false;
+            try
+            {
+                PresentMonCaptureController.RunAsync("unused", "unused", restart: false)
+                    .GetAwaiter().GetResult();
+            }
+            catch (InvalidOperationException ex) when (
+                ex.Message.Contains("no second elevation", StringComparison.OrdinalIgnoreCase))
+            {
+                extraElevationRefused = true;
+            }
+            if (!extraElevationRefused)
+                throw new InvalidOperationException("PresentMon stop requested a second elevation.");
             using var events = new GameProcessEvents("cmd.exe");
             var starts = new ConcurrentQueue<int>();
             var exits = new ConcurrentQueue<int>();
