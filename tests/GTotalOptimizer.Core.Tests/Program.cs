@@ -1060,6 +1060,37 @@ try
         "Capture Again discards old temporary output without deleting permanent prior captures");
     File.Delete(pendingJournal);
 
+    // Capture Again uses ONLY the journaled GCO attempt for disposition; no
+    // completed F11 output, archive or prior Collect is needed to discard it.
+    var resetPackage = Path.Combine(root, "ExplicitReset");
+    var resetGame = Path.Combine(root, "ExplicitResetGame");
+    Directory.CreateDirectory(resetGame);
+    var resetAttempt = Guid.NewGuid().ToString("N");
+    var resetFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        resetPackage, resetAttempt, startedLocal.AddSeconds(5), resetGame);
+    var resetCsv = PresentMonLifecyclePolicy.NewSessionCsv(resetPackage, resetAttempt);
+    Directory.CreateDirectory(Path.GetDirectoryName(resetCsv)!);
+    File.WriteAllText(resetCsv, frameCsvBody);
+    var resetJournal = Path.Combine(resetPackage, "RESULTS", "GCO-active-profile-session.json");
+    File.WriteAllText(resetJournal, System.Text.Json.JsonSerializer.Serialize(new
+    {
+        gameRoot = Path.GetFullPath(resetGame), stage = "capture-attempt",
+        sessionId = resetAttempt
+    }));
+    var resetWorkflow = new UnifiedProfilerWorkflow(resetPackage);
+    Require(resetWorkflow.HasCaptureAttempt(resetGame) &&
+        resetWorkflow.AbandonCurrentUncollected(resetGame) &&
+        !Directory.Exists(resetFolder) &&
+        !resetWorkflow.HasCaptureAttempt(resetGame) &&
+        resetWorkflow.HasRecoveryJournal,
+        "Capture Again discards pending CET/REDscript/PresentMon output without F11 or Collect proof");
+    var replacementId = resetWorkflow.BeginCaptureAttempt(resetGame);
+    Require(replacementId != resetAttempt &&
+        resetWorkflow.HasCaptureAttempt(resetGame) &&
+        CollectedCaptureStore.SessionFolder(resetPackage, replacementId) != resetFolder &&
+        !Directory.Exists(resetFolder),
+        "a discarded attempt cannot contribute stale results to its new capture identity");
+
     var failedCollectId = Guid.NewGuid().ToString("N");
     var failedCollectFolder = CollectedCaptureStore.CreateDatedSessionFolder(
         datedPackage, failedCollectId, startedLocal.AddSeconds(2), datedGame);
