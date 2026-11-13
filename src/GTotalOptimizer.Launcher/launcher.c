@@ -8,6 +8,7 @@
 #include <wchar.h>
 #include <wctype.h>
 #include <stdio.h>
+#include <string.h>
 
 // Native Win32 tray host only. The WPF/.NET 10 child may exit completely;
 // this host retains no CLR, report cache, UI resources or capture file handles.
