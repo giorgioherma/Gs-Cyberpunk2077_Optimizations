@@ -1373,7 +1373,8 @@ public partial class MainWindow : Window
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
             var nativeStatus = await Workflow.InspectAsync(game);
-            if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady)
+            if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady &&
+                !Workflow.HasPendingStagedNativeArchive(game))
             {
                 SetPortraitStage(PortraitStage.Black);
                 PinStatus("No completed F11 capture. Start again or restore profilers.");
