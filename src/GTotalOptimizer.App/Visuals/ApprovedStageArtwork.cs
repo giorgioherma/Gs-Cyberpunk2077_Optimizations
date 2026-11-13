@@ -62,7 +62,7 @@ public sealed class ApprovedStageArtwork : SvgViewbox
     /// Uniformly render that source geometry inside any WPF button slot.
     /// No separate approximated chamfer or window-specific offsets.
     /// </summary>
-    internal static Geometry RenderedShell(Size slot)
+    internal static Geometry RenderedShell(System.Windows.Size slot)
     {
         var source = Sources.Value;
         var viewport = source.ViewBox;
@@ -160,7 +160,7 @@ public sealed class StageShellHover : FrameworkElement
         CyanBrush.Freeze();
     }
 
-    internal static Geometry OuterBand(Size slot)
+    internal static Geometry OuterBand(System.Windows.Size slot)
     {
         var shell = ApprovedStageArtwork.RenderedShell(slot);
         if (shell == Geometry.Empty)
