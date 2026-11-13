@@ -543,12 +543,12 @@ public sealed class UnifiedProfilerWorkflow
             // native files above but keep the journal and pending data for a
             // safe retry. Never claim INSTALL-ready while an owned recorder
             // may still be writing its CSV.
+            if (!pendingPresentMonStopped)
+                return new(false,
+                    "Original profiler files restored. PresentMon shutdown is not verified; " +
+                    "retry RESTORE to finish capture cleanup. Recovery journal preserved.");
             if (HasCaptureAttempt(game))
             {
-                if (!pendingPresentMonStopped)
-                    return new(false,
-                        "Original profiler files restored. PresentMon shutdown is not verified; " +
-                        "retry RESTORE to finish discarding this capture. Recovery journal preserved.");
                 // Only unsealed output is disposable. An explicitly COLLECTED
                 // archive remains immutable in the app's RESULTS directory.
                 AbandonCurrentUncollected(game);
