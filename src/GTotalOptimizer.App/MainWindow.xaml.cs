@@ -852,18 +852,14 @@ public partial class MainWindow : Window
 
     // Green means verified framework compatibility, red means preflight
     // reported missing/incompatible components. Unknown remains icon-free.
-    private void SetFrameworkStatusIcon(bool? ready)
+    internal void SetFrameworkStatusIcon(bool? ready)
     {
-        if (ready is null)
-        {
-            FrameworkStatusIcon.Visibility = Visibility.Collapsed;
-            FrameworkStatusIcon.Source = null;
-            return;
-        }
-
-        FrameworkStatusIcon.Source = (ImageSource)FindResource(
-            ready.Value ? "GcoStatusSuccessIcon" : "GcoStatusFailureIcon");
-        FrameworkStatusIcon.Visibility = Visibility.Visible;
+        // Both WPF DrawingImages are declared in XAML. The existing verified
+        // framework preflight remains the single state authority.
+        FrameworkStatusSuccessIcon.Visibility = ready == true
+            ? Visibility.Visible : Visibility.Collapsed;
+        FrameworkStatusFailureIcon.Visibility = ready == false
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // Derive the label/surface directly from the actual, game-bound owner

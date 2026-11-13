@@ -196,6 +196,33 @@ internal static class Program
                             "Essential WPF control failed layout: " + control.Name);
                 }
 
+                // Framework readiness indicators use the owner's native vector
+                // resources directly under Game Root, never reconstructed icons.
+                var successIcon = window.FrameworkStatusSuccessIcon;
+                var failureIcon = window.FrameworkStatusFailureIcon;
+                if (successIcon.Width != 16 || successIcon.Height != 16 ||
+                    failureIcon.Width != 16 || failureIcon.Height != 16 ||
+                    !ReferenceEquals(successIcon.Source, window.FindResource("GcoStatusSuccessIcon")) ||
+                    !ReferenceEquals(failureIcon.Source, window.FindResource("GcoStatusFailureIcon")) ||
+                    successIcon.Parent is not System.Windows.Controls.Grid iconRow ||
+                    !ReferenceEquals(failureIcon.Parent, iconRow) ||
+                    !ReferenceEquals(window.DependencyText.Parent, iconRow))
+                    throw new InvalidOperationException(
+                        "Native 16x16 success/failure icons not registered on the framework status line");
+                window.SetFrameworkStatusIcon(null);
+                if (successIcon.Visibility != System.Windows.Visibility.Collapsed ||
+                    failureIcon.Visibility != System.Windows.Visibility.Collapsed)
+                    throw new InvalidOperationException("Unknown framework must hide both icons");
+                window.SetFrameworkStatusIcon(true);
+                if (successIcon.Visibility != System.Windows.Visibility.Visible ||
+                    failureIcon.Visibility != System.Windows.Visibility.Collapsed)
+                    throw new InvalidOperationException("Compatible framework did not show green check");
+                window.SetFrameworkStatusIcon(false);
+                if (successIcon.Visibility != System.Windows.Visibility.Collapsed ||
+                    failureIcon.Visibility != System.Windows.Visibility.Visible)
+                    throw new InvalidOperationException("Incompatible framework did not show red X");
+                window.SetFrameworkStatusIcon(null);
+
                 // The taller multiline-console footer must not enlarge Continue
                 // or pull it into the workflow cards. Its intrinsic height stays
                 // compact, but enabled/disabled gating and keyboard focus remain.
