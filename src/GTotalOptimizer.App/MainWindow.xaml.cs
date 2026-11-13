@@ -1148,7 +1148,10 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("Bundled profiler provenance changed.");
         var oldId = Workflow.ReadRecoverySessionId(game) ??
                     Guid.NewGuid().ToString("N");
-        var stopped = await StopOwnedPresentMonAsync(oldId);
+        // Keep the durable tracking pointer until every owner reset and
+        // pending-session abandonment succeeds. On failure, reopening GCO
+        // must still know exactly which CSV belongs to the interrupted run.
+        var stopped = await StopOwnedPresentMonAsync(oldId, clearTracking: false);
         if (!stopped.Stopped)
             throw new InvalidOperationException("Previous GCO PresentMon must stop before starting a new attempt: " +
                 stopped.Error);
@@ -1157,6 +1160,7 @@ public partial class MainWindow : Window
         var reset = await Workflow.ResetNativeOutputAsync(game);
         if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
         Workflow.AbandonCurrentUncollected(game);
+        PresentMonCaptureController.ClearTrackedCsv(packageRoot);
         var clean = await Workflow.InspectAsync(game);
         var attemptId = Workflow.BeginCaptureAttempt(game,
             observedGameAlreadyRunning: gameAlreadyRunning,

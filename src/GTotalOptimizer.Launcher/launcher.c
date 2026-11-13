@@ -69,6 +69,10 @@ static BOOL CALLBACK FindGuiWindow(HWND hwnd, LPARAM raw)
 
 static BOOL LaunchOrShowGui(void)
 {
+    // Any newly opened GUI can start a fresh game run. The prior worker has
+    // already posted completion by this point; do not carry a spent stop
+    // state across sessions when no timer event fires before GUI closes.
+    InterlockedCompareExchange(&g_stop_started, 0, 2);
     if (GuiRunning()) {
         GuiWindow data = { GetProcessId(g_ui), NULL };
         EnumWindows(FindGuiWindow, (LPARAM)&data);
