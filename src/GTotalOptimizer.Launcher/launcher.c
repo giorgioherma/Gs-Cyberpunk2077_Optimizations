@@ -204,7 +204,13 @@ static LRESULT CALLBACK TrayProc(HWND window, UINT message, WPARAM wp, LPARAM lp
             }
             return 0;
         case WM_TIMER:
-            if (wp == TRAY_TIMER && !GuiRunning() &&
+            if (wp == TRAY_TIMER && GuiRunning()) {
+                // GCO may begin another capture after collecting this one.
+                // Re-arm only after the previous stop worker has exited.
+                InterlockedCompareExchange(&g_stop_started, 0, 2);
+                return 0;
+            }
+            if (wp == TRAY_TIMER &&
                 InterlockedCompareExchange(&g_stop_started, 0, 0) == 0) {
                 wchar_t csv[MAX_PATH * 4];
                 // No CLR and no busy spin during gameplay. After game exit,

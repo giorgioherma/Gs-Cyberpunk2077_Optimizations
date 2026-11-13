@@ -161,6 +161,23 @@ public sealed class UnifiedProfilerWorkflow
         if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
             !Directory.Exists(target))
             throw new InvalidDataException("Owner archive is outside the GCO staging root.");
+        // String containment alone is insufficient if any staging ancestor
+        // is a junction. Never delete through an unverified parent.
+        var ancestor = Path.GetDirectoryName(target);
+        var package = Path.GetFullPath(packageRoot).TrimEnd(Path.DirectorySeparatorChar);
+        while (ancestor is not null &&
+            ancestor.Length >= package.Length &&
+            ancestor.StartsWith(package, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Directory.Exists(ancestor) ||
+                (File.GetAttributes(ancestor) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked or missing GCO staging ancestor refused.");
+            if (string.Equals(ancestor, package, StringComparison.OrdinalIgnoreCase))
+                break;
+            ancestor = Path.GetDirectoryName(ancestor);
+        }
+        if (ancestor is null || !string.Equals(ancestor, package, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Staging archive parent is outside package root.");
         void Check(string dir)
         {
             if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
