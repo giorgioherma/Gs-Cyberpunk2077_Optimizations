@@ -850,16 +850,34 @@ public partial class MainWindow : Window
     }
     private void ClearStatusPin() => consolePinned = null;
 
-    // Green means verified framework compatibility, red means preflight
-    // reported missing/incompatible components. Unknown remains icon-free.
-    internal void SetFrameworkStatusIcon(bool? ready)
+    // Four independent indicators reflect FrameworkPreflight's *existing*
+    // gates, not a second UI compatibility parser or a new version lock.
+    // Unknown/invalid root keeps both icons hidden for every component.
+    private void ShowFrameworkGate(FrameworkGateStatus? gate, string name,
+        Image success, Image failure, TextBlock label)
     {
-        // Both WPF DrawingImages are declared in XAML. The existing verified
-        // framework preflight remains the single state authority.
-        FrameworkStatusSuccessIcon.Visibility = ready == true
-            ? Visibility.Visible : Visibility.Collapsed;
-        FrameworkStatusFailureIcon.Visibility = ready == false
-            ? Visibility.Visible : Visibility.Collapsed;
+        success.Visibility = gate?.Ready == true ? Visibility.Visible : Visibility.Collapsed;
+        failure.Visibility = gate is { Ready: false } ? Visibility.Visible : Visibility.Collapsed;
+        label.Text = gate is null ? name + " · NOT CHECKED"
+            : gate.Ready ? name + (gate.Required == "present" ? " · PRESENT" : " " + gate.Required)
+            : !gate.Present ? name + " · MISSING"
+            : string.IsNullOrWhiteSpace(gate.Found) ? name + " · UNVERIFIED"
+            : name + " " + gate.Found + " → " + gate.Required;
+        label.Foreground = (Brush)FindResource(gate?.Ready == true ? "Yellow" : "Cyan");
+    }
+
+    internal void SetFrameworkStatuses(FrameworkPreflightResult? result)
+    {
+        FrameworkGateStatus? Gate(string key) =>
+            result?.Gates.FirstOrDefault(g => string.Equals(g.Name, key, StringComparison.Ordinal));
+        ShowFrameworkGate(Gate("CET"), "CET",
+            CetFrameworkSuccessIcon, CetFrameworkFailureIcon, CetFrameworkLabel);
+        ShowFrameworkGate(Gate("0-Engine"), "0-Engine",
+            ZeroEngineFrameworkSuccessIcon, ZeroEngineFrameworkFailureIcon, ZeroEngineFrameworkLabel);
+        ShowFrameworkGate(Gate("RED4ext"), "RED4ext",
+            Red4extFrameworkSuccessIcon, Red4extFrameworkFailureIcon, Red4extFrameworkLabel);
+        ShowFrameworkGate(Gate("redscript"), "redscript",
+            RedscriptFrameworkSuccessIcon, RedscriptFrameworkFailureIcon, RedscriptFrameworkLabel);
     }
 
     // Derive the label/surface directly from the actual, game-bound owner
@@ -923,7 +941,7 @@ public partial class MainWindow : Window
         // cached permissions before awaiting any owner status.
         if (sourceChanged)
         {
-            SetFrameworkStatusIcon(null);
+            SetFrameworkStatuses(null);
             liveState = null;
             savedCapture = null;
             InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
@@ -941,9 +959,7 @@ public partial class MainWindow : Window
         if (!current.IsValidGame)
         {
             ModCountText.Text = "Select the Cyberpunk 2077 game folder";
-            DependencyText.Text = "CET, 0-Engine, r6/scripts and RED4ext have not been checked.";
-            DependencyText.Foreground = (Brush)FindResource("Cyan");
-            SetFrameworkStatusIcon(null);
+            SetFrameworkStatuses(null);
             CetStatusText.Text = "G-CET Profiler  ·  NOT CHECKED";
             RedStatusText.Text = "G-REDscript Profiler  ·  NOT CHECKED";
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
@@ -966,7 +982,7 @@ public partial class MainWindow : Window
             InstallButton.IsEnabled = recoveryMode;
             LaunchButton.IsEnabled = CollectButton.IsEnabled =
                 ContinueButton.IsEnabled = false;
-            SetFrameworkStatusIcon(null);
+            SetFrameworkStatuses(null);
             SetStatus("GCO package verification failed. Re-extract the official build.");
             Trace.TraceError("GCO package verification: " + bundle.Detail);
             return;
@@ -985,13 +1001,9 @@ public partial class MainWindow : Window
             // No extra profiler version whitelist is needed.
             var pinnedFramework = Workflow.HasInstalledFrameworkBaseline(current.GameRoot!, state);
             var framework = pinnedFramework
-                ? new FrameworkPreflightResult(Array.Empty<string>())
+                ? FrameworkPreflightResult.FromVerifiedInstalledBaseline()
                 : FrameworkPreflight.Inspect(current.GameRoot!);
-            DependencyText.Text = framework.Ready
-                ? "CET 1.37.1  ·  0-Engine present  ·  RED4ext 1.30.0  ·  redscript 0.5.31"
-                : framework.Detail;
-            DependencyText.Foreground = (Brush)FindResource(framework.Ready ? "Yellow" : "Cyan");
-            SetFrameworkStatusIcon(framework.Ready);
+            SetFrameworkStatuses(framework);
             var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
             savedCapture = saved;
             var frame = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
@@ -1058,7 +1070,7 @@ public partial class MainWindow : Window
                 InstallButton.IsEnabled = Workflow.HasRecoveryJournal;
                 LaunchButton.IsEnabled = CollectButton.IsEnabled =
                     ContinueButton.IsEnabled = false;
-                SetFrameworkStatusIcon(null);
+                SetFrameworkStatuses(null);
                 Trace.TraceWarning("Profiler status inspection: " + ex);
                 SetStatus("Profiler status unavailable. Retry Refresh.");
             }

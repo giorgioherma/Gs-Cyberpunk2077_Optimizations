@@ -628,6 +628,25 @@ try
         badFrameworks.Detail.Contains("0-Engine/init.lua") &&
         badFrameworks.Detail.Contains("CET requires 1.37.1; found 1.38.0"),
         "all incompatible fixed frameworks and missing 0-Engine are reported");
+    Require(badFrameworks.Gates.Count == 4 &&
+        badFrameworks.Gates[0] is { Name: "CET", Ready: false, Present: true, Found: "1.38.0" } &&
+        badFrameworks.Gates[1] is { Name: "0-Engine", Ready: false, Present: false } &&
+        badFrameworks.Gates[2] is { Name: "RED4ext", Ready: false, Found: "1.31.0" } &&
+        badFrameworks.Gates[3] is { Name: "redscript", Ready: false, Found: "0.5.32" },
+        "all four framework indicators independently expose the authoritative mismatches");
+    var gameOnlyWrong = FrameworkPreflight.Evaluate(Full() with { Game = E("2.5") });
+    Require(!gameOnlyWrong.Ready && gameOnlyWrong.Gates.Count == 4 &&
+        gameOnlyWrong.Gates.All(gate => gate.Ready) &&
+        FrameworkPreflightResult.FromVerifiedInstalledBaseline().Gates.All(gate => gate.Ready),
+        "game version failure never turns valid individual framework checks red; pinned journal is verified");
+    var singleBad = FrameworkPreflight.Evaluate(Full() with { Cet = E("1.38.1") });
+    Require(!singleBad.Ready && !singleBad.Gates[0].Ready &&
+        singleBad.Gates.Skip(1).All(gate => gate.Ready),
+        "one incompatible framework turns only its own icon red while install remains blocked");
+    var unknownCompiler = FrameworkPreflight.Evaluate(Full() with { Redscript = E(null) });
+    Require(!unknownCompiler.Gates[3].Ready && unknownCompiler.Gates[3].Present &&
+        unknownCompiler.Gates.Take(3).All(gate => gate.Ready),
+        "unverifiable redscript shows its own failure without inventing a version");
     Require(!FrameworkPreflight.Evaluate(Full() with
         { Redscript = E(null) }).Ready,
         "an existing but unverifiable compiler is not declared compatible");
@@ -696,14 +715,15 @@ try
             "RED4ext requires 1.30.0; found 1.31.0",
             "redscript requires 0.5.31; found 0.5.32"
         }));
-    Require(frameworkGuide.Split('\n').Length == 6 &&
+    Require(!frameworkGuide.Contains('\n') &&
         frameworkGuide.Contains("Cyberpunk 2077 2.31 required; found 2.5") &&
         frameworkGuide.Contains("CET requires 1.37.1; found 1.38.1") &&
         frameworkGuide.Contains("0-Engine: missing init.lua") &&
         frameworkGuide.Contains("RED4ext requires 1.30.0; found 1.31.0") &&
         frameworkGuide.Contains("redscript requires 0.5.31; found 0.5.32") &&
-        frameworkGuide.Split('\n').All(line => line.Length <= UserFacingConsoleText.MaxLength),
-        "console lists every blocker and required/found framework version in separate bounded rows");
+        frameworkGuide.Length > UserFacingConsoleText.MaxLength &&
+        UserFacingConsoleText.Render(frameworkGuide) == frameworkGuide,
+        "every framework blocker flows across the available console width without truncation or hard line breaks");
     Require(UserFacingConsoleText.FrameworkGuidance(new(Array.Empty<string>()))
             == "Frameworks verified. Click INSTALL PROFILERS." &&
         UserFacingConsoleText.FrameworkGuidance(new(

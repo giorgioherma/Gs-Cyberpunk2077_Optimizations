@@ -9,6 +9,7 @@ public static class UserFacingConsoleText
 {
     public const int MaxLength = 108;
     public const int MaxGuidanceLines = 6;
+    private const string FrameworkBlocked = "INSTALL BLOCKED — ";
 
     public static string Compact(string text)
     {
@@ -22,6 +23,17 @@ public static class UserFacingConsoleText
     // Bound unexpected backend output; preserve distinct authored guidance rows.
     public static string Render(string text)
     {
+        // Authored framework guidance is a bounded, single flowing paragraph:
+        // let WPF wrap it at the available console width, not at 108 chars
+        // or at hardcoded line breaks intended for a narrow previous footer.
+        // This exception applies only to the structured five-gate preflight;
+        // arbitrary backend output remains compact/bounded below.
+        if (text?.StartsWith(FrameworkBlocked, StringComparison.Ordinal) == true)
+        {
+            var singleLine = Regex.Replace(text, @"\s+", " ").Trim();
+            return singleLine.Length <= 768 ? singleLine : singleLine[..767] + "…";
+        }
+
         var lines = (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries |
             StringSplitOptions.TrimEntries);
         return string.Join("\n", lines.Take(MaxGuidanceLines).Select(Compact));
@@ -32,9 +44,10 @@ public static class UserFacingConsoleText
     public static string FrameworkGuidance(FrameworkPreflightResult result)
     {
         if (result.Ready) return "Frameworks verified. Click INSTALL PROFILERS.";
-        var rows = new List<string> { "INSTALL BLOCKED — fix these requirements:" };
-        rows.AddRange(result.Issues.Select(DescribeFrameworkIssue));
-        return Render(string.Join("\n", rows));
+        // Keep all authoritative required/found values while letting the
+        // console consume its actual width up to Continue at every window size.
+        var issues = result.Issues.Select(DescribeFrameworkIssue);
+        return Render(FrameworkBlocked + string.Join("  |  ", issues));
     }
 
     private static string DescribeFrameworkIssue(string raw)

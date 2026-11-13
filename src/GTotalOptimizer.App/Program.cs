@@ -223,6 +223,23 @@ internal static class Program
                     throw new InvalidOperationException("Incompatible framework did not show red X");
                 window.SetFrameworkStatusIcon(null);
 
+                // The short normal message and longer structured framework
+                // guidance both use the full native ScrollViewer viewport.
+                // Continue retains its own separate column.
+                if (System.Windows.Data.BindingOperations.GetBindingExpression(
+                        window.StatusText, System.Windows.FrameworkElement.WidthProperty)
+                        ?.ParentBinding.Path?.Path != "ViewportWidth" ||
+                    window.CaptureConsoleScroll.HorizontalAlignment !=
+                        System.Windows.HorizontalAlignment.Stretch)
+                    throw new InvalidOperationException(
+                        "Capture console must wrap at its actual width, not at bitmap/short-line width");
+                var viewportWidth = window.CaptureConsoleScroll.ViewportWidth;
+                if (viewportWidth > 1 &&
+                    Math.Abs(window.StatusText.ActualWidth - viewportWidth) > 2)
+                    throw new InvalidOperationException(
+                        $"Console does not fill available width: text={window.StatusText.ActualWidth:F1}, " +
+                        $"viewport={viewportWidth:F1}");
+
                 // The taller multiline-console footer must not enlarge Continue
                 // or pull it into the workflow cards. Its intrinsic height stays
                 // compact, but enabled/disabled gating and keyboard focus remain.

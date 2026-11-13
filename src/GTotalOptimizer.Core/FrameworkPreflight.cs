@@ -9,10 +9,31 @@ public sealed record FrameworkEvidence(bool Present, string? Version, bool Struc
 public sealed record GameFrameworkEvidence(
     FrameworkEvidence Game, FrameworkEvidence Cet, FrameworkEvidence ZeroEngine,
     FrameworkEvidence Red4ext, FrameworkEvidence Redscript);
+// Individual UI indicators come from the SAME version/structure checks used
+// for admission. This is diagnostic evidence, never an independent allow-list.
+public sealed record FrameworkGateStatus(
+    string Name, string Required, bool Present, string? Found, bool Ready);
+
 public sealed record FrameworkPreflightResult(IReadOnlyList<string> Issues)
 {
     public bool Ready => Issues.Count == 0;
     public string Detail => Ready ? "Cyberpunk 2.31 frameworks verified." : string.Join("  |  ", Issues);
+    public IReadOnlyList<FrameworkGateStatus> Gates { get; init; } = Array.Empty<FrameworkGateStatus>();
+
+    // The source-owner installation journal keeps a previously verified
+    // framework baseline while active profiler files temporarily replace the
+    // stock loader. A pinned baseline is verified, not a fresh disk scan.
+    public static FrameworkPreflightResult FromVerifiedInstalledBaseline() =>
+        new(Array.Empty<string>())
+        {
+            Gates = new FrameworkGateStatus[]
+            {
+                new("CET", "1.37.1", true, "1.37.1", true),
+                new("0-Engine", "present", true, null, true),
+                new("RED4ext", "1.30.0", true, "1.30.0", true),
+                new("redscript", "0.5.31", true, "0.5.31", true)
+            }
+        };
 }
 
 // This deliberately small list is for reporting known redscript scc.exe builds,
@@ -99,15 +120,33 @@ public static class FrameworkPreflight
     {
         var problems = new List<string>();
         Check(installed.Game, "Cyberpunk 2077", "2.31", problems, game: true);
+
+        // Evaluate each gate exactly once against the existing admission logic.
+        // Measure whether the SAME check added an issue; do not parse error
+        // strings or invent a separate UI compatibility decision.
+        var count = problems.Count;
         Check(installed.Cet, "CET", "1.37.1", problems);
-        // Only require the CET mod folder and init.lua. This flag is
-        // populated by InspectZeroEngine; no version or injection checks.
-        // CET's Resolver/Generator owns source and module injection compatibility.
+        var cet = new FrameworkGateStatus("CET", "1.37.1",
+            installed.Cet.Present, installed.Cet.Version, problems.Count == count);
+
+        // 0-Engine is presence-only: folder + init.lua, with no version lock.
+        // CET's Resolver owns all remaining module/source compatibility.
         if (!installed.ZeroEngine.Present)
             problems.Add("0-Engine is missing from CET mods (expected 0-Engine/init.lua)");
+        var engine = new FrameworkGateStatus("0-Engine", "present",
+            installed.ZeroEngine.Present, null, installed.ZeroEngine.Present);
+
+        count = problems.Count;
         Check(installed.Red4ext, "RED4ext", "1.30.0", problems);
+        var red4 = new FrameworkGateStatus("RED4ext", "1.30.0",
+            installed.Red4ext.Present, installed.Red4ext.Version, problems.Count == count);
+
+        count = problems.Count;
         Check(installed.Redscript, "redscript", "0.5.31", problems);
-        return new(problems);
+        var redscript = new FrameworkGateStatus("redscript", "0.5.31",
+            installed.Redscript.Present, installed.Redscript.Version, problems.Count == count);
+
+        return new(problems) { Gates = new[] { cet, engine, red4, redscript } };
     }
 
     private static string? PeVersion(string path, bool productOnly = false)

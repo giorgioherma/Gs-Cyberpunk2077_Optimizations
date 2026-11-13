@@ -591,27 +591,100 @@
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </Grid>
-                                    <!-- Keep the existing 16-DIP framework line; only
-                                         insert the icon in the line itself. -->
-                                    <Grid Height="16">
+                                    <!-- Four independently verified framework gates share the
+                                         existing 16-DIP preflight line. No extra row or
+                                         change to the locked Game Root panel geometry. -->
+                                    <Grid x:Name="FrameworkChecksRow" Height="16">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="1.05*"/>
+                                            <ColumnDefinition Width="0.87*"/>
+                                            <ColumnDefinition Width="1.14*"/>
+                                            <ColumnDefinition Width="1.2*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Image x:Name="FrameworkStatusSuccessIcon"
-                                               Source="{StaticResource GcoStatusSuccessIcon}"
-                                               Width="16" Height="16" Margin="0,0,4,0"
-                                               VerticalAlignment="Center" SnapsToDevicePixels="True"
-                                               IsHitTestVisible="False" Visibility="Collapsed"/>
-                                        <Image x:Name="FrameworkStatusFailureIcon"
-                                               Source="{StaticResource GcoStatusFailureIcon}"
-                                               Width="16" Height="16" Margin="0,0,4,0"
-                                               VerticalAlignment="Center" SnapsToDevicePixels="True"
-                                               IsHitTestVisible="False" Visibility="Collapsed"/>
-                                        <TextBlock x:Name="DependencyText" Grid.Column="1"
-                                                   Foreground="{StaticResource Cyan}"
-                                                   Height="16" VerticalAlignment="Center"
-                                                   FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                        <Grid Grid.Column="0" Margin="0,0,2,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Image x:Name="CetFrameworkSuccessIcon"
+                                                   Source="{StaticResource GcoStatusSuccessIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <Image x:Name="CetFrameworkFailureIcon"
+                                                   Source="{StaticResource GcoStatusFailureIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <TextBlock x:Name="CetFrameworkLabel" Grid.Column="1"
+                                                       Text="CET · NOT CHECKED"
+                                                       Foreground="{StaticResource Cyan}"
+                                                       VerticalAlignment="Center" FontSize="11.5"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                        <Grid Grid.Column="1" Margin="6,0,2,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Image x:Name="ZeroEngineFrameworkSuccessIcon"
+                                                   Source="{StaticResource GcoStatusSuccessIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <Image x:Name="ZeroEngineFrameworkFailureIcon"
+                                                   Source="{StaticResource GcoStatusFailureIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <TextBlock x:Name="ZeroEngineFrameworkLabel" Grid.Column="1"
+                                                       Text="0-Engine · NOT CHECKED"
+                                                       Foreground="{StaticResource Cyan}"
+                                                       VerticalAlignment="Center" FontSize="11.5"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                        <Grid Grid.Column="2" Margin="6,0,2,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Image x:Name="Red4extFrameworkSuccessIcon"
+                                                   Source="{StaticResource GcoStatusSuccessIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <Image x:Name="Red4extFrameworkFailureIcon"
+                                                   Source="{StaticResource GcoStatusFailureIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <TextBlock x:Name="Red4extFrameworkLabel" Grid.Column="1"
+                                                       Text="RED4ext · NOT CHECKED"
+                                                       Foreground="{StaticResource Cyan}"
+                                                       VerticalAlignment="Center" FontSize="11.5"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                        <Grid Grid.Column="3" Margin="6,0,2,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Image x:Name="RedscriptFrameworkSuccessIcon"
+                                                   Source="{StaticResource GcoStatusSuccessIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <Image x:Name="RedscriptFrameworkFailureIcon"
+                                                   Source="{StaticResource GcoStatusFailureIcon}"
+                                                   Width="16" Height="16" Margin="0,0,3,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                                   Visibility="Collapsed"/>
+                                            <TextBlock x:Name="RedscriptFrameworkLabel" Grid.Column="1"
+                                                       Text="redscript · NOT CHECKED"
+                                                       Foreground="{StaticResource Cyan}"
+                                                       VerticalAlignment="Center" FontSize="11.5"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
                                     </Grid>
                                     <StackPanel Orientation="Horizontal" Margin="1,1,0,0" Height="16">
                                         <TextBlock x:Name="CetStatusText" Style="{StaticResource SmallStatus}"
@@ -651,6 +724,9 @@
                                      clip sits inside the existing perimeter stroke. -->
                                 <Image x:Name="StepOneCardArtwork" Tag="{Binding ElementName=InstallButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
+                                       Width="{Binding ActualWidth, ElementName=StepOneOutline}"
+                                       Height="{Binding ActualHeight, ElementName=StepOneOutline}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                        fx:ChamferClip.CornerCut="14"
                                        fx:ChamferClip.AllCorners="True"/>
                                 <Grid Margin="12,10,12,12">
@@ -698,6 +774,9 @@
                                      clip sits inside the existing perimeter stroke. -->
                                 <Image x:Name="StepTwoCardArtwork" Tag="{Binding ElementName=LaunchButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
+                                       Width="{Binding ActualWidth, ElementName=StepTwoOutline}"
+                                       Height="{Binding ActualHeight, ElementName=StepTwoOutline}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                        fx:ChamferClip.CornerCut="14"
                                        fx:ChamferClip.AllCorners="True"/>
                                 <Grid Margin="12,10,12,12">
@@ -752,6 +831,9 @@
                                      clip sits inside the existing perimeter stroke. -->
                                 <Image x:Name="StepThreeCardArtwork" Tag="{Binding ElementName=CollectButton}"
                                        Style="{StaticResource WorkflowCardArtwork}"
+                                       Width="{Binding ActualWidth, ElementName=StepThreeOutline}"
+                                       Height="{Binding ActualHeight, ElementName=StepThreeOutline}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                        fx:ChamferClip.CornerCut="14"
                                        fx:ChamferClip.AllCorners="True"/>
                                 <Grid Margin="12,10,12,12">
@@ -807,10 +889,11 @@
                              standard one-line status centered in this space. -->
                         <ScrollViewer x:Name="CaptureConsoleScroll" FocusVisualStyle="{x:Null}"
                                       Margin="25,0,5,0" MaxHeight="80"
-                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <TextBlock x:Name="StatusText" Foreground="#BFE0E6"
+                                       Width="{Binding ViewportWidth, ElementName=CaptureConsoleScroll}"
                                        FontSize="12.5" LineHeight="16.5"
                                        TextWrapping="Wrap"
                                        Text="Select the Cyberpunk 2077 game folder."/>
