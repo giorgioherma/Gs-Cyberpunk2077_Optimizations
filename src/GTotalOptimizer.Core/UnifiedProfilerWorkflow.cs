@@ -504,6 +504,15 @@ public sealed class UnifiedProfilerWorkflow
         {
             if (!OwnsSession(game))
                 return new(false, "No matching GCO ownership journal. Use the authoritative standalone manager for recovery.");
+            // Explicit RESTORE forfeits temporary results independently of
+            // whether either profiler can finish restoring original files.
+            // Never delete a CSV while its elevated writer may still run.
+            string? discardError = null;
+            if (pendingPresentMonStopped && HasCaptureAttempt(game))
+            {
+                try { AbandonCurrentUncollected(game); }
+                catch (Exception ex) { discardError = ex.Message; }
+            }
             // Always attempt BOTH owner restores. A damaged status journal or
             // failure in one owner must never prevent restoring the other.
             // The only success authority is the independently re-inspected
@@ -560,12 +569,10 @@ public sealed class UnifiedProfilerWorkflow
                 return new(false,
                     "Original profiler files restored. PresentMon shutdown is not verified; " +
                     "retry RESTORE to finish capture cleanup. Recovery journal preserved.");
-            if (HasCaptureAttempt(game))
-            {
-                // Only unsealed output is disposable. An explicitly COLLECTED
-                // archive remains immutable in the app's RESULTS directory.
-                AbandonCurrentUncollected(game);
-            }
+            if (discardError is not null)
+                return new(false,
+                    "Original profiler files restored. Temporary capture cleanup needs retry: " +
+                    discardError + ". Recovery journal preserved.");
             File.Delete(Journal);
             return new(true, "Both owners verified restoration of original game state." +
                 (evidenceFolder is null ? "" : " Diagnostics preserved at: " + evidenceFolder) +
