@@ -492,3 +492,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-13 — v1.2.5 promotion approved
 
 - Explicit owner version-only promotion on unified `main`; `Directory.Build.props` is the sole product version source. **[Integrated Windows CI #304](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43486488225) SUCCESS, 282/282**, exact source `492477541db6490b39f2598bb0513e7c09967dd7`; artifact **14067103464**, `Gs-Cyberpunk2077_Optimizer-v1.2.5-run304-a1`. UI and CET/GRSP source components unchanged; no release tag or new workflow. User visual/gameplay acceptance still pending.
+
+## 2026-11-13 — stage hover expansion limited strictly to Maximized
+
+- Owner explicitly clarified the stage-button cyan hover outline needs a modest enlargement **only in fullscreen/maximized mode**. The approved Normal window hover, 760×112 native owner SVGs, actual button size and all card/section layout properties remain locked. Width is still constrained by the real button slot to prevent the earlier full-row overflow.
+- Implemented in source `f96ecea` with the original shared hover converter receiving `Window.WindowState`; Windows [CI #305](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43491019935) **SUCCESS**, 282/282 contracts and the native WPF normal/maximized/normal pixel-identity smoke. The adjusted fullscreen visual itself remains subject to owner screenshot approval. v1.2.5 unchanged.
