@@ -238,19 +238,24 @@ internal static class Program
                 {
                     button.UpdateLayout();
                     card.UpdateLayout();
-                    var name = active ? "Active_card_background.png" : "Inactive_card_background.png";
-                    if (!ReferenceEquals(card.Tag, button) ||
-                        card.Source is not System.Windows.Media.Imaging.BitmapImage bitmap ||
-                        bitmap.UriSource is null ||
-                        !bitmap.UriSource.OriginalString.EndsWith(name, StringComparison.Ordinal) ||
-                        card.Stretch != System.Windows.Media.Stretch.UniformToFill ||
-                        card.Clip is null ||
-                        !card.Clip.FillContains(new System.Windows.Point(card.ActualWidth / 2,
-                            card.ActualHeight / 2)) ||
-                        card.Clip.FillContains(new System.Windows.Point(0, 0)))
+                    var name = active ? "ActiveCardBitmap" : "InactiveCardBitmap";
+                    var expected = (System.Windows.Media.Imaging.BitmapSource)
+                        card.FindResource(name);
+                    var sameSource = ReferenceEquals(card.Source, expected);
+                    var sameButton = ReferenceEquals(card.Tag, button);
+                    var crop = card.Stretch == System.Windows.Media.Stretch.UniformToFill;
+                    var clipped = card.Clip is not null &&
+                        card.ActualWidth > 0 && card.ActualHeight > 0 &&
+                        card.Clip.FillContains(new System.Windows.Point(card.ActualWidth / 2,
+                            card.ActualHeight / 2)) &&
+                        !card.Clip.FillContains(new System.Windows.Point(0, 0));
+                    if (!sameButton || !sameSource || !crop || !clipped)
                         throw new InvalidOperationException(
-                            "Card image must use the correct button state, centered proportional crop and a chamfer clip: " +
-                            card.Name + "/" + name);
+                            $"Card artwork state/crop/clip mismatch: {card.Name}, " +
+                            $"button={sameButton}, bitmap={sameSource}, crop={crop}, clip={clipped}, " +
+                            $"imageType={card.Source?.GetType().Name}, " +
+                            $"expectedType={expected.GetType().Name}, " +
+                            $"size={card.ActualWidth:F1}x{card.ActualHeight:F1}, state={name}");
                     button.ApplyTemplate();
                     var hover = button.Template.FindName("StageHover", button)
                         as GTotalOptimizer.App.Visuals.ChamferOutline;

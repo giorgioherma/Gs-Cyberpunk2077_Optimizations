@@ -16,6 +16,12 @@
                 <ResourceDictionary Source="/Status/GcoStatusIcons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         <fx:StageHoverWidthConverter x:Key="StageHoverWidth"/>
+        <!-- Explicit immutable PNG sources. Sharing them through StaticResource
+             makes source identity and Restore transitions deterministic. -->
+        <BitmapImage x:Key="ActiveCardBitmap"
+                     UriSource="pack://application:,,,/CardArtwork/Active_card_background.png"/>
+        <BitmapImage x:Key="InactiveCardBitmap"
+                     UriSource="pack://application:,,,/CardArtwork/Inactive_card_background.png"/>
         <!-- The same source PNGs render beneath each card's existing chamfer.
              IsEnabled + Restore Tag are read from the original stage button. -->
         <Style x:Key="WorkflowCardArtwork" TargetType="{x:Type Image}">
@@ -24,14 +30,14 @@
             <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
             <Setter Property="ClipToBounds" Value="True"/>
-            <Setter Property="Source" Value="pack://application:,,,/CardArtwork/Inactive_card_background.png"/>
+            <Setter Property="Source" Value="{StaticResource InactiveCardBitmap}"/>
             <Style.Triggers>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
                         <Condition Binding="{Binding Tag.IsEnabled, RelativeSource={RelativeSource Self}}" Value="True"/>
                         <Condition Binding="{Binding Tag.Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Source" Value="pack://application:,,,/CardArtwork/Active_card_background.png"/>
+                    <Setter Property="Source" Value="{StaticResource ActiveCardBitmap}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
