@@ -1162,6 +1162,19 @@ try
         !Directory.Exists(replayFolder),
         "hash-indexed PresentMon-only evidence remains discardable before successful Collect");
 
+    // A crashed collector can leave one validated native copy in the temp
+    // attempt but no committed collection marker. Capture Again may remove it.
+    var interruptedId = Guid.NewGuid().ToString("N");
+    var interruptedFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        replayRoot, interruptedId, new DateTimeOffset(2026, 11, 13, 19, 15, 1,
+            TimeSpan.FromHours(1)), replayGame);
+    var interrupted = CollectedCaptureStore.CopyOwner(replayRoot, replayGame,
+        interruptedId, BackendKind.Cet, cetSource);
+    Require(interrupted.Cet is not null && !interrupted.CollectionAttempted &&
+        CollectedCaptureStore.DiscardUncollected(replayRoot, replayGame, interruptedId) &&
+        !Directory.Exists(interruptedFolder),
+        "partially copied but unsealed native archive is discardable only on an explicit new run");
+
     Require(!ComponentBundleVerifier.Inspect(bundleDir).Detail.Contains("schema invalid"),
         "full payload manifest has current schema");
     File.AppendAllText(cetBundleExe, "tamper");

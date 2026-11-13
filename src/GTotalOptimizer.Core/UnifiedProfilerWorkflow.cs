@@ -343,9 +343,8 @@ public sealed class UnifiedProfilerWorkflow
             return false;
         var id = SessionId();
         var state = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
-        if (state.CollectionAttempted || state.Cet is not null ||
-            state.Redscript is not null || state.Restored)
-            return false;
+        if (state.CollectionAttempted || state.Restored)
+            return false; // incomplete/partially copied evidence stays abandonable
         var discarded = CollectedCaptureStore.DiscardUncollected(packageRoot, game, id);
         WriteJournal(game, "both-installed");
         return discarded;

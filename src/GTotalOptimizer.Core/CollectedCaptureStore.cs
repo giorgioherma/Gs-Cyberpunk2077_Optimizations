@@ -142,9 +142,8 @@ public static class CollectedCaptureStore
         var folder = SessionFolder(root, id);
         if (!Directory.Exists(folder)) return false;
         var index = Read(root, game, id, verifyHashes: true);
-        if (index.CollectionAttempted || index.Cet is not null ||
-            index.Redscript is not null || index.Restored)
-            return false;
+        if (index.CollectionAttempted || index.Restored)
+            return false; // only a sealed Collect makes evidence permanent
         static void CheckTree(string directory)
         {
             if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
@@ -157,25 +156,59 @@ public static class CollectedCaptureStore
             }
         }
         CheckTree(folder);
-        // Refuse extra manual evidence even when the session was never
-        // explicitly collected; only GCO's known temporary files qualify.
+        // An interrupted Collect may already have hash-indexed CET/GRSP
+        // copies. They are still temporary until MarkCollectionAttempted,
+        // but ALL indexed paths must match exactly before deletion.
+        var owned = new Dictionary<string, CollectedOwner>(StringComparer.OrdinalIgnoreCase);
+        if (index.Cet is not null)
+            owned.Add(DomainFolder(root, id, "CET"), index.Cet);
+        if (index.Redscript is not null)
+            owned.Add(DomainFolder(root, id, "REDscript"), index.Redscript);
+        foreach (var (domainRoot, owner) in owned)
+        {
+            if (!Directory.Exists(domainRoot))
+                throw new InvalidDataException("Indexed owner archive missing; refusing discard.");
+            var actual = Directory.EnumerateFiles(domainRoot, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(domainRoot, path)
+                    .Replace(Path.DirectorySeparatorChar, '/'))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var expected = owner.Files.Select(file => file.Path)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!actual.SetEquals(expected))
+                throw new InvalidDataException("Unindexed owner file would be removed; refusing discard.");
+            var expectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in owner.Files)
+            {
+                var parent = Path.GetDirectoryName(file.Path.Replace('/', Path.DirectorySeparatorChar));
+                while (!string.IsNullOrWhiteSpace(parent))
+                {
+                    expectedDirs.Add(parent.Replace(Path.DirectorySeparatorChar, '/'));
+                    parent = Path.GetDirectoryName(parent);
+                }
+            }
+            foreach (var dir in Directory.EnumerateDirectories(domainRoot, "*", SearchOption.AllDirectories))
+                if (!expectedDirs.Contains(Path.GetRelativePath(domainRoot, dir)
+                        .Replace(Path.DirectorySeparatorChar, '/')))
+                    throw new InvalidDataException("Unindexed owner directory would be removed.");
+        }
         foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
         {
             if (Directory.Exists(entry) &&
-                Path.GetFileName(entry) is not ("PresentMon" or "FrameTime"))
-                throw new InvalidDataException(
-                    "Unrecognized capture directory; preserving contents: " + entry);
+                Path.GetFileName(entry) is not ("PresentMon" or "FrameTime") &&
+                !owned.ContainsKey(entry))
+                throw new InvalidDataException("Unrecognized capture directory; preserving: " + entry);
             if (File.Exists(entry) &&
-                !Path.GetFileName(entry).Equals("collection.json",
-                    StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException(
-                    "Unrecognized capture evidence; preserving: " + entry);
+                !Path.GetFileName(entry).Equals("collection.json", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Unrecognized capture file; preserving: " + entry);
         }
-        foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
-            if (Path.GetFileName(file) is not ("PresentMon.csv" or "PresentMon-controller.json"
-                                              or "collection.json"))
-                throw new InvalidDataException(
-                    "Unrecognized uncollected capture file; preserving: " + file);
+        foreach (var entry in new[] { "PresentMon", "FrameTime" })
+        {
+            var scratch = Path.Combine(folder, entry);
+            if (!Directory.Exists(scratch)) continue;
+            foreach (var file in Directory.EnumerateFiles(scratch, "*", SearchOption.AllDirectories))
+                if (Path.GetFileName(file) is not ("PresentMon.csv" or "PresentMon-controller.json"))
+                    throw new InvalidDataException("Unknown frame-time scratch file; preserving: " + file);
+        }
         Directory.Delete(folder, recursive: true);
         return true;
     }
