@@ -71,7 +71,32 @@ foreach ($project in @(
   $text=$text.Replace('<TargetFramework>net8.0-windows</TargetFramework>','<TargetFramework>net10.0-windows</TargetFramework>')
   Set-Content $project $text -Encoding UTF8
 }
-# Native DLLs continue to come from exact verified owner packages above.
+# GCO-only adaptations run against pinned, disposable vendor source. The original
+# downloaded packages and both standalone repositories remain unchanged.
+if ($Integrated) {
+  & ./integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1
+  if ($LASTEXITCODE -ne 0) { throw 'GCO owner source adaptation failed' }
+  # Compile the GCO-specific native GRSP protocol from the exact source pin.
+  # The official release Cargo.lock accompanies the verified release package.
+  $lock=Join-Path $grSource 'docs/Cargo.lock'
+  if (!(Test-Path $lock -PathType Leaf)) { throw 'Pinned GRSP Cargo.lock absent from verified release' }
+  Copy-Item $lock 'vendor-grsp/Cargo.lock' -Force
+  Push-Location 'vendor-grsp'
+  try {
+    & cargo build --release --locked
+    if ($LASTEXITCODE -ne 0) { throw 'GCO-specific GRSP native build failed' }
+  } finally { Pop-Location }
+  $native=Join-Path 'vendor-grsp/target/release' 'g_redscript_profiler.dll'
+  if (!(Test-Path $native -PathType Leaf)) { throw 'GCO GRSP native DLL missing after source build' }
+  Copy-Item $native (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Force
+  $grManifest=Join-Path $gr 'MANIFEST.json'
+  $grMetadata=Get-Content $grManifest -Raw | ConvertFrom-Json
+  $grMetadata.shutdown_behavior='GCO: incomplete captures discarded; explicit F11 stop required'
+  $grMetadata.total_profiler_contract.total_specific_profiler_variant=$true
+  $grMetadata.total_profiler_contract.consume_exact_release_unchanged=$false
+  $grMetadata | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $grManifest -Encoding UTF8
+  Write-Host 'PASS GCO-only source-built GRSP native F11 completion protocol'
+}
 function PublishManager([string]$Csproj, [string]$Dest) {
   & dotnet publish $Csproj -c Release -r win-x64 --self-contained false -p:SelfContained=false -p:PublishSingleFile=false -p:PublishTrimmed=false -o $Dest
   if ($LASTEXITCODE -ne 0) { throw "Manager net10 retarget failed: $Csproj" }
@@ -254,8 +279,8 @@ GetExact 'https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/Pre
 Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6.0/LICENSE.txt' -OutFile (Join-Path $pm 'LICENSE-PresentMon.txt')
 Write-Host 'PASS official PresentMon CLI 2.6.0'
 
-# One coreclr in entire bundle. Stable released GRSP and CET native DLLs were
-# not recompiled, and no original third-party mod source is shipped.
+# One coreclr in entire bundle. CET native payload remains source-owned and pinned.
+# Integrated GRSP native payload is built from its pinned source with GCO-only F11 semantics.
 $core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
 if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Expected one shared .NET runtime; found $($core.Count)"
@@ -272,7 +297,7 @@ Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
 $provenance=@{
   testOnly=$true
   cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
-  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead' }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; gcoNativeVariant=$Integrated; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
