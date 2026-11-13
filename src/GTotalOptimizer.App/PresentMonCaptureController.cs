@@ -101,15 +101,37 @@ internal static class PresentMonCaptureController
     {
         var ownedCsv = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
         var resultPath = Path.Combine(Path.GetDirectoryName(ownedCsv)!, ResultName);
+        // A crashed/missing controller report must not strand Restore when
+        // no PresentMon process exists anywhere to keep the CSV open.
+        // If a writer is still present, fail closed without owner proof.
+        static bool AnyPresentMon()
+        {
+            var found = Process.GetProcessesByName("PresentMon");
+            try { return found.Length != 0; }
+            finally { foreach (var process in found) process.Dispose(); }
+        }
         if (!File.Exists(resultPath))
-            throw new InvalidDataException("PresentMon startup proof is missing. Retry after the game closes.");
-        using var proof = JsonDocument.Parse(File.ReadAllText(resultPath));
-        var item = proof.RootElement;
-        if (!item.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True ||
-            !item.TryGetProperty("action", out var action) || action.GetString() != "restart" ||
-            !item.TryGetProperty("pid", out var pidNode) ||
-            !pidNode.TryGetInt32(out var pid) || pid <= 0)
-            throw new InvalidDataException("PresentMon startup proof is incomplete.");
+        {
+            if (!AnyPresentMon()) return;
+            throw new InvalidDataException("PresentMon startup proof is missing; stop remains unverified.");
+        }
+        int pid;
+        try
+        {
+            using var proof = JsonDocument.Parse(File.ReadAllText(resultPath));
+            var item = proof.RootElement;
+            if (!item.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True ||
+                !item.TryGetProperty("action", out var action) || action.GetString() != "restart" ||
+                !item.TryGetProperty("pid", out var pidNode) ||
+                pidNode.ValueKind != JsonValueKind.Number ||
+                !pidNode.TryGetInt32(out pid) || pid <= 0)
+                throw new InvalidDataException("PresentMon startup proof is incomplete.");
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
+        {
+            if (!AnyPresentMon()) return;
+            throw;
+        }
         // Enumerate PIDs instead of opening an elevated process handle.
         // PROCESS_SYNCHRONIZE/MainModule can be denied to non-admin WPF;
         // enumeration of the exact startup-reported PID does not require
