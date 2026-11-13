@@ -78,11 +78,12 @@ public static class ComponentCommandParser
 public sealed class ComponentCommandRunner
 {
     public async Task<ComponentCommandResult> RunAsync(BackendKind kind, string executable,
-        string command, string? gameRoot, CancellationToken token, string? capture = null)
+        string command, string? gameRoot, CancellationToken token, string? capture = null,
+        string? resultsRoot = null)
     {
         if (!File.Exists(executable))
             return new(kind, command, false, "Standalone component executable missing.");
-        if (!new[] { "status", "install", "collect", "restore", "emergency-restore", "report" }.Contains(command))
+        if (!new[] { "status", "install", "collect", "discard-live", "restore", "emergency-restore", "report" }.Contains(command))
             return new(kind, command, false, "Unsupported standalone command.");
         if (command != "report" && string.IsNullOrWhiteSpace(gameRoot))
             return new(kind, command, false, "A verified game root is required.");
@@ -110,6 +111,14 @@ public sealed class ComponentCommandRunner
             process.StartInfo.ArgumentList.Add(gameRoot!);
         }
         process.StartInfo.ArgumentList.Add("--json");
+        // Only GCO's disposable, source-built managers recognize this collect
+        // destination. The staging path is created under the active session.
+        if (command == "collect" && !string.IsNullOrWhiteSpace(resultsRoot))
+        {
+            if (!Path.IsPathFullyQualified(resultsRoot))
+                return new(kind, command, false, "Collection staging root must be absolute.");
+            process.StartInfo.Environment["GCO_COMPONENT_RESULTS_ROOT"] = Path.GetFullPath(resultsRoot);
+        }
 
         try
         {
