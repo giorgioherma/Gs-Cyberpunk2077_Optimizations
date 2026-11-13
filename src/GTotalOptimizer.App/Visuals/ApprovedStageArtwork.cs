@@ -103,14 +103,16 @@ public sealed class ApprovedStageArtwork : SvgViewbox
 }
 
 /// <summary>
-/// Keep the approved Normal hover width identical to the uniform SVG viewport.
-/// Only a genuinely maximized window adds a small centered allowance around
-/// the visible shell; never expand to the full button row width.
+/// Preserve the original Normal hover footprint. In Maximized, the glow
+/// must enclose the actual SVG shell vertically as well as horizontally,
+/// without stretching the button art or the 45-degree chamfer geometry.
 /// </summary>
 public sealed class StageHoverWidthConverter : IMultiValueConverter
 {
-    // An outline centered over the SVG, not another full-card button frame.
+    // Additional full-frame clearance is split equally on opposing sides.
+    // The fixed Normal window receives neither allowance.
     private const double MaximizedHaloWidthAllowance = 18.0;
+    private const double MaximizedHaloHeightAllowance = 12.0;
 
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
     {
@@ -122,7 +124,10 @@ public sealed class StageHoverWidthConverter : IMultiValueConverter
             return DependencyProperty.UnsetValue;
 
         var normalWidth = Math.Min(availableWidth, height * (760.0 / 112.0));
-        return values.Length >= 3 && values[2] is WindowState.Maximized
+        var maximized = values.Length >= 3 && values[2] is WindowState.Maximized;
+        if (string.Equals(parameter as string, "Height", StringComparison.Ordinal))
+            return maximized ? height + MaximizedHaloHeightAllowance : height;
+        return maximized
             ? Math.Min(availableWidth, normalWidth + MaximizedHaloWidthAllowance)
             : normalWidth;
     }

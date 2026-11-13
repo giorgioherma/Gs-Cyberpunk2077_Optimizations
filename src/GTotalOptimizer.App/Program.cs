@@ -530,6 +530,34 @@ internal static class Program
                 shown.Show();
                 DrainDispatcher();
                 DrainDispatcher();
+                // The owner's three 760x112 SVGs all paint inside their
+                // viewport. The hover must surround their full height in
+                // Maximized (the width-only #305 edit could cross the shell).
+                // Normal must retain its original zero-overhang layout.
+                static void CheckStageHoverVertical(System.Windows.Controls.Button button,
+                    bool maximized)
+                {
+                    button.ApplyTemplate();
+                    button.UpdateLayout();
+                    var hover = button.Template.FindName("StageHover", button)
+                        as GTotalOptimizer.App.Visuals.ChamferOutline
+                        ?? throw new InvalidOperationException(
+                            "Native WPF stage hover not found: " + button.Name);
+                    var overhang = hover.ActualHeight - button.ActualHeight;
+                    var origin = hover.TranslatePoint(new System.Windows.Point(0, 0), button);
+                    if (button.ActualHeight <= 0 || hover.ActualWidth <= 0 ||
+                        (maximized && (overhang <= 0 || origin.Y >= 0 ||
+                            origin.Y + hover.ActualHeight <= button.ActualHeight)) ||
+                        (!maximized && (Math.Abs(overhang) > 0.6 || Math.Abs(origin.Y) > 0.6)))
+                        throw new InvalidOperationException(
+                            $"Stage hover is not centered outside the SVG shell in " +
+                            $"{(maximized ? "Maximized" : "Normal")}: {button.Name}, " +
+                            $"button={button.ActualWidth:F2}x{button.ActualHeight:F2}, " +
+                            $"hover={hover.ActualWidth:F2}x{hover.ActualHeight:F2}, origin={origin}");
+                }
+
+                foreach (var button in new[] { shown.InstallButton, shown.LaunchButton, shown.CollectButton })
+                    CheckStageHoverVertical(button, maximized: false);
                 var baseline = SnapshotShown(shown);
                 var stable = SnapshotShown(shown);
                 if (!baseline.Pixels.AsSpan().SequenceEqual(stable.Pixels))
@@ -547,12 +575,16 @@ internal static class Program
                         panel.Children.Count != 4)
                         throw new InvalidOperationException(
                             "Real native WPF maximize did not preserve original Capture tree");
+                    foreach (var button in new[] { shown.InstallButton, shown.LaunchButton, shown.CollectButton })
+                        CheckStageHoverVertical(button, maximized: true);
                     SnapshotShown(shown);
 
                     shown.WindowState = System.Windows.WindowState.Normal;
                     DrainDispatcher();
                     DrainDispatcher();
                     shown.ApplyMaximizedCaptureLayout();
+                    foreach (var button in new[] { shown.InstallButton, shown.LaunchButton, shown.CollectButton })
+                        CheckStageHoverVertical(button, maximized: false);
                     var restored = SnapshotShown(shown);
                     if (restored.Width != baseline.Width ||
                         restored.Height != baseline.Height)
