@@ -15,7 +15,6 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/Status/GcoStatusIcons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
-        <fx:StageHoverWidthConverter x:Key="StageHoverWidth"/>
         <!-- Explicit immutable PNG sources. Sharing them through StaticResource
              makes source identity and Restore transitions deterministic. -->
         <BitmapImage x:Key="ActiveCardBitmap"
@@ -175,37 +174,19 @@
                         <Grid Background="Transparent" SnapsToDevicePixels="True">
                             <fx:ApprovedStageArtwork x:Name="StageArtwork" Variant="Yellow"
                                                      IsHitTestVisible="False"/>
-                            <!-- Hover/focus is a separate cyan outline, not another bitmap.
-                                 It follows the same chamfer as all three source SVGs. -->
-                            <!-- Preserve the exact Normal hover. Only Maximized
-                                 gives the cyan outline enough clearance ABOVE and
-                                 BELOW the native SVG shell, not just side-to-side.
-                                 Keep the chamfer geometry at real (unscaled) size. -->
-                            <fx:ChamferOutline x:Name="StageHover" Fill="Transparent"
-                                               Stroke="#30F2FF" StrokeThickness="2"
-                                               CornerCut="7" Glow="True" Opacity="0"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               IsHitTestVisible="False">
-                                <fx:ChamferOutline.Width>
-                                    <MultiBinding Converter="{StaticResource StageHoverWidth}" ConverterParameter="Width">
-                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
-                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource TemplatedParent}"/>
-                                        <Binding Path="WindowState" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
-                                    </MultiBinding>
-                                </fx:ChamferOutline.Width>
-                                <fx:ChamferOutline.Height>
-                                    <MultiBinding Converter="{StaticResource StageHoverWidth}" ConverterParameter="Height">
-                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
-                                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource TemplatedParent}"/>
-                                        <Binding Path="WindowState" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
-                                    </MultiBinding>
-                                </fx:ChamferOutline.Height>
-                                <fx:ChamferOutline.Effect>
+                            <!-- The native SVG's shared shell path owns the hover geometry.
+                                 This fills the button slot and tracks the SVG's
+                                 uniform scaling, crop and chamfers at ANY window size.
+                                 The luminous band is entirely outside the shell. -->
+                            <fx:StageShellHover x:Name="StageHover" Opacity="0"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch"
+                                                IsHitTestVisible="False">
+                                <fx:StageShellHover.Effect>
                                     <DropShadowEffect Color="#00E2F2" BlurRadius="8"
                                                       ShadowDepth="0" Opacity=".7"/>
-                                </fx:ChamferOutline.Effect>
-                            </fx:ChamferOutline>
+                                </fx:StageShellHover.Effect>
+                            </fx:StageShellHover>
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
