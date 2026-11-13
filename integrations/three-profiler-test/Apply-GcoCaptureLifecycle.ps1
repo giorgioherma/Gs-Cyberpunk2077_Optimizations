@@ -47,7 +47,7 @@ Patch $cc '    public string? Restore(string gameRoot)' @'
 '@
 Patch $cc 'var archived = ArchiveCompletedCaptureOrClearTemplates(paths);' 'DiscardLive(gameRoot); string? archived = null;'
 Patch $cp 'IProfilerService service = new ProfilerService();' 'var service = new ProfilerService();'
-Patch $cp 'case "--reset": command = "reset"; break;' 'case "--reset": command = "reset"; break;'+[Environment]::NewLine+'                case "--discard-live": command = "discard-live"; break;'
+Patch $cp 'case "--reset": command = "reset"; break;' ('case "--reset": command = "reset"; break;' + [Environment]::NewLine + '                case "--discard-live": command = "discard-live"; break;')
 Patch $cp '            "restore" => new' @'
             "discard-live" => new { ok = true, discarded = service.DiscardLive(game), status = service.GetStatus(game) },
             "restore" => new
@@ -208,6 +208,6 @@ Patch $gm @'
         _ = DiscardLive(gameRoot);
         return latestDestination;
 '@
-Patch $gp '?? (parsed.Has("collect") ? "collect" : null)' '?? (parsed.Has("collect") ? "collect" : null)'+[Environment]::NewLine+'                ?? (parsed.Has("discard-live") ? "discard-live" : null)'
-Patch $gp '                "collect" => CollectWithReport(gameRoot),' '                "collect" => CollectWithReport(gameRoot),'+[Environment]::NewLine+'                "discard-live" => new { discarded = ManagerServices.DiscardLive(gameRoot) },'
+Patch $gp '?? (parsed.Has("collect") ? "collect" : null)' ('?? (parsed.Has("collect") ? "collect" : null)' + [Environment]::NewLine + '                ?? (parsed.Has("discard-live") ? "discard-live" : null)')
+Patch $gp '                "collect" => CollectWithReport(gameRoot),' ('                "collect" => CollectWithReport(gameRoot),' + [Environment]::NewLine + '                "discard-live" => new { discarded = ManagerServices.DiscardLive(gameRoot) },')
 Write-Host 'PASS pinned disposable GCO-only source adaptations'
