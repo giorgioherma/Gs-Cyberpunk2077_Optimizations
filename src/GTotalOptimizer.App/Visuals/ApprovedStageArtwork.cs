@@ -103,22 +103,28 @@ public sealed class ApprovedStageArtwork : SvgViewbox
 }
 
 /// <summary>
-/// Match the visible 760:112 SVG within its WPF button's row.
-/// The SVG uses Uniform scaling, so a fullscreen-wide Button is NOT
-/// the same width as its drawn chamfer; hover must never span the row.
+/// Keep the approved Normal hover width identical to the uniform SVG viewport.
+/// Only a genuinely maximized window adds a small centered allowance around
+/// the visible shell; never expand to the full button row width.
 /// </summary>
 public sealed class StageHoverWidthConverter : IMultiValueConverter
 {
+    // An outline centered over the SVG, not another full-card button frame.
+    private const double MaximizedHaloWidthAllowance = 18.0;
+
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
     {
-        if (values.Length != 2 ||
+        if (values.Length < 2 ||
             values[0] is not double availableWidth ||
             values[1] is not double height ||
             !double.IsFinite(availableWidth) || !double.IsFinite(height) ||
             availableWidth <= 0 || height <= 0)
             return DependencyProperty.UnsetValue;
 
-        return Math.Min(availableWidth, height * (760.0 / 112.0));
+        var normalWidth = Math.Min(availableWidth, height * (760.0 / 112.0));
+        return values.Length >= 3 && values[2] is WindowState.Maximized
+            ? Math.Min(availableWidth, normalWidth + MaximizedHaloWidthAllowance)
+            : normalWidth;
     }
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter,

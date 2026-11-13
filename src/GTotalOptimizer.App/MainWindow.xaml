@@ -177,9 +177,10 @@
                                                      IsHitTestVisible="False"/>
                             <!-- Hover/focus is a separate cyan outline, not another bitmap.
                                  It follows the same chamfer as all three source SVGs. -->
-                            <!-- SVG draws at 760:112 inside the stretched row.
-                                 Keep the halo at that actual centered footprint,
-                                 not the row's entire width in fullscreen. -->
+                            <!-- The Normal hover remains the approved SVG-sized
+                                 outline. In Maximized only, the shared width
+                                 converter gives the halo a modest centered
+                                 allowance without expanding to full row width. -->
                             <fx:ChamferOutline x:Name="StageHover" Fill="Transparent"
                                                Stroke="#30F2FF" StrokeThickness="2"
                                                CornerCut="7" Glow="True" Opacity="0"
@@ -189,6 +190,7 @@
                                     <MultiBinding Converter="{StaticResource StageHoverWidth}">
                                         <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
                                         <Binding Path="ActualHeight" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                        <Binding Path="WindowState" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
                                     </MultiBinding>
                                 </fx:ChamferOutline.Width>
                                 <fx:ChamferOutline.Effect>
