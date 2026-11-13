@@ -476,3 +476,9 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 
 - In Maximized, owner requests significantly smaller and narrower step cards, wider inter-card gaps, more vertical space between major sections, a modestly taller Game Root **heading-and-box group**, a tighter workflow heading/card relationship and a slight console shift left. Normal layout remains **untouchable**, and original properties must restore exactly. Implemented only in original `MainWindow.xaml.cs` on `main`, code SHA `046e519`, v1.2.4.
 - Canonical [Windows CI #292](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43335794567) SUCCESS: 278/278 tests and real shown WPF Normal→Maximized→Normal byte-identical pixels at runner DPI; downloadable artifact ID 13997008356. User screenshot approval still pending.
+
+## 2026-11-13 — framework status indicators and card state visuals (CI #298)
+
+- Framework checks below Game Root display the **owner's original** `GcoStatusSuccessIcon` green check or `GcoStatusFailureIcon` red X as explicit 16×16 WPF `Image Source="{StaticResource ...}"` elements; both hidden while preflight is unknown. Existing framework-readiness result is the single authority. Avoid new icon generators and separate state logic.
+- Two original owner PNG backgrounds from `b565031` must reflect the original button state: active yellow vs inactive cyan; Restore Profilers uses cyan. Render proportional center crop with original card chamfer clip; hover outline follows the centered SVG shell, not fullscreen button-row width. The original Normal and maximizing layout must remain stable.
+- Canonical [CI #298](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43352879881) **SUCCESS** on `5713b2b`: 278/278 contracts, native WPF Normal→Maximized→Normal pixel identity, owner CET/GRSP smoke and one private .NET 10.0.15 runtime. Artifact ID 14004921634. User screenshot and gameplay remain pending.
