@@ -1227,6 +1227,7 @@ public partial class MainWindow : Window
             return;
         }
         ClearStatusPin();
+        var launched = false;
         SetBusy(true);
         try
         {
@@ -1259,9 +1260,21 @@ public partial class MainWindow : Window
                 ? "Cyberpunk started. Use F11 to start/stop profiling."
                 : "Cyberpunk started. F11 ready; PresentMon unavailable.",
                 warning);
+            launched = true;
         }
         catch (Exception ex) { Warn(ex.Message, "Launch and capture"); }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        finally
+        {
+            SetBusy(false);
+            if (launched)
+            {
+                // The native root launcher retains the tray/game-exit listener.
+                // Unload all WPF/.NET resources during gameplay; the durable
+                // journal and temporary native/PresentMon data remain intact.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+            }
+            else await RefreshSourceAsync();
+        }
     }
 
     // Collect and independent recovery share ONE PresentMon stop policy:
