@@ -83,21 +83,20 @@ public static class UserFacingConsoleText
 
     public static string CollectionGuidance(CollectedCaptureIndex capture)
     {
-        var status = CaptureAdmissionPolicy.CollectionStatus(capture);
+        var status = "CET " + (capture.Cet is null ? "MISSING" : "OK") +
+            " | REDscript " + (capture.Redscript is null ? "MISSING" : "OK") +
+            " | PresentMon " + (capture.FrameTimeCsv is null ? "MISSING" : "OK");
         if (!capture.PresentMonStopVerified)
-            return Render(status + "\nClose Cyberpunk and retry COLLECT RESULTS to stop PresentMon.");
-
+            return Render(status + ". PresentMon stop pending; retry COLLECT RESULTS.");
         if (capture.Cet is null || capture.Redscript is null)
         {
             var missing = new List<string>();
             if (capture.Cet is null) missing.Add("CET");
             if (capture.Redscript is null) missing.Add("REDscript");
-            return Render(status + "\nMissing " + string.Join(" + ", missing) +
-                ". Click START CYBERPUNK for a fresh capture." +
-                "\nIn-game: F11 start, F11 stop; close game, then COLLECT RESULTS.");
+            return Render("Saved: " + status + ".\n" +
+                string.Join(" + ", missing) + " MISSING. Click START CYBERPUNK; F11 start/stop.");
         }
-
-        return Render(status + "\nClick CONTINUE to restore original files and open ANALYZE.");
+        return Render("Saved: " + status + ". Click CONTINUE.");
     }
 
     public static string Failure(string context, string detail)
@@ -107,8 +106,10 @@ public static class UserFacingConsoleText
         if (detail.Contains("No completed", StringComparison.OrdinalIgnoreCase) &&
             detail.Contains("capture", StringComparison.OrdinalIgnoreCase))
             return "No completed capture found. Stop profiling with F11.";
+        if (detail.Contains("Original profiler files restored", StringComparison.OrdinalIgnoreCase))
+            return "Original files restored. PresentMon still stopping; retry RESTORE.";
         if (detail.Contains("RECOVERY REQUIRED", StringComparison.OrdinalIgnoreCase))
-            return "Restore incomplete. Game files may still be modified; retry Restore.";
+            return "Restore incomplete. Retry RESTORE PROFILERS.";
         if (detail.Contains("previous capture", StringComparison.OrdinalIgnoreCase) &&
             detail.Contains("pending", StringComparison.OrdinalIgnoreCase))
             return "Previous capture pending. Collect or start a fresh session.";
