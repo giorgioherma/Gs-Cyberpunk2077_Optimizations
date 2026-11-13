@@ -191,6 +191,18 @@ public sealed class UnifiedProfilerWorkflow
         }
         Check(target);
         Directory.Delete(target, recursive: true);
+        // A successful Collect must not leave empty .staging/session folders
+        // mixed into the user's permanent RESULTS archive listing.
+        var stopAt = Path.Combine(packageRoot, "RESULTS");
+        var parent = Path.GetDirectoryName(target);
+        while (parent is not null &&
+            !string.Equals(parent, stopAt, StringComparison.OrdinalIgnoreCase) &&
+            Directory.Exists(parent) &&
+            !Directory.EnumerateFileSystemEntries(parent).Any())
+        {
+            Directory.Delete(parent);
+            parent = Path.GetDirectoryName(parent);
+        }
     }
 
     private static ComponentCommandResult Require(ComponentCommandResult result)
