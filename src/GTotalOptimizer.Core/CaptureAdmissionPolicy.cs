@@ -28,12 +28,15 @@ public static class CaptureAdmissionPolicy
             capture?.CollectInvoked != true && capture?.CollectionAttempted != true;
     }
 
-    public static string PendingCaptureGuidance((bool Cet, bool Redscript) ready) =>
-        "CET " + (ready.Cet ? "READY" : "MISSING") +
-        " | REDscript " + (ready.Redscript ? "READY" : "MISSING") +
-        (ready.Cet && ready.Redscript
-            ? ". Click COLLECT RESULTS."
-            : ". START again or RESTORE.");
+    public static string PendingCaptureGuidance((bool Cet, bool Redscript) ready)
+    {
+        if (ready.Cet && ready.Redscript)
+            return "CET READY | REDscript READY. Click COLLECT RESULTS.";
+        return (ready.Cet ? "CET gameplay recording available" : "NO CET gameplay recording") +
+            " | " + (ready.Redscript
+                ? "REDscript gameplay recording available" : "NO REDscript gameplay recording") +
+            " | START again or RESTORE";
+    }
 
     public static bool CanContinue(CollectedCaptureIndex? capture, bool presentMonStopped) =>
         presentMonStopped && capture?.PresentMonStopVerified == true && capture.CollectionAttempted &&

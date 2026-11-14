@@ -719,10 +719,20 @@ try
     Require(CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, newAttempt) &&
         !newAttempt.CollectInvoked,
         "new capture identity permits Collect only after fresh dual-native readiness");
+    var bothMissing = CaptureAdmissionPolicy.PendingCaptureGuidance((false, false));
+    var cetOnly = CaptureAdmissionPolicy.PendingCaptureGuidance((true, false));
+    var redOnly = CaptureAdmissionPolicy.PendingCaptureGuidance((false, true));
+    var bothReady = CaptureAdmissionPolicy.PendingCaptureGuidance((true, true));
     Require(!CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture, newAttempt) &&
-        CaptureAdmissionPolicy.PendingCaptureGuidance((true, false)).Contains("REDscript MISSING") &&
-        CaptureAdmissionPolicy.PendingCaptureGuidance((false, true)).Contains("CET MISSING"),
-        "reopened capture reports missing native domains, not PresentMon-only readiness");
+        bothMissing == "NO CET gameplay recording | NO REDscript gameplay recording | START again or RESTORE" &&
+        cetOnly.Contains("CET gameplay recording available") &&
+        cetOnly.Contains("NO REDscript gameplay recording") &&
+        redOnly.Contains("NO CET gameplay recording") &&
+        redOnly.Contains("REDscript gameplay recording available") &&
+        bothReady.Contains("Click COLLECT RESULTS") &&
+        new[] { bothMissing, cetOnly, redOnly, bothReady }
+            .All(message => message.Length <= UserFacingConsoleText.MaxLength),
+        "reopened capture reports factual gameplay recording availability in concise console copy");
     var oneShotId = Guid.NewGuid().ToString("N");
     var oneShotIndex = CollectedCaptureStore.Read(package, archiveGame, oneShotId);
     var oneShot = CollectedCaptureStore.MarkCollectInvoked(
