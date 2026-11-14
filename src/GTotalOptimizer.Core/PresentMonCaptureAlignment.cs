@@ -54,9 +54,16 @@ public static class PresentMonCaptureAlignment
             var eventName = fields[label].Trim().Trim('"');
             var begin = eventName.Equals("START", StringComparison.OrdinalIgnoreCase) ||
                 eventName.Equals("CAPTURE_START", StringComparison.OrdinalIgnoreCase);
+            // The actual CET F11 STOP action invokes CETProfilerPause()
+            // then CETProfilerDump(); its native marker is PAUSE. CET's
+            // source-owner collection explicitly admits CAPTURE_START + PAUSE.
+            // GRSP instead emits START + STOP_REQUEST. Only treat PAUSE as
+            // terminal for CET to avoid broadening the other owner's markers.
             var stop = eventName.Equals("STOP", StringComparison.OrdinalIgnoreCase) ||
                 eventName.StartsWith("STOP_", StringComparison.OrdinalIgnoreCase) ||
-                eventName is "CAPTURE_STOP" or "CAPTURE_END";
+                eventName is "CAPTURE_STOP" or "CAPTURE_END" ||
+                (domain == "CET" &&
+                 eventName.Equals("PAUSE", StringComparison.OrdinalIgnoreCase));
             if (begin) start = start == 0 ? stamp : Math.Min(start, stamp);
             if (stop) end = Math.Max(end, stamp);
         }

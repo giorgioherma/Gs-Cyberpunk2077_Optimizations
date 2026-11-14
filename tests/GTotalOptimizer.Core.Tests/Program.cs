@@ -465,18 +465,21 @@ try
     Directory.CreateDirectory(redSource);
     File.WriteAllText(Path.Combine(cetSource, "CET_Summary.json"), "{\"capture\":\"CET\"}");
     File.WriteAllText(Path.Combine(redSource, "GRSP_Summary.json"), "{\"capture\":\"RED\"}");
-    // The source owners already emit these F11 absolute clock marker formats.
-    // Build synthetic captures with the CI runner's local-time equivalent.
+    // Mirror the real source-owner wire contracts, not invented generic
+    // STOP fields: CET F11 emits CAPTURE_START + PAUSE; GRSP uses STOP_REQUEST.
+    // Source-locked fixtures preserve the CI runner's local-time equivalent.
     var sampleLocal = new DateTime(2026, 11, 5, 22, 40, 0, DateTimeKind.Local);
     var sampleUnix = new DateTimeOffset(sampleLocal).ToUnixTimeMilliseconds();
     Directory.CreateDirectory(Path.Combine(cetSource, "Data", "Runtime"));
     Directory.CreateDirectory(Path.Combine(redSource, "Data", "Runtime"));
     File.WriteAllText(Path.Combine(cetSource, "Data", "Runtime", "CET_Runtime_Profile_Markers.csv"),
-        "Label,UnixEpochMs\nCAPTURE_START," + (sampleUnix + 100) +
-        "\nCAPTURE_STOP," + (sampleUnix + 900) + "\n");
+        "Sequence,CaptureMs,UnixEpochMs,Label,DroppedMarkersAtDump\n" +
+        "1,0.000000," + (sampleUnix + 100) + ",CAPTURE_START,0\n" +
+        "2,800.000000," + (sampleUnix + 900) + ",PAUSE,0\n");
     File.WriteAllText(Path.Combine(redSource, "Data", "Runtime", "GRSP_Markers.csv"),
-        "event,unix_ms\nSTART," + (sampleUnix + 110) +
-        "\nSTOP_REQUEST," + (sampleUnix + 850) + "\n");
+        "capture_id,scenario,event,qpc,capture_ms,unix_ms\n" +
+        "1,test,START,100,0.000," + (sampleUnix + 110) + "\n" +
+        "1,test,STOP_REQUEST,200,740.000," + (sampleUnix + 850) + "\n");
     var package = Path.Combine(root, "GCO-package");
     var sessionId = Guid.NewGuid().ToString("N");
     var emptyCapture = CollectedCaptureStore.Read(package, archiveGame, sessionId);
@@ -1083,7 +1086,7 @@ try
             verifyHashes: true));
     Require(commonWindow.StartUnixMs == sampleUnix + 110 &&
         commonWindow.EndUnixMs == sampleUnix + 850,
-        "verified CET and GRSP F11 markers determine their shared capture interval");
+        "actual CET CAPTURE_START+PAUSE and GRSP START+STOP_REQUEST F11 markers determine the shared interval");
     var rawDatedCsv = "Application,CPUStartDateTime,MsBetweenPresents,MsInPresentAPI\r\n" +
         "Cyberpunk2077.exe,2026-11-05 22:40:00.050000000,16.6,0.5\r\n" +
         "Cyberpunk2077.exe,2026-11-05 22:40:00.123456789,16.6,0.5\r\n" +
