@@ -1548,3 +1548,5 @@ When implementation starts, append exact commits, build jobs, test output and ga
 - Added contracts for dual-native admission, one-shot persistence, stale results rejection, interrupted indexed copies and missing-status instructions. GCO version remains 1.2.5. Integrated CI and in-game acceptance pending.
 
 - Follow-up source correction: a simulated interrupted index must clear both `CollectionAttempted` and `CollectInvoked` flags to qualify as a not-yet-clicked attempt. GCO `ResetNativeOutputAsync` now attempts BOTH CET and GRSP source-owned `--discard-live` commands independently and makes success depend on final verified empty owner scopes; a failed command cannot suppress the other reset. Integrated build verification pending.
+
+- Corrected legacy contract expectations: a verified PresentMon stop failure no longer advertises a retry of the same COLLECT button (one-shot); reopen with only PresentMon scratch keeps COLLECT disabled until two fresh native F11 results exist. Short user-facing guidance consistently points to START/RESTORE. CI pending.

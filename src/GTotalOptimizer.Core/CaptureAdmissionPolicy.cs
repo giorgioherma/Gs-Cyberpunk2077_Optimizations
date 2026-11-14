@@ -48,7 +48,7 @@ public static class CaptureAdmissionPolicy
             " | PresentMon " + State(capture.FrameTimeCsv is not null) + ".";
 
         if (!capture.PresentMonStopVerified)
-            return status + " PresentMon stop failed; retry Collect.";
+            return status + " Collect ended. START again or RESTORE.";
         if (capture.Cet is null || capture.Redscript is null)
         {
             if (capture.CetReadyBeforeAttempt || capture.RedscriptReadyBeforeAttempt)

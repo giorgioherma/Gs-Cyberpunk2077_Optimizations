@@ -803,7 +803,7 @@ try
         captureGuide.Contains("START CYBERPUNK") && captureGuide.Contains("F11 start") &&
         UserFacingConsoleText.CollectionGuidance(attemptedDual).Contains("Click CONTINUE") &&
         UserFacingConsoleText.CollectionGuidance(
-            attemptedDual with { PresentMonStopVerified = false }).Contains("retry COLLECT RESULTS"),
+            attemptedDual with { PresentMonStopVerified = false }).Contains("START again or RESTORE"),
         "console guides missing native evidence, verified success and unverified PresentMon stop");
     Require(UserFacingConsoleText.Render("First action.\nSecond action.") ==
             "First action.\nSecond action." &&
@@ -818,14 +818,14 @@ try
     var failedStop = CollectedCaptureStore.MarkCollectionAttempted(package,
         archiveGame, sessionId, presentMonStopped: false);
     Require(CaptureAdmissionPolicy.CollectionStatus(failedStop).Contains(
-            "PresentMon stop failed; retry Collect.") &&
+            "Collect ended. START again or RESTORE.") &&
         CaptureAdmissionPolicy.CollectionStatus(failedStop).Length <=
             UserFacingConsoleText.MaxLength,
-        "failed PresentMon stop remains a short, actionable retry instruction");
+        "failed PresentMon stop directs a fresh START instead of a second Collect");
     Require(!CaptureAdmissionPolicy.CanContinue(failedStop, presentMonStopped: true) &&
         !CollectedCaptureStore.Read(package, archiveGame, sessionId).PresentMonStopVerified &&
-        CaptureAdmissionPolicy.CanCollect(true, true, failedStop),
-        "failed PresentMon stop retains safe Collect retry, with Continue disabled after app restart");
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, failedStop),
+        "failed PresentMon stop is a one-shot Collect; Continue stays disabled after app restart");
     _ = CollectedCaptureStore.MarkCollectionAttempted(package,
         archiveGame, sessionId, presentMonStopped: true);
 
@@ -1113,10 +1113,11 @@ try
         reopened.HasCaptureAttempt(datedGame) &&
         reopened.ReadCollected(datedGame) is
             { CollectionAttempted: false, FrameTimeCsv: null } &&
-        CaptureAdmissionPolicy.CanCollect(true, true, reopened.ReadCollected(datedGame)) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture,
+            reopened.ReadCollected(datedGame)) &&
         File.Exists(pendingCsv) && File.Exists(pendingController) &&
         File.Exists(pendingJournal),
-        "WPF shutdown and restart preserve pending session and complete PresentMon scratch");
+        "WPF restart preserves pending capture and PresentMon scratch without enabling Collect from frame data alone");
     // Only user-approved Capture Again (not close) may destroy this scope.
     Require(CollectedCaptureStore.DiscardUncollected(datedPackage, datedGame, pendingId) &&
         !Directory.Exists(pendingFolder) && File.Exists(datedCsv) &&

@@ -87,7 +87,7 @@ public static class UserFacingConsoleText
             " | REDscript " + (capture.Redscript is null ? "MISSING" : "OK") +
             " | PresentMon " + (capture.FrameTimeCsv is null ? "MISSING" : "OK");
         if (!capture.PresentMonStopVerified)
-            return Render(status + ". PresentMon stop pending; retry COLLECT RESULTS.");
+            return Render(status + ". Collect ended; START again or RESTORE.");
         if (capture.Cet is null || capture.Redscript is null)
         {
             var missing = new List<string>();
