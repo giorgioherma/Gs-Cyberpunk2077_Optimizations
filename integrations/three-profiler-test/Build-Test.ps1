@@ -1,5 +1,8 @@
 param([switch]$Integrated)
 $ErrorActionPreference = 'Stop'
+# Canonical GCO integration only; the legacy standalone triple-test and
+# its independent F11 capture handler have been permanently retired.
+if (!$Integrated) { throw 'Standalone triple-test retired; use the integrated GCO build.' }
 Set-StrictMode -Version Latest
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid unified app version from MSBuild: $version" }
@@ -328,8 +331,6 @@ foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path 
   if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
 }
 New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
-if (!$Integrated) { Copy-Item 'integrations/three-profiler-test/Run-Triple-Test.ps1' (Join-Path $root 'Run-Triple-Test.ps1') }
-if (!$Integrated) { Set-Content (Join-Path $root 'RUN-ALL-THREE-TEST.cmd') @('@echo off','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Triple-Test.ps1"','pause') -Encoding ascii }
 Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
 $provenance=@{
   testOnly=$true
@@ -338,18 +339,6 @@ $provenance=@{
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
-if (!$Integrated) {
-Set-Content (Join-Path $root 'README-TRIPLE-TEST.txt') @'
-CET + GRSP + PresentMon triple test package — NOT a production optimizer build.
-Extract entirely. Run RUN-ALL-THREE-TEST.cmd and select Cyberpunk 2077 root.
-It uses both profiler owners' original install/collect/restore headless CLIs.
-PresentMon starts with F11 capture targeting Cyberpunk2077.exe and asks for UAC.
-Start/stop F11 twice in the game. CLOSE game before collecting/restore.
-Retain RESULTS/Triple-* logs and raw data to report success or errors.
-The ordinary G-Total GUI install/generate buttons remain gated.
-No third-party mod source or optimization output is distributed.
-'@ -Encoding UTF8
-}
 if ($Integrated) {
   $entries=@(
     @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
@@ -423,6 +412,4 @@ VERSION $version (portable build). No system .NET installation required.
   } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
   Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
   Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
-} else {
-  Write-Host 'PASS THREE: CET + GRSP + PresentMon, one private .NET10 runtime, test harness package'
 }

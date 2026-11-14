@@ -34,7 +34,6 @@ public partial class MainWindow : Window
     private string? completedSessionId;
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
-    private bool captureLaunched;
     // START may return before the real Cyberpunk process is observable. Keep
     // its pending tray handoff until that specific game startup is confirmed.
     private bool pendingCaptureHibernation;
@@ -50,9 +49,6 @@ public partial class MainWindow : Window
     private bool pendingGameExitRefresh;
     private int? observedGamePid;
     private int? gcoLaunchedGamePid;
-    // The last CSV whose ETW stop completed successfully in this process.
-    // Its tracking pointer remains until explicit Collect/abandonment.
-    private string? stoppedPresentMonCsv;
     private bool closingInProgress;
     private bool closureCleanupVerified;
     // Only a successful START CYBERPUNK hibernates WPF while retaining the tray.
@@ -634,7 +630,6 @@ public partial class MainWindow : Window
         launchProcessGuardUntilUtc = DateTime.MinValue;
         pendingCaptureHibernation = false;
         gcoLaunchedGamePid = null;
-        captureLaunched = false;
         if (IsLoaded && !busy) await RefreshSourceAsync();
     }
 
@@ -696,7 +691,6 @@ public partial class MainWindow : Window
         gameProcesses.Untrack(pid);
         observedGamePid = null;
         gcoLaunchedGamePid = null;
-        captureLaunched = false;
         pendingCaptureHibernation = false;
         launchProcessGuardUntilUtc = DateTime.MinValue;
         ++launchProcessGuardGeneration;
@@ -768,14 +762,9 @@ public partial class MainWindow : Window
             WindowState == System.Windows.WindowState.Minimized) return;
         if (portraitStage is PortraitStage.Capturing or PortraitStage.Collecting)
             StartGlitchIfVisible();
-        // Do not run synchronous pre-await inspection inside the taskbar's
-        // native activation transition; schedule it once activation settles.
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-        {
-            if (IsLoaded && !busy &&
-                WindowState != System.Windows.WindowState.Minimized)
-                _ = RefreshSourceAsync();
-        }));
+        // Activation is presentation-only. Initial load, user REFRESH,
+        // process transitions and workflow actions already re-inspect sources.
+        // Repeating owner CLIs and package hashing on Alt-Tab was redundant.
     }
 
     private void Window_StateChanged(object sender, EventArgs e)
@@ -973,8 +962,8 @@ public partial class MainWindow : Window
         var label = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         var style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
-        // Re-applying the same template on focus refresh would redraw its
-        // SVG even if IsEnabled does not change.
+        // Re-applying the same template during status refresh would redraw
+        // its SVG even if IsEnabled does not change.
         if (!string.Equals(InstallButton.Content as string, label, StringComparison.Ordinal))
             InstallButton.Content = label;
         if (!ReferenceEquals(InstallButton.Style, style))
@@ -1200,7 +1189,6 @@ public partial class MainWindow : Window
             var result = await Workflow.InstallAsync(inspection.GameRoot);
             if (result.Ok)
             {
-                captureLaunched = false;
                 SetPortraitStage(PortraitStage.Black);
                 // InstallAsync already re-inspects both source-owned managers.
                 PinStatus("Profilers installed. Ready to start Cyberpunk.");
@@ -1278,8 +1266,6 @@ public partial class MainWindow : Window
         Workflow.BeginCaptureAttempt(game,
             observedGameAlreadyRunning: gameAlreadyRunning,
             ownerBeforeCapture: clean, preparedSessionId: preparedId);
-        captureLaunched = true;
-        stoppedPresentMonCsv = null;
         return warning;
     }
 
@@ -1414,11 +1400,9 @@ public partial class MainWindow : Window
             // Explicit cleanup may signal the elevated native observer.
             // Automatic game-exit shutdown is exclusively native-owned.
             await PresentMonCaptureController.WaitForAutoStopAsync(packageRoot, tracked);
-            stoppedPresentMonCsv = tracked;
             if (clearTracking)
             {
                 PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                stoppedPresentMonCsv = null;
             }
             return (tracked, true, null);
         }
@@ -1523,11 +1507,9 @@ public partial class MainWindow : Window
             // archives are durable, hashes verify, and ETW is stopped. If this
             // cleanup fails, do not seal Collect; the same session can retry.
             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            stoppedPresentMonCsv = null;
             var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
-            captureLaunched = false;
             sealedSuccess = true;
             if (saved.Cet is not null && saved.Redscript is not null)
             {
@@ -1568,7 +1550,6 @@ public partial class MainWindow : Window
                         {
                             Workflow.AbandonCurrentUncollected(game);
                             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-                            stoppedPresentMonCsv = null;
                         }
                         else Trace.TraceWarning("Failed-Collect native cleanup: " + reset.Detail);
                     }
@@ -1731,7 +1712,6 @@ public partial class MainWindow : Window
                 cleanupWarning = "Saved Analyze pointer could not be cleared: " + ex.Message;
                 Trace.TraceWarning("Restored workspace pointer cleanup: " + ex);
             }
-            captureLaunched = false;
             SetPortraitStage(PortraitStage.Black);
             // Owner verification removed the journal. The same button changes
             // immediately from RESTORE to INSTALL, and the path unlocks.

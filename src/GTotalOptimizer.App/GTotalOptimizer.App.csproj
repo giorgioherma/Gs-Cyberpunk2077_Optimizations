@@ -16,8 +16,6 @@
     <RootNamespace>GTotalOptimizer.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Retain legacy form in git for comparison; ship only WPF controls. -->
-    <Compile Remove="MainForm.cs" />
     <!-- Win32 EXE icon covers Explorer; WPF pack resource covers the
          titlebar, taskbar, and owned dialogs without runtime file paths. -->
     <Resource Include="../../assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico" Link="Icons/GOT_LAG.ico" />

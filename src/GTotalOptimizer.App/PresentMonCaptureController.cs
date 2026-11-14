@@ -12,8 +12,8 @@ internal static class PresentMonCaptureController
 {
     public const string CliSwitch = "--presentmon-control";
     private const string ResultName = "PresentMon-controller.json";
-    // Temporary live-game diagnostic for the owner's next test build.
-    // Revert to false after identifying the PresentMon/observer exit cause.
+    // Owner-approved visible recording indicator. The native observer
+    // closes the PresentMon console after the actual game exit.
     private const bool ShowPresentMonDiagnosticConsole = true;
     private static string TrackingFile(string root) =>
         Path.Combine(root, "RESULTS", "GCO-current-PresentMon.txt");
