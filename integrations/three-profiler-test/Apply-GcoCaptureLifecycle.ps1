@@ -93,6 +93,21 @@ Patch $gm '        File.Exists(Path.Combine(path, "GRSP_Status.txt"));' @'
         File.ReadAllText(Path.Combine(path, "GCO-F11-Complete.flag")).Trim() == "F11_STOP";
 '@
 Patch $gm '    public static string Restore(string gameRoot)' @'
+    // The original owner state FILE is the restore ownership marker even if its
+    // JSON is damaged. Reject linked paths before deleting any managed data.
+    private static void AssertUnlinkedManagedTree(string directory)
+    {
+        if (!Directory.Exists(directory)) return;
+        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Linked GRSP managed directory refused.");
+        foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+        {
+            if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked GRSP managed entry refused.");
+            if (Directory.Exists(entry)) AssertUnlinkedManagedTree(entry);
+        }
+    }
+
     // GCO-only: discard explicitly uncollected output, not DLLs or manager state.
     public static int DiscardLive(string gameRoot)
     {
@@ -103,18 +118,7 @@ Patch $gm '    public static string Restore(string gameRoot)' @'
         _ = LoadState(StatePath(gameRoot));
         var results = NativeResultsPath(gameRoot);
         if (!Directory.Exists(results)) return 0;
-        static void CheckLinks(string dir)
-        {
-            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("Linked GRSP results directory refused.");
-            foreach (var entry in Directory.EnumerateFileSystemEntries(dir))
-            {
-                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
-                    throw new InvalidDataException("Linked GRSP result refused.");
-                if (Directory.Exists(entry)) CheckLinks(entry);
-            }
-        }
-        CheckLinks(results);
+        AssertUnlinkedManagedTree(DataDirectory(gameRoot));
         var count = Directory.EnumerateFileSystemEntries(results).Count();
         DeleteDirectoryContentsForce(results);
         if (Directory.EnumerateFileSystemEntries(results).Any())
@@ -158,7 +162,9 @@ Patch $gm @'
             }
         }
 '@ @'
-        _ = DiscardLive(gameRoot);
+        // RESTORE already owns the entire managed data directory through the
+        // original marker. Capture-discard JSON validation must not gate it.
+        AssertUnlinkedManagedTree(DataDirectory(gameRoot));
         string? archived = null;
         string? archiveWarning = null;
 '@

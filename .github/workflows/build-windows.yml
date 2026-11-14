@@ -9,6 +9,7 @@ on:
       - '.github/workflows/build-windows.yml'
       - 'Directory.Build.props'
       - 'integrations/three-profiler-test/Build-Test.ps1'
+      - 'integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1'
       - 'src/GTotalOptimizer.App/**'
       - 'assets/ui/elements/**'
       - 'src/GTotalOptimizer.Launcher/**'
@@ -145,6 +146,9 @@ jobs:
             $mid=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
             if (!$mid.ok -or $mid.result.State -ne 'INSTALLED_CURRENT') { throw 'GRSP installed state not confirmed' }
             $live=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler/RESULTS'
+            $ownerDll=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler.dll'
+            $ownership=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler/.manager_state.json'
+            $installedHash=(Get-FileHash $ownerDll -Algorithm SHA256).Hash
             $cap=Join-Path $live 'Capture_0001_CI_1000'
             New-Item -ItemType Directory -Force $cap | Out-Null
             'capture,rows' | Set-Content (Join-Path $cap 'GRSP_Summary.csv')
@@ -163,6 +167,8 @@ jobs:
             if (!$discard.ok -or $discard.result.discarded -lt 1 -or
                 $clean.result.CompletedCaptureCount -ne 0 -or
                 $clean.result.State -ne 'INSTALLED_CURRENT' -or
+                !(Test-Path $ownership) -or
+                (Get-FileHash $ownerDll -Algorithm SHA256).Hash -ne $installedHash -or
                 (Get-ChildItem $live -Force).Count -ne 0) {
               throw 'GRSP discard failed to reset live data while retaining installed profiler'
             }
@@ -184,6 +190,28 @@ jobs:
           }
           $post=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
           if ($post.result.State -ne 'NOT_INSTALLED') { throw 'GRSP fixture state remains after restore' }
+          # The same RESTORE must recover a managed GRSP install when ownership
+          # JSON is unreadable, without making a duplicate archive.
+          $again=(ExecVerified $grsp ('--install --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (!$again.ok -or !(Test-Path $ownership) -or !(Test-Path $ownerDll)) {
+            throw 'GRSP recovery fixture could not reinstall managed profiler'
+          }
+          New-Item -ItemType Directory -Force $live | Out-Null
+          'uncollected' | Set-Content (Join-Path $live 'partial.txt')
+          '{invalid-owner-json' | Set-Content $ownership
+          $damaged=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if ($damaged.result.State -ne 'INVALID_MANAGED_STATE' -or !$damaged.result.ManagedStatePresent) {
+            throw 'Damaged GRSP owner state was not recognized as managed recovery'
+          }
+          $recovered=(ExecVerified $grsp ('--restore --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          $afterRecovery=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (!$recovered.ok -or $afterRecovery.result.State -ne 'NOT_INSTALLED' -or
+              (Test-Path $ownership) -or (Test-Path $ownerDll) -or
+              @(Get-ChildItem $live -Force -ErrorAction SilentlyContinue).Count -ne 0 -or
+              @(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count -ne $before) {
+            throw 'RESTORE did not recover corrupt GRSP ownership marker without archiving'
+          }
+          Write-Host 'PASS bundled GRSP restore after damaged ownership JSON; no uncollected archive.'
           if (!(Test-Path $env:DOTNET_HOST_TRACEFILE)) { throw 'Private .NET10 host trace missing' }
           Write-Host 'PASS CET+GRSP private .NET10 headless CLI launches and GRSP owned install/restore.'
       - name: Test source contracts and verify the final downloadable package
