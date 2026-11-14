@@ -987,8 +987,8 @@ try
         startArgs.Contains("--output_file") &&
         startArgs.Contains(automaticCsv) &&
         !startArgs.Contains("--hotkey") &&
-        startArgs.Contains("--terminate_on_proc_exit"),
-        "PresentMon records with one initial elevation, no F11 handler, and auto-flushes on game exit");
+        !startArgs.Contains("--terminate_on_proc_exit"),
+        "GCO owns PresentMon exit; no competing native process-exit handler or F11 hook");
     Require(stopArgs.SequenceEqual(new[]
         { "--terminate_existing_session", "--session_name", PresentMonLifecyclePolicy.SessionName }),
         "Collect must gracefully terminate the named ETW session");

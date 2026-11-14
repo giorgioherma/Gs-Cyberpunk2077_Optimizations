@@ -39,10 +39,10 @@ public static class PresentMonLifecyclePolicy
         return actual;
     }
 
-    // No RegisterHotKey and no extra F11 handler. The owner records
-    // continuously, then exits/flushed its CSV when Cyberpunk exits.
-    // The official v2.6.0 target-process exit gate only arms after seeing
-    // the game; PresentMon can start before GCO launches Cyberpunk.
+    // No RegisterHotKey or extra F11 handler. PresentMon starts before the
+    // game using the one approved UAC. GCO's small elevated native observer
+    // owns its graceful game-exit/failed-launch ETW shutdown. Never enable
+    // PresentMon's competing --terminate_on_proc_exit watcher.
     // CET / GRSP timestamps define the useful analysis window later.
     public static IReadOnlyList<string> StartArguments(string csv)
     {
@@ -52,7 +52,6 @@ public static class PresentMonLifecyclePolicy
             "--process_name", "Cyberpunk2077.exe",
             "--session_name", SessionName,
             "--stop_existing_session",
-            "--terminate_on_proc_exit",
             "--output_file", csv,
             "--date_time",
             "--no_console_stats",

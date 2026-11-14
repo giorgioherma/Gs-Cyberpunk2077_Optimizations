@@ -35,8 +35,8 @@ internal static class Program
         if (args.Length == 1 && args[0] == "--verify-game-process-events")
             return VerifyGameProcessEvents();
 
-        if (args.Length == 3 && args[0] == PresentMonCaptureController.CliSwitch)
-            return PresentMonCaptureController.ExecuteElevated(args[1], args[2]);
+        if (args.Length == 4 && args[0] == PresentMonCaptureController.CliSwitch)
+            return PresentMonCaptureController.ExecuteElevated(args[1], args[2], args[3]);
 
         var app = new System.Windows.Application
         {

@@ -256,12 +256,23 @@ $buildLines=@(
   'if errorlevel 1 exit /b %errorlevel%'
   ('rc.exe /nologo /fo"{0}" "{1}"' -f $nativeRes,$rcPath)
   'if errorlevel 1 exit /b %errorlevel%'
-  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib shell32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
+  ('cl.exe /nologo /O2 /MT /DUNICODE /D_UNICODE /Fo:"{0}" "{1}" "{2}" /link /SUBSYSTEM:WINDOWS user32.lib shell32.lib advapi32.lib /OUT:"{3}"' -f $nativeObj,$nativeSource,$nativeRes,$nativeExe)
   'exit /b %errorlevel%'
 )
 Set-Content $cmdPath $buildLines -Encoding ascii
 & $cmdPath
 if ($LASTEXITCODE -ne 0 -or !(Test-Path $nativeExe)) { throw 'Native launcher build failed' }
+
+# Exercise the real compiled native observer control: strict session-ID
+# parsing, medium-integrity security descriptor, named-event signal/ack,
+# and clean process exit. No ETW or UAC is needed for this source contract.
+$observerCheck=Start-Process -FilePath $nativeExe -ArgumentList '--verify-presentmon-observer' -PassThru -Wait
+try {
+  if ($observerCheck.ExitCode -ne 0) {
+    throw "GCO native PresentMon observer control failed ($($observerCheck.ExitCode))"
+  }
+  Write-Host 'PASS native PresentMon observer control and event permissions'
+} finally { $observerCheck.Dispose() }
 
 # Assert version identity in the built native launcher and managed application.
 foreach ($exe in @($nativeExe,(Join-Path $root 'app/G-Total-Optimizer.App.exe'))) {

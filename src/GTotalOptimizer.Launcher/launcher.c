@@ -9,6 +9,8 @@
 #include <wctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <sddl.h>
+#include <stdlib.h>
 
 // Native Win32 tray host only. The WPF/.NET 10 child may exit completely;
 // this host retains no CLR, report cache, UI resources or capture file handles.
@@ -122,6 +124,177 @@ static BOOL TrackedCsv(wchar_t *out, size_t outSize)
     return _wcsnicmp(out, prefix, wcslen(prefix)) == 0;
 }
 
+
+// The initial elevated GCO START launches this small, native observer with
+// the same privilege. It owns only the exact bundled PresentMon PID, never
+// other ETW sessions, and remains resident while WPF is unloaded to tray.
+// A per-session event lets non-elevated GCO request a graceful stop without
+// any second UAC elevation (including a game that never actually starts).
+static BOOL IsCaptureId(const wchar_t *id)
+{
+    if (!id || wcslen(id) != 32) return FALSE;
+    for (size_t i = 0; i < 32; ++i)
+        if (!iswxdigit(id[i])) return FALSE;
+    return TRUE;
+}
+
+static BOOL ObserverEventName(const wchar_t *id, wchar_t *out, size_t count)
+{
+    return IsCaptureId(id) &&
+           swprintf_s(out, count, L"Local\\GCO_PM_Stop_%ls", id) >= 0;
+}
+
+static HANDLE FindGameHandle(void)
+{
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return NULL;
+    PROCESSENTRY32W entry = {0};
+    entry.dwSize = sizeof(entry);
+    HANDLE game = NULL;
+    if (Process32FirstW(snap, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, L"Cyberpunk2077.exe") != 0) continue;
+            game = OpenProcess(SYNCHRONIZE, FALSE, entry.th32ProcessID);
+            if (game) break;
+        } while (Process32NextW(snap, &entry));
+    }
+    CloseHandle(snap);
+    return game;
+}
+
+static BOOL StopBundledPresentMon(const wchar_t *exe, HANDLE writer)
+{
+    wchar_t cmd[MAX_PATH * 4 + 100];
+    if (swprintf_s(cmd, ARRAYSIZE(cmd),
+                   L"\"%ls\" --terminate_existing_session --session_name GCO", exe) < 0)
+        return FALSE;
+    STARTUPINFOW startup = {0};
+    PROCESS_INFORMATION child = {0};
+    startup.cb = sizeof(startup);
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                        NULL, g_root, &startup, &child))
+        return FALSE;
+    CloseHandle(child.hThread);
+    DWORD ended = WaitForSingleObject(child.hProcess, 15000);
+    DWORD code = 0;
+    BOOL good = ended == WAIT_OBJECT_0 &&
+                GetExitCodeProcess(child.hProcess, &code) && code == 0;
+    CloseHandle(child.hProcess);
+    // An ETW session may already have ended after its writer exited.
+    if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) return TRUE;
+    return good && WaitForSingleObject(writer, 15000) == WAIT_OBJECT_0;
+}
+
+// The stop event deliberately has medium integrity, so non-elevated WPF
+// can signal it even when the watcher has a high-integrity UAC token. Only
+// session-local interactive callers may modify this unguessable event.
+static HANDLE CreateObserverStopEvent(const wchar_t *name)
+{
+    PSECURITY_DESCRIPTOR descriptor = NULL;
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, FALSE };
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x00100002;;;IU)S:(ML;;NW;;;ME)",
+            SDDL_REVISION_1, &descriptor, NULL))
+        return NULL;
+    sa.lpSecurityDescriptor = descriptor;
+    HANDLE result = CreateEventW(&sa, TRUE, FALSE, name);
+    DWORD error = GetLastError();
+    LocalFree(descriptor);
+    SetLastError(error);
+    return result;
+}
+
+static int ObservePresentMon(DWORD pid, const wchar_t *id)
+{
+    wchar_t exe[MAX_PATH * 4];
+    wchar_t eventName[100];
+    if (!ObserverEventName(id, eventName, ARRAYSIZE(eventName)) ||
+        swprintf_s(exe, ARRAYSIZE(exe),
+                   L"%ls\\components\\presentmon\\PresentMon.exe", g_root) < 0)
+        return 11;
+    HANDLE writer = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                                FALSE, pid);
+    if (!writer) return 12;
+    wchar_t actual[MAX_PATH * 4];
+    DWORD length = ARRAYSIZE(actual);
+    if (!QueryFullProcessImageNameW(writer, 0, actual, &length) ||
+        _wcsicmp(exe, actual) != 0) {
+        CloseHandle(writer);
+        return 13; // Never observe or stop an unverified foreign process.
+    }
+
+    HANDLE stop = CreateObserverStopEvent(eventName);
+    DWORD createError = GetLastError();
+    if (!stop || createError == ERROR_ALREADY_EXISTS) {
+        if (stop) CloseHandle(stop);
+        CloseHandle(writer);
+        return 15;
+    }
+
+    HANDLE game = NULL;
+    ULONGLONG graceUntil = 0;
+    BOOL sawGame = FALSE;
+    int exitCode = 0;
+    for (;;) {
+        if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) break;
+        if (WaitForSingleObject(stop, 0) == WAIT_OBJECT_0 ||
+            (graceUntil && GetTickCount64() >= graceUntil)) {
+            // A failed ETW stop remains retryable by this same authorized
+            // observer. Do not kill the writer or invent CSV flush success.
+            if (StopBundledPresentMon(exe, writer)) break;
+            Sleep(1000);
+            continue;
+        }
+        if (!game) {
+            game = FindGameHandle();
+            if (game) {
+                sawGame = TRUE;
+                graceUntil = 0;
+            } else {
+                // Before first game process, wait for explicit user request
+                // or a fresh START that stops the old writer. Never auto-exit.
+                // After a process exit, tolerate short relaunch transitions.
+                (void)sawGame;
+                WaitForSingleObject(stop, 250);
+            }
+            continue;
+        }
+        HANDLE waits[3] = { stop, game, writer };
+        DWORD result = WaitForMultipleObjects(3, waits, FALSE, INFINITE);
+        if (result == WAIT_OBJECT_0) continue; // stop request on next loop
+        if (result == WAIT_OBJECT_0 + 2) break; // writer died independently
+        if (result == WAIT_OBJECT_0 + 1) {
+            CloseHandle(game);
+            game = NULL;
+            // Distinguish the final exit from an early transient game PID.
+            graceUntil = GetTickCount64() + 3000;
+            continue;
+        }
+        exitCode = 16;
+        break;
+    }
+    if (game) CloseHandle(game);
+    CloseHandle(stop);
+    CloseHandle(writer);
+    return exitCode;
+}
+
+static int VerifyObserverControl(void)
+{
+    wchar_t id[] = L"0123456789abcdef0123456789abcdef";
+    wchar_t name[100];
+    if (!ObserverEventName(id, name, ARRAYSIZE(name)) ||
+        ObserverEventName(L"../bad", name, ARRAYSIZE(name))) return 1;
+    HANDLE ready = CreateObserverStopEvent(name);
+    if (!ready) return 2;
+    HANDLE client = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE, name);
+    BOOL good = client && SetEvent(client) &&
+                WaitForSingleObject(ready, 0) == WAIT_OBJECT_0;
+    if (client) CloseHandle(client);
+    CloseHandle(ready);
+    return good ? 0 : 3;
+}
+
 static void AddTrayIcon(void)
 {
     ZeroMemory(&g_icon, sizeof(g_icon));
@@ -227,6 +400,24 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
         MessageBoxW(NULL, L"Application files missing. Extract the entire package together.",
                     L"GCO", MB_OK | MB_ICONERROR);
         return 2;
+    }
+
+    // Elevated observer uses the same signed package launcher, but skips
+    // the native tray singleton and the private .NET runtime entirely.
+    if (commandLine && wcscmp(commandLine, L"--verify-presentmon-observer") == 0)
+        return VerifyObserverControl();
+    if (commandLine && wcsncmp(commandLine, L"--presentmon-observe ", 21) == 0) {
+        int count = 0;
+        LPWSTR *args = CommandLineToArgvW(GetCommandLineW(), &count);
+        int result = 10;
+        if (args && count == 4 && wcscmp(args[1], L"--presentmon-observe") == 0) {
+            wchar_t *end = NULL;
+            unsigned long parsed = wcstoul(args[2], &end, 10);
+            if (parsed > 0 && end && *end == 0 && IsCaptureId(args[3]))
+                result = ObservePresentMon((DWORD)parsed, args[3]);
+        }
+        if (args) LocalFree(args);
+        return result;
     }
 
     if (commandLine && (wcscmp(commandLine, L"--tray-exit") == 0 ||

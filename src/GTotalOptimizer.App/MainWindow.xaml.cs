@@ -38,7 +38,10 @@ public partial class MainWindow : Window
     // START may return before the real Cyberpunk process is observable. Keep
     // its pending tray handoff until that specific game startup is confirmed.
     private bool pendingCaptureHibernation;
-    private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
+    // Only protects the short gap between clicking START and observing
+    // Cyberpunk2077.exe. An observed process uses the ordinary running gate.
+    private DateTime launchProcessGuardUntilUtc = DateTime.MinValue;
+    private int launchProcessGuardGeneration;
     private string? consolePinned;
     private bool gameStateRefreshInFlight;
     private bool pendingExternalGameStart;
@@ -598,6 +601,42 @@ public partial class MainWindow : Window
         DispatchGameEvent(() => _ = ReconcileGameProcessChangesAsync());
     }
 
+    private void ArmProcessStartGuard()
+    {
+        var generation = ++launchProcessGuardGeneration;
+        launchProcessGuardUntilUtc = DateTime.UtcNow.AddSeconds(12);
+        _ = ExpireProcessStartGuardAsync(generation);
+    }
+
+    private async Task ExpireProcessStartGuardAsync(int generation)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(12));
+        if (generation != launchProcessGuardGeneration ||
+            Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        // A deadline is not proof of failure: recheck the real process first.
+        if (GameRunning())
+        {
+            if (observedGamePid is null)
+            {
+                var games = Process.GetProcessesByName("Cyberpunk2077");
+                try
+                {
+                    if (games.Length != 0) GameStarted(games[0].Id);
+                }
+                finally { foreach (var p in games) p.Dispose(); }
+            }
+            launchProcessGuardUntilUtc = DateTime.MinValue;
+            return;
+        }
+        // No Cyberpunk PID was ever observed; do not keep START locked merely
+        // because a previous attempt launched PresentMon successfully.
+        launchProcessGuardUntilUtc = DateTime.MinValue;
+        pendingCaptureHibernation = false;
+        gcoLaunchedGamePid = null;
+        captureLaunched = false;
+        if (IsLoaded && !busy) await RefreshSourceAsync();
+    }
+
     private bool HibernateForObservedCapture()
     {
         if (!pendingCaptureHibernation || busy || !IsLoaded ||
@@ -624,6 +663,8 @@ public partial class MainWindow : Window
 
     private void GameStarted(int pid)
     {
+        launchProcessGuardUntilUtc = DateTime.MinValue;
+        ++launchProcessGuardGeneration;
         if (observedGamePid == pid) return;
         if (observedGamePid is not null) return; // existing game is tracked
         observedGamePid = pid;
@@ -656,6 +697,8 @@ public partial class MainWindow : Window
         gcoLaunchedGamePid = null;
         captureLaunched = false;
         pendingCaptureHibernation = false;
+        launchProcessGuardUntilUtc = DateTime.MinValue;
+        ++launchProcessGuardGeneration;
         // Match the exit to the still-active attempt, not a session that
         // might already have been superseded by another game launch.
         try
@@ -1103,8 +1146,7 @@ public partial class MainWindow : Window
                 state, saved, staged.Cet, staged.Redscript);
             var readyToCollect = CaptureAdmissionPolicy.CanCollect(
                 session, captureStarted, state, saved, staged.Cet, staged.Redscript);
-            var recentLaunch = captureLaunched &&
-                DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
+            var processLaunchPending = DateTime.UtcNow < launchProcessGuardUntilUtc;
             InstallButton.IsEnabled = restoreAvailable ||
                 (!foreignSession && framework.Ready && state.CleanForInstall && !running);
             // Do not start another game while the previous attempt still
@@ -1113,14 +1155,15 @@ public partial class MainWindow : Window
             // A user may deliberately skip Collect: a later Start discards
             // ONLY GCO's uncollected attempt after stopping owned PresentMon.
             LaunchButton.IsEnabled = pinnedFramework &&
-                !running && !recentLaunch;
+                !running && !processLaunchPending;
             CollectButton.IsEnabled = !running && readyToCollect;
             ContinueButton.IsEnabled = !running &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null);
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
             LaunchButton.Content = running ? "GAME RUNNING"
-                : captureLaunched ? "CAPTURE STARTED" : "START CYBERPUNK";
+                : processLaunchPending ? "STARTING CYBERPUNK"
+                : "START CYBERPUNK";
             CollectButton.Content = "COLLECT RESULTS";
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
@@ -1237,7 +1280,8 @@ public partial class MainWindow : Window
         var monStarted = false;
         try
         {
-            await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
+            await PresentMonCaptureController.RunAsync(packageRoot, csv,
+                restart: true, captureSessionId: preparedId);
             monStarted = true;
         }
         catch (Exception ex)
@@ -1270,7 +1314,6 @@ public partial class MainWindow : Window
             observedGameAlreadyRunning: gameAlreadyRunning,
             ownerBeforeCapture: clean, preparedSessionId: preparedId);
         captureLaunched = true;
-        lastLaunchRequestedUtc = DateTime.UtcNow;
         stoppedPresentMonCsv = null;
         return warning;
     }
@@ -1311,9 +1354,9 @@ public partial class MainWindow : Window
     {
         if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
-        if (captureLaunched && DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10))
+        if (DateTime.UtcNow < launchProcessGuardUntilUtc)
         {
-            Warn("The previous launch is still being processed.", "Start");
+            Warn("Cyberpunk startup is still being processed.", "Start");
             return;
         }
         var game = inspection.GameRoot;
@@ -1336,6 +1379,7 @@ public partial class MainWindow : Window
                 // Arm before CreateProcess: a fast WMI start can be queued
                 // before Process.Start returns, but still belongs to GCO.
                 pendingCaptureHibernation = true;
+                ArmProcessStartGuard();
                 using var started = Process.Start(new ProcessStartInfo(executable)
                 {
                     UseShellExecute = true,
@@ -1360,6 +1404,8 @@ public partial class MainWindow : Window
             catch
             {
                 pendingCaptureHibernation = false;
+                launchProcessGuardUntilUtc = DateTime.MinValue;
+                ++launchProcessGuardGeneration;
                 // A failed game launch is not a meaningful capture. Flush ETW,
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
