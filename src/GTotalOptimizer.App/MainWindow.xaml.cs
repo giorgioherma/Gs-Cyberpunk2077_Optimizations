@@ -46,7 +46,8 @@ public partial class MainWindow : Window
     private bool gameStateRefreshInFlight;
     private bool pendingExternalGameStart;
     private int? pendingExternalGamePid;
-    private string? pendingGameExitSessionId;
+    // Process exit schedules UI refresh, never PresentMon shutdown.
+    private bool pendingGameExitRefresh;
     private int? observedGamePid;
     private int? gcoLaunchedGamePid;
     // The last CSV whose ETW stop completed successfully in this process.
@@ -699,15 +700,8 @@ public partial class MainWindow : Window
         pendingCaptureHibernation = false;
         launchProcessGuardUntilUtc = DateTime.MinValue;
         ++launchProcessGuardGeneration;
-        // Match the exit to the still-active attempt, not a session that
-        // might already have been superseded by another game launch.
-        try
-        {
-            var game = Workflow.ReadRecoveryGameRoot();
-            if (game is not null && Workflow.HasCaptureAttempt(game))
-                pendingGameExitSessionId = Workflow.ReadRecoverySessionId(game);
-        }
-        catch (Exception ex) { Trace.TraceWarning("Game exit journal inspection: " + ex); }
+        // Native elevated observer alone stops PresentMon on game exit.
+        pendingGameExitRefresh = true;
         QueueGameReconciliation();
     }
 
@@ -736,8 +730,8 @@ public partial class MainWindow : Window
         gameStateRefreshInFlight = true;
         try
         {
-            // A new game run supersedes the previous exit: its restart
-            // already stops old ETW before beginning a new capture.
+            // External launches still provision fresh attempts; process-exit
+            // notifications only refresh UI and never signal ETW shutdown.
             if (pendingExternalGameStart)
             {
                 var pid = pendingExternalGamePid;
@@ -745,16 +739,13 @@ public partial class MainWindow : Window
                 pendingExternalGamePid = null;
                 if (pid == observedGamePid && GameRunning())
                 {
-                    pendingGameExitSessionId = null;
+                    pendingGameExitRefresh = false;
                     await HandleExternalGameLaunchAsync();
                 }
             }
 
-            if (pendingGameExitSessionId is string exitId)
-            {
-                pendingGameExitSessionId = null;
-                await StopPresentMonAfterGameExitAsync(exitId);
-            }
+            // Consume UI-only pending refresh; no PresentMon stop requested.
+            pendingGameExitRefresh = false;
         }
         catch (Exception ex)
         {
@@ -765,35 +756,9 @@ public partial class MainWindow : Window
         {
             gameStateRefreshInFlight = false;
             await RefreshSourceAsync();
-            if (pendingExternalGameStart || pendingGameExitSessionId is not null)
+            if (pendingExternalGameStart || pendingGameExitRefresh)
                 QueueGameReconciliation();
         }
-    }
-
-    private async Task StopPresentMonAfterGameExitAsync(string exitedSessionId)
-    {
-        var game = Workflow.ReadRecoveryGameRoot();
-        if (game is null || !Workflow.HasCaptureAttempt(game) ||
-            !string.Equals(Workflow.ReadRecoverySessionId(game), exitedSessionId,
-                StringComparison.OrdinalIgnoreCase))
-            return;
-        // Never clear GCO-current-PresentMon.txt here. Collect needs the
-        // precise CSV path even after the writer has stopped and flushed.
-        SetBusy(true);
-        try
-        {
-            var stopped = await StopOwnedPresentMonAsync(exitedSessionId,
-                clearTracking: false);
-            // The next Refresh will read both real F11 outputs; do not pin
-            // a generic "Game closed" instruction across a later game run.
-            ClearStatusPin();
-            SetStatus(stopped.Stopped
-                ? "Game closed. Checking CET and REDscript..."
-                : "Game closed. PresentMon still stopping.");
-            if (stopped.Error is not null)
-                Trace.TraceWarning("PresentMon game-exit stop: " + stopped.Error);
-        }
-        finally { SetBusy(false); }
     }
 
     private void Window_Activated(object sender, EventArgs e)
@@ -949,7 +914,7 @@ public partial class MainWindow : Window
         UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
-        if (!isBusy && (pendingExternalGameStart || pendingGameExitSessionId is not null))
+        if (!isBusy && (pendingExternalGameStart || pendingGameExitRefresh))
             QueueGameReconciliation();
     }
 
@@ -1329,11 +1294,10 @@ public partial class MainWindow : Window
             var state = await Workflow.InspectAsync(game);
             var warning = await BeginFreshCaptureAsync(game, state,
                 gameAlreadyRunning: true);
-            // The game may terminate during WMI notification / elevated ETW
-            // startup (e.g. redscript compilation failure). Flush the NEW
-            // attempt, never an old ID read during the earlier exit event.
-            if (!GameRunning() && Workflow.HasCaptureAttempt(game))
-                pendingGameExitSessionId = Workflow.ReadRecoverySessionId(game);
+            // A fast external exit still triggers a deferred status refresh.
+            // Its ETW stop is handled exclusively by the native observer.
+            if (!GameRunning())
+                pendingGameExitRefresh = true;
             SetPortraitStage(PortraitStage.Capturing);
             PinStatus(warning is null
                 ? "New game detected. Fresh capture ready. Use F11."
@@ -1447,9 +1411,8 @@ public partial class MainWindow : Window
         if (tracked is null) return (null, true, null);
         try
         {
-            // PresentMon v2.6.0 auto-exits when Cyberpunk closes. The exact
-            // capture PID was recorded by the one elevated startup helper.
-            // No separate stop process, UAC prompt or foreign-PM inspection.
+            // Explicit cleanup may signal the elevated native observer.
+            // Automatic game-exit shutdown is exclusively native-owned.
             await PresentMonCaptureController.WaitForAutoStopAsync(packageRoot, tracked);
             stoppedPresentMonCsv = tracked;
             if (clearTracking)

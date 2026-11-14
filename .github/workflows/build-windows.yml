@@ -260,6 +260,18 @@ jobs:
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          # Regression: transient startup PID exit must not trigger duplicate
+          # automatic ETW stop from WPF. Native observer owns that decision.
+          $wpfCapture=Get-Content 'src/GTotalOptimizer.App/MainWindow.xaml.cs' -Raw
+          if ($wpfCapture -match 'StopPresentMonAfterGameExitAsync|pendingGameExitSessionId') {
+            throw 'Duplicate WPF game-exit PresentMon stop path reintroduced'
+          }
+          if ($wpfCapture -notmatch 'private void GameExited\(int pid\)' -or
+              $wpfCapture -notmatch 'pendingGameExitRefresh = true;' -or
+              $wpfCapture -notmatch 'await PresentMonCaptureController.WaitForAutoStopAsync') {
+            throw 'WPF game-exit refresh or explicit cleanup path disappeared'
+          }
+          Write-Host 'PASS game-exit auto-stop native-only; WPF refresh and explicit stops retained'
           foreach ($exe in @(
             (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
             (Join-Path $root 'app/G-Total-Optimizer.App.exe')
