@@ -144,33 +144,6 @@ static BOOL ObserverEventName(const wchar_t *id, wchar_t *out, size_t count)
            swprintf_s(out, count, L"Local\\GCO_PM_Stop_%ls", id) >= 0;
 }
 
-// Temporary capture troubleshooting: short, append-only event evidence.
-// No output from PresentMon itself is intercepted; its real console stays live.
-// Each attempt gets its own root RESULTS log so it survives failed CSV creation.
-static void LogObserver(const wchar_t *id, const char *event, DWORD pid, DWORD value)
-{
-    wchar_t path[MAX_PATH * 4];
-    if (swprintf_s(path, ARRAYSIZE(path),
-                   L"%ls\\RESULTS\\GCO-PresentMon-observer-%ls.log", g_root, id) < 0)
-        return;
-    HANDLE file = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                              NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) return;
-    SYSTEMTIME now;
-    GetLocalTime(&now);
-    char line[256];
-    int n = sprintf_s(line, sizeof(line),
-                      "%04u-%02u-%02u %02u:%02u:%02u.%03u %s pid=%lu value=%lu\r\n",
-                      now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute,
-                      now.wSecond, now.wMilliseconds, event,
-                      (unsigned long)pid, (unsigned long)value);
-    if (n > 0) {
-        DWORD written = 0;
-        WriteFile(file, line, (DWORD)n, &written, NULL);
-    }
-    CloseHandle(file);
-}
-
 static HANDLE FindGameHandle(void)
 {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -239,18 +212,13 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
         swprintf_s(exe, ARRAYSIZE(exe),
                    L"%ls\\components\\presentmon\\PresentMon.exe", g_root) < 0)
         return 11;
-    LogObserver(id, "observer-start", pid, 0);
     HANDLE writer = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
                                 FALSE, pid);
-    if (!writer) {
-        LogObserver(id, "writer-open-failed", pid, GetLastError());
-        return 12;
-    }
+    if (!writer) return 12;
     wchar_t actual[MAX_PATH * 4];
     DWORD length = ARRAYSIZE(actual);
     if (!QueryFullProcessImageNameW(writer, 0, actual, &length) ||
         _wcsicmp(exe, actual) != 0) {
-        LogObserver(id, "writer-identity-failed", pid, GetLastError());
         CloseHandle(writer);
         return 13; // Never observe or stop an unverified foreign process.
     }
@@ -259,7 +227,6 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
     DWORD createError = GetLastError();
     if (!stop || createError == ERROR_ALREADY_EXISTS) {
         if (stop) CloseHandle(stop);
-        LogObserver(id, "event-creation-failed", pid, createError);
         CloseHandle(writer);
         return 15;
     }
@@ -267,30 +234,14 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
     HANDLE game = NULL;
     ULONGLONG graceUntil = 0;
     BOOL sawGame = FALSE;
-    BOOL stopFailureLogged = FALSE;
     int exitCode = 0;
-    LogObserver(id, "observer-ready", pid, 0);
     for (;;) {
-        if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) {
-            DWORD writerExit = 0;
-            if (!GetExitCodeProcess(writer, &writerExit)) writerExit = GetLastError();
-            LogObserver(id, "writer-exited-unrequested", pid, writerExit);
-            break;
-        }
-        BOOL requestedStop = WaitForSingleObject(stop, 0) == WAIT_OBJECT_0;
-        if (requestedStop || (graceUntil && GetTickCount64() >= graceUntil)) {
-            if (!stopFailureLogged)
-                LogObserver(id, requestedStop ? "explicit-stop" : "game-exit-stop", pid, 0);
+        if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) break;
+        if (WaitForSingleObject(stop, 0) == WAIT_OBJECT_0 ||
+            (graceUntil && GetTickCount64() >= graceUntil)) {
             // A failed ETW stop remains retryable by this same authorized
             // observer. Do not kill the writer or invent CSV flush success.
-            if (StopBundledPresentMon(exe, writer)) {
-                LogObserver(id, "etw-stop-flushed", pid, 0);
-                break;
-            }
-            if (!stopFailureLogged) {
-                LogObserver(id, "etw-stop-failed", pid, 0);
-                stopFailureLogged = TRUE;
-            }
+            if (StopBundledPresentMon(exe, writer)) break;
             Sleep(1000);
             continue;
         }
@@ -299,7 +250,6 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
             if (game) {
                 sawGame = TRUE;
                 graceUntil = 0;
-                LogObserver(id, "game-observed", GetProcessId(game), 0);
             } else {
                 // Before first game process, wait for explicit user request
                 // or a fresh START that stops the old writer. Never auto-exit.
@@ -312,14 +262,8 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
         HANDLE waits[3] = { stop, game, writer };
         DWORD result = WaitForMultipleObjects(3, waits, FALSE, INFINITE);
         if (result == WAIT_OBJECT_0) continue; // stop request on next loop
-        if (result == WAIT_OBJECT_0 + 2) {
-            DWORD writerExit = 0;
-            if (!GetExitCodeProcess(writer, &writerExit)) writerExit = GetLastError();
-            LogObserver(id, "writer-exited-unrequested", pid, writerExit);
-            break;
-        }
+        if (result == WAIT_OBJECT_0 + 2) break; // writer died independently
         if (result == WAIT_OBJECT_0 + 1) {
-            LogObserver(id, "game-process-exited", GetProcessId(game), 0);
             CloseHandle(game);
             game = NULL;
             // Distinguish the final exit from an early transient game PID.
@@ -327,13 +271,11 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
             continue;
         }
         exitCode = 16;
-        LogObserver(id, "wait-error", pid, GetLastError());
         break;
     }
     if (game) CloseHandle(game);
     CloseHandle(stop);
     CloseHandle(writer);
-    LogObserver(id, "observer-exit", pid, (DWORD)exitCode);
     return exitCode;
 }
 
