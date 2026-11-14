@@ -833,9 +833,9 @@ public partial class MainWindow : Window
 
     private void UpdatePathLock()
     {
-        // A journal is written before owner mutations, so interrupted installs
-        // also lock the root. This survives an application restart.
-        var locked = Workflow.HasRecoveryJournal;
+        // A valid journal pins its game; a corrupt journal must not lock out
+        // selection of the original game for owner-managed RESTORE.
+        var locked = Workflow.ReadRecoveryGameRoot() is not null;
         GamePathBox.IsReadOnly = locked;
         GamePathBox.IsEnabled = !busy;
         BrowseButton.IsEnabled = !busy && !locked;
@@ -901,10 +901,9 @@ public partial class MainWindow : Window
     // never inherits another game's recovery control.
     private bool UpdateProfilerAction(string? gameRoot)
     {
-        // A durable journal always exposes recovery, even if damaged data
-        // prevents identification of its game root. The click then reports
-        // actionable recovery instructions in the console without writing.
-        var recovery = Workflow.HasRecoveryJournal;
+        // RESTORE is available from either GCO's session journal or an
+        // authoritative profiler-owned game-side transaction marker.
+        var recovery = Workflow.RestoreActionAvailable(gameRoot);
         var label = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         var style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
@@ -1010,7 +1009,8 @@ public partial class MainWindow : Window
                 (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)) return;
             liveState = state;
             var running = GameRunning();
-            var session = UpdateProfilerAction(current.GameRoot!);
+            var restoreAvailable = UpdateProfilerAction(current.GameRoot!);
+            var session = Workflow.HasSessionForGame(current.GameRoot!);
             var foreignSession = Workflow.HasRecoveryJournal && !session;
             // A game-bound, verified owner installation reuses the original
             // admitted baseline until verified restore removes the journal.
@@ -1041,7 +1041,7 @@ public partial class MainWindow : Window
             var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted, saved);
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
-            InstallButton.IsEnabled = session ||
+            InstallButton.IsEnabled = restoreAvailable ||
                 (!foreignSession && framework.Ready && state.CleanForInstall && !running);
             // Do not start another game while the previous attempt still
             // needs collection; BeginCaptureAttempt creates a fresh identity
@@ -1062,6 +1062,8 @@ public partial class MainWindow : Window
 
             SetStatus(foreignSession
                 ? "Another game session is pending. Restore it before switching games."
+                : restoreAvailable && !session
+                    ? "Profiler installation detected. Click RESTORE PROFILERS."
                 : !framework.Ready ? UserFacingConsoleText.FrameworkGuidance(framework)
                 : running ? "Cyberpunk running. F11 starts profiling; F11 again stops it.\nClose the game, then COLLECT RESULTS."
                 : saved?.CollectionAttempted == true
@@ -1083,7 +1085,7 @@ public partial class MainWindow : Window
             {
                 // A failed inspection cannot leave stale actions enabled.
                 // Keep the owner's emergency Restore action available.
-                InstallButton.IsEnabled = Workflow.HasRecoveryJournal;
+                InstallButton.IsEnabled = Workflow.RestoreActionAvailable(current.GameRoot);
                 LaunchButton.IsEnabled = CollectButton.IsEnabled =
                     ContinueButton.IsEnabled = false;
                 SetFrameworkStatuses(null);
@@ -1095,9 +1097,8 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        // No modal dialog and no admission gate may suppress a requested
-        // recovery attempt. The owner journal supplies the only target.
-        if (Workflow.HasRecoveryJournal)
+        // Only RESTORE and CONTINUE trigger owner-managed restoration.
+        if (Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
         else
             await InstallProfilersAsync();
@@ -1532,10 +1533,15 @@ public partial class MainWindow : Window
     private async Task RestoreIncompleteSessionAsync()
     {
         if (busy) return;
-        var game = Workflow.ReadRecoveryGameRoot();
-        if (game is null || !Workflow.HasSessionForGame(game))
+        // Prefer the verified journal root. If the journal is absent/corrupt,
+        // use the user-selected game only when its owner marker proves a
+        // managed installation. Owner managers perform all actual restoration.
+        var game = Workflow.ReadRecoveryGameRoot() ??
+            (inspection.IsValidGame ? inspection.GameRoot : GamePathBox.Text);
+        if (!Workflow.RestoreActionAvailable(game) ||
+            (Workflow.ReadRecoveryGameRoot() is null && !Workflow.HasOwnerRestoreState(game)))
         {
-            Warn("Recovery location invalid. Use the original profiler managers.", "Recovery required");
+            Warn("Select the game with installed profilers to restore.", "Recovery required");
             return;
         }
         if (GameRunning())

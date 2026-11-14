@@ -425,6 +425,36 @@ try
             !sessionWorkflow.HasRecoveryJournal,
         "owner-verified restore removes journal, unlocks Game Root and re-enables strict INSTALL preflight");
 
+    // Source-owner restore remains accessible when the GCO journal is missing
+    // or corrupt. A marker is a trigger only: CET/GRSP decide actual deletion.
+    Require(!sessionWorkflow.HasOwnerRestoreState(sessionGame) &&
+            !sessionWorkflow.RestoreActionAvailable(sessionGame),
+        "no journal and no owner markers leaves RESTORE unavailable");
+    var cetMarker = Path.Combine(sessionGame, "bin", "x64", "plugins",
+        ".cet_runtime_profiler");
+    Directory.CreateDirectory(cetMarker);
+    Require(sessionWorkflow.HasOwnerRestoreState(sessionGame) &&
+            sessionWorkflow.RestoreActionAvailable(sessionGame) &&
+            !sessionWorkflow.HasSessionForGame(sessionGame),
+        "missing GCO journal cannot hide CET-owned restoration");
+    Directory.Delete(cetMarker, recursive: true);
+    var grspMarker = Path.Combine(sessionGame, "red4ext", "plugins",
+        "G-REDscript-Profiler", ".manager_state.json");
+    Directory.CreateDirectory(Path.GetDirectoryName(grspMarker)!);
+    File.WriteAllText(grspMarker, "{damaged-owner-json");
+    Require(sessionWorkflow.HasOwnerRestoreState(sessionGame) &&
+            sessionWorkflow.RestoreActionAvailable(sessionGame),
+        "damaged GRSP owner JSON still supplies an authoritative restore marker");
+    File.WriteAllText(sessionJournal, "{damaged-gco-json");
+    Require(sessionWorkflow.ReadRecoveryGameRoot() is null &&
+            sessionWorkflow.RestoreActionAvailable(sessionGame) &&
+            !sessionWorkflow.HasSessionForGame(sessionGame),
+        "corrupt GCO journal does not suppress source-owner RESTORE");
+    File.Delete(sessionJournal);
+    File.Delete(grspMarker);
+    Require(!sessionWorkflow.RestoreActionAvailable(sessionGame),
+        "RESTORE action returns to INSTALL when neither owner remains");
+
     // Archive copies are verified, immutable evidence for Continue.
     var archiveGame = Path.Combine(root, "CaptureGame");
     Directory.CreateDirectory(archiveGame);

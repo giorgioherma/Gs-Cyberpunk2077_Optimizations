@@ -70,6 +70,30 @@ public sealed class UnifiedProfilerWorkflow
     public UnifiedProfilerWorkflow(string packageRoot) => this.packageRoot = Path.GetFullPath(packageRoot);
     public bool HasRecoveryJournal => File.Exists(Journal);
 
+    // Profiler-owned game-side transaction markers identify whether RESTORE
+    // should be offered when GCO's session journal is absent or unreadable.
+    // Only the source-owner managers may interpret/mutate these installations.
+    public bool HasOwnerRestoreState(string? game)
+    {
+        if (string.IsNullOrWhiteSpace(game)) return false;
+        try
+        {
+            var root = Normalize(game);
+            return Directory.Exists(Path.Combine(root, "bin", "x64", "plugins",
+                       ".cet_runtime_profiler")) ||
+                   File.Exists(Path.Combine(root, "red4ext", "plugins",
+                       "G-REDscript-Profiler", ".manager_state.json"));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException
+            or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    public bool RestoreActionAvailable(string? game) =>
+        HasRecoveryJournal || HasOwnerRestoreState(game);
+
     // Recover the original target from the durable session, not mutable UI
     // settings. This works even if the game exe / preflight is now unavailable.
     // Never infer a path from partial or corrupt journal data.
@@ -502,13 +526,20 @@ public sealed class UnifiedProfilerWorkflow
         if (GameRunning()) return new(false, "Close Cyberpunk before profiler restoration.");
         try
         {
-            if (!OwnsSession(game))
-                return new(false, "No matching GCO ownership journal. Use the authoritative standalone manager for recovery.");
+            // A valid GCO journal pins the game root. Without one, the selected
+            // game may still be restored if an authoritative owner marker exists.
+            // Neither case authorizes GCO to restore or delete profiler files itself.
+            var journalRoot = ReadRecoveryGameRoot();
+            if (journalRoot is not null &&
+                !string.Equals(journalRoot, Normalize(game), StringComparison.OrdinalIgnoreCase))
+                return new(false, "Profiler session belongs to another game folder.");
+            if (journalRoot is null && !HasOwnerRestoreState(game))
+                return new(false, "No source-owner profiler installation found for this game.");
             // Explicit RESTORE forfeits temporary results independently of
             // whether either profiler can finish restoring original files.
             // Never delete a CSV while its elevated writer may still run.
             string? discardError = null;
-            if (pendingPresentMonStopped && HasCaptureAttempt(game))
+            if (pendingPresentMonStopped && HasSessionForGame(game) && HasCaptureAttempt(game))
             {
                 try { AbandonCurrentUncollected(game); }
                 catch (Exception ex) { discardError = ex.Message; }
@@ -519,7 +550,7 @@ public sealed class UnifiedProfilerWorkflow
             // original game state after both operations.
             LiveProfilerState? before = null;
             try { before = await InspectAsync(game, token); }
-            catch { /* owner restore must run even if status parsing failed */ }
+            catch { /* owner restore runs even if status parsing fails */ }
             string? evidenceFolder = null;
             string? evidenceWarning = null;
             if (preserveIncompleteEvidence && before is { BothCaptured: false })
@@ -537,9 +568,8 @@ public sealed class UnifiedProfilerWorkflow
             var problems = new List<string>();
             foreach (var kind in new[] { BackendKind.Grsp, BackendKind.Cet })
             {
-                var installed = kind == BackendKind.Grsp
-                    ? before?.GrspManaged : before?.CetManaged;
-                if (installed == false) continue;
+                // Attempt each owner unconditionally. A damaged or incomplete
+                // installation may report unmanaged/invalid during pre-status.
                 try
                 {
                     var result = await Run(kind, "restore", game, token);
