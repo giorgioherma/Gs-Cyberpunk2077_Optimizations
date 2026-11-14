@@ -11,7 +11,8 @@ public sealed record CollectedCaptureIndex(
     string? FrameTimeCsv, bool Restored = false, List<string>? Skipped = null,
     CollectedFile? FrameTimeEvidence = null, bool CollectionAttempted = false,
     bool PresentMonStopVerified = false,
-    bool CetReadyBeforeAttempt = false, bool RedscriptReadyBeforeAttempt = false)
+    bool CetReadyBeforeAttempt = false, bool RedscriptReadyBeforeAttempt = false,
+    bool CollectInvoked = false)
 {
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
@@ -442,10 +443,24 @@ public static class CollectedCaptureStore
         return state;
     }
 
+    // Persist the one-shot click BEFORE touching any owner archive or ETW
+    // output; an exception or GUI restart must not re-enable the button.
+    // This flag is distinct from successful permanent collection, so failed
+    // scratch stays safely discardable by Capture Again or failed cleanup.
+    public static CollectedCaptureIndex MarkCollectInvoked(string root, string game, string sessionId)
+    {
+        var state = Read(root, game, sessionId, verifyHashes: true);
+        if (state.CollectInvoked || state.CollectionAttempted)
+            throw new InvalidOperationException("COLLECT was already used for this capture attempt.");
+        state = state with { CollectInvoked = true };
+        Write(root, state);
+        return state;
+    }
+
     public static CollectedCaptureIndex MarkCollectionAttempted(string root, string game, string sessionId, bool presentMonStopped)
     {
         var state = Read(root, game, sessionId, verifyHashes: true);
-        state = state with { CollectionAttempted = true, PresentMonStopVerified = presentMonStopped };
+        state = state with { CollectInvoked = true, CollectionAttempted = true, PresentMonStopVerified = presentMonStopped };
         Write(root, state);
         return state;
     }

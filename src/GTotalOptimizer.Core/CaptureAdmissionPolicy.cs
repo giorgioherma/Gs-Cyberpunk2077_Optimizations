@@ -2,15 +2,38 @@ namespace GTotalOptimizer.Core;
 
 public static class CaptureAdmissionPolicy
 {
-    // Collect is an explicit one-time completion per capture attempt, not a
-    // permanent launch-state toggle. A failed PresentMon stop may be retried;
-    // after verified shutdown the button stays disabled even if no native
-    // F11 capture exists. BeginCaptureAttempt assigns a new session ID and
-    // therefore a fresh uncollected index for the next game run.
+    // Completed native F11 output from BOTH owners is required. An interrupted
+    // Collect may have indexed or staged one domain; never accept a stale
+    // pre-attempt result or PresentMon-only evidence as the missing domain.
+    public static (bool Cet, bool Redscript) AvailableNativeCaptures(
+        LiveProfilerState? state, CollectedCaptureIndex? capture,
+        bool cetStaged = false, bool redscriptStaged = false)
+    {
+        if (state?.BothInstalled != true) return (false, false);
+        return (
+            capture?.Cet is not null ||
+                (capture?.CetReadyBeforeAttempt != true && (state.CetCaptureReady || cetStaged)),
+            capture?.Redscript is not null ||
+                (capture?.RedscriptReadyBeforeAttempt != true && (state.GrspCaptureReady || redscriptStaged)));
+    }
+
+    // This attempt's COLLECT is one-shot even if collection fails. START makes
+    // a new capture identity; RESTORE invokes the same source-owner restorers.
     public static bool CanCollect(bool hasOwnedSession, bool launchAttemptStarted,
-        CollectedCaptureIndex? capture = null) =>
-        hasOwnedSession && launchAttemptStarted &&
-        !(capture?.CollectionAttempted == true && capture.PresentMonStopVerified);
+        LiveProfilerState? state, CollectedCaptureIndex? capture = null,
+        bool cetStaged = false, bool redscriptStaged = false)
+    {
+        var ready = AvailableNativeCaptures(state, capture, cetStaged, redscriptStaged);
+        return hasOwnedSession && launchAttemptStarted && ready.Cet && ready.Redscript &&
+            capture?.CollectInvoked != true && capture?.CollectionAttempted != true;
+    }
+
+    public static string PendingCaptureGuidance((bool Cet, bool Redscript) ready) =>
+        "CET " + (ready.Cet ? "READY" : "MISSING") +
+        " | REDscript " + (ready.Redscript ? "READY" : "MISSING") +
+        (ready.Cet && ready.Redscript
+            ? ". Click COLLECT RESULTS."
+            : ". START again or RESTORE.");
 
     public static bool CanContinue(CollectedCaptureIndex? capture, bool presentMonStopped) =>
         presentMonStopped && capture?.PresentMonStopVerified == true && capture.CollectionAttempted &&

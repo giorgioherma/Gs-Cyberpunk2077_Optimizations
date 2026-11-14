@@ -357,11 +357,11 @@ try
         !installedStatus.CanCollect(hasCurrentSession: false, gameRunning: false) &&
         !installedStatus.CanLaunch(hasCurrentSession: true, gameRunning: false),
         "only completed dual-domain owner capture and closed game unlock Collect, not another launch");
-    Require((installedStatus with { CetCaptureReady = false })
+    Require(!(installedStatus with { CetCaptureReady = false })
             .CanCollect(hasCurrentSession: true, gameRunning: false) &&
-        (installedStatus with { GrspCaptureReady = false })
+        !(installedStatus with { GrspCaptureReady = false })
             .CanCollect(hasCurrentSession: true, gameRunning: false),
-        "independent CET-only and REDscript-only results can be collected");
+        "both source-owner F11 captures are required for collection");
 
     // Strict original framework versions are not rechecked while GCO's
     // temporary native profiler is installed and both owners verify identity.
@@ -680,11 +680,16 @@ try
     Require(!FrameworkPreflight.Evaluate(Full() with
         { Redscript = E(null) }).Ready,
         "an existing but unverifiable compiler is not declared compatible");
-    Require(CaptureAdmissionPolicy.CanCollect(true, true) &&
-        CaptureAdmissionPolicy.CanCollect(true, true, emptyCapture) &&
-        !CaptureAdmissionPolicy.CanCollect(true, false) &&
-        !CaptureAdmissionPolicy.CanCollect(false, true),
-        "Collect requires an owned launch attempt, not a successful native F11 capture");
+    Require(!CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture, emptyCapture) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true,
+            installedStatus with { CetCaptureReady = false }) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true,
+            installedStatus with { GrspCaptureReady = false }) &&
+        CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, emptyCapture) &&
+        !CaptureAdmissionPolicy.CanCollect(true, false, installedStatus) &&
+        !CaptureAdmissionPolicy.CanCollect(false, true, installedStatus),
+        "Collect requires BOTH current native captures; launch/PresentMon alone never qualify");
     Require(!CaptureAdmissionPolicy.CanContinue(emptyCapture, true) &&
         !CaptureAdmissionPolicy.CanContinue(cetCopy, true) &&
         !CaptureAdmissionPolicy.CanContinue(redCopy, true),
@@ -693,14 +698,43 @@ try
     Require(CaptureAdmissionPolicy.CanContinue(attemptedDual, true) &&
         !CaptureAdmissionPolicy.CanContinue(attemptedDual, false),
         "dual native capture allows Continue without PresentMon only after stopped collection");
-    Require(!CaptureAdmissionPolicy.CanCollect(true, true, attemptedDual) &&
-        !CaptureAdmissionPolicy.CanCollect(true, true, attemptedDual with
-            { Cet = null, Redscript = null, FrameTimeCsv = null, FrameTimeEvidence = null }),
-        "Collect greys out after verified shutdown even when both native captures are missing");
+    Require(!CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, attemptedDual) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedStatus,
+            attemptedDual with { Cet = null, Redscript = null,
+                FrameTimeCsv = null, FrameTimeEvidence = null }),
+        "sealed Collect is one-shot even if later results disappear");
     var newAttempt = CollectedCaptureStore.Read(package, archiveGame, Guid.NewGuid().ToString("N"));
-    Require(CaptureAdmissionPolicy.CanCollect(true, true, newAttempt) &&
-        !newAttempt.CollectionAttempted,
-        "a distinct new capture attempt re-enables Collect without reusing old evidence");
+    Require(CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, newAttempt) &&
+        !newAttempt.CollectInvoked,
+        "new capture identity permits Collect only after fresh dual-native readiness");
+    Require(!CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture, newAttempt) &&
+        CaptureAdmissionPolicy.PendingCaptureGuidance((true, false)).Contains("REDscript MISSING") &&
+        CaptureAdmissionPolicy.PendingCaptureGuidance((false, true)).Contains("CET MISSING"),
+        "reopened capture reports missing native domains, not PresentMon-only readiness");
+    var oneShotId = Guid.NewGuid().ToString("N");
+    var oneShotIndex = CollectedCaptureStore.Read(package, archiveGame, oneShotId);
+    var oneShot = CollectedCaptureStore.MarkCollectInvoked(
+        package, archiveGame, oneShotId);
+    Require(oneShot.CollectInvoked && !oneShot.CollectionAttempted &&
+        CollectedCaptureStore.Read(package, archiveGame, oneShotId).CollectInvoked &&
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedStatus, oneShot) &&
+        !CaptureAdmissionPolicy.CanCollect(true, true, installedStatus,
+            CollectedCaptureStore.Read(package, archiveGame, oneShotId)),
+        "failed Collect click persists one-shot admission across GUI restart");
+    Require(CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
+            attemptedDual with { CollectionAttempted = false }).Cet &&
+        CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
+            attemptedDual with { CollectionAttempted = false }).Redscript &&
+        CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture,
+            attemptedDual with { CollectionAttempted = false }),
+        "hash-indexed CET+GRSP copies may qualify an interrupted collection without live data");
+    Require(!CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
+            emptyCapture).Cet &&
+        !CaptureAdmissionPolicy.AvailableNativeCaptures(installedStatus,
+            emptyCapture with { CetReadyBeforeAttempt = true }).Cet &&
+        !CaptureAdmissionPolicy.AvailableNativeCaptures(installedStatus,
+            emptyCapture with { RedscriptReadyBeforeAttempt = true }).Redscript,
+        "missing or stale native captures never acquire readiness from a previous launch");
     var fullCaptureStatus = CaptureAdmissionPolicy.CollectionStatus(attemptedDual);
     var missingRedStatus = CaptureAdmissionPolicy.CollectionStatus(
         attemptedDual with { Redscript = null });

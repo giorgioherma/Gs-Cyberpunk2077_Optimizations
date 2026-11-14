@@ -708,10 +708,14 @@ public partial class MainWindow : Window
         {
             var stopped = await StopOwnedPresentMonAsync(exitedSessionId,
                 clearTracking: false);
-            PinStatus(stopped.Stopped
-                ? "Game closed. COLLECT, START again or RESTORE."
-                : "Game closed. PresentMon still stopping; retry Collect.",
-                stopped.Error);
+            // The next Refresh will read both real F11 outputs; do not pin
+            // a generic "Game closed" instruction across a later game run.
+            ClearStatusPin();
+            SetStatus(stopped.Stopped
+                ? "Game closed. Checking CET and REDscript..."
+                : "Game closed. PresentMon still stopping.");
+            if (stopped.Error is not null)
+                Trace.TraceWarning("PresentMon game-exit stop: " + stopped.Error);
         }
         finally { SetBusy(false); }
     }
@@ -1020,7 +1024,7 @@ public partial class MainWindow : Window
                 ? FrameworkPreflightResult.FromVerifiedInstalledBaseline()
                 : FrameworkPreflight.Inspect(current.GameRoot!);
             SetFrameworkStatuses(framework);
-            var saved = session ? Workflow.ReadCollected(current.GameRoot!) : null;
+            var saved = session ? Workflow.ReadCollected(current.GameRoot!, verifyHashes: true) : null;
             savedCapture = saved;
             var frame = PresentMonCaptureController.ReadTrackedCsv(packageRoot);
 
@@ -1034,11 +1038,17 @@ public partial class MainWindow : Window
             // insufficient to authorize Continue without native capture.
             PresentStatusText.Text = "PresentMon  ·  AUTOMATIC";
 
-            // Collect is available after a launch even if F11 was never used,
-            // but is disabled once this attempt's PresentMon shutdown and
-            // collection have been recorded. A failed stop remains retryable.
-            var captureStarted = Workflow.HasCaptureAttempt(current.GameRoot!);
-            var readyToCollect = CaptureAdmissionPolicy.CanCollect(session, captureStarted, saved);
+            // Reopen/tray resume never resets the session: owners determine
+            // which F11 captures actually completed. A failed Collect is
+            // permanently disabled for this attempt, even after restarting WPF.
+            var captureStarted = session && Workflow.HasCaptureAttempt(current.GameRoot!);
+            var staged = captureStarted
+                ? Workflow.PendingStagedNativeCaptures(current.GameRoot!)
+                : (Cet: false, Redscript: false);
+            var available = CaptureAdmissionPolicy.AvailableNativeCaptures(
+                state, saved, staged.Cet, staged.Redscript);
+            var readyToCollect = CaptureAdmissionPolicy.CanCollect(
+                session, captureStarted, state, saved, staged.Cet, staged.Redscript);
             var recentLaunch = captureLaunched &&
                 DateTime.UtcNow - lastLaunchRequestedUtc < TimeSpan.FromSeconds(10);
             InstallButton.IsEnabled = restoreAvailable ||
@@ -1060,22 +1070,29 @@ public partial class MainWindow : Window
             CollectButton.Content = "COLLECT RESULTS";
             resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
+            // Gameplay status replaces stale event/exit pins, rather than
+            // reporting "Game closed" while Cyberpunk is still running.
+            if (running || captureStarted)
+                ClearStatusPin();
             SetStatus(foreignSession
                 ? "Another game session is pending. Restore it before switching games."
                 : restoreAvailable && !session
                     ? "Profiler installation detected. Click RESTORE PROFILERS."
+                : running ? "Cyberpunk running. Record gameplay; F11 START / STOP."
                 : !framework.Ready ? UserFacingConsoleText.FrameworkGuidance(framework)
-                : running ? "Cyberpunk running. F11 starts profiling; F11 again stops it.\nClose the game, then COLLECT RESULTS."
                 : saved?.CollectionAttempted == true
                     ? UserFacingConsoleText.CollectionGuidance(saved)
-                    : readyToCollect
-                        ? "Game closed. Click COLLECT RESULTS."
+                    : captureStarted && saved?.CollectInvoked == true
+                        ? "Collect finished. START again or RESTORE."
+                    : captureStarted && state.BothInstalled
+                        ? CaptureAdmissionPolicy.PendingCaptureGuidance(available)
                         : state.BothInstalled
                             ? "Profilers installed. Click START CYBERPUNK.\nIn-game: F11 start, F11 stop."
                             : session
                                 ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
                                 : $"G-CET Profiler: {cetProfiler} | G-REDscript Profiler: {redProfiler}");
-            if (HasNative(saved) && portraitStage != PortraitStage.Collected)
+            if (CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
+                portraitStage != PortraitStage.Collected)
                 SetPortraitStage(PortraitStage.Collected);
         }
         catch (OperationCanceledException) { }
@@ -1335,38 +1352,40 @@ public partial class MainWindow : Window
             Warn("Cannot verify collection state: " + ex.Message, "Collection");
             return;
         }
+        LiveProfilerState owners;
+        try { owners = await Workflow.InspectAsync(game); }
+        catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
+        var stagedOwners = Workflow.PendingStagedNativeCaptures(game);
         if (!CaptureAdmissionPolicy.CanCollect(
-                Workflow.HasSessionForGame(game), true, existing))
+                Workflow.HasSessionForGame(game), true, owners, existing,
+                stagedOwners.Cet, stagedOwners.Redscript))
         {
-            Warn("Already collected. Start a new session or Restore.", "Collection");
+            Warn("Both CET and REDscript F11 captures are required. START again or RESTORE.", "Collection");
             return;
         }
+        // One-shot state is durable BEFORE any native copy, ETW flush or
+        // potential exception. Successful saves remain; failed scratch clears.
+        try { Workflow.RecordCollectInvoked(game); }
+        catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
         ClearStatusPin();
         SetBusy(true);
         SetPortraitStage(PortraitStage.Collecting);
         SetStatus("Collecting profiler results...");
+        var sealedSuccess = false;
         try
         {
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
             var nativeStatus = await Workflow.InspectAsync(game);
-            // A crash can occur AFTER verified owner copies are indexed and
-            // native live files are cleared, but BEFORE collection is sealed.
-            // Those hash-verified, current-session copies are recoverable.
             var indexed = Workflow.ReadCollected(game, verifyHashes: true);
-            if (!nativeStatus.CetCaptureReady && !nativeStatus.GrspCaptureReady &&
-                indexed?.Cet is null && indexed?.Redscript is null &&
-                !Workflow.HasPendingStagedNativeArchive(game))
-            {
-                SetPortraitStage(PortraitStage.Black);
-                PinStatus("No completed F11 capture. Start again or restore profilers.");
-                return;
-            }
-            // Only a completed native capture authorizes permanent collection.
-            // A failed run keeps PresentMon temporary until restart/restore.
-            // Do not discard the durable PresentMon pointer before a verified
-            // native collection. Failed Collect must remain retryable after
-            // closing or reopening the WPF interface.
+            var staged = Workflow.PendingStagedNativeCaptures(game);
+            var ready = CaptureAdmissionPolicy.AvailableNativeCaptures(
+                nativeStatus, indexed, staged.Cet, staged.Redscript);
+            if (!ready.Cet || !ready.Redscript)
+                throw new InvalidOperationException(
+                    CaptureAdmissionPolicy.PendingCaptureGuidance(ready));
+            // Both owner captures were ready when COLLECT was invoked.
+            // A failed native collect ends this attempt, not a second click.
             var stop = await StopOwnedPresentMonAsync(attempt.SessionId,
                 clearTracking: false);
             string? frameWarning = stop.Error;
@@ -1394,12 +1413,10 @@ public partial class MainWindow : Window
             // Do not seal a failed/empty native collection. Keep the pending
             // capture intact so Collect may be retried or the run abandoned.
             var collected = Workflow.ReadCollected(game, verifyHashes: true);
-            if (!native.Ok || !stop.Stopped || !HasNative(collected))
-            {
-                PinStatus("No verified F11 capture collected. Retry or start a fresh run.",
-                    native.Detail + (frameWarning is null ? "" : " | PresentMon: " + frameWarning));
-                return;
-            }
+            if (!native.Ok || !stop.Stopped ||
+                collected?.Cet is null || collected.Redscript is null)
+                throw new InvalidOperationException("Native collection incomplete: " + native.Detail +
+                    (frameWarning is null ? "" : " | PresentMon: " + frameWarning));
             // Retire the temporary PresentMon pointer only after the CET/GRSP
             // archives are durable, hashes verify, and ETW is stopped. If this
             // cleanup fails, do not seal Collect; the same session can retry.
@@ -1409,7 +1426,8 @@ public partial class MainWindow : Window
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             captureLaunched = false;
-            if (HasNative(saved))
+            sealedSuccess = true;
+            if (saved.Cet is not null && saved.Redscript is not null)
             {
                 resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
                 SetPortraitStage(PortraitStage.Collected);
@@ -1430,7 +1448,39 @@ public partial class MainWindow : Window
             SetPortraitStage(PortraitStage.Black);
             Warn(ex.Message, "Capture collection");
         }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        finally
+        {
+            if (!sealedSuccess)
+            {
+                // Attempt both owner resets, even on partial collection. No
+                // file can be cleared while the owned PresentMon writer runs.
+                try
+                {
+                    var session = Workflow.ReadRecoverySessionId(game);
+                    var stopped = await StopOwnedPresentMonAsync(
+                        session ?? Guid.NewGuid().ToString("N"), clearTracking: false);
+                    if (stopped.Stopped)
+                    {
+                        var reset = await Workflow.ResetNativeOutputAsync(game);
+                        if (reset.Ok)
+                        {
+                            Workflow.AbandonCurrentUncollected(game);
+                            PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+                            stoppedPresentMonCsv = null;
+                        }
+                        else Trace.TraceWarning("Failed-Collect native cleanup: " + reset.Detail);
+                    }
+                    else Trace.TraceWarning("Failed-Collect PresentMon shutdown: " + stopped.Error);
+                }
+                catch (Exception ex) { Trace.TraceWarning("Failed-Collect scratch cleanup: " + ex); }
+                // Never convert a failed one-shot attempt into a saved capture.
+                // START will use the normal capture reset if cleanup is pending.
+                SetPortraitStage(PortraitStage.Black);
+                PinStatus("Collect failed. START again or RESTORE.");
+            }
+            SetBusy(false);
+            await RefreshSourceAsync();
+        }
     }
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)

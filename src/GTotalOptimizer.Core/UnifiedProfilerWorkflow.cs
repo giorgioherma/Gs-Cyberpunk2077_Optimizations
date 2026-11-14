@@ -186,20 +186,27 @@ public sealed class UnifiedProfilerWorkflow
         return File.Exists(Path.Combine(candidates[0], expected)) ? candidates[0] : null;
     }
 
-    public bool HasPendingStagedNativeArchive(string game)
+    // Distinct per-owner staging evidence can survive interrupted collection.
+    public (bool Cet, bool Redscript) PendingStagedNativeCaptures(string game)
     {
-        if (!HasCaptureAttempt(game)) return false;
+        if (!HasCaptureAttempt(game)) return (false, false);
         try
         {
             var id = SessionId();
-            return StagedArchive(id, BackendKind.Cet) is not null ||
-                StagedArchive(id, BackendKind.Grsp) is not null;
+            return (StagedArchive(id, BackendKind.Cet) is not null,
+                StagedArchive(id, BackendKind.Grsp) is not null);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException
             or UnauthorizedAccessException)
         {
-            return false; // Collect will report exact issue; no false ready state
+            return (false, false);
         }
+    }
+
+    public bool HasPendingStagedNativeArchive(string game)
+    {
+        var staged = PendingStagedNativeCaptures(game);
+        return staged.Cet || staged.Redscript;
     }
 
     // Called only after a deliberate Capture Again, never on GUI unload.
@@ -471,6 +478,14 @@ public sealed class UnifiedProfilerWorkflow
         return discarded;
     }
 
+    public CollectedCaptureIndex RecordCollectInvoked(string game)
+    {
+        if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting.");
+        if (!HasCaptureAttempt(game))
+            throw new InvalidOperationException("No current capture attempt.");
+        return CollectedCaptureStore.MarkCollectInvoked(packageRoot, game, SessionId());
+    }
+
     public CollectedCaptureIndex RecordCollectionAttempt(string game, bool presentMonStopped)
     {
         if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting results.");
@@ -626,17 +641,14 @@ public sealed class UnifiedProfilerWorkflow
         LiveProfilerState state;
         try { state = await InspectAsync(game, token); }
         catch (Exception ex) { return new(false, "Owner capture status unavailable: " + ex.Message); }
-        if (!state.BothInstalled && !saved.HasAny)
-            return new(false, "Profiler owners are not both installed and no frame-time evidence was saved.");
         var stagedCet = StagedArchive(id, BackendKind.Cet);
         var stagedRed = StagedArchive(id, BackendKind.Grsp);
-        if (!state.CetCaptureReady && !state.GrspCaptureReady &&
-            stagedCet is null && stagedRed is null && !saved.HasAny)
-            return new(false, "No completed CET, REDscript or frame-time capture.");
-        if (!state.BothInstalled)
-            return new(true, "Only verified frame-time evidence collected; profiler owner state requires recovery. " +
-                "Original game files are still instrumented until Continue or explicit Restore.",
-                CaptureVerified: saved.HasAny);
+        var ready = CaptureAdmissionPolicy.AvailableNativeCaptures(
+            state, saved, stagedCet is not null, stagedRed is not null);
+        if (!ready.Cet || !ready.Redscript)
+            return new(false, "CET " + (ready.Cet ? "READY" : "MISSING") +
+                " | REDscript " + (ready.Redscript ? "READY" : "MISSING") +
+                ". Both completed F11 captures are required.");
 
         try
         {
@@ -689,8 +701,10 @@ public sealed class UnifiedProfilerWorkflow
                     BackendKind.Grsp, archive);
                 RetireStagedArchive(id, BackendKind.Grsp, archive);
             }
-            // Partial/uncompleted output must not remain in the game for the
-            // next capture, even if only one native domain was collected.
+            // Only finish Collect with two complete verified owner copies.
+            // Cleanup of failed attempts belongs to the one-shot GUI action.
+            if (saved.Cet is null || saved.Redscript is null)
+                return new(false, "One owner archive is missing; native collection incomplete.");
             var reset = await ResetNativeOutputAsync(game, token);
             if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
         }
@@ -708,14 +722,13 @@ public sealed class UnifiedProfilerWorkflow
             (saved.RedscriptReadyBeforeAttempt
                 ? " REDscript had pre-existing native results; excluded from this attempt."
                 : "");
-        return new(saved.HasAny, "Collected " +
-            (saved.Cet is null ? "no CET" : "CET") + " / " +
+        return new(saved.Cet is not null && saved.Redscript is not null, "Collected " +            (saved.Cet is null ? "no CET" : "CET") + " / " +
             (saved.Redscript is null ? "no REDscript" : "REDscript") +
             ". Original game files are still instrumented until Continue or explicit Restore." +
             staleNotice,
             saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
             saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"),
-            CaptureVerified: saved.HasAny, RestoreVerified: false);
+            CaptureVerified: saved.Cet is not null && saved.Redscript is not null, RestoreVerified: false);
     }
 
     public async Task<ProfilerWorkflowResult> ContinueAsync(string game,
