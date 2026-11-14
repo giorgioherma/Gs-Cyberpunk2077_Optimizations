@@ -445,11 +445,24 @@ public sealed class UnifiedProfilerWorkflow
             var state = await InspectAsync(game, token);
             if (!state.BothInstalled)
                 return new(false, "Profiler ownership changed; preserve results and restore safely.");
-            Require(await Run(BackendKind.Cet, "discard-live", game, token));
-            Require(await Run(BackendKind.Grsp, "discard-live", game, token));
+            // Both owners get a reset attempt independently. One failed
+            // command must never suppress the other owner's cleanup.
+            var failures = new List<string>();
+            foreach (var kind in new[] { BackendKind.Cet, BackendKind.Grsp })
+            {
+                try
+                {
+                    var result = await Run(kind, "discard-live", game, token);
+                    if (!result.Ok) failures.Add(kind + ": " + result.Detail);
+                }
+                catch (Exception ex) { failures.Add(kind + ": " + ex.Message); }
+            }
             var after = await InspectAsync(game, token);
             if (!after.BothInstalled || after.CetCaptureReady || after.GrspCaptureReady)
-                return new(false, "Native capture reset could not be verified. No game launch authorized.");
+                return new(false, "Native capture reset incomplete: " +
+                    string.Join("; ", failures) + ". START blocked until both owners are clean.");
+            // Final owner state wins over a command warning only if BOTH
+            // installed profilers and BOTH empty result scopes are verified.
             return new(true, "Uncollected CET and REDscript native output reset.");
         }
         catch (Exception ex)

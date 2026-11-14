@@ -722,11 +722,11 @@ try
             CollectedCaptureStore.Read(package, archiveGame, oneShotId)),
         "failed Collect click persists one-shot admission across GUI restart");
     Require(CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
-            attemptedDual with { CollectionAttempted = false }).Cet &&
+            attemptedDual with { CollectionAttempted = false, CollectInvoked = false }).Cet &&
         CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
-            attemptedDual with { CollectionAttempted = false }).Redscript &&
+            attemptedDual with { CollectionAttempted = false, CollectInvoked = false }).Redscript &&
         CaptureAdmissionPolicy.CanCollect(true, true, installedNoCapture,
-            attemptedDual with { CollectionAttempted = false }),
+            attemptedDual with { CollectionAttempted = false, CollectInvoked = false }),
         "hash-indexed CET+GRSP copies may qualify an interrupted collection without live data");
     Require(!CaptureAdmissionPolicy.AvailableNativeCaptures(installedNoCapture,
             emptyCapture).Cet &&
