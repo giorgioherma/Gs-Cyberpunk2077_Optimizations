@@ -43,7 +43,8 @@ public static class PresentMonLifecyclePolicy
     // game using the one approved UAC. GCO's small elevated native observer
     // owns its graceful game-exit/failed-launch ETW shutdown. Never enable
     // PresentMon's competing --terminate_on_proc_exit watcher.
-    // CET / GRSP timestamps define the useful analysis window later.
+    // GRSP's Windows QPC+Unix anchors and CET's Unix markers define the F11
+    // window without relying on PresentMon's incorrect local-time formatting.
     public static IReadOnlyList<string> StartArguments(string csv, bool showConsoleStats = false)
     {
         RequireWritableCapturePath(csv);
@@ -53,7 +54,7 @@ public static class PresentMonLifecyclePolicy
             "--session_name", SessionName,
             "--stop_existing_session",
             "--output_file", csv,
-            "--date_time",
+            "--qpc_time",
             "--no_track_input"
         };
         if (!showConsoleStats) arguments.Add("--no_console_stats");
@@ -125,9 +126,11 @@ public static class PresentMonLifecyclePolicy
         if (header is null) throw new InvalidDataException("PresentMon CSV lacks a header.");
         var columns = header.Split(',');
         var app = Array.FindIndex(columns, c => c.Trim().Trim('"') == "Application");
-        var timestamp = Array.FindIndex(columns, c => c.Trim().Trim('"') == "CPUStartDateTime");
+        var timestamp = Array.FindIndex(columns, c =>
+            c.Trim().Trim('"') is "CPUStartQPC" or "CPUStartDateTime");
         if (app < 0 || timestamp < 0)
-            throw new InvalidDataException("PresentMon CSV lacks Application or CPUStartDateTime.");
+            throw new InvalidDataException("PresentMon CSV lacks Application or a supported frame clock.");
+        var qpcClock = columns[timestamp].Trim().Trim('"') == "CPUStartQPC";
         var matches = 0;
         string? line;
         while ((line = reader.ReadLine()) is not null)
@@ -135,7 +138,11 @@ public static class PresentMonLifecyclePolicy
             var row = line.Split(',');
             if (row.Length <= Math.Max(app, timestamp)) continue;
             if (!row[app].Trim().Trim('"').Equals("Cyberpunk2077.exe", StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(row[timestamp])) continue;
+                string.IsNullOrWhiteSpace(row[timestamp]) ||
+                (qpcClock && !long.TryParse(row[timestamp].Trim().Trim('"'),
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var ticks)))
+                continue;
             if (++matches == 2) return matches;
         }
         if (matches == 0)

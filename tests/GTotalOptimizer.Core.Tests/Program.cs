@@ -476,10 +476,16 @@ try
         "Sequence,CaptureMs,UnixEpochMs,Label,DroppedMarkersAtDump\n" +
         "1,0.000000," + (sampleUnix + 100) + ",CAPTURE_START,0\n" +
         "2,800.000000," + (sampleUnix + 900) + ",PAUSE,0\n");
+    // GRSP and PresentMon both use Windows QueryPerformanceCounter.
+    // 10,000 QPC ticks/ms is a synthetic fixture rate, not a runtime constant.
+    var qpcOrigin = 1_141_273_085_012L;
+    const long fixtureTicksPerMs = 10_000;
     File.WriteAllText(Path.Combine(redSource, "Data", "Runtime", "GRSP_Markers.csv"),
         "capture_id,scenario,event,qpc,capture_ms,unix_ms\n" +
-        "1,test,START,100,0.000," + (sampleUnix + 110) + "\n" +
-        "1,test,STOP_REQUEST,200,740.000," + (sampleUnix + 850) + "\n");
+        "1,test,START," + (qpcOrigin + 110 * fixtureTicksPerMs) +
+            ",0.000," + (sampleUnix + 110) + "\n" +
+        "1,test,STOP_REQUEST," + (qpcOrigin + 850 * fixtureTicksPerMs) +
+            ",740.000," + (sampleUnix + 850) + "\n");
     var package = Path.Combine(root, "GCO-package");
     var sessionId = Guid.NewGuid().ToString("N");
     var emptyCapture = CollectedCaptureStore.Read(package, archiveGame, sessionId);
@@ -991,7 +997,8 @@ try
     var stopArgs = PresentMonLifecyclePolicy.StopArguments();
     Require(startArgs.Contains("--process_name") &&
         startArgs.Contains("Cyberpunk2077.exe") &&
-        startArgs.Contains("--date_time") &&
+        startArgs.Contains("--qpc_time") &&
+        !startArgs.Contains("--date_time") &&
         startArgs.Contains("--no_track_input") &&
         startArgs.Contains("--stop_existing_session") &&
         startArgs.Contains("--output_file") &&
@@ -1085,14 +1092,23 @@ try
         datedPackage, CollectedCaptureStore.Read(datedPackage, datedGame, datedId,
             verifyHashes: true));
     Require(commonWindow.StartUnixMs == sampleUnix + 110 &&
-        commonWindow.EndUnixMs == sampleUnix + 850,
-        "actual CET CAPTURE_START+PAUSE and GRSP START+STOP_REQUEST F11 markers determine the shared interval");
-    var rawDatedCsv = "Application,CPUStartDateTime,MsBetweenPresents,MsInPresentAPI\r\n" +
-        "Cyberpunk2077.exe,2026-11-05 22:40:00.050000000,16.6,0.5\r\n" +
-        "Cyberpunk2077.exe,2026-11-05 22:40:00.123456789,16.6,0.5\r\n" +
-        "Other.exe,2026-11-05 22:40:00.200000000,8.2,0.5\r\n" +
-        "Cyberpunk2077.exe,2026-11-05 22:40:00.500000000,17.0,0.3\r\n" +
-        "Cyberpunk2077.exe,2026-11-05 22:40:00.950000000,17.0,0.3\r\n";
+        commonWindow.EndUnixMs == sampleUnix + 850 &&
+        commonWindow.GrspStartQpc == qpcOrigin + 110 * fixtureTicksPerMs &&
+        commonWindow.GrspStopQpc == qpcOrigin + 850 * fixtureTicksPerMs,
+        "actual CET CAPTURE_START+PAUSE and GRSP START+STOP_REQUEST QPC+Unix markers determine one verified interval");
+    // New captures use monotonic QPC. The older 2.6.0 --date_time output
+    // incorrectly double-converts local time on some Windows installations.
+    // These numeric ticks are correct regardless of the runner's timezone.
+    var qpcEarly = qpcOrigin + 50 * fixtureTicksPerMs;
+    var qpcIncludedA = qpcOrigin + 1_234_560; // 123.456 ms
+    var qpcIncludedB = qpcOrigin + 500 * fixtureTicksPerMs;
+    var qpcLate = qpcOrigin + 950 * fixtureTicksPerMs;
+    var rawDatedCsv = "Application,CPUStartQPC,MsBetweenPresents,MsInPresentAPI\r\n" +
+        $"Cyberpunk2077.exe,{qpcEarly},16.6,0.5\r\n" +
+        $"Cyberpunk2077.exe,{qpcIncludedA},16.6,0.5\r\n" +
+        $"Other.exe,{qpcOrigin + 200 * fixtureTicksPerMs},8.2,0.5\r\n" +
+        $"Cyberpunk2077.exe,{qpcIncludedB},17.0,0.3\r\n" +
+        $"Cyberpunk2077.exe,{qpcLate},17.0,0.3\r\n";
     File.WriteAllText(datedCsv, rawDatedCsv);
     var datedMon = CollectedCaptureStore.CollectPresentMon(
         datedPackage, datedGame, datedId, datedCsv, commonWindow);
@@ -1101,10 +1117,10 @@ try
         datedMon.PresentMonOverlapStartUnixMs == commonWindow.StartUnixMs &&
         datedMon.PresentMonOverlapEndUnixMs == commonWindow.EndUnixMs &&
         datedMon.PresentMonAlignedFrames == 2 &&
-        filtered.Contains("00.123456789") &&
-        filtered.Contains("00.500000000") &&
-        !filtered.Contains("00.050000000") &&
-        !filtered.Contains("00.950000000") &&
+        filtered.Contains(qpcIncludedA.ToString(System.Globalization.CultureInfo.InvariantCulture)) &&
+        filtered.Contains(qpcIncludedB.ToString(System.Globalization.CultureInfo.InvariantCulture)) &&
+        !filtered.Contains(qpcEarly.ToString(System.Globalization.CultureInfo.InvariantCulture)) &&
+        !filtered.Contains(qpcLate.ToString(System.Globalization.CultureInfo.InvariantCulture)) &&
         !filtered.Contains("Other.exe") &&
         CollectedCaptureStore.Read(datedPackage, datedGame, datedId,
             verifyHashes: true).HasAny,
@@ -1117,11 +1133,26 @@ try
     try
     {
         PresentMonCaptureAlignment.TrimToOverlap(datedPackage, datedCsv,
-            new NativeCaptureWindow(sampleUnix + 2000, sampleUnix + 2500));
+            commonWindow with
+            { StartUnixMs = sampleUnix + 2000, EndUnixMs = sampleUnix + 2500 });
     }
     catch (InvalidDataException) { noOverlapRejected = true; }
     Require(noOverlapRejected && File.ReadAllText(datedCsv) == filtered,
-        "no overlapping frames must preserve the original CSV and reject fake correlation");
+        "no overlapping QPC frames must preserve the original CSV and reject fake correlation");
+    var missingClockRefused = false;
+    try
+    {
+        PresentMonCaptureAlignment.TrimToOverlap(datedPackage, datedCsv,
+            new NativeCaptureWindow(commonWindow.StartUnixMs, commonWindow.EndUnixMs));
+    }
+    catch (InvalidDataException) { missingClockRefused = true; }
+    Require(missingClockRefused && File.ReadAllText(datedCsv) == filtered,
+        "QPC frame capture without matching GRSP QPC anchors is refused without modifying original CSV");
+    // Keep historical properly-localized --date_time evidence readable for
+    // legacy sessions, without ever applying a fixed country or DST offset.
+    Require(PresentMonCaptureAlignment.TrimToOverlap(
+            root, automaticCsv, new NativeCaptureWindow(sampleUnix + 110, sampleUnix + 850)) == 2,
+        "legacy locally formatted PresentMon CSV remains supported");
     var nativeWindowRejected = false;
     try { PresentMonCaptureAlignment.RequireOverlap(
         datedPackage, datedRed with { Cet = null }); }

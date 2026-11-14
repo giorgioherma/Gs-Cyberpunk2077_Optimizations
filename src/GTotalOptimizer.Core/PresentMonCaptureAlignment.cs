@@ -4,11 +4,13 @@ using System.Text;
 namespace GTotalOptimizer.Core;
 
 // Offline, read-only native marker correlation. Never invokes profiler hooks.
-public sealed record NativeCaptureWindow(long StartUnixMs, long EndUnixMs);
+public sealed record NativeCaptureWindow(long StartUnixMs, long EndUnixMs,
+    long? GrspStartQpc = null, long? GrspStopQpc = null,
+    long? GrspStartUnixMs = null, long? GrspStopUnixMs = null);
 
 public static class PresentMonCaptureAlignment
 {
-    private static (long Start, long End) ReadMarkers(
+    private static (long Start, long End, long? StartQpc, long? StopQpc) ReadMarkers(
         string packageRoot, string id, string domain, CollectedOwner owner,
         string expectedFile)
     {
@@ -37,9 +39,13 @@ public static class PresentMonCaptureAlignment
             v.Trim().Trim('"').Equals("unix_ms", StringComparison.OrdinalIgnoreCase));
         if (label < 0 || unix < 0)
             throw new InvalidDataException(domain + " markers lack absolute-time columns.");
+        var qpc = Array.FindIndex(header, v =>
+            v.Trim().Trim('"').Equals("qpc", StringComparison.OrdinalIgnoreCase));
 
         long start = 0;
         long end = 0;
+        long? startQpc = null;
+        long? stopQpc = null;
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
@@ -64,12 +70,33 @@ public static class PresentMonCaptureAlignment
                 eventName is "CAPTURE_STOP" or "CAPTURE_END" ||
                 (domain == "CET" &&
                  eventName.Equals("PAUSE", StringComparison.OrdinalIgnoreCase));
-            if (begin) start = start == 0 ? stamp : Math.Min(start, stamp);
-            if (stop) end = Math.Max(end, stamp);
+            // GRSP records the global Windows QueryPerformanceCounter clock
+            // next to Unix milliseconds, allowing timezone-free correlation
+            // with PresentMon --qpc_time, without modifying either profiler.
+            long? tick = null;
+            if (domain == "REDscript" && qpc >= 0 &&
+                fields.Length > qpc &&
+                long.TryParse(fields[qpc].Trim().Trim('"'),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var parsedQpc) &&
+                parsedQpc > 0)
+                tick = parsedQpc;
+            if (begin)
+            {
+                if (start == 0 || stamp < start)
+                {
+                    start = stamp;
+                    startQpc = tick;
+                }
+            }
+            if (stop && stamp >= end)
+            {
+                end = stamp;
+                stopQpc = tick;
+            }
         }
         if (start == 0 || end <= start)
             throw new InvalidDataException(domain + " has no complete F11 START/STOP clock markers.");
-        return (start, end);
+        return (start, end, startQpc, stopQpc);
     }
 
     public static NativeCaptureWindow RequireOverlap(string packageRoot,
@@ -85,7 +112,10 @@ public static class PresentMonCaptureAlignment
         var stop = Math.Min(cet.End, red.End);
         if (stop <= start)
             throw new InvalidDataException("CET and REDscript F11 windows do not overlap.");
-        return new NativeCaptureWindow(start, stop);
+        // A GRSP QPC anchor is optional only for legacy PresentMon date-time
+        // exports. New QPC captures will explicitly require both anchors.
+        return new NativeCaptureWindow(start, stop,
+            red.StartQpc, red.StopQpc, red.Start, red.End);
     }
 
     // PresentMon --date_time writes local wall-clock timestamps, sometimes
@@ -118,6 +148,29 @@ public static class PresentMonCaptureAlignment
         return true;
     }
 
+    // Convert the common monotonic Windows QPC clock to GRSP's native Unix
+    // clock using its exact F11 START/STOP anchors. Both clocks come from the
+    // same machine and session. No local timezone, DST rule or fixed offset.
+    private static long FrameQpcUnixMs(string raw, NativeCaptureWindow overlap)
+    {
+        if (overlap.GrspStartQpc is not long qpcStart ||
+            overlap.GrspStopQpc is not long qpcStop ||
+            overlap.GrspStartUnixMs is not long unixStart ||
+            overlap.GrspStopUnixMs is not long unixStop ||
+            qpcStop <= qpcStart || unixStop <= unixStart)
+            throw new InvalidDataException("GRSP F11 QPC clock anchors are missing or invalid.");
+        if (!long.TryParse(raw.Trim().Trim('"'), NumberStyles.None,
+                CultureInfo.InvariantCulture, out var frameQpc) || frameQpc <= 0)
+            throw new InvalidDataException("Invalid PresentMon QPC frame timestamp.");
+
+        var projected = (decimal)unixStart +
+            ((decimal)frameQpc - qpcStart) * (unixStop - unixStart) /
+            ((decimal)qpcStop - qpcStart);
+        if (projected is < 1_000_000_000_000m or > 4_102_444_800_000m)
+            throw new InvalidDataException("PresentMon QPC is outside the supported Unix clock range.");
+        return (long)decimal.Round(projected, 0, MidpointRounding.AwayFromZero);
+    }
+
     // Atomic replacement is allowed only after a verified, nonempty frame
     // intersection. Repeating the same filter is idempotent.
     public static int TrimToOverlap(string root, string csv, NativeCaptureWindow overlap)
@@ -141,10 +194,15 @@ public static class PresentMonCaptureAlignment
                 var cols = header.Split(',');
                 var app = Array.FindIndex(cols, c =>
                     c.Trim().Trim('"').Equals("Application", StringComparison.Ordinal));
-                var time = Array.FindIndex(cols, c =>
+                var qpc = Array.FindIndex(cols, c =>
+                    c.Trim().Trim('"').Equals("CPUStartQPC", StringComparison.Ordinal));
+                var time = qpc >= 0 ? qpc : Array.FindIndex(cols, c =>
                     c.Trim().Trim('"').Equals("CPUStartDateTime", StringComparison.Ordinal));
                 if (app < 0 || time < 0)
-                    throw new InvalidDataException("PresentMon CSV has no absolute frame clock.");
+                    throw new InvalidDataException("PresentMon CSV has no recognized frame clock.");
+                if (qpc >= 0 &&
+                    (overlap.GrspStartQpc is null || overlap.GrspStopQpc is null))
+                    throw new InvalidDataException("GRSP F11 QPC anchors are needed for frame alignment.");
                 writer.WriteLine(header);
                 string? line;
                 while ((line = reader.ReadLine()) is not null)
@@ -152,9 +210,14 @@ public static class PresentMonCaptureAlignment
                     var fields = line.Split(',');
                     if (fields.Length <= Math.Max(app, time) ||
                         !fields[app].Trim().Trim('"').Equals("Cyberpunk2077.exe",
-                            StringComparison.OrdinalIgnoreCase) ||
-                        !TryLocalFrameUnixMs(fields[time], out var ms) ||
-                        ms < overlap.StartUnixMs || ms >= overlap.EndUnixMs) continue;
+                            StringComparison.OrdinalIgnoreCase)) continue;
+                    long ms;
+                    if (qpc >= 0)
+                        ms = FrameQpcUnixMs(fields[time], overlap);
+                    else if (!TryLocalFrameUnixMs(fields[time], out ms))
+                        continue; // Legacy properly localized CSV only.
+                    if (ms < overlap.StartUnixMs || ms >= overlap.EndUnixMs)
+                        continue;
                     writer.WriteLine(line);
                     kept++;
                 }
