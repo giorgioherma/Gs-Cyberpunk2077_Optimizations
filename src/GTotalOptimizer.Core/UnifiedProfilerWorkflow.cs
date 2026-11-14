@@ -18,8 +18,7 @@ public sealed record LiveProfilerState(
     // The two source owners decide capture completion. A journal alone means
     // only that profiler files were installed; it never unlocks collection.
     public bool CanCollect(bool hasCurrentSession, bool gameRunning) =>
-        hasCurrentSession && !gameRunning && BothInstalled &&
-        (CetCaptureReady || GrspCaptureReady);
+        hasCurrentSession && !gameRunning && BothCaptured;
     public bool CanLaunch(bool hasCurrentSession, bool gameRunning) =>
         hasCurrentSession && !gameRunning && BothInstalled && !BothCaptured;
 }
