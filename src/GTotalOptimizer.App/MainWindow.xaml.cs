@@ -598,11 +598,11 @@ public partial class MainWindow : Window
         DispatchGameEvent(() => _ = ReconcileGameProcessChangesAsync());
     }
 
-    private void HibernateForObservedCapture()
+    private bool HibernateForObservedCapture()
     {
         if (!pendingCaptureHibernation || busy || !IsLoaded ||
             closingInProgress || closureCleanupVerified ||
-            WpfVerificationMode || !GameRunning()) return;
+            WpfVerificationMode || !GameRunning()) return false;
 
         // Do not assume a Process.Start return value is a running game; the
         // actual Cyberpunk process may appear later during mod loading.
@@ -619,6 +619,7 @@ public partial class MainWindow : Window
                 // No tray handoff for a game which died before it began.
             }
         }));
+        return true;
     }
 
     private void GameStarted(int pid)
@@ -1356,13 +1357,11 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
-            if (launched)
-            {
-                // No one-time process check: the notification may arrive AFTER
-                // Process.Start returns. Hibernate on actual game observation.
-                HibernateForObservedCapture();
-            }
-            await RefreshSourceAsync();
+            // Skip costly UI/source refresh when an actual game process has
+            // already authorized the queued WPF unload. If the game has not
+            // appeared yet, leave WPF open until its start notification.
+            if (!launched || !HibernateForObservedCapture())
+                await RefreshSourceAsync();
         }
     }
 
