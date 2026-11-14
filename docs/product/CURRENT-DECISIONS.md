@@ -559,3 +559,7 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-14 — X means full exit; capture hibernation alone retains tray
 
 - X/Alt+F4 terminates both the WPF managed GUI and the lightweight native launcher. Only a successful START CYBERPUNK calls the explicit WPF unload that retains a native tray during profiling. Neither close clears pending CET/GRSP output, collected RESULTS, GCO journal, owner restore markers, nor PresentMon; opening the EXE again recovers the durable phase. Keep in-progress owner transaction safety, the existing tray menu and exactly two pages.
+
+## 2026-11-14 — await actual game process before hibernating WPF
+
+- GCO START may return before `Cyberpunk2077.exe` is visible: do not permanently skip the tray handoff after a single immediate `GameRunning` check or classify GCO's delayed game-start WMI event as an external capture restart. Arm a pending hibernation for START, consume it when the actual game is observed running, and retain the window if the game dies before handoff. Preserve direct X full exit and existing source-owned capture/PresentMon lifecycles.

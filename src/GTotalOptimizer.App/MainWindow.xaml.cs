@@ -35,6 +35,9 @@ public partial class MainWindow : Window
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
     private bool captureLaunched;
+    // START may return before the real Cyberpunk process is observable. Keep
+    // its pending tray handoff until that specific game startup is confirmed.
+    private bool pendingCaptureHibernation;
     private DateTime lastLaunchRequestedUtc = DateTime.MinValue;
     private string? consolePinned;
     private bool gameStateRefreshInFlight;
@@ -595,6 +598,29 @@ public partial class MainWindow : Window
         DispatchGameEvent(() => _ = ReconcileGameProcessChangesAsync());
     }
 
+    private void HibernateForObservedCapture()
+    {
+        if (!pendingCaptureHibernation || busy || !IsLoaded ||
+            closingInProgress || closureCleanupVerified ||
+            WpfVerificationMode || !GameRunning()) return;
+
+        // Do not assume a Process.Start return value is a running game; the
+        // actual Cyberpunk process may appear later during mod loading.
+        pendingCaptureHibernation = false;
+        captureHibernationClose = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            // Process may have crashed before the scheduled WPF close.
+            if (IsLoaded && !busy && GameRunning())
+                Close();
+            else
+            {
+                captureHibernationClose = false;
+                // No tray handoff for a game which died before it began.
+            }
+        }));
+    }
+
     private void GameStarted(int pid)
     {
         if (observedGamePid == pid) return;
@@ -606,16 +632,19 @@ public partial class MainWindow : Window
             GameExited(pid);
             return;
         }
-        if (gcoLaunchedGamePid == pid)
+        if (pendingCaptureHibernation || gcoLaunchedGamePid == pid)
         {
+            // Delayed start from OUR START button: never run the external
+            // game's BeginFreshCapture reset against an already-running game.
             gcoLaunchedGamePid = null;
+            HibernateForObservedCapture();
         }
         else
         {
             pendingExternalGameStart = true;
             pendingExternalGamePid = pid;
+            QueueGameReconciliation();
         }
-        QueueGameReconciliation();
     }
 
     private void GameExited(int pid)
@@ -625,6 +654,7 @@ public partial class MainWindow : Window
         observedGamePid = null;
         gcoLaunchedGamePid = null;
         captureLaunched = false;
+        pendingCaptureHibernation = false;
         // Match the exit to the still-active attempt, not a session that
         // might already have been superseded by another game launch.
         try
@@ -1279,16 +1309,33 @@ public partial class MainWindow : Window
                 gameAlreadyRunning: false);
             try
             {
+                // Arm before CreateProcess: a fast WMI start can be queued
+                // before Process.Start returns, but still belongs to GCO.
+                pendingCaptureHibernation = true;
                 using var started = Process.Start(new ProcessStartInfo(executable)
                 {
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(executable)!
                 }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
                 gcoLaunchedGamePid = started.Id;
-                GameStarted(started.Id); // Process.Exited, no 2-second polling
+                // Only track the real game executable, not a transient launch
+                // delegate. If it has not started yet, wait for WMI/fallback.
+                try
+                {
+                    if (!started.HasExited &&
+                        string.Equals(started.ProcessName, "Cyberpunk2077",
+                            StringComparison.OrdinalIgnoreCase))
+                        GameStarted(started.Id);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Already exited: a game startup notification may still
+                    // arrive for the actual game PID.
+                }
             }
             catch
             {
+                pendingCaptureHibernation = false;
                 // A failed game launch is not a meaningful capture. Flush ETW,
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
@@ -1309,14 +1356,13 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
-            if (launched && GameRunning())
+            if (launched)
             {
-                // Hibernate only for a live capture. An immediate launch crash
-                // keeps WPF open so the player sees missing native results.
-                captureHibernationClose = true;
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+                // No one-time process check: the notification may arrive AFTER
+                // Process.Start returns. Hibernate on actual game observation.
+                HibernateForObservedCapture();
             }
-            else await RefreshSourceAsync();
+            await RefreshSourceAsync();
         }
     }
 
