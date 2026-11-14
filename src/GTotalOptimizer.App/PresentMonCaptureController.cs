@@ -12,6 +12,9 @@ internal static class PresentMonCaptureController
 {
     public const string CliSwitch = "--presentmon-control";
     private const string ResultName = "PresentMon-controller.json";
+    // Temporary live-game diagnostic for the owner's next test build.
+    // Revert to false after identifying the PresentMon/observer exit cause.
+    private const bool ShowPresentMonDiagnosticConsole = true;
     private static string TrackingFile(string root) =>
         Path.Combine(root, "RESULTS", "GCO-current-PresentMon.txt");
 
@@ -348,10 +351,11 @@ internal static class PresentMonCaptureController
                 var launch = new ProcessStartInfo(presentMon)
                 {
                     UseShellExecute = false,
-                    CreateNoWindow = true,
+                    CreateNoWindow = !ShowPresentMonDiagnosticConsole,
                     WorkingDirectory = Path.GetDirectoryName(presentMon)!
                 };
-                foreach (var argument in PresentMonLifecyclePolicy.StartArguments(csv))
+                foreach (var argument in PresentMonLifecyclePolicy.StartArguments(
+                    csv, showConsoleStats: ShowPresentMonDiagnosticConsole))
                     launch.ArgumentList.Add(argument);
                 // This controller already runs elevated. Do NOT also pass
                 // --restart_as_admin or request a second UAC transition.

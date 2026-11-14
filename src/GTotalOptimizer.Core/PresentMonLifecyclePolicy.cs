@@ -44,19 +44,20 @@ public static class PresentMonLifecyclePolicy
     // owns its graceful game-exit/failed-launch ETW shutdown. Never enable
     // PresentMon's competing --terminate_on_proc_exit watcher.
     // CET / GRSP timestamps define the useful analysis window later.
-    public static IReadOnlyList<string> StartArguments(string csv)
+    public static IReadOnlyList<string> StartArguments(string csv, bool showConsoleStats = false)
     {
         RequireWritableCapturePath(csv);
-        return
-        [
+        var arguments = new List<string>
+        {
             "--process_name", "Cyberpunk2077.exe",
             "--session_name", SessionName,
             "--stop_existing_session",
             "--output_file", csv,
             "--date_time",
-            "--no_console_stats",
             "--no_track_input"
-        ];
+        };
+        if (!showConsoleStats) arguments.Add("--no_console_stats");
+        return arguments;
     }
 
     // Official v2.6.0 CLI operation: gracefully end the named ETW recording,

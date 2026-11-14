@@ -978,6 +978,13 @@ try
     Require(unsafeRefused, "unavoidably long path explicitly refuses instead of silently destroying capture filename");
 
     var startArgs = PresentMonLifecyclePolicy.StartArguments(automaticCsv);
+    var debugArgs = PresentMonLifecyclePolicy.StartArguments(automaticCsv, showConsoleStats: true);
+    Require(startArgs.Contains("--no_console_stats") &&
+            !debugArgs.Contains("--no_console_stats") &&
+            debugArgs.Contains("--output_file") && debugArgs.Contains(automaticCsv) &&
+            debugArgs.Contains("--session_name") && debugArgs.Contains("GCO") &&
+            !debugArgs.Contains("--terminate_on_proc_exit"),
+        "diagnostic console uses the SAME owned PresentMon CSV/session without hidden console stats or competing exit switch");
     var stopArgs = PresentMonLifecyclePolicy.StopArguments();
     Require(startArgs.Contains("--process_name") &&
         startArgs.Contains("Cyberpunk2077.exe") &&
