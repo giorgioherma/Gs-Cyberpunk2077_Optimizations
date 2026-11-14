@@ -1309,10 +1309,10 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
-            if (launched)
+            if (launched && GameRunning())
             {
-                // This is the ONLY close that retains the native tray.
-                // Unload WPF/.NET while keeping current native results intact.
+                // Hibernate only for a live capture. An immediate launch crash
+                // keeps WPF open so the player sees missing native results.
                 captureHibernationClose = true;
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
             }
