@@ -1072,7 +1072,7 @@ public partial class MainWindow : Window
 
             // Gameplay status replaces stale event/exit pins, rather than
             // reporting "Game closed" while Cyberpunk is still running.
-            if (running || captureStarted)
+            if (running || (captureStarted && saved?.CollectInvoked != true))
                 ClearStatusPin();
             SetStatus(foreignSession
                 ? "Another game session is pending. Restore it before switching games."
@@ -1083,7 +1083,7 @@ public partial class MainWindow : Window
                 : saved?.CollectionAttempted == true
                     ? UserFacingConsoleText.CollectionGuidance(saved)
                     : captureStarted && saved?.CollectInvoked == true
-                        ? "Collect finished. START again or RESTORE."
+                        ? "Collect failed. START again or RESTORE."
                     : captureStarted && state.BothInstalled
                         ? CaptureAdmissionPolicy.PendingCaptureGuidance(available)
                         : state.BothInstalled
@@ -1352,17 +1352,14 @@ public partial class MainWindow : Window
             Warn("Cannot verify collection state: " + ex.Message, "Collection");
             return;
         }
-        LiveProfilerState owners;
-        try { owners = await Workflow.InspectAsync(game); }
-        catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
-        var stagedOwners = Workflow.PendingStagedNativeCaptures(game);
-        if (!CaptureAdmissionPolicy.CanCollect(
-                Workflow.HasSessionForGame(game), true, owners, existing,
-                stagedOwners.Cet, stagedOwners.Redscript))
+        if (existing?.CollectInvoked == true || existing?.CollectionAttempted == true)
         {
-            Warn("Both CET and REDscript F11 captures are required. START again or RESTORE.", "Collection");
+            Warn("Collect already used. START again or RESTORE.", "Collection");
             return;
         }
+        // If native output vanishes between the visible readiness check and
+        // the click, that failed click still ends this attempt exactly once.
+        // The inner collection verifies owner readiness after the latch.
         // One-shot state is durable BEFORE any native copy, ETW flush or
         // potential exception. Successful saves remain; failed scratch clears.
         try { Workflow.RecordCollectInvoked(game); }
