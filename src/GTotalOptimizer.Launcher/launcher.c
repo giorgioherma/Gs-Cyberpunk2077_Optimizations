@@ -144,6 +144,49 @@ static BOOL ObserverEventName(const wchar_t *id, wchar_t *out, size_t count)
            swprintf_s(out, count, L"Local\\GCO_PM_Stop_%ls", id) >= 0;
 }
 
+// One bounded diagnostic record on observer exit. No continuous file writes,
+// process injection, extra helper, ETW changes or elevated-to-user file overwrite.
+// A new capture ID names a new file under this package's RESULTS directory.
+static BOOL WriteObserverOutcome(const wchar_t *id, const char *reason,
+                                 DWORD writerPid, DWORD writerExit,
+                                 DWORD observerExit, DWORD gamePid,
+                                 DWORD gameExitCount, DWORD stopAttempts,
+                                 BOOL sawGame, ULONGLONG elapsedMs)
+{
+    wchar_t folder[MAX_PATH * 4];
+    wchar_t path[MAX_PATH * 4];
+    if (!IsCaptureId(id) ||
+        swprintf_s(folder, ARRAYSIZE(folder), L"%ls\\RESULTS", g_root) < 0 ||
+        swprintf_s(path, ARRAYSIZE(path),
+                   L"%ls\\GCO-PresentMon-exit-%ls.txt", folder, id) < 0)
+        return FALSE;
+    DWORD attrs = GetFileAttributesW(folder);
+    if (attrs == INVALID_FILE_ATTRIBUTES ||
+        !(attrs & FILE_ATTRIBUTE_DIRECTORY) ||
+        (attrs & FILE_ATTRIBUTE_REPARSE_POINT))
+        return FALSE;
+    // CREATE_NEW never follows or overwrites an existing per-attempt record.
+    HANDLE file = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+                              CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) return FALSE;
+    char report[512];
+    int length = sprintf_s(report, sizeof(report),
+        "reason=%s\r\nwriterPid=%lu\r\nwriterExitCode=%lu\r\n"
+        "observerExitCode=%lu\r\nlastGamePid=%lu\r\n"
+        "gameExitCount=%lu\r\nstopAttempts=%lu\r\n"
+        "gameObserved=%u\r\nelapsedMs=%llu\r\n",
+        reason, (unsigned long)writerPid, (unsigned long)writerExit,
+        (unsigned long)observerExit, (unsigned long)gamePid,
+        (unsigned long)gameExitCount, (unsigned long)stopAttempts,
+        sawGame ? 1U : 0U, (unsigned long long)elapsedMs);
+    DWORD written = 0;
+    BOOL ok = length > 0 &&
+              WriteFile(file, report, (DWORD)length, &written, NULL) &&
+              written == (DWORD)length;
+    CloseHandle(file);
+    return ok;
+}
+
 static HANDLE FindGameHandle(void)
 {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -234,14 +277,26 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
     HANDLE game = NULL;
     ULONGLONG graceUntil = 0;
     BOOL sawGame = FALSE;
+    DWORD lastGamePid = 0;
+    DWORD gameExitCount = 0;
+    DWORD stopAttempts = 0;
+    ULONGLONG started = GetTickCount64();
+    const char *reason = "presentmon-exited";
     int exitCode = 0;
     for (;;) {
-        if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) break;
-        if (WaitForSingleObject(stop, 0) == WAIT_OBJECT_0 ||
-            (graceUntil && GetTickCount64() >= graceUntil)) {
+        if (WaitForSingleObject(writer, 0) == WAIT_OBJECT_0) {
+            if (stopAttempts) reason = "presentmon-exited-after-stop-attempt";
+            break;
+        }
+        BOOL userStop = WaitForSingleObject(stop, 0) == WAIT_OBJECT_0;
+        if (userStop || (graceUntil && GetTickCount64() >= graceUntil)) {
             // A failed ETW stop remains retryable by this same authorized
             // observer. Do not kill the writer or invent CSV flush success.
-            if (StopBundledPresentMon(exe, writer)) break;
+            ++stopAttempts;
+            if (StopBundledPresentMon(exe, writer)) {
+                reason = userStop ? "gco-stop-request" : "game-exit-stop";
+                break;
+            }
             Sleep(1000);
             continue;
         }
@@ -249,6 +304,7 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
             game = FindGameHandle();
             if (game) {
                 sawGame = TRUE;
+                lastGamePid = GetProcessId(game);
                 graceUntil = 0;
             } else {
                 // Before first game process, wait for explicit user request
@@ -262,18 +318,30 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
         HANDLE waits[3] = { stop, game, writer };
         DWORD result = WaitForMultipleObjects(3, waits, FALSE, INFINITE);
         if (result == WAIT_OBJECT_0) continue; // stop request on next loop
-        if (result == WAIT_OBJECT_0 + 2) break; // writer died independently
+        if (result == WAIT_OBJECT_0 + 2) {
+            if (stopAttempts) reason = "presentmon-exited-after-stop-attempt";
+            break; // writer died independently
+        }
         if (result == WAIT_OBJECT_0 + 1) {
+            ++gameExitCount;
             CloseHandle(game);
             game = NULL;
             // Distinguish the final exit from an early transient game PID.
             graceUntil = GetTickCount64() + 3000;
             continue;
         }
+        reason = "observer-wait-error";
         exitCode = 16;
         break;
     }
     if (game) CloseHandle(game);
+    DWORD writerExit = 0;
+    if (!GetExitCodeProcess(writer, &writerExit))
+        writerExit = GetLastError();
+    (void)WriteObserverOutcome(id, reason, pid, writerExit,
+                               (DWORD)exitCode, lastGamePid,
+                               gameExitCount, stopAttempts, sawGame,
+                               GetTickCount64() - started);
     CloseHandle(stop);
     CloseHandle(writer);
     return exitCode;
@@ -292,7 +360,31 @@ static int VerifyObserverControl(void)
                 WaitForSingleObject(ready, 0) == WAIT_OBJECT_0;
     if (client) CloseHandle(client);
     CloseHandle(ready);
-    return good ? 0 : 3;
+    if (!good) return 3;
+
+    // Exercise actual bounded output. Never package this synthetic evidence.
+    wchar_t results[MAX_PATH * 4], path[MAX_PATH * 4];
+    if (swprintf_s(results, ARRAYSIZE(results), L"%ls\\RESULTS", g_root) < 0 ||
+        swprintf_s(path, ARRAYSIZE(path),
+                   L"%ls\\GCO-PresentMon-exit-%ls.txt", results, id) < 0)
+        return 4;
+    if (!CreateDirectoryW(results, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return 4;
+    if (!WriteObserverOutcome(id, "presentmon-exited", 1234, 7, 0,
+                              4321, 1, 0, TRUE, 1500))
+        return 5;
+    char content[512] = {0};
+    DWORD n = 0;
+    HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    BOOL recorded = file != INVALID_HANDLE_VALUE &&
+                    ReadFile(file, content, sizeof(content) - 1, &n, NULL) &&
+                    strstr(content, "reason=presentmon-exited") &&
+                    strstr(content, "writerExitCode=7") &&
+                    strstr(content, "lastGamePid=4321");
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    BOOL removed = DeleteFileW(path);
+    return recorded && removed ? 0 : 6;
 }
 
 static void AddTrayIcon(void)
