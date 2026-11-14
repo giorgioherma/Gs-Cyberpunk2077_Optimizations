@@ -389,9 +389,8 @@ jobs:
           }
           Write-Host 'PASS native GCO launcher forwards args and starts verified private runtime'
 
-          # Real native tray lifecycle: close the full managed GUI while keeping
-          # the native host alive, reopen the same WPF page, then cleanly exit.
-          # No game, UAC, profiler install or capture fixture is needed here.
+          # Real native lifecycle: absent WPF can be reopened from the tray,
+          # but the window X must exit both the GUI and the native host.
           $launcherPath=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
           $tray=$null
           $opened=$null
@@ -421,11 +420,10 @@ jobs:
             }
             if (!$opened) { throw 'Native tray did not launch a visible WPF process' }
             $firstPid=$opened.Id
-            if (!$opened.CloseMainWindow() -or !$opened.WaitForExit(15000)) {
-              throw 'Managed GUI did not close independently of the native tray'
-            }
-            if ($tray.HasExited) { throw 'Tray exited when WPF GUI was closed' }
-
+            # Simulate the unloaded child; native tray must remain reopenable.
+            $opened.Kill()
+            if (!$opened.WaitForExit(15000)) { throw 'WPF child did not exit' }
+            if ($tray.HasExited) { throw 'Native tray lost after WPF child unload' }
             $secondLauncher=Start-Process -FilePath $launcherPath -WorkingDirectory $root -PassThru
             try {
               if (!$secondLauncher.WaitForExit(10000)) {
@@ -434,29 +432,20 @@ jobs:
             } finally { $secondLauncher.Dispose() }
             $deadline.Restart()
             while ($deadline.Elapsed.TotalSeconds -lt 25) {
-              if ($tray.HasExited) { throw 'Native tray exited before managed UI reopened' }
+              if ($tray.HasExited) { throw 'Native tray exited before UI could reopen' }
               $reopened=FindGcoUi $firstPid
               if ($reopened -and $reopened.MainWindowHandle -ne [IntPtr]::Zero) { break }
               if ($reopened) { $reopened.Dispose(); $reopened=$null }
               Start-Sleep -Milliseconds 250
             }
-            if (!$reopened) { throw 'Native tray did not reconstruct the WPF UI' }
+            if (!$reopened) { throw 'Native tray did not reopen WPF' }
             if (!$reopened.CloseMainWindow() -or !$reopened.WaitForExit(15000)) {
-              throw 'Rebuilt managed WPF GUI did not shut down cleanly'
+              throw 'X did not close the managed WPF GUI'
             }
-            if ($tray.HasExited) {
-              throw 'Native host exited unexpectedly when the second managed WPF window closed'
-            }
-            $trayExit=Start-Process -FilePath $launcherPath -ArgumentList '--tray-exit' -WorkingDirectory $root -PassThru
-            try {
-              if (!$trayExit.WaitForExit(10000) -or $trayExit.ExitCode -ne 0) {
-                throw 'Native package-bound tray-exit command could not find its own host'
-              }
-            } finally { $trayExit.Dispose() }
             if (!$tray.WaitForExit(10000)) {
-              throw 'Native tray did not exit cleanly when explicitly requested'
+              throw 'X closed WPF but left the native tray running'
             }
-            Write-Host 'PASS real native tray: managed GUI close/unload, singleton reopen, verified native exit'
+            Write-Host 'PASS native tray survives WPF unload/reopen; X fully exits WPF and tray'
           }
           finally {
             if ($reopened) {

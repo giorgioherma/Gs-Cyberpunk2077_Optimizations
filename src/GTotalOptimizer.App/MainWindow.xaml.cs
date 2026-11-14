@@ -48,6 +48,8 @@ public partial class MainWindow : Window
     private string? stoppedPresentMonCsv;
     private bool closingInProgress;
     private bool closureCleanupVerified;
+    // Only a successful START CYBERPUNK hibernates WPF while retaining the tray.
+    private bool captureHibernationClose;
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
@@ -757,9 +759,8 @@ public partial class MainWindow : Window
         }));
     }
 
-    // Closing the managed GUI is not collection, restoration or abandonment.
-    // The lightweight native launcher remains in the tray; the durable session,
-    // F11 native files and the tracked PresentMon CSV stay unchanged.
+    // Window X fully exits GCO; only the explicit capture-hibernation close
+    // keeps the native tray. Neither action mutates owned results or journals.
     private void Window_Closing(object? sender,
         System.ComponentModel.CancelEventArgs e)
     {
@@ -780,6 +781,28 @@ public partial class MainWindow : Window
         glitchTimer.Stop();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
+        if (!WpfVerificationMode && !captureHibernationClose)
+        {
+            // User X/Alt+F4 terminates the package-bound native host as well.
+            // The existing capture and owner restore state are never modified.
+            try
+            {
+                var launcher = Path.Combine(packageRoot, PortablePackagePaths.RootLauncherName);
+                if (File.Exists(launcher))
+                {
+                    using var control = Process.Start(new ProcessStartInfo(launcher, "--ui-closed")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        WorkingDirectory = packageRoot
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning("GCO tray shutdown after window close: " + ex);
+            }
+        }
     }
 
     private async void GamePath_Changed(object sender, TextChangedEventArgs e)
@@ -1288,9 +1311,9 @@ public partial class MainWindow : Window
             SetBusy(false);
             if (launched)
             {
-                // The native root launcher retains the tray/game-exit listener.
-                // Unload all WPF/.NET resources during gameplay; the durable
-                // journal and temporary native/PresentMon data remain intact.
+                // This is the ONLY close that retains the native tray.
+                // Unload WPF/.NET while keeping current native results intact.
+                captureHibernationClose = true;
                 Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
             }
             else await RefreshSourceAsync();

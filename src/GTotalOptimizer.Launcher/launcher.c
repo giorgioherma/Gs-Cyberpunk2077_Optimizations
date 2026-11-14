@@ -15,6 +15,7 @@
 #define TRAY_EVENT (WM_APP + 17)
 #define TRAY_OPEN  1001
 #define TRAY_EXIT  1002
+#define TRAY_UI_CLOSED 1003
 
 static HINSTANCE g_inst;
 static HWND g_window;
@@ -168,6 +169,9 @@ static LRESULT CALLBACK TrayProc(HWND window, UINT message, WPARAM wp, LPARAM lp
                     MessageBoxW(window, L"PresentMon is still recording. Reopen GCO to collect or restore first.",
                                 L"GCO capture active", MB_OK | MB_ICONINFORMATION);
                 } else DestroyWindow(window);
+            } else if (LOWORD(wp) == TRAY_UI_CLOSED) {
+                // User X closes the host, but never touches PresentMon/results.
+                DestroyWindow(window);
             }
             return 0;
         case WM_DESTROY:
@@ -225,15 +229,18 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
         return 2;
     }
 
-    if (commandLine && wcscmp(commandLine, L"--tray-exit") == 0) {
-        // Headless native control path. Reuse the exact package-bound
-        // window name and never initialize the CLR to close an idle tray.
+    if (commandLine && (wcscmp(commandLine, L"--tray-exit") == 0 ||
+                        wcscmp(commandLine, L"--ui-closed") == 0)) {
+        // Both native-only controls target the exact package-bound host.
+        // The existing tray menu retains its active-PresentMon exit guard.
+        const BOOL userClosed = wcscmp(commandLine, L"--ui-closed") == 0;
         wchar_t name[80];
         swprintf_s(name, ARRAYSIZE(name),
                    L"Local\\GCO_Tray_%016llX", (unsigned long long)RootHash(g_root));
         HWND owner = FindWindowW(L"GCO.Native.Tray.Window", name);
-        if (!owner) return 6;
-        return PostMessageW(owner, WM_COMMAND, TRAY_EXIT, 0) ? 0 : 7;
+        if (!owner) return userClosed ? 0 : 6;
+        return PostMessageW(owner, WM_COMMAND,
+                            userClosed ? TRAY_UI_CLOSED : TRAY_EXIT, 0) ? 0 : 7;
     }
 
     if (commandLine && *commandLine) {
