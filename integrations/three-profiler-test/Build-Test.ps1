@@ -81,14 +81,40 @@ if ($Integrated) {
   $lock=Join-Path $grSource 'docs/Cargo.lock'
   if (!(Test-Path $lock -PathType Leaf)) { throw 'Pinned GRSP Cargo.lock absent from verified release' }
   Copy-Item $lock 'vendor-grsp/Cargo.lock' -Force
-  Push-Location 'vendor-grsp'
-  try {
-    & cargo build --release --locked
-    if ($LASTEXITCODE -ne 0) { throw 'GCO-specific GRSP native build failed' }
-  } finally { Pop-Location }
-  $native=Join-Path 'vendor-grsp/target/release' 'g_redscript_profiler.dll'
-  if (!(Test-Path $native -PathType Leaf)) { throw 'GCO GRSP native DLL missing after source build' }
-  Copy-Item $native (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Force
+  $cacheRoot=Join-Path (Get-Location) '.gco-grsp-native'
+  $cachedNative=Join-Path $cacheRoot 'G-REDscript-Profiler.dll'
+  $cacheProof=Join-Path $cacheRoot 'proof.json'
+  $destination=Join-Path $gr 'payload/G-REDscript-Profiler.dll'
+  $reuse=Test-Path -LiteralPath $cacheProof -PathType Leaf
+  if ($reuse) {
+    $proof=Get-Content -LiteralPath $cacheProof -Raw | ConvertFrom-Json
+    if (!$env:GCO_GRSP_NATIVE_CACHE_KEY -or $proof.schema -ne 1 -or
+        $proof.key -ne $env:GCO_GRSP_NATIVE_CACHE_KEY) {
+      throw 'Cached GRSP native identity differs from the pinned Rust and adapter inputs.'
+    }
+    VerifyFile $cachedNative $proof.sha256
+    Copy-Item -LiteralPath $cachedNative -Destination $destination -Force
+    Write-Host 'PASS exact-input cached GCO GRSP native DLL; Rust recompilation skipped'
+  }
+  else {
+    Push-Location 'vendor-grsp'
+    try {
+      & cargo build --release --locked
+      if ($LASTEXITCODE -ne 0) { throw 'GCO-specific GRSP native build failed' }
+    } finally { Pop-Location }
+    $native=Join-Path 'vendor-grsp/target/release' 'g_redscript_profiler.dll'
+    if (!(Test-Path $native -PathType Leaf)) { throw 'GCO GRSP native DLL missing after source build' }
+    Copy-Item -LiteralPath $native -Destination $destination -Force
+    if ($env:GCO_GRSP_NATIVE_CACHE_KEY) {
+      New-Item -ItemType Directory -Force $cacheRoot | Out-Null
+      Copy-Item -LiteralPath $native -Destination $cachedNative -Force
+      $digest=(Get-FileHash -LiteralPath $cachedNative -Algorithm SHA256).Hash.ToLowerInvariant()
+      @{ schema=1; key=$env:GCO_GRSP_NATIVE_CACHE_KEY; sha256=$digest } |
+        ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $cacheProof -Encoding UTF8
+      VerifyFile $cachedNative $digest
+      Write-Host 'PASS compiled GCO GRSP native DLL staged for exact-input reuse'
+    }
+  }
   $grManifest=Join-Path $gr 'MANIFEST.json'
   $grMetadata=Get-Content $grManifest -Raw | ConvertFrom-Json
   $grMetadata.shutdown_behavior='GCO: incomplete captures discarded; explicit F11 stop required'

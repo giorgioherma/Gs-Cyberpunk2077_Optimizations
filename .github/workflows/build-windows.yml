@@ -79,12 +79,47 @@ jobs:
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
-      - name: Assemble integrated two-page GUI and profilers (one shared runtime)
+      # GRSP's pinned Rust build takes ~6m on a fresh runner. The other
+      # components are fast and remain rebuilt/verified by the normal script.
+      - name: Identify reusable GRSP native compilation
+        id: grsp_native_key
         shell: pwsh
         working-directory: unified
         run: |
+          $ErrorActionPreference='Stop'
+          $source=(& git -C vendor-grsp rev-parse HEAD).Trim()
+          if ($source.Length -ne 40) { throw 'GRSP source commit is not pinned.' }
+          $parts=@(
+            'gco-grsp-native-v1',
+            $source,
+            ((& rustc -vV) -join '|'),
+            (Get-FileHash 'integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1' -Algorithm SHA256).Hash,
+            (Get-FileHash 'integrations/three-profiler-test/Build-Test.ps1' -Algorithm SHA256).Hash
+          )
+          $fingerprint=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes(($parts -join "`n")))).ToLowerInvariant()
+          "key=gco-grsp-native-$fingerprint" >> $env:GITHUB_OUTPUT
+          Write-Host 'PASS GRSP pinned source, GCO source adapter and Rust toolchain cache fingerprint'
+      - name: Restore unchanged GRSP native binary
+        id: grsp_native_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: unified/.gco-grsp-native
+          key: ${{ steps.grsp_native_key.outputs.key }}
+      - name: Assemble integrated two-page GUI and profilers (one shared runtime)
+        shell: pwsh
+        working-directory: unified
+        env:
+          GCO_GRSP_NATIVE_CACHE_KEY: ${{ steps.grsp_native_key.outputs.key }}
+        run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
+      - name: Save verified native GRSP binary for matching source
+        if: steps.grsp_native_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: unified/.gco-grsp-native
+          key: ${{ steps.grsp_native_key.outputs.key }}
       - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
         shell: pwsh
         working-directory: unified
