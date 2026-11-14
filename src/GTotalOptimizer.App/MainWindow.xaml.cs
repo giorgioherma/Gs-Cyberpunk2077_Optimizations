@@ -1218,38 +1218,61 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("Bundled profiler provenance changed.");
         var oldId = Workflow.ReadRecoverySessionId(game) ??
                     Guid.NewGuid().ToString("N");
-        // Keep the durable tracking pointer until every owner reset and
-        // pending-session abandonment succeeds. On failure, reopening GCO
-        // must still know exactly which CSV belongs to the interrupted run.
-        var stopped = await StopOwnedPresentMonAsync(oldId, clearTracking: false);
-        if (!stopped.Stopped)
-            throw new InvalidOperationException("Previous GCO PresentMon must stop before starting a new attempt: " +
-                stopped.Error);
-        // No new attempt until BOTH owner-managed native live-output scopes
-        // are empty. Discard only the previous UNCOLLECTED GCO session folder.
+        // Reset native owners while the game is closed. The old ETW writer is
+        // separate and must be gracefully stopped by its existing controller.
         var reset = await Workflow.ResetNativeOutputAsync(game);
         if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
-        Workflow.AbandonCurrentUncollected(game);
-        PresentMonCaptureController.ClearTrackedCsv(packageRoot);
         var clean = await Workflow.InspectAsync(game);
-        var attemptId = Workflow.BeginCaptureAttempt(game,
-            observedGameAlreadyRunning: gameAlreadyRunning,
-            ownerBeforeCapture: clean);
-        captureLaunched = true;
-        lastLaunchRequestedUtc = DateTime.UtcNow;
+
+        // Before changing the authoritative journal, provision the next
+        // destination. The ONE elevated controller then stops any prior
+        // GCO-owned PresentMon (including a surviving forced-close writer)
+        // and launches a fresh session with this distinct output CSV.
+        var preparedId = Guid.NewGuid().ToString("N");
+        CollectedCaptureStore.CreateDatedSessionFolder(
+            packageRoot, preparedId, DateTimeOffset.Now, game,
+            clean.CetCaptureReady, clean.GrspCaptureReady);
+        var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, preparedId);
+        string? warning = null;
+        var monStarted = false;
         try
         {
-            var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, attemptId);
             await PresentMonCaptureController.RunAsync(packageRoot, csv, restart: true);
-            stoppedPresentMonCsv = null;
-            return null;
+            monStarted = true;
         }
         catch (Exception ex)
         {
-            // A PresentMon-only failure does not invent native evidence or
-            // silently reuse old CSVs. CET/GRSP F11 remain independently usable.
-            return ex.Message;
+            warning = ex.Message;
+            // Optional startup failure may fall back to CET/GRSP, but only
+            // after proving neither an OLD nor a newly-started PresentMon
+            // still owns an active CSV. Never delete a running writer's scope.
+            var oldStopped = await StopOwnedPresentMonAsync(oldId, clearTracking: false);
+            if (!oldStopped.Stopped)
+                throw new InvalidOperationException(
+                    "Previous PresentMon could not be reset; old output preserved. " +
+                    oldStopped.Error, ex);
+            var processes = Process.GetProcessesByName("PresentMon");
+            try
+            {
+                if (processes.Length != 0)
+                    throw new InvalidOperationException(
+                        "PresentMon restart incomplete; writer still active. Old output preserved.", ex);
+            }
+            finally { foreach (var process in processes) process.Dispose(); }
         }
+        // The controller has positively stopped the prior owned writer.
+        // Retire only uncollected old scratch. A sealed collection stays
+        // immutable. On success RunAsync already updated the tracking pointer
+        // to the new CSV, so do not clear it while switching journals.
+        Workflow.AbandonCurrentUncollected(game);
+        if (!monStarted) PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+        Workflow.BeginCaptureAttempt(game,
+            observedGameAlreadyRunning: gameAlreadyRunning,
+            ownerBeforeCapture: clean, preparedSessionId: preparedId);
+        captureLaunched = true;
+        lastLaunchRequestedUtc = DateTime.UtcNow;
+        stoppedPresentMonCsv = null;
+        return warning;
     }
 
     private async Task HandleExternalGameLaunchAsync()
@@ -1449,12 +1472,13 @@ public partial class MainWindow : Window
             if (!ready.Cet || !ready.Redscript)
                 throw new InvalidOperationException(
                     CaptureAdmissionPolicy.PendingCaptureGuidance(ready));
-            // Both owner captures were ready when COLLECT was invoked.
-            // A failed native collect ends this attempt, not a second click.
+            // After the owned writer is stopped, first hash/copy BOTH native
+            // F11 archives; they are the clock authority for frame alignment.
             var stop = await StopOwnedPresentMonAsync(attempt.SessionId,
                 clearTracking: false);
             string? frameWarning = stop.Error;
-            if (stop.Stopped && stop.Csv is not null)
+            var native = await Workflow.CollectResultsAsync(game);
+            if (native.Ok && stop.Stopped && stop.Csv is not null)
             {
                 var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, attempt.SessionId) +
                     Path.DirectorySeparatorChar;
@@ -1465,16 +1489,20 @@ public partial class MainWindow : Window
                 {
                     try
                     {
+                        var both = Workflow.ReadCollected(game, verifyHashes: true) ??
+                            throw new InvalidDataException("Native session index missing.");
+                        var overlap = PresentMonCaptureAlignment.RequireOverlap(packageRoot, both);
                         CollectedCaptureStore.CollectPresentMon(packageRoot, game,
-                            attempt.SessionId, stop.Csv);
+                            attempt.SessionId, stop.Csv, overlap);
                     }
                     catch (Exception ex)
                     {
-                        frameWarning = "CSV unavailable: " + ex.Message;
+                        // Do not invent frame-time evidence when owner clocks
+                        // or real frame rows cannot prove the common window.
+                        frameWarning = "Frame-time alignment unavailable: " + ex.Message;
                     }
                 }
             }
-            var native = await Workflow.CollectResultsAsync(game);
             // Do not seal a failed/empty native collection. Keep the pending
             // capture intact so Collect may be retried or the run abandoned.
             var collected = Workflow.ReadCollected(game, verifyHashes: true);

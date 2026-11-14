@@ -12,7 +12,10 @@ public sealed record CollectedCaptureIndex(
     CollectedFile? FrameTimeEvidence = null, bool CollectionAttempted = false,
     bool PresentMonStopVerified = false,
     bool CetReadyBeforeAttempt = false, bool RedscriptReadyBeforeAttempt = false,
-    bool CollectInvoked = false)
+    bool CollectInvoked = false,
+    long? PresentMonOverlapStartUnixMs = null,
+    long? PresentMonOverlapEndUnixMs = null,
+    int? PresentMonAlignedFrames = null)
 {
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
@@ -424,7 +427,7 @@ public static class CollectedCaptureStore
         }
     }
     public static CollectedCaptureIndex CollectPresentMon(string root, string game,
-        string sessionId, string csv)
+        string sessionId, string csv, NativeCaptureWindow? overlap = null)
     {
         var path = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
         var folder = SessionFolder(root, sessionId);
@@ -433,12 +436,20 @@ public static class CollectedCaptureStore
             relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             throw new InvalidDataException("PresentMon CSV belongs to a different capture session.");
         var state = Read(root, game, sessionId, verifyHashes: true);
-        // Capture is not counted unless the source-generated CSV has real
-        // Cyberpunk frame rows. Collection needs no CET/GRSP completion.
-        PresentMonLifecyclePolicy.CountVerifiedFrames(path);
+        // GCO's combined path supplies the proven intersection of both F11
+        // owner intervals. Older standalone import callers may omit it.
+        var frames = overlap is null
+            ? PresentMonLifecyclePolicy.CountVerifiedFrames(path)
+            : PresentMonCaptureAlignment.TrimToOverlap(root, path, overlap);
         var proof = new CollectedFile(relative.Replace(Path.DirectorySeparatorChar, '/'),
             new FileInfo(path).Length, Hash(path));
-        state = state with { FrameTimeCsv = path, FrameTimeEvidence = proof };
+        state = state with
+        {
+            FrameTimeCsv = path, FrameTimeEvidence = proof,
+            PresentMonOverlapStartUnixMs = overlap?.StartUnixMs,
+            PresentMonOverlapEndUnixMs = overlap?.EndUnixMs,
+            PresentMonAlignedFrames = overlap is null ? null : frames
+        };
         Write(root, state);
         return state;
     }

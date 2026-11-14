@@ -465,6 +465,18 @@ try
     Directory.CreateDirectory(redSource);
     File.WriteAllText(Path.Combine(cetSource, "CET_Summary.json"), "{\"capture\":\"CET\"}");
     File.WriteAllText(Path.Combine(redSource, "GRSP_Summary.json"), "{\"capture\":\"RED\"}");
+    // The source owners already emit these F11 absolute clock marker formats.
+    // Build synthetic captures with the CI runner's local-time equivalent.
+    var sampleLocal = new DateTime(2026, 11, 5, 22, 40, 0, DateTimeKind.Local);
+    var sampleUnix = new DateTimeOffset(sampleLocal).ToUnixTimeMilliseconds();
+    Directory.CreateDirectory(Path.Combine(cetSource, "Data", "Runtime"));
+    Directory.CreateDirectory(Path.Combine(redSource, "Data", "Runtime"));
+    File.WriteAllText(Path.Combine(cetSource, "Data", "Runtime", "CET_Runtime_Profile_Markers.csv"),
+        "Label,UnixEpochMs\nCAPTURE_START," + (sampleUnix + 100) +
+        "\nCAPTURE_STOP," + (sampleUnix + 900) + "\n");
+    File.WriteAllText(Path.Combine(redSource, "Data", "Runtime", "GRSP_Markers.csv"),
+        "event,unix_ms\nSTART," + (sampleUnix + 110) +
+        "\nSTOP_REQUEST," + (sampleUnix + 850) + "\n");
     var package = Path.Combine(root, "GCO-package");
     var sessionId = Guid.NewGuid().ToString("N");
     var emptyCapture = CollectedCaptureStore.Read(package, archiveGame, sessionId);
@@ -1049,12 +1061,52 @@ try
         File.Exists(Path.Combine(datedFolder, "G-CET", "CET_Summary.json")) &&
         File.Exists(Path.Combine(datedFolder, "G-REDscript", "GRSP_Summary.json")),
         "native owner archives appear as G-CET and G-REDscript siblings");
+    var commonWindow = PresentMonCaptureAlignment.RequireOverlap(
+        datedPackage, CollectedCaptureStore.Read(datedPackage, datedGame, datedId,
+            verifyHashes: true));
+    Require(commonWindow.StartUnixMs == sampleUnix + 110 &&
+        commonWindow.EndUnixMs == sampleUnix + 850,
+        "verified CET and GRSP F11 markers determine their shared capture interval");
+    var rawDatedCsv = "Application,CPUStartDateTime,MsBetweenPresents,MsInPresentAPI\r\n" +
+        "Cyberpunk2077.exe,2026-11-05 22:40:00.050000000,16.6,0.5\r\n" +
+        "Cyberpunk2077.exe,2026-11-05 22:40:00.123456789,16.6,0.5\r\n" +
+        "Other.exe,2026-11-05 22:40:00.200000000,8.2,0.5\r\n" +
+        "Cyberpunk2077.exe,2026-11-05 22:40:00.500000000,17.0,0.3\r\n" +
+        "Cyberpunk2077.exe,2026-11-05 22:40:00.950000000,17.0,0.3\r\n";
+    File.WriteAllText(datedCsv, rawDatedCsv);
     var datedMon = CollectedCaptureStore.CollectPresentMon(
-        datedPackage, datedGame, datedId, datedCsv);
+        datedPackage, datedGame, datedId, datedCsv, commonWindow);
+    var filtered = File.ReadAllText(datedCsv);
     Require(datedMon.FrameTimeEvidence?.Path == "PresentMon/PresentMon.csv" &&
+        datedMon.PresentMonOverlapStartUnixMs == commonWindow.StartUnixMs &&
+        datedMon.PresentMonOverlapEndUnixMs == commonWindow.EndUnixMs &&
+        datedMon.PresentMonAlignedFrames == 2 &&
+        filtered.Contains("00.123456789") &&
+        filtered.Contains("00.500000000") &&
+        !filtered.Contains("00.050000000") &&
+        !filtered.Contains("00.950000000") &&
+        !filtered.Contains("Other.exe") &&
         CollectedCaptureStore.Read(datedPackage, datedGame, datedId,
             verifyHashes: true).HasAny,
-        "new frame-time evidence has flat relative path and verified hash");
+        "GCO indexes only the shared CET/GRSP F11 interval and actual Cyberpunk frames");
+    Require(PresentMonCaptureAlignment.TrimToOverlap(
+            datedPackage, datedCsv, commonWindow) == 2 &&
+        File.ReadAllText(datedCsv) == filtered,
+        "repeated frame window filtering is idempotent");
+    var noOverlapRejected = false;
+    try
+    {
+        PresentMonCaptureAlignment.TrimToOverlap(datedPackage, datedCsv,
+            new NativeCaptureWindow(sampleUnix + 2000, sampleUnix + 2500));
+    }
+    catch (InvalidDataException) { noOverlapRejected = true; }
+    Require(noOverlapRejected && File.ReadAllText(datedCsv) == filtered,
+        "no overlapping frames must preserve the original CSV and reject fake correlation");
+    var nativeWindowRejected = false;
+    try { PresentMonCaptureAlignment.RequireOverlap(
+        datedPackage, datedRed with { Cet = null }); }
+    catch (InvalidDataException) { nativeWindowRejected = true; }
+    Require(nativeWindowRejected, "missing native F11 owner cannot authorize PresentMon correlation");
     var datedCollected = CollectedCaptureStore.MarkCollectionAttempted(
         datedPackage, datedGame, datedId, presentMonStopped: true);
     Require(!CollectedCaptureStore.DiscardUncollected(datedPackage, datedGame, datedId) &&
@@ -1155,6 +1207,34 @@ try
         CollectedCaptureStore.SessionFolder(resetPackage, replacementId) != resetFolder &&
         !Directory.Exists(resetFolder),
         "a discarded attempt cannot contribute stale results to its new capture identity");
+
+    // The existing one-UAC PresentMon controller must be able to start the
+    // next recording BEFORE the old uncollected session journal is retired.
+    var precreatedId = Guid.NewGuid().ToString("N");
+    var precreatedFolder = CollectedCaptureStore.CreateDatedSessionFolder(
+        resetPackage, precreatedId, startedLocal.AddSeconds(8), resetGame);
+    var precreatedCsv = PresentMonLifecyclePolicy.NewSessionCsv(resetPackage, precreatedId);
+    Require(resetWorkflow.ReadRecoverySessionId(resetGame) == replacementId &&
+        File.Exists(Path.Combine(precreatedFolder, "collection.json")) &&
+        precreatedCsv.StartsWith(precreatedFolder, StringComparison.OrdinalIgnoreCase),
+        "fresh PresentMon destination can be prepared without superseding the active journal");
+    Require(resetWorkflow.AbandonCurrentUncollected(resetGame),
+        "verified old writer stop permits retirement of old unsealed scratch");
+    var adoptedId = resetWorkflow.BeginCaptureAttempt(
+        resetGame, preparedSessionId: precreatedId);
+    Require(adoptedId == precreatedId &&
+        resetWorkflow.ReadRecoverySessionId(resetGame) == precreatedId &&
+        Directory.Exists(precreatedFolder) &&
+        CollectedCaptureStore.Read(resetPackage, resetGame, precreatedId).Cet is null,
+        "GCO adopts the pre-provisioned NEW PresentMon path after old scope shutdown");
+    Require(resetWorkflow.AbandonCurrentUncollected(resetGame),
+        "prepared uncollected capture remains disposable on the next user START");
+    var missingPreparedRejected = false;
+    try { resetWorkflow.BeginCaptureAttempt(
+        resetGame, preparedSessionId: Guid.NewGuid().ToString("N")); }
+    catch (InvalidDataException) { missingPreparedRejected = true; }
+    Require(missingPreparedRejected && !resetWorkflow.HasCaptureAttempt(resetGame),
+        "a missing prepared capture cannot replace the verified installation journal");
 
     var failedCollectId = Guid.NewGuid().ToString("N");
     var failedCollectFolder = CollectedCaptureStore.CreateDatedSessionFolder(

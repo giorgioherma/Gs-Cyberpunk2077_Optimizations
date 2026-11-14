@@ -563,3 +563,8 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-14 — await actual game process before hibernating WPF
 
 - GCO START may return before `Cyberpunk2077.exe` is visible: do not permanently skip the tray handoff after a single immediate `GameRunning` check or classify GCO's delayed game-start WMI event as an external capture restart. Arm a pending hibernation for START, consume it when the actual game is observed running, and retain the window if the game dies before handoff. Preserve direct X full exit and existing source-owned capture/PresentMon lifecycles.
+
+## 2026-11-14 — source-owned PresentMon restart and common F11 capture interval
+
+- On each explicit START CYBERPUNK, allocate a new capture output and use the ONE existing elevated controller to gracefully stop any prior GCO PresentMon session and start a new session, then retire only old uncollected scratch and commit the new capture journal. Refuse to remove old CSVs if any writer remains. Prior completed captures/restore records are untouched. PresentMon can fail without blocking native-only profiling only when prior ETW is positively stopped; no extra consent prompts or native profiler changes.
+- At COLLECT, the shared frame-time output must correspond to the intersection of source-owner CET/REDscript F11 START/STOP windows, not all Cyberpunk gameplay time. Both archived native F11 marker files provide absolute clock proof; align PresentMon CPUStartDateTime rows and atomically retain only matching frames, recording exact bounds/count and a hash. Missing/uncertain clocks imply PresentMon unaligned/missing, not fabricated measurements; dual-native Continue remains available.

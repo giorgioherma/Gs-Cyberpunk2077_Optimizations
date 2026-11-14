@@ -402,7 +402,7 @@ public sealed class UnifiedProfilerWorkflow
     // A new attempt uses a fresh identity, so a previous partial or complete
     // archive cannot accidentally qualify the next capture. Old evidence remains.
     public string BeginCaptureAttempt(string game, bool observedGameAlreadyRunning = false,
-        LiveProfilerState? ownerBeforeCapture = null)
+        LiveProfilerState? ownerBeforeCapture = null, string? preparedSessionId = null)
     {
         var gameRunning = GameRunning();
         if (gameRunning && !observedGameAlreadyRunning)
@@ -419,14 +419,28 @@ public sealed class UnifiedProfilerWorkflow
             if (prior is not null && (!prior.CollectionAttempted || !prior.PresentMonStopVerified))
                 throw new InvalidOperationException("Previous capture is still pending. Stop/collect or abandon its owned output first.");
         }
-        var id = Guid.NewGuid().ToString("N");
-        // Create a short, readable folder and durable identity before writing
-        // the journal; previous captures remain immutable and independently
-        // readable even after owner restoration.
-        CollectedCaptureStore.CreateDatedSessionFolder(
-            packageRoot, id, DateTimeOffset.Now, game,
-            ownerBeforeCapture?.CetCaptureReady == true,
-            ownerBeforeCapture?.GrspCaptureReady == true);
+        var id = preparedSessionId ?? Guid.NewGuid().ToString("N");
+        // During PresentMon restart, its ONE elevated controller stops the
+        // old writer and starts the next one using a pre-provisioned CSV.
+        // Only after safely retiring the old attempt may we bind this ID.
+        if (preparedSessionId is null)
+            CollectedCaptureStore.CreateDatedSessionFolder(
+                packageRoot, id, DateTimeOffset.Now, game,
+                ownerBeforeCapture?.CetCaptureReady == true,
+                ownerBeforeCapture?.GrspCaptureReady == true);
+        else
+        {
+            var folder = CollectedCaptureStore.SessionFolder(packageRoot, id);
+            if (!File.Exists(Path.Combine(folder, "collection.json")))
+                throw new InvalidDataException("Prepared capture identity lacks its durable index.");
+            var prepared = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
+            if (prepared.Cet is not null || prepared.Redscript is not null ||
+                prepared.FrameTimeCsv is not null || prepared.CollectInvoked ||
+                prepared.CollectionAttempted || prepared.Restored ||
+                prepared.CetReadyBeforeAttempt != (ownerBeforeCapture?.CetCaptureReady == true) ||
+                prepared.RedscriptReadyBeforeAttempt != (ownerBeforeCapture?.GrspCaptureReady == true))
+                throw new InvalidDataException("Prepared capture identity or owner baseline changed.");
+        }
         WriteJournal(game, "capture-attempt", id);
         return id;
     }
