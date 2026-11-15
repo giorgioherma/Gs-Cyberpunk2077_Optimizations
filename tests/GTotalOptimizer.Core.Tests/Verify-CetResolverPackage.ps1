@@ -163,6 +163,10 @@ end)
     if ($LASTEXITCODE -eq 0 -or ($bad -join ' ') -notmatch '"ok":false') {
         throw 'Resolver must reject unavailable live source.'
     }
+    # The two negative-case invocations must exit nonzero. Their validated
+    # result cannot become this *test script's* exit code in the calling CI
+    # step: report success only after all assertions above have passed.
+    $global:LASTEXITCODE = 0
     Write-Host 'PASS CET Resolver .NET10 original CLI vs .NET8 owner baseline, source-backed measured callback, full hashed assets, single runtime and safe invalid-input refusal'
 } finally {
     if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
