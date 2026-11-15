@@ -40,6 +40,24 @@ jobs:
           ref: c6871e21d3d3ece8e36d3ea47d45e18d0d7acead
           path: unified/vendor-grsp
           persist-credentials: false
+      # CI-only real CET source fixture. Never stage private files into the
+      # portable product or the generated optimization ZIP.
+      - name: Verify private CET source fixture access
+        shell: pwsh
+        env:
+          GCET_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GCET_PRIVATE_SOURCE_TOKEN)) {
+            throw 'GCO Actions secret GCET_STACK_SOURCES_TOKEN is required for private CET regression replay.'
+          }
+      - name: Checkout private CET live-source fixture
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: unified/.gco-ci-private-cet
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -541,6 +559,21 @@ jobs:
           Write-Host 'PASS delivery: sibling START-HERE.txt + Gs-Cyberpunk2077_Optimizer.exe'
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Replay real CET capture against updated private live-source snapshot
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCetSourceReplay.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PrivateSourceRoot '.gco-ci-private-cet/GCO-Capture-15112026_021913' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'GCO real CET capture + private live-source replay failed' }
+      - name: Remove private CET source checkout
+        if: always()
+        shell: pwsh
+        working-directory: unified
+        run: |
+          if (Test-Path -LiteralPath '.gco-ci-private-cet') {
+            Remove-Item -LiteralPath '.gco-ci-private-cet' -Recurse -Force -ErrorAction Stop
+          }
       - uses: actions/upload-artifact@v4
         with:
           # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
