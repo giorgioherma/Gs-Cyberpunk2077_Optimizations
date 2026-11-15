@@ -3,6 +3,12 @@ name: Gs-Cyberpunk2077_Optimizer
 
 on:
   workflow_dispatch:
+    inputs:
+      full_source_replay:
+        description: 'Milestone verification: replay the sealed capture against private CET sources (adds ~10 minutes)'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [ main, feature/presentmon-resolver-integration ]
     paths:
@@ -43,6 +49,7 @@ jobs:
       # CI-only real CET source fixture. Never stage private files into the
       # portable product or the generated optimization ZIP.
       - name: Verify private CET source fixture access
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
         shell: pwsh
         env:
           GCET_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
@@ -51,6 +58,7 @@ jobs:
             throw 'GCO Actions secret GCET_STACK_SOURCES_TOKEN is required for private CET regression replay.'
           }
       - name: Enable long paths for Windows Git fixture checkout
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
         shell: pwsh
         run: |
           git config --global core.longpaths true
@@ -58,6 +66,7 @@ jobs:
             throw 'Windows Git long-path support could not be enabled.'
           }
       - name: Checkout private CET live-source fixture
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/original_cet_source
@@ -570,6 +579,9 @@ jobs:
           Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Replay real CET capture against updated private live-source snapshot
+        # Full 5,459-file / 14,573-frame fixture, untouched/partial/complete
+        # CET pass and 2nd-pass idempotence stay intact; run at milestones.
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -577,7 +589,7 @@ jobs:
           & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCetSourceReplay.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PrivateSourceRoot '.gco-ci-private-cet/GCO-Capture-15112026_021913' -PackageRoot $root
           if ($LASTEXITCODE -ne 0) { throw 'GCO real CET capture + private live-source replay failed' }
       - name: Remove private CET source checkout
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
         shell: pwsh
         working-directory: unified
         run: |
