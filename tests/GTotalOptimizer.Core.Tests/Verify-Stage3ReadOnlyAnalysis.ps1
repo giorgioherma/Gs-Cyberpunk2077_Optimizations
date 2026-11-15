@@ -159,6 +159,56 @@ try {
     finally { $zip.Dispose() }
     Remove-Item -LiteralPath $marker -Recurse -Force
 
+    # Actual owner source-state regression. A *single* already optimized
+    # mod file from the first ZIP is a real partial installation; the owner
+    # must still produce the remaining CET pass from the CURRENT source.
+    $firstPass=Join-Path $WorkRoot 'GCO-Stage4-First-CET-Pass.zip'
+    Copy-Item -LiteralPath $passZip -Destination $firstPass -ErrorAction Stop
+    $archive=[IO.Compression.ZipFile]::OpenRead($firstPass)
+    try {
+        $prefix='bin/x64/plugins/cyber_engine_tweaks/mods/'
+        $sourceFile=@($archive.Entries | Where-Object {
+            $_.FullName.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -and
+            $_.FullName.EndsWith('.lua',[StringComparison]::OrdinalIgnoreCase) -and
+            !$_.FullName.StartsWith(($prefix+'0-Engine/'),[StringComparison]::OrdinalIgnoreCase) -and
+            (Test-Path -LiteralPath (Join-Path $targetGame ($_.FullName.Replace('/','\'))) -PathType Leaf)
+        } | Select-Object -First 1)
+        if ($sourceFile.Count -ne 1) {
+            throw 'First CET pass has no existing mod Lua to exercise partially optimized source.'
+        }
+        $partialTarget=Join-Path $targetGame ($sourceFile[0].FullName.Replace('/','\'))
+        $read=$sourceFile[0].Open()
+        try {
+            $write=[IO.File]::Open($partialTarget,[IO.FileMode]::Create,
+                [IO.FileAccess]::Write,[IO.FileShare]::None)
+            try { $read.CopyTo($write) } finally { $write.Dispose() }
+        }
+        finally { $read.Dispose() }
+    } finally { $archive.Dispose() }
+
+    # This ZIP is CI-only; never overwrite a user's output. Repeated GCO
+    # generation on a partially optimized stack must still use the exact
+    # original owner CLI and return genuine, remaining transforms.
+    Remove-Item -LiteralPath $passZip -Force -ErrorAction Stop
+    $partial=@(& dotnet run --configuration Release --project $testProject -- --stage4-generate $PackageRoot $targetGame $id 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+        @($partial | Where-Object { [string]$_ -like 'PASS Stage 4 CET source-owned generated game-relative ZIP:*' }).Count -ne 1) {
+        throw 'PARTIAL_SOURCE_PASS_FAILED: existing CET generator could not complete partial original sources.'
+    }
+    Write-Host 'PASS Stage 4 real partial CET installation: original owner produced remaining source-proven transforms'
+
+    # Fully apply the first complete ZIP to the DISPOSABLE game fixture only.
+    # This is equivalent to a Vortex overlay, never a player installation.
+    # The source-owned SECOND pass must contain ZERO new transformations.
+    [IO.Compression.ZipFile]::ExtractToDirectory($firstPass,$targetGame,$true)
+    Remove-Item -LiteralPath $passZip -Force -ErrorAction Stop
+    $second=@(& dotnet run --configuration Release --project $testProject -- --stage4-idempotent $PackageRoot $targetGame $id 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+        @($second | Where-Object { [string]$_ -like 'PASS Stage 4 completed-source CET second pass:*' }).Count -ne 1) {
+        throw 'SECOND_PASS_NOT_IDEMPOTENT: existing CET owner regenerated transforms or refused completed sources.'
+    }
+    Write-Host 'PASS Stage 4 fully optimized CET state: second source-owned pass produces ZERO new transforms'
+
     # Generate must not edit live mods or sealed capture. Keep COLLECT's
     # established corruption contract; no new ANALYZE restoration gate.
     $sourceEvidence=Join-Path $targetSession 'G-CET/CET_Summary.json'
