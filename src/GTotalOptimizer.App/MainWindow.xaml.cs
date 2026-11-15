@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
     private CancellationTokenSource? analysisCancellation;
     private bool analysisRunning;
+    private bool generationRunning;
     private string? analyzedSessionId;
     // WMI can report our game process before Process.Start returns.
     // Classify that event as GCO-owned; the tray handoff itself never waits.
@@ -1660,7 +1661,8 @@ public partial class MainWindow : Window
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
             ResultsStatusText.Text = "Original profiler files restored. Read-only CET analysis uses the current installed source; ZIP generation is not yet available.";
             OpenResultsButton.IsEnabled = true;
-            GenerateButton.IsEnabled = false;
+            GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
+                analyzedSessionId == saved.SessionId;
             if (!analysisRunning && analyzedSessionId != saved.SessionId)
                 _ = RunReadOnlyAnalysisAsync(saved);
         }
@@ -1711,8 +1713,7 @@ public partial class MainWindow : Window
                 " verified files." + Environment.NewLine +
                 "REDscript optimization is not implemented in this stage; no REDscript performance gains claimed.";
             AnalyzeButton.Content = "ANALYZED";
-            ResultsStatusText.Text = "CET analysis complete. No game files modified. " +
-                "ZIP generation stays disabled pending source-safe CET generation and REDscript validation.";
+            ResultsStatusText.Text = "CET Resolver ready. Generate a CET-only pass from current mod sources.";
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)
@@ -1721,13 +1722,59 @@ public partial class MainWindow : Window
             Trace.TraceWarning("Read-only CET analysis: " + ex);
             ResultsStatusText.Text = "CET analysis unavailable: " + ex.Message +
                 " Collected results remain untouched.";
-            CetReportText.Text = "No trusted CET analysis produced. Use the restored capture and current installed source.";
+            analyzedSessionId = null;
+            CetReportText.Text = "CET Resolver unavailable. The collected capture is unchanged.";
             AnalyzeButton.Content = "UNAVAILABLE";
         }
         finally
         {
             analysisRunning = false;
-            GenerateButton.IsEnabled = false;
+            GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
+                !generationRunning;
+        }
+    }
+
+    private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
+    {
+        if (generationRunning || analysisRunning || completedSessionId is null ||
+            completedGameRoot is null || analyzedSessionId != completedSessionId)
+            return;
+
+        generationRunning = true;
+        GenerateButton.IsEnabled = false;
+        var session = completedSessionId;
+        var game = completedGameRoot;
+        var cancellation = new CancellationTokenSource();
+        analysisCancellation?.Dispose();
+        analysisCancellation = cancellation;
+        ResultsStatusText.Text = "Generating CET pass from current sources...";
+        try
+        {
+            // Exactly the source owner's established --generate-pass pipeline.
+            // No second GCO generator, no REDscript transform and no mod writes.
+            var pass = await readOnlyAnalyzer.GenerateCetPassAsync(
+                packageRoot, game, session, cancellation.Token);
+            if (cancellation.IsCancellationRequested || !IsLoaded) return;
+            resultsFolder = Path.GetDirectoryName(pass.ZipPath);
+            ResultsStatusText.Text = "CET pass created: " + Path.GetFileName(pass.ZipPath) +
+                " | Files: " + pass.FileCount + " | Transforms: " +
+                pass.TransformCount + ". REDscript generation is separate.";
+            OpenResultsButton.IsEnabled = true;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!cancellation.IsCancellationRequested && IsLoaded)
+            {
+                Trace.TraceWarning("CET owner pass generation: " + ex);
+                ResultsStatusText.Text = "CET pass not generated: " + ex.Message;
+            }
+        }
+        finally
+        {
+            generationRunning = false;
+            if (IsLoaded)
+                GenerateButton.IsEnabled = analyzedSessionId == session;
         }
     }
 
