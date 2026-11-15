@@ -266,12 +266,15 @@ jobs:
           if ($wpfCapture -match 'StopPresentMonAfterGameExitAsync|pendingGameExitSessionId') {
             throw 'Duplicate WPF game-exit PresentMon stop path reintroduced'
           }
+          $pmController=Get-Content 'src/GTotalOptimizer.App/PresentMonCaptureController.cs' -Raw
           if ($wpfCapture -notmatch 'private void GameExited\(int pid\)' -or
               $wpfCapture -notmatch 'pendingGameExitRefresh = true;' -or
-              $wpfCapture -notmatch 'await PresentMonCaptureController.WaitForAutoStopAsync') {
-            throw 'WPF game-exit refresh or explicit cleanup path disappeared'
+              $wpfCapture -notmatch 'PresentMonCaptureController.StopTrackedAsync' -or
+              $pmController -notmatch 'public static async Task.*StopTrackedAsync' -or
+              $pmController -notmatch 'await WaitForAutoStopAsync\(root, tracked\)') {
+            throw 'WPF game-exit refresh or single PresentMon controller cleanup path disappeared'
           }
-          Write-Host 'PASS game-exit auto-stop native-only; WPF refresh and explicit stops retained'
+          Write-Host 'PASS game-exit auto-stop native-only; WPF refresh and one shared controller cleanup retained'
           foreach ($exe in @(
             (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
             (Join-Path $root 'app/G-Total-Optimizer.App.exe')
