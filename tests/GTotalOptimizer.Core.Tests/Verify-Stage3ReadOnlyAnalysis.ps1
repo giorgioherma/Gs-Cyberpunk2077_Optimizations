@@ -62,7 +62,21 @@ try {
         $messages=@(& dotnet run --configuration Release --project $testProject -- --stage3-analyze $PackageRoot $targetGame $id 2>&1)
         $code=$LASTEXITCODE
         if ($shouldPass -and $code -ne 0) {
-            throw ('Stage 3 production analysis failed: '+$scenario+'; see private logs.')
+            # CI diagnostics must be actionable, but never expose paths from
+            # the private original CET source repository in public Actions.
+            $reasons=@($messages | ForEach-Object { [string]$_ } |
+                Where-Object { $_ -match 'Exception:|Unhandled exception|^FAIL |\berror CS\d+\b' } |
+                Select-Object -First 2)
+            $diagnostic=if ($reasons.Count -gt 0) {
+                ($reasons -join ' | ')
+            } else { 'NO_EXCEPTION_LINE; EXIT_'+$code }
+            foreach ($secretPath in @($PrivateSourceRoot,$originalMods,$targetGame,
+                $targetMods,$StagedSealedSession,$targetSession,$PackageRoot,$WorkRoot)) {
+                $diagnostic=$diagnostic.Replace($secretPath,'[PATH]')
+            }
+            $diagnostic=[regex]::Replace($diagnostic,'[A-Za-z]:\\[^:\r\n]*','[PATH]')
+            if ($diagnostic.Length -gt 600) { $diagnostic=$diagnostic.Substring(0,600) }
+            throw ('Stage 3 analysis '+$scenario+': '+$diagnostic)
         }
         if (!$shouldPass -and $code -eq 0) {
             throw 'Unsafe Stage 3 analysis falsely passed: '+$scenario
