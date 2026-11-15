@@ -18,6 +18,7 @@ $targetMods=Join-Path $targetGame 'bin/x64/plugins/cyber_engine_tweaks/mods'
 $targetSession=Join-Path (Join-Path $PackageRoot 'RESULTS') (Split-Path $StagedSealedSession -Leaf)
 $targetIndex=Join-Path $targetSession 'collection.json'
 $testProject='tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj'
+$passZip=$null # Test-only private-source output must NEVER enter the public artifact.
 $originalCaptureIndexHash=(Get-FileHash -LiteralPath (Join-Path $StagedSealedSession 'collection.json') -Algorithm SHA256).Hash
 if (Test-Path -LiteralPath $targetSession) {
     throw 'CI session must never overwrite an existing player RESULTS session.'
@@ -168,6 +169,12 @@ try {
     }
     Write-Host 'PASS collected capture originals unchanged; tampered copy refused'
 } finally {
+    if (![string]::IsNullOrWhiteSpace($passZip) -and
+        (Test-Path -LiteralPath $passZip -PathType Leaf)) {
+        # Only the disposable CI-generated private-source overlay is removed.
+        # The real output feature remains intact for end users.
+        Remove-Item -LiteralPath $passZip -Force -ErrorAction Stop
+    }
     if (Test-Path -LiteralPath $targetSession) {
         Remove-Item -LiteralPath $targetSession -Recurse -Force -ErrorAction Stop
     }
