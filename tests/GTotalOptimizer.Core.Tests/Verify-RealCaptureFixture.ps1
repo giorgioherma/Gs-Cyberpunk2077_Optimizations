@@ -134,13 +134,21 @@ try {
         $columns=@($header.Split(',') | ForEach-Object { $_.Trim().Trim('"') })
         $app=[Array]::IndexOf($columns,'Application')
         $qpc=[Array]::IndexOf($columns,'CPUStartQPC')
+        $localTime=[Array]::IndexOf($columns,'CPUStartDateTime')
         $frameTime=[Array]::IndexOf($columns,'FrameTime')
-        if ($app -lt 0 -or $qpc -lt 0 -or $frameTime -lt 0) {
-            throw 'PresentMon fixture lacks official Application/CPUStartQPC/FrameTime fields.'
+        # The sealed user capture can predate GCO's switch to --qpc_time.
+        # Mirror the actual GCO collection consumer: QPC is preferred, but
+        # valid historical --date_time CSVs retain local wall-clock evidence.
+        # This check NEVER converts timezones or changes the original CSV.
+        $clockIndex=if ($qpc -ge 0) { $qpc } else { $localTime }
+        $clockKind=if ($qpc -ge 0) { 'QPC' } else { 'LocalDateTime' }
+        if ($app -lt 0 -or $clockIndex -lt 0 -or $frameTime -lt 0) {
+            throw ('PresentMon fixture is missing Application, FrameTime or a supported ' +
+                'CPUStartQPC/CPUStartDateTime clock; actual columns: ' + ($columns -join ', '))
         }
         $frames=0
         $finiteFrameTimes=0
-        $badQpc=0
+        $invalidClocks=0
         $line=$null
         while ($null -ne ($line=$reader.ReadLine())) {
             $fields=$line.Split(',')
@@ -149,9 +157,34 @@ try {
             }
             if ($fields[$app].Trim('"') -ine 'Cyberpunk2077.exe') { continue }
             $frames++
-            $clock=0L
-            if (![long]::TryParse($fields[$qpc].Trim('"'),[ref]$clock) -or $clock -le 0) {
-                $badQpc++
+            $clockText=$fields[$clockIndex].Trim().Trim('"')
+            if ($clockKind -eq 'QPC') {
+                $clock=0L
+                if (![long]::TryParse($clockText,
+                    [Globalization.NumberStyles]::None,
+                    [Globalization.CultureInfo]::InvariantCulture,[ref]$clock) -or
+                    $clock -le 0) {
+                    $invalidClocks++
+                }
+            } else {
+                # Match the historical date-time format accepted by GCO's
+                # PresentMonCaptureAlignment.TryLocalFrameUnixMs, but avoid
+                # interpreting local timestamps in the CI runner's timezone.
+                $match=[regex]::Match($clockText,
+                    '^(?<day>\d{4}-\d{1,2}-\d{1,2})[ T](?<time>\d{1,2}:\d{2}:\d{2})(?:\.(?<fraction>\d{1,9}))?$')
+                if (!$match.Success) {
+                    $invalidClocks++
+                } else {
+                    $baseTime=$match.Groups['day'].Value + ' ' +
+                        $match.Groups['time'].Value
+                    $parsed=[datetime]::MinValue
+                    if (![datetime]::TryParseExact($baseTime,
+                        'yyyy-M-d H:mm:ss',
+                        [Globalization.CultureInfo]::InvariantCulture,
+                        [Globalization.DateTimeStyles]::None,[ref]$parsed)) {
+                        $invalidClocks++
+                    }
+                }
             }
             $value=0.0
             if ([double]::TryParse($fields[$frameTime].Trim('"'),
@@ -161,9 +194,10 @@ try {
                 $finiteFrameTimes++
             }
         }
-        if ($frames -lt 2 -or $badQpc -ne 0 -or $finiteFrameTimes -lt 2) {
-            throw "Actual PresentMon records not usable for frame analysis: frames=$frames invalidQpc=$badQpc finiteMs=$finiteFrameTimes"
+        if ($frames -lt 2 -or $invalidClocks -ne 0 -or $finiteFrameTimes -lt 2) {
+            throw "PresentMon invalid: frames=$frames invalid$clockKind=$invalidClocks finiteMs=$finiteFrameTimes"
         }
+        Write-Host "PASS real PresentMon clock=$clockKind, frames=$frames, valid clocks=$($frames-$invalidClocks), finiteMs=$finiteFrameTimes"
         if ($null -ne $index.PresentMonAlignedFrames -and
             $frames -ne [int]$index.PresentMonAlignedFrames) {
             throw "Aligned PresentMon frame index disagrees with actual retained Cyberpunk rows: index=$($index.PresentMonAlignedFrames), rows=$frames"
