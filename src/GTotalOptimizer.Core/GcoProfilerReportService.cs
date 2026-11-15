@@ -252,7 +252,7 @@ public static class GcoProfilerReportService
                 JsonSerializer.Serialize(report, Json), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(publishing, HtmlFile),
                 HtmlReport(report.frameEvidence.provider, mon?.Frames.Count ?? 0,
-                    rows, grspFrames, cetWindows), new UTF8Encoding(false));
+                    JsonSerializer.Serialize(rows, Json), grspFrames, cetWindows), new UTF8Encoding(false));
             // Keep the full original CET and GRSP reports and their data links
             // accessible beneath the consolidated report. This is RESULTS
             // only, never part of the optimizer pass ZIP.
@@ -449,6 +449,126 @@ public static class GcoProfilerReportService
     }
 
     private static string HtmlReport(string provider, int monFrames,
-        IEnumerable<dynamic> unused, int grspFrames, int cetWindows)
-        => throw new NotSupportedException();
+        string timelineJson, int grspFrames, int cetWindows)
+    {
+        // Standalone/offline HTML: no CDN, network, external scripts or files.
+        // Three independent y-axis ranges with ONE shared F11 time axis.
+        const string template = """
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GCO — Combined Profiler Report</title>
+<style>
+:root{color-scheme:dark;--bg:#050b0e;--panel:#101b21;--border:#34505a;--fg:#e1f2f5;--muted:#91abb4;--cyan:#33daec;--yellow:#f9d854;--magenta:#ef71c2}
+*{box-sizing:border-box}body{font:14px "Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--fg);margin:0}
+main{max-width:1450px;margin:auto;padding:20px 26px 45px}h1{font-size:25px;letter-spacing:.05em;color:#fff000}h2{font-size:19px;color:var(--cyan);margin:26px 0 12px}
+p{line-height:1.5}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px}
+.card{padding:16px;border:1px solid var(--border);background:var(--panel);border-radius:6px}
+.card strong{display:block;font-size:22px;margin:5px 0}.chartbox{position:relative;padding:12px;background:var(--panel);border:1px solid var(--border);border-radius:8px}
+canvas{display:block;width:100%;height:570px;cursor:crosshair}
+nav{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}a{color:var(--cyan);text-underline-offset:4px}
+button{background:#132b34;border:1px solid #3daabc;color:#dff5fa;border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.tip{display:none;position:absolute;pointer-events:none;z-index:2;white-space:pre-line;max-width:300px;background:#071014f5;border:1px solid var(--cyan);padding:10px;border-radius:6px;font:12px Consolas,monospace}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px}.sw{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:currentColor}
+.note{background:#152128;border-left:3px solid var(--yellow);padding:10px 13px;margin:12px 0}
+@media(max-width:650px){main{padding:12px}canvas{height:450px}}
+</style></head><body><main>
+<h1>GCO / Combined Profiler Report</h1>
+<p class="muted">Real source-owned CET and REDscript measurements, alongside <strong>__PROVIDER__</strong> frame evidence. Derived from the collected capture; no game or original capture files modified.</p>
+<section class="grid">
+<div class="card">Frame-time source<strong>__PROVIDER__</strong><span class="muted">No CapFrameX substitution or synthetic frame data</span></div>
+<div class="card">PresentMon frames<strong>__MONFRAMES__</strong><span class="muted">Verified common F11 intersection</span></div>
+<div class="card">CET timeline rows<strong>__CETWINDOWS__</strong><span class="muted">Measured native 50 ms owner buckets</span></div>
+<div class="card">GRSP frames<strong>__REDFRAMES__</strong><span class="muted">Measured instrumented call-edge work in the overlap</span></div>
+</section>
+<h2>CET + REDscript + PresentMon</h2>
+<div class="note"><strong>Measurement boundaries:</strong> PresentMon measures present-to-present intervals, not displayed latency. CET and REDscript values are distinct observed/instrumented workloads, not whole-process CPU; they can overlap and must <strong>not</strong> be added or subtracted. Timing alignment is coarse 50 ms association using recorded QPC/Unix F11 anchors, not proof that either profiler caused a particular hitch. PC latency and frame-generation flags are NOT_CAPTURED.</div>
+<div class="chartbox"><div class="toolbar">
+<button id="full">Full capture</button><button id="worst">Worst PresentMon interval</button>
+<span class="muted">Hold Shift and scroll to zoom · Hover for actual values</span></div>
+<canvas id="graph" role="img" aria-label="Three aligned time-series panels: PresentMon, measured CET and REDscript work"></canvas>
+<div class="tip" id="tip"></div><div class="legend">
+<span style="color:var(--cyan)"><i class="sw"></i>PresentMon maximum interval / 50ms bucket</span>
+<span style="color:var(--yellow)"><i class="sw"></i>CET measured exclusive work / 50ms bucket</span>
+<span style="color:var(--magenta)"><i class="sw"></i>GRSP measured exclusive instrumented work / 50ms bucket</span>
+</div></div>
+<p class="muted">A missing PresentMon capture is shown as NOT_CAPTURED. GRSP's recorded frame Unix clocks and CET 50ms bucket clocks are used directly; no frame-index lag fitting or CapFrameX format is synthesized.</p>
+<h2>Full source-owned profiler reports</h2>
+<nav><a href="CET/CET_Report.html">Full CET report (native/GC/allocations/callbacks)</a>
+<a href="GRSP/GRSP_Report.html">Full REDscript report (functions/frames/spikes)</a>
+<a href="CET/CET_Resolver_Input.json">CET Resolver input (native PresentMon evidence)</a>
+<a href="GCO_Profiler_Report.json">Consolidated machine data</a></nav>
+<p class="muted">GCO owns this combined view. CET and GRSP own their measurements and report producers. Standalone profiler input support is unchanged.</p>
+</main>
+<script>
+(function(){
+const data=__TIMELINE__,canvas=document.getElementById('graph'),tip=document.getElementById('tip');
+if(!data.length){canvas.replaceWith(document.createTextNode("No synchronized timeline available; native reports remain accessible."));return;}
+let xmin=data[0].timeMs,xmax=data[data.length-1].timeMs+50;
+const fullMin=xmin,fullMax=xmax;let worst=data.find(p=>p.presentIntervalMaxMs!=null)||data[0];
+for(const p of data)if((p.presentIntervalMaxMs||0)>(worst.presentIntervalMaxMs||0))worst=p;
+const panels=[
+ {key:'presentIntervalMaxMs',name:'PRESENTMON / present interval',color:'#33daec'},
+ {key:'cetExclusiveMeasuredMs',name:'CET / measured exclusive work',color:'#f9d854'},
+ {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented exclusive work',color:'#ef71c2'}
+];
+const wPad=61,rPad=20,top=16,bottom=28;
+function visible(){return data.filter(p=>p.timeMs+50>=xmin&&p.timeMs<=xmax);}
+function draw(){
+ const w=canvas.clientWidth,h=canvas.clientHeight,ctx=canvas.getContext('2d');
+ ctx.clearRect(0,0,w,h);
+ const view=visible(),span=Math.max(1,xmax-xmin),panelH=(h-top-bottom)/3;
+ const x=t=>wPad+(t-xmin)/span*(w-wPad-rPad);
+ for(let i=0;i<3;i++){
+  const p=panels[i],y0=top+i*panelH,vals=view.map(d=>d[p.key]).filter(v=>v!=null);
+  const yMax=Math.max(1,...vals)*1.12;
+  ctx.fillStyle='#10242c';ctx.fillRect(wPad,y0,w-wPad-rPad,panelH-14);
+  ctx.fillStyle=p.color;ctx.font='12px Segoe UI';ctx.fillText(p.name,5,y0+13);
+  ctx.textAlign='right';ctx.fillStyle='#a4b8bf';ctx.fillText(yMax.toFixed(1)+' ms',wPad-6,y0+30);
+  ctx.textAlign='left';ctx.strokeStyle='#243f4b';ctx.lineWidth=1;
+  for(let k=0;k<=3;k++){const y=y0+25+(panelH-52)*k/3;ctx.beginPath();ctx.moveTo(wPad,y);ctx.lineTo(w-rPad,y);ctx.stroke();}
+  ctx.strokeStyle=p.color;ctx.lineWidth=1.35;ctx.beginPath();let started=false;
+  for(const d of view){
+   const v=d[p.key];if(v==null){started=false;continue;}
+   const xx=x(d.timeMs),yy=y0+25+(1-Math.min(1,v/yMax))*(panelH-52);
+   if(!started){ctx.moveTo(xx,yy);started=true;}else ctx.lineTo(xx,yy);
+  }
+  ctx.stroke();
+ }
+ ctx.fillStyle='#a6bbc4';ctx.font='12px Segoe UI';ctx.fillText((xmin/1000).toFixed(1)+' s',wPad,h-8);
+ ctx.textAlign='right';ctx.fillText((xmax/1000).toFixed(1)+' s',w-rPad,h-8);ctx.textAlign='left';
+}
+function resize(){
+ const ratio=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth),h=canvas.clientHeight;
+ canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);
+ canvas.getContext('2d').setTransform(ratio,0,0,ratio,0,0);draw();
+}
+document.getElementById('full').onclick=()=>{xmin=fullMin;xmax=fullMax;draw();};
+document.getElementById('worst').onclick=()=>{xmin=Math.max(fullMin,worst.timeMs-5000);xmax=Math.min(fullMax,worst.timeMs+5000);draw();};
+canvas.addEventListener('mousemove',e=>{
+ const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad)));
+ const t=xmin+ratio*(xmax-xmin);let lo=0,hi=data.length-1;
+ while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}const p=data[Math.max(0,lo-1)];
+ if(!p)return;const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
+ tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresentMon: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' frames)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET measured: '+fmt(p.cetExclusiveMeasuredMs)+'\nGRSP measured: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED calls: '+(p.redscriptCalls??'NOT_CAPTURED');
+ tip.style.display='block';tip.style.left=Math.max(5,Math.min(r.width-290,e.clientX-r.left+10))+'px';tip.style.top=Math.max(3,e.clientY-r.top-95)+'px';
+});
+canvas.addEventListener('mouseleave',()=>tip.style.display='none');
+canvas.addEventListener('wheel',e=>{
+ if(!e.shiftKey)return;e.preventDefault();
+ const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad))),anchor=xmin+ratio*(xmax-xmin);
+ const next=Math.max(500,Math.min(fullMax-fullMin,(xmax-xmin)*(e.deltaY<0?.78:1.28)));
+ let a=anchor-ratio*next,b=a+next;if(a<fullMin){a=fullMin;b=a+next;}if(b>fullMax){b=fullMax;a=b-next;}
+ xmin=a;xmax=b;draw();
+},{passive:false});window.addEventListener('resize',resize);requestAnimationFrame(resize);
+})();
+</script></body></html>
+""";
+        return template.Replace("__PROVIDER__", WebUtility.HtmlEncode(provider), StringComparison.Ordinal)
+            .Replace("__MONFRAMES__", monFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("__CETWINDOWS__", cetWindows.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("__REDFRAMES__", grspFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal);
+    }
 }
