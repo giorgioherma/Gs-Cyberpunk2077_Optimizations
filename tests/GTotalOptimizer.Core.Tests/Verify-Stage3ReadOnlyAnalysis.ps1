@@ -39,8 +39,8 @@ try {
     [IO.File]::WriteAllText((Join-Path $bin 'Cyberpunk2077.exe'),
         'CI-only game sentinel; not executable and never launched')
 
-    # Simulate a GCO VERIFIED RESTORED index only in this copied fixture.
-    # The real sealed collection index and all file hashes remain original.
+    # Simulate COLLECT's completed capture index in this private test copy.
+    # Do not use a restored flag to grant or deny Resolver analysis.
     Copy-Item -LiteralPath $StagedSealedSession -Destination $targetSession -Recurse
     $index=Get-Content -LiteralPath $targetIndex -Raw | ConvertFrom-Json -Depth 70
     $id=[string]$index.SessionId
@@ -51,7 +51,7 @@ try {
         throw 'Actual fixture cannot model a verified restored collection.'
     }
     $index.GameRoot=$targetGame
-    $index.Restored=$true
+    $index.Restored=$false
     if ($null -ne $index.FrameTimeEvidence) {
         $relative=([string]$index.FrameTimeEvidence.Path).Replace('/','\')
         $index.FrameTimeCsv=Join-Path $targetSession $relative
@@ -83,7 +83,7 @@ try {
         }
         if ($shouldPass) {
             $success=@($messages | Where-Object {
-                [string]$_ -like 'PASS Stage 3 read-only restored-session CET analysis:*'
+                [string]$_ -like 'PASS Stage 3 read-only collected-session CET analysis:*'
             })
             if ($success.Count -ne 1) {
                 throw 'Stage 3 CLI gave no successful production source report.'
@@ -98,24 +98,75 @@ try {
     if ($first -ne $again) { throw 'Repeated Stage 3 CET analysis has unstable output.' }
     Write-Host 'PASS Stage 3 real current-source CET read-only report replay is stable across repeat runs'
 
-    $index.Restored=$false
-    $index | ConvertTo-Json -Depth 70 | Set-Content -LiteralPath $targetIndex -Encoding utf8
-    $null=InvokeAnalysis $false 'un-restored session refusal'
-    $index.Restored=$true
-    $index | ConvertTo-Json -Depth 70 | Set-Content -LiteralPath $targetIndex -Encoding utf8
-
+    # ANALYZE and GENERATE are not profiler lifecycle/RESTORE managers. A
+    # captured index does not need Restored=true, and a recovery marker does
+    # not change the actual source-owned Resolver's inputs.
     $marker=Join-Path $targetGame 'bin/x64/plugins/.cet_runtime_profiler'
     New-Item -ItemType Directory -Force -Path $marker | Out-Null
-    $null=InvokeAnalysis $false 'managed original restoration marker refusal'
+    $null=InvokeAnalysis $true 'ANALYZE independent of profiler owner marker'
+    Write-Host 'PASS Stage 3 collected data analysis independent of profiler restore flag and marker'
+
+    # The production Page 2 operation must call the ALREADY DEVELOPED
+    # source-owned CET --generate-pass. No synthetic ZIP or rewritten Lua.
+    $passZip=Join-Path (Join-Path $PackageRoot 'RESULTS') ('G-CET_PASS_'+$id+'.zip')
+    if (Test-Path -LiteralPath $passZip) { throw 'Unexpected pre-existing CET pass in CI workspace.' }
+    $generated=@(& dotnet run --configuration Release --project $testProject -- --stage4-generate $PackageRoot $targetGame $id 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $errorLines=@($generated | ForEach-Object { [string]$_ } |
+            Where-Object { $_ -match 'Exception:|Unhandled exception|^FAIL ' } |
+            Select-Object -First 2)
+        # Never include private original source absolute paths in the log.
+        $errorText=($errorLines -join ' | ')
+        foreach ($secret in @($originalMods,$PrivateSourceRoot,$targetMods,$targetGame,$PackageRoot)) {
+            $errorText=$errorText.Replace($secret,'[PATH]')
+        }
+        $errorText=[regex]::Replace($errorText,'[A-Za-z]:\\[^:\r\n]*','[PATH]')
+        if ($errorText.Length -gt 400) { $errorText=$errorText.Substring(0,400) }
+        throw ('Actual source-owned CET pass generation failed: '+$errorText)
+    }
+    if (!(Test-Path -LiteralPath $passZip -PathType Leaf)) {
+        throw 'Owner CET generation did not publish a ZIP into GCO RESULTS.'
+    }
+    $generatedProof=@($generated | Where-Object {
+        [string]$_ -like 'PASS Stage 4 CET source-owned generated game-relative ZIP:*'
+    })
+    if ($generatedProof.Count -ne 1) {
+        throw 'CET generator did not report applied transforms and file count.'
+    }
+    Add-Type -AssemblyName System.IO.Compression
+    $zip=[System.IO.Compression.ZipFile]::OpenRead($passZip)
+    try {
+        $entries=@($zip.Entries)
+        $unique=@{}
+        $lua=0
+        foreach($entry in $entries) {
+            $n=$entry.FullName
+            $modFile=$n.StartsWith('bin/x64/plugins/cyber_engine_tweaks/mods/',[StringComparison]::OrdinalIgnoreCase)
+            $nativeFile=$n.StartsWith('red4ext/plugins/G-CET-StaticLocations/',[StringComparison]::OrdinalIgnoreCase)
+            if (!$modFile -and !$nativeFile -or $n -match '\\.\\.|\\' -or
+                $entry.Length -le 0 -or $unique.ContainsKey($n.ToLowerInvariant())) {
+                throw 'Owner-generated CET pass contains invalid, duplicate or non-game-relative entry.'
+            }
+            $unique[$n.ToLowerInvariant()]=$true
+            if ($n.EndsWith('.lua',[StringComparison]::OrdinalIgnoreCase)) { $lua++ }
+        }
+        if ($entries.Count -lt 2 -or $lua -lt 1) {
+            throw 'Actual CET owner generation emitted no usable Lua source in ZIP.'
+        }
+        Write-Host ('PASS Stage 4 actual owner CET pass ZIP entries='+$entries.Count+', Lua files='+$lua+', game-relative only; no profiler/report/RED assets')
+    }
+    finally { $zip.Dispose() }
     Remove-Item -LiteralPath $marker -Recurse -Force
 
+    # Generate must not edit live mods or sealed capture. Keep COLLECT's
+    # established corruption contract; no new ANALYZE restoration gate.
     $sourceEvidence=Join-Path $targetSession 'G-CET/CET_Summary.json'
     [IO.File]::AppendAllText($sourceEvidence,'tampered')
-    $null=InvokeAnalysis $false 'indexed CET capture SHA256 drift refusal'
+    $null=InvokeAnalysis $false 'indexed capture corrupted after Collect'
     if ((Get-FileHash -LiteralPath (Join-Path $StagedSealedSession 'collection.json') -Algorithm SHA256).Hash -ne $originalCaptureIndexHash) {
-        throw 'Real original capture index changed during Stage 3 regression.'
+        throw 'Real original capture index changed during generation regression.'
     }
-    Write-Host 'PASS Stage 3 refusal of incomplete restore, active managed source and corrupted capture hashes'
+    Write-Host 'PASS collected capture originals unchanged; tampered copy refused'
 } finally {
     if (Test-Path -LiteralPath $targetSession) {
         Remove-Item -LiteralPath $targetSession -Recurse -Force -ErrorAction Stop
