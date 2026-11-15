@@ -11,6 +11,110 @@ var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().
 try
 {
     Directory.CreateDirectory(root);
+
+    // GCO Stage 2: numerical, read-only PresentMon -> CET frame chronology.
+    // QPC anchors are artificial but independent, 1000ms per million ticks.
+    var pmFixture = Path.Combine(root, "sealed-capture", "PresentMon");
+    Directory.CreateDirectory(pmFixture);
+    var pmCsv = Path.Combine(pmFixture, "PresentMon.csv");
+    const string pmHeader = "Application,CPUStartQPC,TimeInQPC,MsBetweenPresents,MsCPUBusy,MsGPUBusy,MsGPUTime";
+    var pmRows = new[]
+    {
+        "Cyberpunk2077.exe,1200000,1216000,16,5.25,4,6",
+        "Cyberpunk2077.exe,1216000,1249000,33,11,18,20",
+        "Cyberpunk2077.exe,1249000,1265000,16,7,9,",
+    };
+    File.WriteAllLines(pmCsv, [pmHeader, .. pmRows]);
+    CollectedCaptureIndex MakePmIndex(int rows = 3) => new(
+        "00000000000000000000000000000001", root,
+        new CollectedOwner("cet.zip", []),
+        new CollectedOwner("red.zip", []), pmCsv,
+        FrameTimeEvidence: new CollectedFile(
+            "PresentMon/PresentMon.csv",
+            new FileInfo(pmCsv).Length,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(pmCsv)))),
+        PresentMonOverlapStartUnixMs: 1_800_000_000_190,
+        PresentMonOverlapEndUnixMs: 1_800_000_000_810,
+        PresentMonAlignedFrames: rows);
+    var pmOverlap = new NativeCaptureWindow(
+        1_800_000_000_190, 1_800_000_000_810,
+        GrspStartQpc: 1_000_000, GrspStopQpc: 2_000_000,
+        GrspStartUnixMs: 1_800_000_000_000,
+        GrspStopUnixMs: 1_800_000_001_000,
+        CetStartUnixMs: 1_800_000_000_100,
+        CetStopUnixMs: 1_800_000_000_950);
+    var sealedFolder = Path.Combine(root, "sealed-capture");
+    var originalPmHash = MakePmIndex().FrameTimeEvidence!.Sha256;
+    var pmChronology = GcoPresentMonFrameEvidence.Build(sealedFolder, MakePmIndex(), pmOverlap);
+    Require(pmChronology.SchemaVersion == GcoPresentMonFrameEvidence.ContractVersion &&
+        pmChronology.SourceFrameCount == 3 &&
+        pmChronology.Frames.Count == 3 &&
+        pmChronology.SourceSha256 == originalPmHash &&
+        pmChronology.Correlation == "CET_GRSP_F11_INTERSECTION_VERIFIED",
+        "GCO PresentMon chronology preserves indexed source identity and exact F11 proof");
+    Require(Math.Abs(pmChronology.Frames[0].RelativeStartMs - 100) < 0.001 &&
+        Math.Abs(pmChronology.Frames[1].RelativeStartMs - 116) < 0.001 &&
+        Math.Abs(pmChronology.Frames[2].RelativeStartMs - 149) < 0.001 &&
+        pmChronology.Frames[1].IntervalMs == 33,
+        "independent QPC/Unix arithmetic anchors intervals at TimeInQPC, not CPUStartQPC");
+    Require(pmChronology.Frames[0].CpuBusyMs == 5.25 &&
+        pmChronology.Frames[1].GpuBusyMs == 18 &&
+        pmChronology.Frames[2].GpuTimeMs is null,
+        "PresentMon true optional CPU busy/GPU busy/time values preserved; missing GPU time is null");
+    var pmStaged = Path.Combine(root, "CET-staging");
+    var pmContract = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+        sealedFolder, MakePmIndex(), pmOverlap, pmStaged);
+    var pmContractBytes = File.ReadAllBytes(pmContract);
+    Require(Path.GetFileName(pmContract) == GcoPresentMonFrameEvidence.ContractFile &&
+        File.Exists(pmCsv) && MakePmIndex().FrameTimeEvidence!.Sha256 == originalPmHash &&
+        System.Text.Json.JsonDocument.Parse(pmContractBytes).RootElement
+            .GetProperty("frames").GetArrayLength() == 3,
+        "derived canonical GCO JSON is staged separately; original CSV and indexed SHA256 remain immutable");
+    void RejectPm(string why, Action call)
+    {
+        var rejected = false;
+        try { call(); }
+        catch (InvalidDataException) { rejected = true; }
+        Require(rejected, why);
+    }
+    RejectPm("missing CET F11 anchor fails closed",
+        () => GcoPresentMonFrameEvidence.Build(sealedFolder, MakePmIndex(),
+            pmOverlap with { CetStartUnixMs = null }));
+    RejectPm("invalid GRSP QPC anchor order fails closed",
+        () => GcoPresentMonFrameEvidence.Build(sealedFolder, MakePmIndex(),
+            pmOverlap with { GrspStopQpc = 0 }));
+    RejectPm("forged PresentMon collection index SHA fails closed",
+        () => GcoPresentMonFrameEvidence.Build(sealedFolder,
+            MakePmIndex() with { FrameTimeEvidence = MakePmIndex().FrameTimeEvidence! with { Sha256 = new string('0', 64) } },
+            pmOverlap));
+    RejectPm("inconsistent frame overlap index fails closed",
+        () => GcoPresentMonFrameEvidence.Build(sealedFolder,
+            MakePmIndex() with { PresentMonOverlapStartUnixMs = 1_800_000_000_180 }, pmOverlap));
+    RejectPm("short/missing PresentMon frame count fails closed",
+        () => GcoPresentMonFrameEvidence.Build(sealedFolder, MakePmIndex(rows: 4), pmOverlap));
+    RejectPm("writing chronology into sealed evidence folder refused",
+        () => GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+            sealedFolder, MakePmIndex(), pmOverlap, sealedFolder));
+    RejectPm("duplicate derived chronology cannot silently overwrite",
+        () => GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+            sealedFolder, MakePmIndex(), pmOverlap, pmStaged));
+    void ReplacePmAndReject(string replacement, string why)
+    {
+        File.WriteAllText(pmCsv, replacement);
+        RejectPm(why, () => GcoPresentMonFrameEvidence.Build(
+            sealedFolder, MakePmIndex(), pmOverlap));
+        File.WriteAllLines(pmCsv, [pmHeader, .. pmRows]);
+    }
+    ReplacePmAndReject("Application,CPUStartDateTime,TimeInQPC,MsBetweenPresents\nCyberpunk2077.exe,2026-11-15 02:00:00,1216000,16\n",
+        "unanchorable legacy wall time cannot masquerade as F11 QPC correlation");
+    ReplacePmAndReject(pmHeader + "\nCyberpunk2077.exe,1200000,1216000,-1,5,4,6\n" +
+        string.Join("\n", pmRows.Skip(1)) + "\n",
+        "negative frame interval cannot authorize hitch/G-GC input");
+    ReplacePmAndReject(pmHeader + "\nCyberpunk2077.exe,99999999999,99999999999,16,5,4,6\n" +
+        string.Join("\n", pmRows.Skip(1)) + "\n",
+        "source frame outside F11 overlap rejected even when hashed after alteration");
+    Require(MakePmIndex().FrameTimeEvidence!.Sha256 == originalPmHash,
+        "malformed PresentMon fixtures never changed original sealed evidence at rest");
     Require(!Mo2FeatureGate.Enabled,
         "initial integrated app never enables MO2 source/install/Resolver mode before lifecycle verification");
 
