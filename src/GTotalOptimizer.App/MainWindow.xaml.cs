@@ -1592,11 +1592,10 @@ public partial class MainWindow : Window
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
             if (IsLoaded && completedSessionId == sessionId &&
-                completedGameRoot == game)
-            {
-                var saved = CollectedCaptureStore.Read(packageRoot, game, sessionId);
-                UpdateResultTexts(saved);
-            }
+                completedGameRoot == game &&
+                !RedReportText.Text.Contains("Combined profiler report:", StringComparison.Ordinal))
+                RedReportText.Text += Environment.NewLine +
+                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
         }
         catch (Exception ex)
         {
@@ -1748,6 +1747,9 @@ public partial class MainWindow : Window
             RedReportText.Text = "REDscript captured: " + report.CapturedRedscriptFiles +
                 " verified files." + Environment.NewLine +
                 "REDscript optimization is not implemented in this stage; no REDscript performance gains claimed.";
+            if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
+                RedReportText.Text += Environment.NewLine +
+                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
             AnalyzeButton.Content = "ANALYZED";
             ResultsStatusText.Text = "CET Resolver ready. Generate a CET-only pass from current mod sources.";
         }
