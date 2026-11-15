@@ -52,6 +52,18 @@ The archive shows these **explicitly commented** previous hand-optimization stag
 
 Earlier passes and untagged edits cannot be assigned to a stage reliably from this final ZIP alone. Never use a `Pass N` comment as a structural admissibility condition.
 
+## Mandatory development ordering — **generic coverage before semantic remainder** (2026-11-15 decision)
+
+**Do not port the 61 hand-optimized files as 61 semantic passes first.** The partial ZIP is a finite, already gameplay-tested *reference and eventual coverage oracle*, not a prescribed code-generation queue or measurement substitute. Enforce this order:
+
+1. **Capture and prove:** collect **fresh** CET + GRSP + genuine PresentMon on the user's current mod stack, validate GRSP quality/attribution and live source inventory; optionally index the 61 references privately and read-only for later comparison, but **do not implement semantics from that inventory**.
+2. **Discover generic opportunities across the entire live REDscript stack:** rank measured recurring operations and exact structural shapes. Treat CET generic mechanisms as hypotheses only; REDscript compiler/side-effect/lifecycle rules determine feasibility. Candidate priority comes from observed value, not old portfolio owners or a fixed G0/G1 rule order.
+3. **Implement and validate broad generic passes first:** add GRSP instrumentation or extend optional G-REDruntime services **at this point, even before a pass ships**, if a specific reusable high-impact opportunity needs them and their behavior/overhead can be proven. Compile actual REDscript output, test untouched/partially/already optimized inputs and idempotence, and compare performance with fresh captures where practicable. Do not claim savings without a comparable measurement.
+4. **Only AFTER the worthwhile generics have been applied and validated, run a portfolio gap analysis:** compare each of the 61 approved files' *behavioral transformation patterns* against the actual generic-generated output, pre-existing live optimizations and source state. Record per item/operation: `GENERIC_COVERED`, `ALREADY_PRESENT`, `SEMANTIC_REMAINDER`, `UNPROVEN_OR_DRIFTED`, or `NOT_APPLICABLE`, with structural and dependency evidence. A file may span multiple statuses. No item is automatically a recipe.
+5. **Implement only proven `SEMANTIC_REMAINDER` work**, limited to this explicitly approved portfolio; skip the rest with reasons. Generate missing work only, never copy historical whole-file output or stack duplicate generic and semantic versions of the same transform. Compile/validate the composed effective REDscript stack and test gameplay independently.
+
+**Hard gate R7:** No mod-specific semantic implementation is admitted before R5/R6 generic coverage is established and a documented 61-file gap matrix demonstrates the residual behavior. R1 is metadata/reference preparation only, not a first semantic pass. The goal is useful measured improvements and preserved gameplay, **not** maximizing transformed file counts or forcing all 61 files to change.
+
 ## 3. Implementation sequence with exit criteria
 
 ### Stage R0 — record new owner contract and protect existing baselines
@@ -60,12 +72,12 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 - Explicitly freeze current GCO PresentMon reporting / CET source-owner generation; retain one canonical Windows CI, one .NET10 runtime, GRSP native install/restore. New GRSP code lives on `dev/resolver-profiler-handoff`.
 - **Exit:** both handoffs agree on owner CLI/data contracts; no source rewriting/UI changes.
 
-### Stage R1 — make a *private*, replayable evidence and transformation fixture set
+### Stage R1 — privately index the 61-file reference (NO semantic implementation)
 
 - Index all 61 approved optimized source files and 30 owners by their game-relative paths. Store source provenance and accepted feature behavior as **test evidence**, not release/payload mod inventories or hardcoded game source hashes.
-- For each candidate derive: original source structure when available; added/removed code; preconditions; untouched → optimized structural predicate; partial → remaining-work predicate; final already optimized predicate; dependency and rollback ownership. Distinguish files identical to current source and unmatched/added helpers.
+- Record file paths, owners, known historical pass tags, helper additions, known existing dependencies and whether comparison source matches. Mark unmatched/ambiguous source as `UNPROVEN`. **Defer rule-specific structural predicates, transformation choices and semantic recipe implementation to R7, after the generic coverage gap analysis.**
 - Preserve the user's reference ZIP unchanged. Keep third-party original source fixtures and generated test passes **private**; do not embed or upload them to public GitHub Actions artifacts.
-- **Exit:** 61/61 entries classified with explicit provenance or `UNPROVEN`; none silently regenerated by copying a historical whole file.
+- **Exit:** all 61 paths privately indexed with provenance or `UNPROVEN`, including added helpers and known identical files. **Zero semantic passes implemented** and no historical whole-file copying.
 
 ### Stage R2 — acquire **fresh** full three-profiler capture evidence
 
@@ -88,28 +100,30 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 - Build exact source-state classification: `PRISTINE_APPLICABLE`, `PARTIALLY_APPLICABLE`, `ALREADY_COMPLETE`, `UNSAFE_OR_UNPROVEN`, `DRIFTED`, `MISSING_DEPENDENCY` with the proof that established the state. Never rely on fixed source file hashes as version locks; hash only the *current* live inventory for invocation consistency.
 - **Exit:** positive/negative structural proofs against the real partial ZIP and original snapshot, plus current-source drift/repeated-pass tests; still no on-disk game changes.
 
-### Stage R5 — implement only the first **measured high-value generics**
+### Stage R5 — discover, implement and verify **high-value generic coverage FIRST**
 
+- Rank **all currently installed REDscript source candidates** using fresh GRSP/PresentMon measurements and structural proof before selecting any generic pass. The following G0–G4 are hypotheses, **not a fixed priority sequence**. Do not use the 61-file portfolio as a candidate whitelist.
 - **G0:** scope-local reuse of duplicate proven-pure/stable provider reads; refuse if side effects, branches, receiver/lifetime or invalidation are ambiguous.
 - **G1:** semantic-preserving cheap guard ordering and unnecessary repeated lookup elimination; preserve exact call effects and early-return semantics.
 - **G2:** conditional no-op setter / unchanged retained-widget update skipping, only with proof that setter is idempotent and notifications are not significant.
 - After actual measured wins, consider **G3** source-proven short-lived cache/invalidation and **G4** event-driven/demand dormancy, InputHub/Scheduler consolidation. These are *mechanisms*, not universal auto-throttling rules.
 - Each generic candidate must emit a measured justification or `SOURCE_FIRST_UNMEASURED`, application structural proof and reason for exclusion. Generate missing work only. Target real recurring work, not count of modified lines.
-- **Exit per pass:** representative actual output compiles, behavior/lifetime invariants tested, supported partial/optimized states proven, second run emits zero transforms. Benchmark gain requires fresh after-capture, not resolver-estimated percentages.
+- **Exit per pass:** representative actual output compiles, behavior/lifetime invariants tested, supported partial/optimized states proven, second run emits zero transforms. Benchmark gain requires fresh after-capture, not resolver-estimated percentages. **Proceed to R7 only after recording applied generic coverage and why remaining generic candidates are unsupported, too low value, or deferred.**
 
-### Stage R6 — extend GRSP instrumentation and/or G-REDruntime **only when the selected rule needs it**
+### Stage R6 — iteratively expand GRSP/G-REDruntime when a **generic** opportunity requires it (may precede an R5 pass)
 
 - If a desired transform lacks reliable observations, extend the **existing GRSP writer** with the narrowest bounded measurement: stable dynamic callsite shape, actual framework job runs/wake/stop, per-owner costs, lost-event counts or proven eligible allocation boundary. Measure capture overhead and preserve standalone native contracts. No CET LuaJIT allocation/GC hooks copied to REDscript.
 - If independent mods exhibit the *same* safe reusable need, design narrow framework API additions (session-safe lookup / explicit dirty versions / actual per-job scheduling / dispatcher tracking) in **G-REDruntime source**. Must remain dormant with no consumers and never create optional-mod compile dependencies in the framework core.
 - No framework requirement for G0/G1/G2 if normal REDscript can implement them. No invented framework API or blanket conversion to `InputHub`/`Scheduler` without original input/cadence/cleanup proof.
-- **Exit:** owner-native tests/overhead evidence, no default behavior regression, and an accepted generic pass that materially uses the added capability.
+- **Exit:** owner-native tests/overhead evidence, no default behavior regression, and an accepted generic pass that materially uses the added capability. R6 may interleave with R2–R5 to make a measurable generic pass possible; it is **not** held until after all R5 passes or used to justify semantic rules in advance.
 
-### Stage R7 — port only the user's already-approved **semantic remainder**
+### Stage R7 — first prove the **61-file generic-coverage gap**, then implement only semantic remainder
 
-- Convert the 61-file hand-optimized portfolio into small **source-structural recipes and feature regression fixtures** rather than shipping whole copies of specific old mod versions. Wherever a stable pattern is truly generic, R5 owns it; the **remainder** stays the *only current approved mod-specific semantic set*.
+- **Prerequisite:** validated R5 generic pass results on current sources (with R6 where justified). Reassess all 61 reference files **after applying generic output**, at individual transformation/behavior level, not by filename or byte comparison alone. Produce a coverage matrix with `GENERIC_COVERED`, `ALREADY_PRESENT`, `SEMANTIC_REMAINDER`, `UNPROVEN_OR_DRIFTED`, `NOT_APPLICABLE` and supporting structural/dependency proof. Recalculate after generic-rule changes.
+- Only the verified `SEMANTIC_REMAINDER` may become small **source-structural recipes and feature regression fixtures**, never whole-file copies or 61 obligatory patches. Generic patterns belong to R5. The rest is the *only current approved mod-specific semantic set*.
 - Reapply a semantic recipe **only** when the live source's actual operations, callback graph, dependencies and expected original state are proven. If an edited mod version differs, fail that recipe closed and continue unrelated safe passes. Preserve existing user optimizations; recognize already-done states; never duplicate helper classes/fields/subscriptions.
 - Special attention: `ChipwareExpansion` and `ImmersiveCyberware` added helper dependencies; `InputHub` migrations require detach and input-consumption parity; `Scheduler` migrations require exact wake/pause and cancellation; `DigitalVixenCore` UI sleep requires open/close invalidation; `FlushingEtiquette` mappins and `VirtualAtelierDelivery` spawn batching require ownership/cleanup proof.
-- **Exit:** each allowed semantic either structural match+compiles+regressions or clear skip reason; no unsupported catalogs, no mod-version locks.
+- **Exit:** per-operation coverage matrix completed and every residual approved semantic either structural match+compiles+regressions or has an explicit skip reason; no duplicate generics, unsupported catalogs or mod-version locks. **Zero residual semantics is a valid successful outcome.**
 
 ### Stage R8 — full-stack compile, dependencies and source-state proof
 
@@ -136,7 +150,7 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 
 **Must refuse/skip:** unresolved source mapping, dynamic or non-pure getter, uncertain callback timing or input consumption, missing optional dependency, duplicated patch from earlier stage, unverifiable compiler coverage, framework API mismatch, unrelated source drift, stale or low-quality captures presented as guaranteed CPU wins.
 
-**Next actionable milestone:** R0–R3. Record the ownership decision, index the 61-file approved portfolio *privately*, then ingest **fresh** complete GRSP evidence with the genuine GCO PresentMon chronology. Choose G0/G1 candidates only after measuring, matching and proving them. CET and GCO consolidated reporting are frozen baselines, not redevelopment targets.
+**Next actionable milestone:** R1 remains read-only portfolio indexing, while R2–R4 establish fresh measurement and structural source proof. Select and validate the most valuable **generic** opportunities first (not necessarily G0/G1); evolve GRSP/G-REDruntime where justified. Only **after** generic output exists perform the 61-file coverage-gap analysis and implement its proven semantic remainder, if any. CET and GCO consolidated reporting are frozen baselines, not redevelopment targets.
 
 ## Appendix A — partial ZIP file inventory
 

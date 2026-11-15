@@ -1799,3 +1799,9 @@ When implementation starts, append exact commits, build jobs, test output and ga
 ### 2026-11-15 — Enable existing integrated Windows CI on new REDscript branch
 
 - One-line branch filter extension in `.github/workflows/build-windows.yml`: new `feature/redscript-resolver-integration` receives the **same** automatic Windows build/CLI/installer/package contracts and artifact as existing approved branches. No second workflow, source test changes, package version change or profiler implementation modification. Exact new run outcome must be appended after completion; GRSP future source generator is not yet integrated or tested.
+
+## 2026-11-15 — REDscript development order clarified: measured generics before 61-file semantic remainder
+
+- **Decision-only scope:** updated canonical R0–R10 blueprint, GCO `AGENTS.md`, handoff, roadmap, decisions and active ledger to enforce **fresh captures → source-proven generic discovery → generic pass implementation and tests (GRSP instrumentation/framework evolution if necessary) → 61-file per-operation generic coverage matrix → only missing approved semantics**. R1 is read-only index, not semantic-first implementation. R7 is blocked until actual generic output is verified. No 61-file mod inventory locks or guaranteed 61 optimizations.
+- **Verification:** documentation content/branch consistency only; no actual REDscript edits, builds, compilation, new profiler captures, performance measurements or gameplay validation. Prior #416 CET full replay and #426 PresentMon consolidated report are unchanged. GCO `main`, CET feature, GRSP stable release and G-REDruntime unchanged by this refinement.
+- **Next:** gather fresh representative captures and effective source evidence; implement meaningful safe generics in GRSP before any remaining semantic recipe. Update both GRSP/GCO progress and latest-work records promptly as results land.
