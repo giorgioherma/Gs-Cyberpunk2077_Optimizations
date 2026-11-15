@@ -80,13 +80,36 @@ try {
     }
     $cetCapture=$cetSummaries[0].DirectoryName
     $handoff=Join-Path $cetCapture 'CET_Resolver_Input.json'
+    # Stage 2: actual sealed index/CET+GRSP F11 markers, no imported fake
+    # CapFrameX JSON. Mirror the captured RESULTS tree in CI temporary space.
+    $indexes=@(Get-ChildItem -LiteralPath $stage -Filter 'collection.json' -Recurse -File)
+    if ($indexes.Count -ne 1) { throw 'Real fixture needs exactly one collection.json.' }
+    $sealedSession=$indexes[0].DirectoryName
+    $packageSandbox=Join-Path $stage 'GCO-FrameContract-Package'
+    $results=Join-Path $packageSandbox 'RESULTS'
+    New-Item -ItemType Directory -Force -Path $results | Out-Null
+    $copiedSession=Join-Path $results (Split-Path $sealedSession -Leaf)
+    Copy-Item -LiteralPath $sealedSession -Destination $copiedSession -Recurse -ErrorAction Stop
+    & dotnet run --configuration Release --project 'tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj' -- --stage-presentmon $copiedSession $cetCapture
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Production GCO PresentMon source-clock conversion refused the real sealed F11 capture.'
+    }
+    $frames=Join-Path $cetCapture 'PresentMon/GCO-PresentMon-Frames.v1.json'
+    if (!(Test-Path -LiteralPath $frames -PathType Leaf)) {
+        throw 'GCO did not stage its versioned PresentMon chronology for CET.'
+    }
+    # The actual source-owned report engine must regenerate its canonical
+    # resolver handoff from frame evidence in the derived CET workspace.
+    $null=InvokeOwnerCli $owner @('--report','--capture',$cetCapture,'--json')
     if (!(Test-Path -LiteralPath $handoff -PathType Leaf)) {
-        # Generate the missing machine handoff from the owner raw capture in
-        # TEMP only. Never forge CET_Resolver_Input.json or edit collection.json.
-        $null=InvokeOwnerCli $owner @('--report','--capture',$cetCapture,'--json')
-        if (!(Test-Path -LiteralPath $handoff -PathType Leaf)) {
-            throw 'CET owner report did not produce Resolver handoff from the real capture.'
-        }
+        throw 'CET owner report did not produce a PresentMon resolver handoff.'
+    }
+    $reportHandoff=Get-Content -LiteralPath $handoff -Raw | ConvertFrom-Json -Depth 70
+    if ($reportHandoff.frameEvidence.provider -ne 'PRESENTMON_2_6' -or
+        $reportHandoff.frameEvidence.correlation -ne 'QPC_F11_CET_WINDOW_CORRELATION_ONLY' -or
+        $reportHandoff.frameEvidence.exactCallbackAttribution -ne $false -or
+        $null -eq $reportHandoff.hitchPressure) {
+        throw 'CET report failed to consume real PresentMon with truthful callback uncertainty.'
     }
     $result=InvokeOwnerCli $resolver @('--capture',$cetCapture,'--mods',$mods,'--json')
     if (!$result.ResolverPath -or !(Test-Path -LiteralPath $result.ResolverPath -PathType Leaf)) {
@@ -97,6 +120,9 @@ try {
     if ($null -eq $analysis.captureRuntimeInterpretation -or
         $null -eq $analysis.gGcCaptureCalibration) {
         throw 'Real CET analysis lacks source-owned capture/G-GC provenance.'
+    }
+    if ([string]$analysis.gGcCaptureCalibration.gameplay.toleranceSource -notlike 'PRESENTMON_QPC_*') {
+        throw 'G-GC calibration did not consume the QPC-verified PresentMon frame allowance.'
     }
     if ([int]$result.FamilyCount -lt 1 -or [int]$result.RankedCallbackCount -lt 1) {
         throw 'No real measured CET callback family matched the live-source snapshot.'
@@ -121,6 +147,7 @@ try {
     Write-Host ('PASS real sealed CET capture + private live-source replay: callback families=' +
         [int]$result.FamilyCount + ', ranked=' + [int]$result.RankedCallbackCount +
         ', original source files unchanged=' + $hashes.Count)
+    Write-Host 'PASS Stage 2 real GCO PresentMon QPC -> CET report/hitch -> G-GC allowance; CapFrameX not required'
     Write-Host 'PASS GCO .NET10 owner Resolver produced analysis in disposable workspace; no private source packaged'
 } finally {
     if (Test-Path -LiteralPath $stage) {
