@@ -110,3 +110,7 @@ try {
         Remove-Item -LiteralPath $targetGame -Recurse -Force -ErrorAction Stop
     }
 }
+
+# Expected negative native exits were asserted above; they must not poison
+# the outer PowerShell workflow guard after a fully successful test.
+$global:LASTEXITCODE=0
