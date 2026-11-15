@@ -2,6 +2,8 @@
 
 **Status: reviewed from current repository source; not yet exercised end-to-end through the new app.** Recheck current heads/build packages before implementation; commands below describe the interfaces observed on 2026-11-04.
 
+**Current feature scope (2026-11-15, overrides historical ownership/CapFrameX assumptions below):** [GRSP-owned REDscript blueprint](../integration/GRSP_REDscript_Resolver_Blueprint.md), [GCO live progress](../integration/REDSCRIPT-RESOLVER-PROGRESS.md). GRSP owns REDscript measurement, new source-aware Resolver/Generator and full-stack compiler validation. GCO invokes original CET+GRSP backends, keeps its real `PRESENTMON_2_6` consolidated reporter separate from ANALYZE and merges a clean ZIP. Missing PresentMon is `NOT_CAPTURED`, not a CapFrameX fallback. **GRSP Resolver/Generator CLI commands are NOT YET IMPLEMENTED**; freeze switches/schema after source-backed acceptance. Standalone GRSP's old CapFrameX compatibility remains unchanged. Latest completed prior GCO stage evidence: #416 CET source generation; #426 PresentMon reporter. Do not infer gameplay tests.
+
 ## CET profiler
 
 Source: [CET `src/G.CETProfiler.App/Program.cs`](https://github.com/giorgioherma/G-CET_Runtime_Profiler/blob/dev/resolver-profiler-handoff/src/G.CETProfiler.App/Program.cs). Normal packaged root launcher delegates to .NET core; the same core owns install/restore and collection.
@@ -83,8 +85,8 @@ The [approved Page 1 handoff](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) s
 ## 2026-11-06 — authoritative ownership and combined plan
 
 - **CET owns its existing Lua Resolver/Generator, native optimizations and G-GC.** GCO consumes its authoritative analysis/generation interfaces and does not reproduce CET source transformations or alter its fixed generation sequence.
-- **GRSP owns REDscript profiler instrumentation.** If the combined decision process needs missing REDscript measurements, extend GRSP's evidence source there.
-- **GCO owns the new REDscript Resolver/Generator** as well as a single combined CET+GRSP optimization plan, cross-domain prioritization, reporting, output compatibility validation and final ZIP. REDscript generation must preserve full source/compile safety.
+- **GRSP owns REDscript profiler instrumentation AND the new source-aware REDscript Resolver/Generator and compiler validation.** Fix missing native evidence at GRSP source; never duplicate the REDscript generator in GCO.
+- **GCO owns orchestration, unified CET+GRSP optimization planning, genuine PresentMon reporting, original owner CLI invocation, output compatibility validation and final ZIP.** REDscript generation and full-stack compilation remain GRSP's responsibility.
 - **G-REDruntime owns shared services for REDscript**, included in the generated ZIP only where an accepted optimization requires them.
 - **CET profiling requires 0-Engine v0.17.2+** under the user-approved GCO CET route. This is distinct from standalone CET's optional core-only profiler mode. GRSP-only does not require CET/0-Engine. No duplicate owner implementations.
 
