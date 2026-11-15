@@ -8,8 +8,8 @@
                             |
           +-----------------+------------------+
           |                 |                  |
-     CET Profiler       GRSP Profiler     Optional CapFrameX
-     (CET repo)        (GRSP repo)         (third party)
+     CET Profiler       GRSP Profiler     PresentMon
+     (CET repo)        (GRSP repo)         (external)
           |                 |                  |
           +---------- captured evidence -------+
                             |
@@ -22,7 +22,7 @@
                        |           |
               CET Resolver      REDscript Resolver
               + Generator         + Generator
-              (CET-owned)         (GCO-owned)
+              (CET-owned)         (GRSP-owned)
               0-Engine/native     generic-first
               Lua/G-GC/semantics  .reds proof/compile
                        |           |  optional G-REDruntime
@@ -33,7 +33,7 @@
               (no profilers, docs, reports, PDBs)
 ```
 
-GCO owns **one combined analysis/decision plan**, UI, reporting and final ZIP; it does **not** duplicate CET's mature Lua Resolver/Generator or either profiler's install/restore logic. CET retains authoritative source-aware CET code generation and its fixed stages. GCO owns the new REDscript Resolver/Generator, which must use GRSP evidence alongside CET evidence and verify REDscript compilation/source safety. G-REDruntime supplies REDscript services only when an accepted rule needs them. The REDscript backend is a library in GCO, not an additional ordinary launcher.
+GCO owns **one combined analysis/decision plan**, UI, reporting and final ZIP; it does **not** duplicate CET's mature Lua Resolver/Generator or either profiler's install/restore logic. CET retains authoritative source-aware CET code generation and its fixed stages. GRSP owns the new source-aware REDscript Resolver/Generator and full-stack REDscript compilation validation, using native GRSP evidence and genuine GCO PresentMon chronology where available. G-REDruntime supplies REDscript services only when accepted rules need them. GCO calls GRSP's headless owner interface rather than implementing another parser, rewrite engine or ordinary launcher.
 
 ## Component responsibilities
 
@@ -43,8 +43,9 @@ GCO owns **one combined analysis/decision plan**, UI, reporting and final ZIP; i
 | CET Lua Resolver/Generator | CET repo | Existing source-aware decisions, generic 0-Engine/native/final/semantic generation, G-GC, staged idempotence; preserve all current work | Consume CET evidence/output in one combined cross-domain plan, never duplicate CET generation |
 | GRSP native/manager | GRSP repo | RED4ext Rust call-edge hooks, source/callsite/owner evidence, safe install/restore | Invoke API, preserve full raw developer evidence and trust gates |
 | G-REDruntime | Framework repo | Shared framework services **for REDscript**: Scheduler, cache, dirty flags, context/input/events/hooks | Include in final ZIP **only** for accepted optimizations which need those services |
-| GCO unified planning + REDscript Resolver/Generator | This repo | Cross-domain CET+GRSP evidence analysis and one shared plan; parse current effective .reds, select generic-first work, verify lifecycle/source, compile and generate changed-file overlays | Coordinate owner-safe CET results and new REDscript output, validate merged dependencies and assemble one ZIP |
-| CapFrameX | External | Frame-time capture | Optional launch/link, copy-only import, sanity-check synchronization |
+| GRSP REDscript Resolver/Generator | GRSP repo (`dev/resolver-profiler-handoff`) | Source-aware generic-first `.reds` optimizer, structural source-state admission, compiler validation, changed-only REDscript output | Invoke the GRSP owner headless contract; provide verified PresentMon and current game root; no duplicate generator |
+| GCO unified planning, reporting and final ZIP | This repo (`feature/redscript-resolver-integration`) | Cross-domain CET+GRSP planning, real PresentMon-backed consolidated profiler reporting, verified outputs and dependency/collision-safe merge | Coordinate original CET/GRSP owner outputs into one clean game-relative ZIP |
+| PresentMon 2.6 | External | Recorded frame intervals and CPU/GPU busy when captured | GCO seals and aligns actual QPC/Unix chronology; missing is NOT_CAPTURED, no GCO CapFrameX fallback |
 
 **CET profiling admission:** supported GCO CET workflow requires 0-Engine **v0.17.2+**; GRSP-only remains independent. Standalone CET core-only profiling without 0-Engine does not change this GCO requirement.
 

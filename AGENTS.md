@@ -1,8 +1,17 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
-**Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Work on `main` only** unless the user explicitly changes that decision. Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
+**Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Protect `main`; work on explicitly approved feature branches for their specific tasks.** Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
-## Active scoped development (owner approved 2026-11-15)
+## Active REDscript integration branch — approved 2026-11-15 (CURRENT ON THIS BRANCH)
+
+- **Use only `feature/redscript-resolver-integration` for GCO REDscript integration**, branched from finished CET/PresentMon feature at `3caccafbdf39ec2b6474b69ed8f34c9392e2ff20`. Stable GCO `main` (`f7b8e6b`) and the completed CET feature remain unchanged; do not silently merge or promote either.
+- **Read before any REDscript work:** [complete source-audited R0–R10 blueprint](docs/integration/GRSP_REDscript_Resolver_Blueprint.md); [mandatory live REDscript ledger](docs/integration/REDSCRIPT-RESOLVER-PROGRESS.md); [GRSP owner handoff](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_HANDOFF.md) and [GRSP progress](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_PROGRESS.md). Existing CET four-stage instructions below are **historical for this branch** and must not stop the newly approved REDscript milestone.
+- **New explicit owner override:** GRSP `dev/resolver-profiler-handoff` owns REDscript measurements, Resolver JSON, generic-first source-aware Generator and full REDscript compiler validation (owner documentation commit `b82e73cfe`). GCO owns combined planning, genuine PresentMon-backed reporting, invoking original CET and GRSP headless backends and verifying/merging the final single game-relative ZIP. G-REDruntime owns optional shared services. Do **not** build a REDscript rewrite engine in GCO.
+- **Freeze proven baselines:** CET untouched/partial/second pass last full source-backed PASS GCO CI #416; GCO consolidated real CET+GRSP+PresentMon report PASS #426. Neither constitutes in-game verification. Preserve COLLECT/CONTINUE/Restore boundaries, two-page WPF UI, 1 private .NET10 runtime, original CET generator and one canonical Windows CI. No new CapFrameX imitation or GCO fallback; preserve standalone compatibility.
+- **Evidence first:** fresh F11 CET+GRSP+PresentMon sessions and live `r6/scripts` are the authority. The 61-file gameplay-verified partial ZIP is a *finite approved semantic reference*, never a public release fixture, hardcoded inventory or universal patch. Generic proven reusable transforms first, source-state/drift/idempotence/full-stack compile and actual behavior checks before shipping output.
+- **Agent documentation rule:** After every significant change or decision, update **this branch's** `docs/integration/REDSCRIPT-RESOLVER-PROGRESS.md` and `docs/LATEST-WORK.md` in the same change or promptly after exact CI results. Record what changed, exact branch/commit/CI, pass/fail/skipped, new decisions, source-state/compile/gameplay evidence, outstanding blockers and next action. Update `docs/product/CURRENT-DECISIONS.md`, `docs/HANDOFF/CORE.md`, GRSP handoff and both progress ledgers whenever ownership/interface contracts change. Never quietly record a planned test as passed.
+
+## Historical CET + PresentMon scoped development (owner approved 2026-11-15)
 
 - **GCO stable `main` is protected.** Owner-approved CET Resolver / PresentMon work happens **only** on `feature/presentmon-resolver-integration`; do not infer this feature branch is the new default for unrelated GCO work. The feature was fast-forwarded to `main` at `f7b8e6baa66ce363fd272f5cb8370548383e8bd2`, after the successful v1.2.5 CI #383 baseline.
 - **Mandatory active task references:** [four-stage CET + PresentMon integration plan](docs/integration/CET-PRESENTMON-GCO-PLAN.md) and [live progress ledger](docs/integration/CET-PRESENTMON-GCO-PROGRESS.md). Read both after the existing handoff/current decisions/latest work, **before implementing**. Follow stage gates 1→2→3→4; update ledger and `docs/LATEST-WORK.md` promptly after meaningful work and CI.
@@ -41,15 +50,15 @@ Read, in order:
 4. **Respect component ownership.**
 
 - **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. GCO profiling checks only that 0-Engine's mod directory and `init.lua` exist; CET's Resolver owns generation and injection compatibility.
-- **GRSP:** Owns REDscript profiling and instrumentation.
-- **GCO:** Owns unified analysis, cross-domain coordination, new REDscript Resolver/Generator, UI, reporting and final optimization ZIP.
+- **GRSP:** Owns REDscript profiling, instrumentation, Resolver, generic-first Generator and full-stack REDscript compilation validation.
+- **GCO:** Owns unified analysis, cross-domain coordination, calling both owner Resolvers/Generators, UI, genuine PresentMon-backed reporting and final optimization ZIP.
 - **G-REDruntime:** Owns shared framework services for REDscript, included only when required.
 - **One combined optimization plan**, using CET and GRSP evidence and live sources. Preserve CET's authoritative generation pipeline and REDscript compilation/source-safety checks. Never duplicate implementations.
 
 - **CET source:** `giorgioherma/G-CET_Runtime_Profiler` on `dev/resolver-profiler-handoff`. Its source-owned installer/restore and CET optimization generation remain authoritative; GCO never replaces or duplicates them. Standalone CET's core-only mode is a documented capability, but the user-approved **GCO CET profiling workflow** verifies only 0-Engine mod directory and `init.lua` presence at installation preflight.
 - **GRSP source:** `giorgioherma/GRSP-G-REDscript-Profiler` on `dev/resolver-profiler-handoff`. Missing measurement hooks/report fields are fixed THERE, not reimplemented in GCO.
 - **G-REDruntime source:** `giorgioherma/G-REDruntime_Framework` on `main`. Shared REDscript runtime files enter the generated ZIP only for accepted rules which require them; not a universal dependency.
-- **GCO source:** this repo on `main`. One **central cross-domain coordination/optimization plan**, using CET and GRSP evidence and current live mod sources. CET retains its authoritative Resolver/generator decisions and fixed order; GCO owns new REDscript Resolver/Generator. GCO validates compatibility, composes owner outputs and assembles the final ZIP.
+- **GCO source:** this repo on `main`. One **central cross-domain coordination/optimization plan**, using CET and GRSP evidence and current live mod sources. CET retains its authoritative Resolver/generator decisions and fixed order; GRSP owns the new REDscript Resolver/Generator. GCO validates compatibility, composes owner outputs and assembles the final ZIP.
 - **PresentMon and any legacy CapFrameX:** independent third-party frame-time sources; preserve user settings/source evidence and verify distribution provenance. Never add overlapping CET+GRSP measurements as total script CPU.
 - The historical `G-Cyberpunk2077_Total_Profiler` is only a source of design/correlation ideas, never a current CET/GRSP binary baseline.
 
