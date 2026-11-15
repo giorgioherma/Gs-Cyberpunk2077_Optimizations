@@ -621,3 +621,9 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 ## 2026-11-15 — Normal foreground activation on GCO WPF reopen
 
 - Native-tray automatic return after game exit should show the WPF child as an active ordinary window. Request WPF Activate()/Focus() once after Loaded; never use Topmost, force z-order, native foreground-attach workarounds or change layout. The 10-second game grace and PresentMon writer stop remain authoritative.
+
+## 2026-11-15 — CET + PresentMon development branch and REDscript scope boundary
+
+- The existing successful GCO v1.2.5 `main` / CI #383 is protected. Authorize development on `feature/presentmon-resolver-integration`, starting from the latest `main`. Do not change the functioning Capture/reopen/Collect/Restore implementation as a side effect of Resolver development.
+- Follow the **four stages** in [CET+PresentMon GCO plan](../integration/CET-PRESENTMON-GCO-PLAN.md) and maintain the [live progress ledger](../integration/CET-PRESENTMON-GCO-PROGRESS.md): 1) bundle verified original CET Resolver under the single .NET10 runtime, 2) migrate GCO frame evidence to native PresentMon input without breaking standalone CapFrameX, 3) connect sealed Page 2 CET analysis, 4) validate CET generator/overlay and hand off to REDscript. Each gate requires actual source/output evidence.
+- **REDscript optimizer is a separate future project; stop this map at its handoff.** The overall original goal of one CET+REDscript ZIP remains but is not delivered by these four stages. Preserve original CET generator ownership, one canonical full Windows CI (manual branch dispatch), no new workflow, no unproven binary freezing/caching and no version changes without explicit approval.

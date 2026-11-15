@@ -2,6 +2,13 @@
 
 **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Work on `main` only** unless the user explicitly changes that decision. Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
+## Active scoped development (owner approved 2026-11-15)
+
+- **GCO stable `main` is protected.** Owner-approved CET Resolver / PresentMon work happens **only** on `feature/presentmon-resolver-integration`; do not infer this feature branch is the new default for unrelated GCO work. The feature was fast-forwarded to `main` at `f7b8e6baa66ce363fd272f5cb8370548383e8bd2`, after the successful v1.2.5 CI #383 baseline.
+- **Mandatory active task references:** [four-stage CET + PresentMon integration plan](docs/integration/CET-PRESENTMON-GCO-PLAN.md) and [live progress ledger](docs/integration/CET-PRESENTMON-GCO-PROGRESS.md). Read both after the existing handoff/current decisions/latest work, **before implementing**. Follow stage gates 1→2→3→4; update ledger and `docs/LATEST-WORK.md` promptly after meaningful work and CI.
+- **Stop before REDscript optimization.** Four stages end at a tested CET GCO contribution/REDscript handoff. The REDscript generator and final combined CET+REDscript optimizer are a separate future project requiring an explicit new plan. Do not claim the current stage delivers the final ZIP.
+- Preserve the currently working Capture UI/lifecycle, source-owned CET Resolver, standalone CapFrameX, GRSP, one-UAC observer, sealed collection data, one private .NET 10 runtime, version v1.2.5 and **the sole existing Windows workflow**. Manual `workflow_dispatch` tests the feature branch; no duplicate pipeline or speculative caching/freezing. Preserve main CI as the baseline until owner-approved merge.
+
 ## Mandatory startup
 
 Read, in order:

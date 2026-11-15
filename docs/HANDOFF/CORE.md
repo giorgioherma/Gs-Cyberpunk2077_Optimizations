@@ -10,6 +10,13 @@
 4. [Architecture and state machine](../technical/ARCHITECTURE.md), [headless component contracts](../technical/COMPONENT-CONTRACTS.md), [document index](../README.md).
 5. Project-specific source-of-truth docs for the component being modified.
 
+## Active CET Resolver integration handoff (owner authorized 2026-11-15)
+
+- **Protected working branch:** `main` at `f7b8e6baa66ce363fd272f5cb8370548383e8bd2` (documentation-only head after GCO v1.2.5 [CI #383](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43668057045), 308/308). **Active feature branch:** `feature/presentmon-resolver-integration`, initially fast-forwarded to that exact head; no production code changed by this handoff.
+- **Read next:** [four-stage CET + PresentMon plan](../integration/CET-PRESENTMON-GCO-PLAN.md) and [mandatory stage/progress ledger](../integration/CET-PRESENTMON-GCO-PROGRESS.md). For this feature the four stages are: (1) complete CET Resolver .NET10 source-owned package, (2) truthful GCO PresentMon→CET frame/hitch/G-GC input, (3) sealed-data Page 2 read-only CET analysis, (4) CET generator/ZIP safety validation and explicit REDscript handoff. All stages **NOT STARTED** until proven; update progress and `docs/LATEST-WORK.md` as work proceeds.
+- **Scope stop:** REDscript optimizer is a **separate project for later**, not part of this four-stage map. GCO's original eventual combined CET/REDscript ZIP still stands as the product goal, but cannot be declared complete at CET handoff.
+- **CI:** `.github/workflows/build-windows.yml` remains the sole full Windows CI; manually dispatch on feature branch when needed. No second pipeline, speculative freeze/caching, version bump or changes to stable Capture/recovery. Agent must distinguish source evidence, compiled tests, actual Resolver/ZIP output and user gameplay.
+
 ## Scope
 
 Build an **all-in-one, user-oriented app** bundling verified CET and GRSP profilers, PresentMon, CET's **existing authoritative Lua Resolver/Generator**, and a **new GCO-owned REDscript Resolver/Generator**. GCO owns unified analysis and one combined optimization plan from both profilers and live installed sources, then a single verified game-relative optimization ZIP. Preserve CET's existing work. G-REDruntime provides shared services for REDscript only when accepted optimizations require them. The legacy TOTAL Profiler remains a historical reference, not a source of current binaries.
