@@ -9,6 +9,11 @@ on:
         type: boolean
         required: false
         default: false
+      grsp_instrumentation_run_id:
+        description: 'Manual only: verified GRSP native instrumentation run ID; empty retains accepted baseline'
+        type: string
+        required: false
+        default: ''
   push:
     branches: [ main, feature/presentmon-resolver-integration ]
     paths:
@@ -40,10 +45,19 @@ jobs:
           ref: 08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44
           path: unified/vendor-cet
           persist-credentials: false
+      # Routine builds use the existing proven native F11 source.
       - uses: actions/checkout@v4
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.grsp_instrumentation_run_id == '' }}
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
           ref: c6871e21d3d3ece8e36d3ea47d45e18d0d7acead
+          path: unified/vendor-grsp
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.grsp_instrumentation_run_id != '' }}
+        with:
+          repository: giorgioherma/GRSP-G-REDscript-Profiler
+          ref: 61b0be963b9c16827be5c4ea5df12b5b61bd5e11
           path: unified/vendor-grsp
           persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
@@ -123,9 +137,59 @@ jobs:
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
+      - name: Import independently verified GRSP developer native artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.grsp_instrumentation_run_id != '' }}
+        shell: pwsh
+        working-directory: unified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GRSP_OWNER_RUN: ${{ inputs.grsp_instrumentation_run_id }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $runText=[string]$env:GRSP_OWNER_RUN
+          if ($runText -notmatch '^[1-9][0-9]{5,18}$') { throw 'Invalid GRSP native CI run ID' }
+          $expected='61b0be963b9c16827be5c4ea5df12b5b61bd5e11'
+          $result=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/$runText") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $result.conclusion -ne 'success' -or
+              $result.event -ne 'workflow_dispatch' -or $result.head_sha -ne $expected -or
+              $result.head_branch -ne 'dev/resolver-profiler-handoff') {
+            throw 'GRSP native build must be manually dispatched, successful and exact-source pinned'
+          }
+          $owner=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/workflows/$($result.workflow_id)") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $owner.path -ne '.github/workflows/native-instrumentation.yml') {
+            throw 'GRSP native build workflow identity mismatch'
+          }
+          & gh run download $runText --repo giorgioherma/GRSP-G-REDscript-Profiler --name "GRSP-native-callback-instrumentation-$expected" --dir downloaded-grsp-native
+          if ($LASTEXITCODE -ne 0) { throw 'GRSP native CI artifact unavailable' }
+          $root='downloaded-grsp-native'
+          $proof=Get-Content (Join-Path $root 'provenance.json') -Raw | ConvertFrom-Json
+          if ($proof.schema -ne 1 -or
+              $proof.producer -ne 'GRSP_NATIVE_CALLBACK_INSTRUMENTATION' -or
+              $proof.sourceCommit -ne $expected -or
+              $proof.nativeVariant -ne 'gco_explicit_f11' -or
+              $proof.strictF11StopOnly -ne $true -or
+              $proof.dllSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+            throw 'GRSP artifact provenance does not prove the approved strict-F11 variant'
+          }
+          $dll=Join-Path $root 'G-REDscript-Profiler.dll'
+          $hash=(Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $proof.dllSha256.ToLowerInvariant()) { throw 'GRSP native SHA256 mismatch' }
+          $shaLine=(Get-Content (Join-Path $root 'SHA256.txt') -Raw).Trim()
+          if (!$shaLine.StartsWith($hash+'  ')) { throw 'GRSP native SHA sidecar mismatch' }
+          if (!(Test-Path (Join-Path $root 'Cargo.lock') -PathType Leaf)) {
+            throw 'GRSP native Cargo.lock provenance missing'
+          }
+          $bytes=[IO.File]::ReadAllBytes((Resolve-Path $dll))
+          $asText=[Text.Encoding]::ASCII.GetString($bytes)
+          foreach($marker in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv')) {
+            if (!$asText.Contains($marker)) { throw "GRSP native DLL missing source-owned contract $marker" }
+          }
+          "GCO_GRSP_NATIVE_OWNER_RUN_ID=$runText" >> $env:GITHUB_ENV
+          Write-Host "PASS pinned GRSP native F11 instrumentation: source=$expected sha256=$hash"
       # GRSP's pinned Rust build takes ~6m on a fresh runner. The other
       # components are fast and remain rebuilt/verified by the normal script.
       - name: Identify reusable GRSP native compilation
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.grsp_instrumentation_run_id == '' }}
         id: grsp_native_key
         shell: pwsh
         working-directory: unified
@@ -145,6 +209,7 @@ jobs:
           "key=gco-grsp-native-$fingerprint" >> $env:GITHUB_OUTPUT
           Write-Host 'PASS GRSP pinned source, GCO source adapter and Rust toolchain cache fingerprint'
       - name: Restore unchanged GRSP native binary
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.grsp_instrumentation_run_id == '' }}
         id: grsp_native_cache
         uses: actions/cache/restore@v4
         with:
@@ -155,11 +220,12 @@ jobs:
         working-directory: unified
         env:
           GCO_GRSP_NATIVE_CACHE_KEY: ${{ steps.grsp_native_key.outputs.key }}
+          GCO_GRSP_NATIVE_ARTIFACT_ROOT: ${{ github.event_name == 'workflow_dispatch' && inputs.grsp_instrumentation_run_id != '' && 'downloaded-grsp-native' || '' }}
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
       - name: Save verified native GRSP binary for matching source
-        if: steps.grsp_native_cache.outputs.cache-hit != 'true'
+        if: ${{ (github.event_name != 'workflow_dispatch' || inputs.grsp_instrumentation_run_id == '') && steps.grsp_native_cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: unified/.gco-grsp-native

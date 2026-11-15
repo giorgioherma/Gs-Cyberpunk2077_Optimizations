@@ -53,7 +53,10 @@ Patch $cp '            "restore" => new' @'
             "restore" => new
 '@
 
-# GRSP's GCO variant never implicitly completes recording on game shutdown.
+# Stable GRSP input retains its historical disposable native adjustment.
+# New developer instrumentation has the same strict-F11 semantics implemented
+# in the GRSP authoritative Rust Cargo feature; never patch its native source.
+if ([string]::IsNullOrWhiteSpace($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT)) {
 Patch $gr @'
 unsafe extern "C" fn on_shutdown(_app: &GameApp) {
     // There is no pause/resume mode. Closing the game while recording acts as
@@ -87,6 +90,17 @@ Patch $gr @'
 
     if dump_ok {
 '@
+}
+else {
+    $native=Get-Content -LiteralPath $gr -Raw
+    foreach ($proof in @('gco_explicit_f11','GCO-F11-Complete.flag',
+                         'if dump_ok && play_stop_signal')) {
+        if (!$native.Contains($proof)) {
+            throw "Strict F11 contract missing in authoritative GRSP native source: $proof"
+        }
+    }
+    Write-Host 'PASS exact GRSP native source owns strict F11 feature, no GCO patch'
+}
 Patch $gm '        File.Exists(Path.Combine(path, "GRSP_Status.txt"));' @'
         File.Exists(Path.Combine(path, "GRSP_Status.txt")) &&
         File.Exists(Path.Combine(path, "GCO-F11-Complete.flag")) &&

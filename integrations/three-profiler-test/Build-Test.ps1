@@ -101,7 +101,32 @@ foreach ($project in @(
 if ($Integrated) {
   & ./integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1
   if ($LASTEXITCODE -ne 0) { throw 'GCO owner source adaptation failed' }
-  # Compile the GCO-specific native GRSP protocol from the exact source pin.
+  # Native instrumentation must come from independent GRSP manual CI.
+  # No fallback cargo build, source patch, or package cache on this path.
+  if (-not [string]::IsNullOrWhiteSpace($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT)) {
+    $artifact=Join-Path (Get-Location) $env:GCO_GRSP_NATIVE_ARTIFACT_ROOT
+    $proofPath=Join-Path $artifact 'provenance.json'
+    if (!(Test-Path -LiteralPath $proofPath -PathType Leaf)) {
+      throw 'Missing independent GRSP native artifact provenance'
+    }
+    $proof=Get-Content -LiteralPath $proofPath -Raw | ConvertFrom-Json
+    $ownerSource=(git -C vendor-grsp rev-parse HEAD).Trim()
+    if ($ownerSource.Length -ne 40 -or $proof.schema -ne 1 -or
+        $proof.sourceCommit -ne $ownerSource -or
+        $proof.nativeVariant -ne 'gco_explicit_f11' -or
+        $proof.strictF11StopOnly -ne $true -or
+        $proof.dllSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+      throw 'GRSP instrumentation DLL source/F11/SHA provenance refused'
+    }
+    $native=Join-Path $artifact 'G-REDscript-Profiler.dll'
+    VerifyFile $native $proof.dllSha256
+    $destination=Join-Path $gr 'payload/G-REDscript-Profiler.dll'
+    Copy-Item -LiteralPath $native -Destination $destination -Force
+    VerifyFile $destination $proof.dllSha256
+    Write-Host 'PASS verified GRSP native instrumentation imported; no GCO native build'
+  }
+  else {
+  # Existing stable source-adapter build remains the baseline for ordinary CI.
   # The official release Cargo.lock accompanies the verified release package.
   $lock=Join-Path $grSource 'docs/Cargo.lock'
   if (!(Test-Path $lock -PathType Leaf)) { throw 'Pinned GRSP Cargo.lock absent from verified release' }
@@ -139,6 +164,7 @@ if ($Integrated) {
       VerifyFile $cachedNative $digest
       Write-Host 'PASS compiled GCO GRSP native DLL staged for exact-input reuse'
     }
+  }
   }
   $grManifest=Join-Path $gr 'MANIFEST.json'
   $grMetadata=Get-Content $grManifest -Raw | ConvertFrom-Json
@@ -392,10 +418,22 @@ foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path 
 }
 New-Item -ItemType Directory -Force (Join-Path $root 'RESULTS') | Out-Null
 Set-Content (Join-Path $root 'VERSION.txt') $version -NoNewline
+$grSourceCommit=(git -C vendor-grsp rev-parse HEAD).Trim()
+if ($grSourceCommit.Length -ne 40) { throw 'GRSP source commit not pinned' }
+$nativeOwnerRun=if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT) {
+  [string]$env:GCO_GRSP_NATIVE_OWNER_RUN_ID
+} else { '' }
+if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
+    $nativeOwnerRun -notmatch '^[1-9][0-9]{5,18}$') {
+  throw 'Owner-native provenance run ID missing for GCO instrumentation'
+}
+$nativeMode=if ($nativeOwnerRun) { 'GRSP_CI_MANUAL_GCO_STRICT_F11' } else {
+  'LEGACY_VERIFIED_GCO_DISPOSABLE_SOURCE'
+}
 $provenance=@{
   testOnly=$true
   cet=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
-  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; gcoNativeVariant=$Integrated; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
   cetResolver=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
@@ -403,7 +441,7 @@ $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if 
 if ($Integrated) {
   $entries=@(
     @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ciRun=41820765951; artifactId=13317131256 },
-    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit=$grSourceCommit; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
   )
   foreach ($entry in $entries) {
     $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
