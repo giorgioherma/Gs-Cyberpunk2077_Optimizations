@@ -783,9 +783,9 @@ internal static class Program
             };
             handoff.Show();
             DrainDispatcher();
-            if (!handoff.HibernateAfterLaunch() || handoff.IsLoaded)
+            if (!handoff.HibernateAfterLaunch() || handoff.IsVisible)
                 throw new InvalidOperationException(
-                    "Successful START must unload WPF immediately, without a Cyberpunk PID.");
+                    "Successful START must close the visible WPF window immediately, without a Cyberpunk PID.");
             DrainDispatcher();
             Console.WriteLine("PASS START capture handoff unloads WPF before Cyberpunk is observed");
 

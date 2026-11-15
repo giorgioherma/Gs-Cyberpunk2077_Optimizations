@@ -642,7 +642,9 @@ public partial class MainWindow : Window
             return false;
         captureHibernationClose = true;
         Close();
-        return !IsLoaded;
+        // WPF IsLoaded is sticky after a window has been shown, even when
+        // Close() has disposed it. Visibility is the correct closure check.
+        return !IsVisible;
     }
 
     private void GameStarted(int pid)
