@@ -1,12 +1,28 @@
 using GTotalOptimizer.Core;
 
+// Stage 4 uses the SAME production GCO service and CET owner's original
+// --generate-pass path. Never simulate generated Lua or create a second engine.
+if (args.Length > 0 && args[0] == "--stage4-generate")
+{
+    if (args.Length != 4)
+        throw new ArgumentException("Usage: --stage4-generate <GCO package> <test game> <collected session ID>");
+    var pass = await new CetReadOnlyAnalysisService().GenerateCetPassAsync(
+        args[1], args[2], args[3]);
+    if (pass.FileCount < 1 || pass.TransformCount < 1 ||
+        !File.Exists(pass.ZipPath))
+        throw new InvalidDataException("Existing CET source owner produced no applied optimization pass.");
+    Console.WriteLine("PASS Stage 4 CET source-owned generated game-relative ZIP: " +
+        "files=" + pass.FileCount + ", transforms=" + pass.TransformCount);
+    return;
+}
+
 // CI: run the exact Page 2 source-owned CET analysis service on a test
-// installation and an indexed, simulated post-restore collection. No game
+// installation and an indexed, collected capture independent of profiler restoration. No game
 // files are modified and --generate-pass is deliberately not available.
 if (args.Length > 0 && args[0] == "--stage3-analyze")
 {
     if (args.Length != 4)
-        throw new ArgumentException("Usage: --stage3-analyze <GCO package> <test game> <restored session ID>");
+        throw new ArgumentException("Usage: --stage3-analyze <GCO package> <test game> <collected session ID>");
     var analysis = await new CetReadOnlyAnalysisService().AnalyzeAsync(
         args[1], args[2], args[3]);
     if (analysis.InstalledCetMods < 1 || analysis.MeasuredCallbackFamilies < 1 ||
@@ -14,7 +30,7 @@ if (args.Length > 0 && args[0] == "--stage3-analyze")
         analysis.RuntimeInterpretation.Length == 0 ||
         analysis.SourceVerification != "CURRENT_SOURCE_READ_ONLY; CAPTURE_SOURCE_IDENTITY_UNVERIFIED")
         throw new InvalidDataException("Actual GCO Page 2 CET analysis contract was not satisfied.");
-    Console.WriteLine("PASS Stage 3 read-only restored-session CET analysis: " +
+    Console.WriteLine("PASS Stage 3 read-only collected-session CET analysis: " +
         "current mods=" + analysis.InstalledCetMods +
         ", measured families=" + analysis.MeasuredCallbackFamilies +
         ", ranked=" + analysis.RankedCallbacks +
