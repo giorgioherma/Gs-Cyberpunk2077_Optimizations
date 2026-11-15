@@ -6,7 +6,8 @@ namespace GTotalOptimizer.Core;
 // Offline, read-only native marker correlation. Never invokes profiler hooks.
 public sealed record NativeCaptureWindow(long StartUnixMs, long EndUnixMs,
     long? GrspStartQpc = null, long? GrspStopQpc = null,
-    long? GrspStartUnixMs = null, long? GrspStopUnixMs = null);
+    long? GrspStartUnixMs = null, long? GrspStopUnixMs = null,
+    long? CetStartUnixMs = null, long? CetStopUnixMs = null);
 
 public static class PresentMonCaptureAlignment
 {
@@ -115,7 +116,8 @@ public static class PresentMonCaptureAlignment
         // A GRSP QPC anchor is optional only for legacy PresentMon date-time
         // exports. New QPC captures will explicitly require both anchors.
         return new NativeCaptureWindow(start, stop,
-            red.StartQpc, red.StopQpc, red.Start, red.End);
+            red.StartQpc, red.StopQpc, red.Start, red.End,
+            cet.Start, cet.End);
     }
 
     // PresentMon --date_time writes local wall-clock timestamps, sometimes
