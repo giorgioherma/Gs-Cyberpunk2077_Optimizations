@@ -94,8 +94,12 @@ public static class GcoProfilerReportService
                 cet, saved.Cet, cancellationToken);
             CopyOwner(CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "REDscript"),
                 red, saved.Redscript, cancellationToken);
+            // Keep the exact same hash-sealed GCO chronology that CET
+            // already consumes. GRSP will read a report-side copy; never
+            // create a second QPC conversion or touch the sealed capture.
+            string? stagedFrameHandoff = null;
             if (mon is not null)
-                _ = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+                stagedFrameHandoff = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
                     sealedFolder, saved,
                     PresentMonCaptureAlignment.RequireOverlap(packageRoot, saved), cet);
 
@@ -219,6 +223,9 @@ public static class GcoProfilerReportService
             }).ToArray();
 
             Directory.CreateDirectory(publishing);
+            if (stagedFrameHandoff is not null)
+                File.Copy(stagedFrameHandoff,
+                    Path.Combine(publishing, GcoPresentMonFrameEvidence.ContractFile));
             var report = new
             {
                 schemaVersion = "gco.profiler.report.v1",
@@ -229,6 +236,7 @@ public static class GcoProfilerReportService
                     provider = mon is null ? "NOT_CAPTURED" : "PRESENTMON_2_6",
                     source = mon?.SourceFile,
                     sha256 = mon?.SourceSha256,
+                    chronologyFile = mon is null ? null : GcoPresentMonFrameEvidence.ContractFile,
                     clock = mon?.Clock,
                     intervalSemantics = mon?.IntervalSemantics,
                     correlation = mon?.Correlation,

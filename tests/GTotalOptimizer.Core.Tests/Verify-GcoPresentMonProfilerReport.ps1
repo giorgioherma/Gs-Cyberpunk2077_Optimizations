@@ -66,8 +66,37 @@ try {
     if([int]$json.presentMonFrameCount -ne [int]$index.PresentMonAlignedFrames -or
         $json.frameEvidence.provider -ne 'PRESENTMON_2_6' -or
         $json.frameEvidence.source -ne [string]$index.FrameTimeEvidence.Path -or
+        $json.frameEvidence.chronologyFile -ne 'GCO-PresentMon-Frames.v1.json' -or
         @($json.timeline | Where-Object {$null -ne $_.presentIntervalMaxMs}).Count -lt 2) {
         throw 'Consolidated profiler report does not preserve authentic indexed PresentMon evidence.'
+    }
+    # The identical GCO-owned verified per-present QPC chronology must be
+    # available to the GRSP Resolver, not only the staged CET reporter.
+    # This is derived report evidence, never a modified capture or release ZIP.
+    $framePath=Join-Path $reportFolder 'GCO-PresentMon-Frames.v1.json'
+    $cetFramePath=Join-Path $reportFolder 'CET/PresentMon/GCO-PresentMon-Frames.v1.json'
+    if(!(Test-Path -LiteralPath $framePath -PathType Leaf) -or
+       !(Test-Path -LiteralPath $cetFramePath -PathType Leaf)) {
+        throw 'Missing genuine shared PresentMon chronology for GRSP Resolver.'
+    }
+    if((Get-FileHash -LiteralPath $framePath -Algorithm SHA256).Hash -ne
+       (Get-FileHash -LiteralPath $cetFramePath -Algorithm SHA256).Hash) {
+        throw 'GCO reported GRSP frame chronology differs from CET owner input.'
+    }
+    $chronology=Get-Content -LiteralPath $framePath -Raw |
+        ConvertFrom-Json -Depth 80
+    $originalMon=Join-Path $sessionCopy (([string]$index.FrameTimeEvidence.Path).Replace('/','\\'))
+    $frames=@($chronology.frames)
+    if($chronology.schemaVersion -ne 'gco.presentmon.chronology.v1' -or
+       $chronology.producer -ne 'GCO_PRESENTMON_2_6' -or
+       $chronology.correlation -ne 'CET_GRSP_F11_INTERSECTION_VERIFIED' -or
+       $chronology.sourceFile -ne [string]$index.FrameTimeEvidence.Path -or
+       $chronology.sourceSha256 -ne (Get-FileHash -LiteralPath $originalMon -Algorithm SHA256).Hash -or
+       $frames.Count -ne [int]$index.PresentMonAlignedFrames -or
+       $frames.Count -lt 2 -or
+       [long]$frames[0].presentQpc -ge [long]$frames[-1].presentQpc -or
+       [double]$frames[0].intervalMs -le 0) {
+        throw 'GRSP frame evidence is not identical to sealed genuine PresentMon chronology.'
     }
     foreach($file in @(
         'GCO_Profiler_Report.html',
