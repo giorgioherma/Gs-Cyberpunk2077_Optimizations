@@ -79,6 +79,13 @@ jobs:
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
+          # Same exact CET source/run as the profiler. This reference is NOT
+          # copied wholesale into GCO (it is .NET8 self-contained); only its
+          # source-owned native service is imported, and the old binary is
+          # exercised as a behavior oracle for the rebuilt .NET10 CLI.
+          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
+          Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
       # GRSP's pinned Rust build takes ~6m on a fresh runner. The other
       # components are fast and remain rebuilt/verified by the normal script.
       - name: Identify reusable GRSP native compilation
@@ -260,6 +267,11 @@ jobs:
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          # Stage 1: execute both the exact CET owner-built Resolver and our
+          # source-retargeted .NET10 Resolver against the same disposable
+          # measured-callback evidence. Do not edit sealed user captures.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-CetResolverPackage.ps1 -PackageRoot $root -OwnerArtifactRoot 'downloaded-cet-resolver'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged CET Resolver owner-equivalence contract failed' }
           # Regression: transient startup PID exit must not trigger duplicate
           # automatic ETW stop from WPF. Native observer owns that decision.
           $wpfCapture=Get-Content 'src/GTotalOptimizer.App/MainWindow.xaml.cs' -Raw

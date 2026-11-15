@@ -51,6 +51,27 @@ if ($gm.version -ne '1.0.0') { throw 'GRSP release version drift' }
 if (-not (Test-Path (Join-Path $grSource 'payload/G-REDscript-Profiler.dll'))) { throw 'GRSP native payload missing' }
 Write-Host 'PASS official GRSP v1.0.0 release ZIP integrity and payload'
 
+# The owner CI shipped Profiler and Resolver from the SAME pinned source.
+# We rebuild Resolver managed code below; these original artifact bytes serve
+# only as a native-service provenance anchor and baseline behavior oracle.
+$resolverArchive=Join-Path (Get-Location) 'downloaded-cet-resolver'
+foreach ($z in @(Get-ChildItem $resolverArchive -Filter '*.zip' -File -Recurse)) {
+  Expand-Archive -LiteralPath $z.FullName -DestinationPath (Join-Path $temp 'Resolver') -Force
+}
+$resolverCandidates=@(Get-ChildItem $resolverArchive,(Join-Path $temp 'Resolver') -Filter 'G-CET-Resolver.exe' -Recurse -File -ErrorAction SilentlyContinue |
+  Where-Object { (Test-Path (Join-Path $_.DirectoryName 'knowledge/semantic-library.json')) -and
+                 (Test-Path (Join-Path $_.DirectoryName 'runtime/native/GCETStaticLocations.dll')) })
+if ($resolverCandidates.Count -ne 1) {
+  throw "Expected exactly one pinned CET Resolver reference package: $($resolverCandidates.Count)"
+}
+$resolverReference=$resolverCandidates[0].DirectoryName
+$nativeResolverDll=Join-Path $resolverReference 'runtime/native/GCETStaticLocations.dll'
+# The owner-built static-location runtime is independently pinned and must
+# never come from the user's live game or from an unverified historical ZIP.
+$nativeResolverHash='737bcdd9d6cbfedd9b238d16ae49c9fa0b52497e4e1e14cb606e826dd56c1496'
+VerifyFile $nativeResolverDll $nativeResolverHash
+Write-Host 'PASS original CET Resolver artifact and independent native service provenance'
+
 $components=Join-Path $root 'components'
 $cet=Join-Path $components 'cet'
 $gr=Join-Path $components 'grsp'
@@ -65,6 +86,7 @@ Remove-Item (Join-Path $gr 'app') -Recurse -Force
 foreach ($project in @(
   'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj',
   'vendor-cet/src/G.CETProfiler.Core/G.CETProfiler.Core.csproj',
+  'vendor-cet/src/G.CETResolver.App/G.CETResolver.App.csproj',
   'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj'
 )) {
   $text=Get-Content $project -Raw
@@ -133,6 +155,44 @@ function PublishManager([string]$Csproj, [string]$Dest) {
 }
 PublishManager 'vendor-cet/src/G.CETProfiler.App/G.CETProfiler.App.csproj' (Join-Path $cet 'app')
 PublishManager 'vendor-grsp/manager/GRedscriptProfiler.Manager.csproj' (Join-Path $gr 'app')
+
+# Publish the actual CET-owned Resolver from this same pinned source, with
+# the same private .NET10 runtime as the managers. Its WinForms UI is an
+# internal owner capability; GCO will use only the original CLI in Stage 3.
+# Source templates are copied by the owner's .csproj, never reconstructed.
+$cetResolver=Join-Path $components 'cet-resolver'
+$cetResolverApp=Join-Path $cetResolver 'app'
+New-Item -ItemType Directory -Force $cetResolverApp | Out-Null
+PublishManager 'vendor-cet/src/G.CETResolver.App/G.CETResolver.App.csproj' $cetResolverApp
+$resolverAssetPaths=@(
+  'G-CET-Resolver.exe',
+  'G-CET-Resolver.dll',
+  'G.CETProfiler.Core.dll',
+  'knowledge/semantic-library.json',
+  'runtime/0-Engine/fixed-init.lua.gz.b64',
+  'runtime/0-Engine/modules/ActionRouter.lua.b64',
+  'runtime/0-Engine/modules/Health.lua.b64',
+  'runtime/0-Engine/modules/Scheduler.lua.b64',
+  'runtime/0-Engine/modules/GCETNativeLocationHost.lua'
+)
+foreach ($asset in $resolverAssetPaths) {
+  $published=Join-Path $cetResolverApp $asset
+  if (!(Test-Path -LiteralPath $published -PathType Leaf)) {
+    throw "CET source-owned Resolver asset missing from framework-dependent publish: $asset"
+  }
+  $ownerReference=Join-Path $resolverReference $asset
+  if ($asset -notmatch '^(G-CET-Resolver\.|G\.CETProfiler\.Core\.)' -and
+      (Test-Path -LiteralPath $ownerReference -PathType Leaf)) {
+    $expected=(Get-FileHash -LiteralPath $ownerReference -Algorithm SHA256).Hash.ToLowerInvariant()
+    VerifyFile $published $expected
+  }
+}
+$nativeResolverTarget=Join-Path $cetResolverApp 'runtime/native'
+New-Item -ItemType Directory -Force $nativeResolverTarget | Out-Null
+Copy-Item -LiteralPath $nativeResolverDll -Destination (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll')
+VerifyFile (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll') $nativeResolverHash
+Write-Host 'PASS pinned CET Resolver recompiled for one shared .NET10 runtime with unmodified owner assets'
+
 # Source of truth for both Windows executables and WPF windows.
 # Keep the owner-provided multi-resolution ICO intact (no resampling).
 $iconSource=(Resolve-Path 'assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico' -ErrorAction Stop).Path
@@ -325,7 +385,7 @@ $core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
 if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Expected one shared .NET runtime; found $($core.Count)"
 }
-foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'))) {
+foreach ($exe in @((Join-Path $root 'app/G-Total-Optimizer.App.exe'),(Join-Path $cet 'app/G-CET-Runtime-Profiler.App.exe'),(Join-Path $gr 'app/G-REDscript-Profiler.App.exe'),(Join-Path $cetResolverApp 'G-CET-Resolver.exe'))) {
   if (!(Test-Path $exe)) { throw "Manager executable absent $exe" }
   $json=Get-Content ([IO.Path]::ChangeExtension($exe,'.runtimeconfig.json')) -Raw
   if ($json -notmatch '10\.0') { throw "Framework-dependent manager did not retarget to net10: $exe" }
@@ -337,6 +397,7 @@ $provenance=@{
   cet=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; gcoNativeVariant=$Integrated; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
+  cetResolver=@{ sourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
@@ -354,13 +415,32 @@ if ($Integrated) {
     'components/grsp/payload/G-REDscript-Profiler.dll',
     'components/presentmon/PresentMon.exe'
   )
+  # Independent analysis component; keep CET/GRSP installer admission and
+  # original five-payload manifest semantics unchanged. All published source
+  # assets are hash indexed for later Stage 3 read-only invocation.
+  $resolverAssetEntries=@(Get-ChildItem -LiteralPath $cetResolverApp -File -Recurse |
+    Sort-Object FullName | ForEach-Object {
+      $relative=[IO.Path]::GetRelativePath($root,$_.FullName).Replace('\','/')
+      @{ path=$relative; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+    })
+  $resolverEntry=@{
+    id='cet-resolver'
+    executable='components/cet-resolver/app/G-CET-Resolver.exe'
+    sourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'
+    ownerCiRun=41820765951
+    ownerArtifactId=13317096524
+    framework='net10.0-windows'
+    nativeSha256=$nativeResolverHash
+    files=$resolverAssetEntries
+  }
+  $resolverEntry.sha256=(Get-FileHash (Join-Path $cetResolverApp 'G-CET-Resolver.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
   $payloads=@($payloadPaths | ForEach-Object {
     @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
   })
   VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
   VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
   VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
-  @{ schemaVersion=2; components=$entries; payloads=$payloads } |
+  @{ schemaVersion=2; components=$entries; payloads=$payloads; analysisTools=@($resolverEntry) } |
     ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
   # The GitHub artifact contains ONE portable app directory plus a short
   # adjacent user guide. Never copy the guide into the game optimization ZIP.
@@ -411,5 +491,5 @@ VERSION $version (portable build). No system .NET installation required.
     githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
   } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
   Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
-  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, source-owned native DLLs, PresentMon and verified payload manifest'
+  Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, pinned complete CET Resolver, source-owned native DLLs, PresentMon and verified payload manifest'
 }
