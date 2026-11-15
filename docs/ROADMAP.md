@@ -6,7 +6,7 @@
 
 **Branch:** `feature/presentmon-resolver-integration`; `main` is preserved at the successful CI #383 baseline. **Authoritative stage gates:** [four-stage implementation plan](integration/CET-PRESENTMON-GCO-PLAN.md); **current stage/status:** [live progress ledger](integration/CET-PRESENTMON-GCO-PROGRESS.md). These replace older speculative "next" instructions for this specific task; the original product milestones below remain the eventual target.
 
-1. **NOT STARTED:** publish existing source-owned CET Resolver for GCO's single .NET 10 runtime and establish baseline CLI/report behavior.
+1. **IN PROGRESS (source e191663, CI NOT RUN):** original CET Resolver .NET 10 publish and baseline CLI/report contract added to the canonical build; packaged behavior, full Windows verification and real capture replay pending.
 2. **NOT STARTED:** present the real F11-aligned PresentMon frames to CET report/hitch/G-GC logic with measured semantics and safe missing-data behavior.
 3. **NOT STARTED:** connect sealed GCO results and live CET source to Page 2's read-only Resolver analysis.
 4. **NOT STARTED:** prove actual CET generated output/source safety and produce the REDscript integration handoff. **STOP HERE**.
