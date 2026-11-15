@@ -1,5 +1,28 @@
 using GTotalOptimizer.Core;
 
+// CI: run the exact Page 2 source-owned CET analysis service on a test
+// installation and an indexed, simulated post-restore collection. No game
+// files are modified and --generate-pass is deliberately not available.
+if (args.Length > 0 && args[0] == "--stage3-analyze")
+{
+    if (args.Length != 4)
+        throw new ArgumentException("Usage: --stage3-analyze <GCO package> <test game> <restored session ID>");
+    var analysis = await new CetReadOnlyAnalysisService().AnalyzeAsync(
+        args[1], args[2], args[3]);
+    if (analysis.InstalledCetMods < 1 || analysis.MeasuredCallbackFamilies < 1 ||
+        analysis.RankedCallbacks < 1 ||
+        analysis.RuntimeInterpretation.Length == 0 ||
+        analysis.SourceVerification != "CURRENT_SOURCE_READ_ONLY; CAPTURE_SOURCE_IDENTITY_UNVERIFIED")
+        throw new InvalidDataException("Actual GCO Page 2 CET analysis contract was not satisfied.");
+    Console.WriteLine("PASS Stage 3 read-only restored-session CET analysis: " +
+        "current mods=" + analysis.InstalledCetMods +
+        ", measured families=" + analysis.MeasuredCallbackFamilies +
+        ", ranked=" + analysis.RankedCallbacks +
+        ", PresentMon=" + analysis.FrameEvidence +
+        ", generation disabled; capture/live-source identity not assumed");
+    return;
+}
+
 // CI-only bridge exerciser. Use the real GCO production class against
 // extracted sealed source evidence, never package test utilities to players.
 if (args.Length > 0 && args[0] == "--stage-presentmon")
