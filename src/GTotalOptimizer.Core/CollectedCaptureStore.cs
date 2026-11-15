@@ -344,7 +344,9 @@ public static class CollectedCaptureStore
             return null; // another selected game never inherits an old workspace
         var id = identity.GetString()!;
         CheckId(id);
-        return ReadRestored(root, game, id);
+        // CONTINUE recorded this pointer. ANALYZE reads its already-collected
+        // inputs; profiler restoration state is not an analysis prerequisite.
+        return Read(root, game, id);
     }
 
     private static string Hash(string path)
