@@ -2,17 +2,22 @@ using GTotalOptimizer.Core;
 
 // Stage 4 uses the SAME production GCO service and CET owner's original
 // --generate-pass path. Never simulate generated Lua or create a second engine.
-if (args.Length > 0 && args[0] == "--stage4-generate")
+if (args.Length > 0 && args[0] is "--stage4-generate" or "--stage4-idempotent")
 {
     if (args.Length != 4)
         throw new ArgumentException("Usage: --stage4-generate <GCO package> <test game> <collected session ID>");
     var pass = await new CetReadOnlyAnalysisService().GenerateCetPassAsync(
         args[1], args[2], args[3]);
-    if (pass.FileCount < 1 || pass.TransformCount < 1 ||
-        !File.Exists(pass.ZipPath))
-        throw new InvalidDataException("Existing CET source owner produced no applied optimization pass.");
-    Console.WriteLine("PASS Stage 4 CET source-owned generated game-relative ZIP: " +
-        "files=" + pass.FileCount + ", transforms=" + pass.TransformCount);
+    var expectedSecond = args[0] == "--stage4-idempotent";
+    if (pass.FileCount < 1 || !File.Exists(pass.ZipPath) ||
+        (expectedSecond ? pass.TransformCount != 0 : pass.TransformCount < 1))
+        throw new InvalidDataException(expectedSecond
+            ? "CET owner generated new transforms after its complete first pass."
+            : "Existing CET source owner produced no applied optimization pass.");
+    Console.WriteLine((expectedSecond
+        ? "PASS Stage 4 completed-source CET second pass:"
+        : "PASS Stage 4 CET source-owned generated game-relative ZIP:") +
+        " files=" + pass.FileCount + ", transforms=" + pass.TransformCount);
     return;
 }
 
