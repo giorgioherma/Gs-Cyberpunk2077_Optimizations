@@ -34,9 +34,9 @@ public partial class MainWindow : Window
     private string? completedSessionId;
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
-    // START may return before the real Cyberpunk process is observable. Keep
-    // its pending tray handoff until that specific game startup is confirmed.
-    private bool pendingCaptureHibernation;
+    // WMI can report our game process before Process.Start returns.
+    // Classify that event as GCO-owned; the tray handoff itself never waits.
+    private bool gcoLaunchInProgress;
     // Only protects the short gap between clicking START and observing
     // Cyberpunk2077.exe. An observed process uses the ordinary running gate.
     private DateTime launchProcessGuardUntilUtc = DateTime.MinValue;
@@ -628,33 +628,21 @@ public partial class MainWindow : Window
         // No Cyberpunk PID was ever observed; do not keep START locked merely
         // because a previous attempt launched PresentMon successfully.
         launchProcessGuardUntilUtc = DateTime.MinValue;
-        pendingCaptureHibernation = false;
         gcoLaunchedGamePid = null;
         if (IsLoaded && !busy) await RefreshSourceAsync();
     }
 
-    private bool HibernateForObservedCapture()
+    // Process.Start returning successfully finishes the START UI workflow.
+    // The native tray remains resident, while Cyberpunk may still be loading
+    // or may crash early. Neither condition should keep the managed UI open.
+    // Also exercised by the packaged Windows WPF smoke with no game process.
+    internal bool HibernateAfterLaunch()
     {
-        if (!pendingCaptureHibernation || busy || !IsLoaded ||
-            closingInProgress || closureCleanupVerified ||
-            WpfVerificationMode || !GameRunning()) return false;
-
-        // Do not assume a Process.Start return value is a running game; the
-        // actual Cyberpunk process may appear later during mod loading.
-        pendingCaptureHibernation = false;
+        if (busy || !IsLoaded || closingInProgress || closureCleanupVerified)
+            return false;
         captureHibernationClose = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-        {
-            // Process may have crashed before the scheduled WPF close.
-            if (IsLoaded && !busy && GameRunning())
-                Close();
-            else
-            {
-                captureHibernationClose = false;
-                // No tray handoff for a game which died before it began.
-            }
-        }));
-        return true;
+        Close();
+        return !IsLoaded;
     }
 
     private void GameStarted(int pid)
@@ -670,12 +658,11 @@ public partial class MainWindow : Window
             GameExited(pid);
             return;
         }
-        if (pendingCaptureHibernation || gcoLaunchedGamePid == pid)
+        if (gcoLaunchInProgress || gcoLaunchedGamePid == pid)
         {
-            // Delayed start from OUR START button: never run the external
-            // game's BeginFreshCapture reset against an already-running game.
+            // This launch already provisioned its capture before Process.Start.
+            // Never run the external-launch reset or postpone WPF unload.
             gcoLaunchedGamePid = null;
-            HibernateForObservedCapture();
         }
         else
         {
@@ -691,7 +678,7 @@ public partial class MainWindow : Window
         gameProcesses.Untrack(pid);
         observedGamePid = null;
         gcoLaunchedGamePid = null;
-        pendingCaptureHibernation = false;
+        gcoLaunchInProgress = false;
         launchProcessGuardUntilUtc = DateTime.MinValue;
         ++launchProcessGuardGeneration;
         // Native elevated observer alone stops PresentMon on game exit.
@@ -1325,9 +1312,9 @@ public partial class MainWindow : Window
                 gameAlreadyRunning: false);
             try
             {
-                // Arm before CreateProcess: a fast WMI start can be queued
-                // before Process.Start returns, but still belongs to GCO.
-                pendingCaptureHibernation = true;
+                // Arm before CreateProcess so a fast WMI start is classified
+                // as this GCO launch rather than an external capture restart.
+                gcoLaunchInProgress = true;
                 ArmProcessStartGuard();
                 using var started = Process.Start(new ProcessStartInfo(executable)
                 {
@@ -1352,7 +1339,7 @@ public partial class MainWindow : Window
             }
             catch
             {
-                pendingCaptureHibernation = false;
+                gcoLaunchInProgress = false;
                 launchProcessGuardUntilUtc = DateTime.MinValue;
                 ++launchProcessGuardGeneration;
                 // A failed game launch is not a meaningful capture. Flush ETW,
@@ -1372,11 +1359,13 @@ public partial class MainWindow : Window
         catch (Exception ex) { Warn(ex.Message, "Launch and capture"); }
         finally
         {
+            gcoLaunchInProgress = false;
+            gcoLaunchedGamePid = null;
             SetBusy(false);
-            // Skip costly UI/source refresh when an actual game process has
-            // already authorized the queued WPF unload. If the game has not
-            // appeared yet, leave WPF open until its start notification.
-            if (!launched || !HibernateForObservedCapture())
+            // Handoff when the launch request succeeds. The native tray and
+            // observer are independent of whether Cyberpunk is observable
+            // yet; the user can reopen GCO after a slow start or crash.
+            if (!launched || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
         }
     }

@@ -772,6 +772,23 @@ internal static class Program
                 DrainDispatcher();
             }
 
+            // Exercise the actual START-to-tray WPF unload while NO game
+            // process was launched. Waiting for Cyberpunk here would be a
+            // regression: this packaged test has no Cyberpunk executable.
+            var handoff = new MainWindow
+            {
+                WpfVerificationMode = true,
+                ShowActivated = false,
+                ShowInTaskbar = false
+            };
+            handoff.Show();
+            DrainDispatcher();
+            if (!handoff.HibernateAfterLaunch() || handoff.IsLoaded)
+                throw new InvalidOperationException(
+                    "Successful START must unload WPF immediately, without a Cyberpunk PID.");
+            DrainDispatcher();
+            Console.WriteLine("PASS START capture handoff unloads WPF before Cyberpunk is observed");
+
             var normal = new MainWindow();
             VerifyAtSize(normal, normal.Width, normal.Height);
 
