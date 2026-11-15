@@ -29,6 +29,22 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
         !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
         !html.Contains("redscriptExclusiveInstrumentedMs", StringComparison.Ordinal))
         throw new InvalidDataException("Consolidated report is missing source-owned report links or real graph series.");
+    // The report is not considered complete until CET/GRSP original
+    // reports and the machine-readable combined evidence are all present.
+    if (!GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
+        throw new InvalidDataException("COLLECT report completion rejected valid original reports.");
+    var grspHtml = Path.Combine(Path.GetDirectoryName(output.HtmlPath)!,
+        "GRSP", "GRSP_Report.html");
+    var held = grspHtml + ".test-held";
+    File.Move(grspHtml, held);
+    try
+    {
+        if (GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
+            throw new InvalidDataException("COLLECT falsely admitted an absent GRSP owner report.");
+    }
+    finally { File.Move(held, grspHtml); }
+    if (!GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
+        throw new InvalidDataException("Complete report set was not recoverable after restoring GRSP HTML.");
     Console.WriteLine("PASS GCO real CET+GRSP+PresentMon profiler report: " +
         "presentFrames=" + output.PresentMonFrames +
         ", cetWindows=" + output.CetWindowCount +

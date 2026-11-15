@@ -799,6 +799,26 @@ internal static class Program
             VerifyAtSize(new MainWindow(), 1700, 900);
             VerifyAtSize(new MainWindow(), 1920, 1080);
 
+            // Capture and Analyze reuse the same bottom-row console. The
+            // Analysis overlay must not cover the owner portrait transition.
+            var resultsLayout = new MainWindow { WpfVerificationMode = true };
+            resultsLayout.ShowResultsPage();
+            resultsLayout.RootLayout.Measure(new System.Windows.Size(1280, 760));
+            resultsLayout.RootLayout.Arrange(new System.Windows.Rect(0, 0, 1280, 760));
+            resultsLayout.RootLayout.UpdateLayout();
+            if (resultsLayout.ResultsPage.Visibility != System.Windows.Visibility.Visible ||
+                resultsLayout.CapturePage.Visibility != System.Windows.Visibility.Collapsed ||
+                System.Windows.Controls.Grid.GetRowSpan(resultsLayout.ResultsPage) != 1 ||
+                resultsLayout.ResultsPage.Background is not System.Windows.Media.SolidColorBrush resultsBg ||
+                resultsBg.Color.A != 0 ||
+                resultsLayout.ContinueButton.Visibility != System.Windows.Visibility.Collapsed ||
+                System.Windows.Controls.Grid.GetColumnSpan(resultsLayout.ConsoleTextHost) != 2 ||
+                resultsLayout.AnalyzeButton.IsEnabled ||
+                resultsLayout.GenerateButton.IsEnabled)
+                throw new InvalidOperationException(
+                    "Page 2 must retain original transparent portrait, footer console, no automatic analysis.");
+            Console.WriteLine("PASS Page 2 uses original black/portrait background and shared console; analysis deferred");
+
             Console.WriteLine(
                 "PASS packaged native WPF Normal-Maximized-Normal pixel identity, maximized-only card growth and both pages");
             app.Shutdown();
