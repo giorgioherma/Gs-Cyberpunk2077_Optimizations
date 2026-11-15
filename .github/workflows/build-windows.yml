@@ -45,6 +45,33 @@ jobs:
           ref: 08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44
           path: unified/vendor-cet
           persist-credentials: false
+      # Resolve the actual native producer SHA from the successful independent
+      # manual GRSP CI run. No moving-branch pins or stale documentation SHA.
+      - name: Resolve GRSP native source from successful owner CI
+        id: grsp_native_source
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.grsp_instrumentation_run_id != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GRSP_OWNER_RUN: ${{ inputs.grsp_instrumentation_run_id }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $runText=[string]$env:GRSP_OWNER_RUN
+          if ($runText -notmatch '^[1-9][0-9]{5,18}$') { throw 'Invalid native run ID' }
+          $run=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/$runText") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or
+              $run.conclusion -ne 'success' -or
+              $run.event -ne 'workflow_dispatch' -or
+              $run.head_branch -ne 'dev/resolver-profiler-handoff' -or
+              $run.head_sha -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'GRSP native source must come from a successful authorized manual developer run'
+          }
+          $wf=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/workflows/$($run.workflow_id)") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $wf.path -ne '.github/workflows/native-instrumentation.yml') {
+            throw 'GRSP native source owner workflow identity mismatch'
+          }
+          "sha=$($run.head_sha)" >> $env:GITHUB_OUTPUT
+          Write-Host "PASS exact GRSP native producer SHA=$($run.head_sha)"
       # Routine builds use the existing proven native F11 source.
       - uses: actions/checkout@v4
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.grsp_instrumentation_run_id == '' }}
@@ -57,7 +84,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.grsp_instrumentation_run_id != '' }}
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
-          ref: 61b0be963b9c16827be5c4ea5df12b5b61bd5e11
+          ref: ${{ steps.grsp_native_source.outputs.sha }}
           path: unified/vendor-grsp
           persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
@@ -148,7 +175,7 @@ jobs:
           $ErrorActionPreference='Stop'
           $runText=[string]$env:GRSP_OWNER_RUN
           if ($runText -notmatch '^[1-9][0-9]{5,18}$') { throw 'Invalid GRSP native CI run ID' }
-          $expected='61b0be963b9c16827be5c4ea5df12b5b61bd5e11'
+          $expected='${{ steps.grsp_native_source.outputs.sha }}'
           $result=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/$runText") | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $result.conclusion -ne 'success' -or
               $result.event -ne 'workflow_dispatch' -or $result.head_sha -ne $expected -or
