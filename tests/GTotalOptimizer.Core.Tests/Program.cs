@@ -16,7 +16,7 @@ try
     // QPC anchors are artificial but independent, 1000ms per million ticks.
     var pmFixture = Path.Combine(root, "sealed-capture", "PresentMon");
     Directory.CreateDirectory(pmFixture);
-    var pmCsv = Path.Combine(pmFixture, "PresentMon.csv");
+    var stage2PmCsv = Path.Combine(pmFixture, "PresentMon.csv");
     const string pmHeader = "Application,CPUStartQPC,TimeInQPC,MsBetweenPresents,MsCPUBusy,MsGPUBusy,MsGPUTime";
     var pmRows = new[]
     {
@@ -24,15 +24,15 @@ try
         "Cyberpunk2077.exe,1216000,1249000,33,11,18,20",
         "Cyberpunk2077.exe,1249000,1265000,16,7,9,",
     };
-    File.WriteAllLines(pmCsv, [pmHeader, .. pmRows]);
+    File.WriteAllLines(stage2PmCsv, [pmHeader, .. pmRows]);
     CollectedCaptureIndex MakePmIndex(int rows = 3) => new(
         "00000000000000000000000000000001", root,
         new CollectedOwner("cet.zip", []),
-        new CollectedOwner("red.zip", []), pmCsv,
+        new CollectedOwner("red.zip", []), stage2PmCsv,
         FrameTimeEvidence: new CollectedFile(
             "PresentMon/PresentMon.csv",
-            new FileInfo(pmCsv).Length,
-            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(pmCsv)))),
+            new FileInfo(stage2PmCsv).Length,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(stage2PmCsv)))),
         PresentMonOverlapStartUnixMs: 1_800_000_000_190,
         PresentMonOverlapEndUnixMs: 1_800_000_000_810,
         PresentMonAlignedFrames: rows);
@@ -66,7 +66,7 @@ try
         sealedFolder, MakePmIndex(), pmOverlap, pmStaged);
     var pmContractBytes = File.ReadAllBytes(pmContract);
     Require(Path.GetFileName(pmContract) == GcoPresentMonFrameEvidence.ContractFile &&
-        File.Exists(pmCsv) && MakePmIndex().FrameTimeEvidence!.Sha256 == originalPmHash &&
+        File.Exists(stage2PmCsv) && MakePmIndex().FrameTimeEvidence!.Sha256 == originalPmHash &&
         System.Text.Json.JsonDocument.Parse(pmContractBytes).RootElement
             .GetProperty("frames").GetArrayLength() == 3,
         "derived canonical GCO JSON is staged separately; original CSV and indexed SHA256 remain immutable");
@@ -100,10 +100,10 @@ try
             sealedFolder, MakePmIndex(), pmOverlap, pmStaged));
     void ReplacePmAndReject(string replacement, string why)
     {
-        File.WriteAllText(pmCsv, replacement);
+        File.WriteAllText(stage2PmCsv, replacement);
         RejectPm(why, () => GcoPresentMonFrameEvidence.Build(
             sealedFolder, MakePmIndex(), pmOverlap));
-        File.WriteAllLines(pmCsv, [pmHeader, .. pmRows]);
+        File.WriteAllLines(stage2PmCsv, [pmHeader, .. pmRows]);
     }
     ReplacePmAndReject("Application,CPUStartDateTime,TimeInQPC,MsBetweenPresents\nCyberpunk2077.exe,2026-11-15 02:00:00,1216000,16\n",
         "unanchorable legacy wall time cannot masquerade as F11 QPC correlation");
