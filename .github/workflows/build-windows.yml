@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
-          ref: 3131b7c7f38e595c1231a0cfcec6a52fbbe6d078
+          ref: c8c9e9caf1d59ceb561fb2c09cc22ba5367a1bff
           path: unified/.gco-ci-grsp-resolver
           persist-credentials: false
       - name: Checkout private live REDscript source for GRSP admission audit
@@ -224,7 +224,8 @@ jobs:
           $ownerCompiler = '.gco-ci-grsp-resolver/resolver/Verify-RealStackCompile.ps1'
           $compilerArchive = '.gco-ci-private-redscript/Compiler/ssc.zip'
           $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
-          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline
+          $effectiveCache = '.gco-ci-private-redscript/Compiler/final.redscripts.zip'
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache
           if ($LASTEXITCODE -ne 0) { throw 'Real GRSP R3 owner capture replay failed' }
       - name: Remove exact real GRSP fixture checkout
         if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
