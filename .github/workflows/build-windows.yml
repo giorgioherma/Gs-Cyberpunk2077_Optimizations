@@ -50,6 +50,13 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:GCET_PRIVATE_SOURCE_TOKEN)) {
             throw 'GCO Actions secret GCET_STACK_SOURCES_TOKEN is required for private CET regression replay.'
           }
+      - name: Enable long paths for Windows Git fixture checkout
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          if ((git config --global --get core.longpaths).Trim() -ne 'true') {
+            throw 'Windows Git long-path support could not be enabled.'
+          }
       - name: Checkout private CET live-source fixture
         uses: actions/checkout@v4
         with:
@@ -58,6 +65,9 @@ jobs:
           token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
           persist-credentials: false
           path: unified/.gco-ci-private-cet
+          sparse-checkout: |
+            GCO-Capture-15112026_021913
+          sparse-checkout-cone-mode: true
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
