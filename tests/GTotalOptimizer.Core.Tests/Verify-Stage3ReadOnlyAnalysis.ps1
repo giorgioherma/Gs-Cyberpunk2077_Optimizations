@@ -99,6 +99,32 @@ try {
     if ($first -ne $again) { throw 'Repeated Stage 3 CET analysis has unstable output.' }
     Write-Host 'PASS Stage 3 real current-source CET read-only report replay is stable across repeat runs'
 
+    # Full profiler reporting is a COLLECT-derived product, not ANALYZE,
+    # Restore or an alternate Resolver. Run original owner report engines
+    # with genuine sealed PresentMon, and inspect the resulting combined graph.
+    $reportRun=@(& dotnet run --configuration Release --project $testProject -- --stage5-profiler-report $PackageRoot $targetGame $id 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $failures=@($reportRun | ForEach-Object { [string]$_ } |
+            Where-Object { $_ -match 'Exception:|Unhandled exception|^FAIL ' } |
+            Select-Object -First 2)
+        $diagnostic=($failures -join ' | ')
+        foreach ($secret in @($originalMods,$PrivateSourceRoot,$targetMods,$targetGame,$PackageRoot)) {
+            $diagnostic=$diagnostic.Replace($secret,'[PATH]')
+        }
+        $diagnostic=[regex]::Replace($diagnostic,'[A-Za-z]:\\[^:\r\n]*','[PATH]')
+        if ($diagnostic.Length -gt 450) { $diagnostic=$diagnostic.Substring(0,450) }
+        throw ('Real GCO combined profiler report failed: '+$diagnostic)
+    }
+    if (@($reportRun | Where-Object {
+        [string]$_ -like 'PASS GCO real CET+GRSP+PresentMon profiler report:*'
+    }).Count -ne 1) {
+        throw 'GCO report test did not prove all three real profiler series.'
+    }
+    Write-Host ($reportRun | Where-Object {
+        [string]$_ -like 'PASS GCO real CET+GRSP+PresentMon profiler report:*'
+    } | Select-Object -First 1)
+
+
     # ANALYZE and GENERATE are not profiler lifecycle/RESTORE managers. A
     # captured index does not need Restored=true, and a recovery marker does
     # not change the actual source-owned Resolver's inputs.
