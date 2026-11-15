@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
-          ref: 4b9635fedcd4368e02ec5d62fb990952a35cd4ff
+          ref: 26b63c85266997091b4004b3b13c14330232faf4
           path: unified/.gco-ci-grsp-resolver
           persist-credentials: false
       - name: Checkout private live REDscript source for GRSP admission audit
