@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? analysisCancellation;
     private bool analysisRunning;
     private bool generationRunning;
+    private bool profilerReportRunning;
     private string? analyzedSessionId;
     // WMI can report our game process before Process.Start returns.
     // Classify that event as GCO-owned; the tray handoff itself never waits.
@@ -1572,6 +1573,38 @@ public partial class MainWindow : Window
             SetBusy(false);
             await RefreshSourceAsync();
         }
+        // Reporting belongs to COLLECT's immutable profiler evidence. It
+        // never gates CONTINUE, owner restoration or Resolver generation.
+        if (sealedSuccess && savedCapture is { } complete)
+            _ = GenerateCollectedProfilerReportAsync(game, complete.SessionId);
+    }
+
+    private async Task GenerateCollectedProfilerReportAsync(string game, string sessionId)
+    {
+        if (profilerReportRunning || File.Exists(
+                GcoProfilerReportService.ReportFile(packageRoot, sessionId)))
+            return;
+        profilerReportRunning = true;
+        try
+        {
+            var result = await Task.Run(() =>
+                GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
+            Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
+                " | PresentMon frames=" + result.PresentMonFrames);
+            if (IsLoaded && completedSessionId == sessionId &&
+                completedGameRoot == game)
+            {
+                var saved = CollectedCaptureStore.Read(packageRoot, game, sessionId);
+                UpdateResultTexts(saved);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Failure to render derived reports must never unseal a successful
+            // collection or strand the profiler restore workflow.
+            Trace.TraceWarning("GCO combined profiler reporting: " + ex);
+        }
+        finally { profilerReportRunning = false; }
     }
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)
@@ -1583,8 +1616,11 @@ public partial class MainWindow : Window
             ? "REDscript native capture not available."
             : "REDscript capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
         RedReportText.Text += saved.FrameTimeCsv is null
-            ? Environment.NewLine + "PresentMon: no verified frame-time CSV."
+            ? Environment.NewLine + "PresentMon: NOT_CAPTURED."
             : Environment.NewLine + "PresentMon CSV: " + saved.FrameTimeCsv;
+        if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
+            RedReportText.Text += Environment.NewLine +
+                "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
     }
 
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
