@@ -18,10 +18,16 @@
 #define TRAY_OPEN  1001
 #define TRAY_EXIT  1002
 #define TRAY_UI_CLOSED 1003
+#define TRAY_GAME_FINISHED (WM_APP + 18)
+#define GCO_WATCH_COPYDATA 0x47434F57u
+#define GAME_RELAUNCH_GRACE_MS 10000u
 
 static HINSTANCE g_inst;
 static HWND g_window;
 static HANDLE g_ui;
+static HANDLE g_gameWatchThread;
+static HANDLE g_gameWatchCancel;
+static DWORD g_gameWatchGeneration;
 static wchar_t g_root[MAX_PATH * 4];
 static wchar_t g_app[MAX_PATH * 4];
 static wchar_t g_launcher[MAX_PATH * 4];
@@ -205,6 +211,155 @@ static HANDLE FindGameHandle(void)
     return game;
 }
 
+// Only observe this portable package's own PresentMon writer. Missing or
+// unrelated PresentMon processes must never prevent reopening GCO.
+static HANDLE FindOwnedPresentMonHandle(void)
+{
+    wchar_t expected[MAX_PATH * 4];
+    if (swprintf_s(expected, ARRAYSIZE(expected),
+                   L"%ls\\components\\presentmon\\PresentMon.exe", g_root) < 0)
+        return NULL;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return NULL;
+    PROCESSENTRY32W entry = {0};
+    entry.dwSize = sizeof(entry);
+    HANDLE owned = NULL;
+    if (Process32FirstW(snap, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, L"PresentMon.exe") != 0) continue;
+            HANDLE candidate = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+                                           FALSE, entry.th32ProcessID);
+            if (!candidate) continue;
+            wchar_t actual[MAX_PATH * 4];
+            DWORD length = ARRAYSIZE(actual);
+            if (QueryFullProcessImageNameW(candidate, 0, actual, &length) &&
+                _wcsicmp(expected, actual) == 0) {
+                owned = candidate;
+                break;
+            }
+            CloseHandle(candidate);
+        } while (Process32NextW(snap, &entry));
+    }
+    CloseHandle(snap);
+    return owned;
+}
+
+typedef struct {
+    HANDLE cancel;
+    HWND window;
+    DWORD generation;
+    wchar_t sessionId[33];
+} GameWatch;
+
+static void RequestOwnedObserverStop(const wchar_t *id)
+{
+    wchar_t name[100];
+    if (!ObserverEventName(id, name, ARRAYSIZE(name))) return;
+    HANDLE stop = OpenEventW(EVENT_MODIFY_STATE, FALSE, name);
+    if (stop) {
+        SetEvent(stop);
+        CloseHandle(stop);
+    }
+}
+
+// Independent of PresentMon. Game process exits use waitable handles;
+// a 250 ms scan is used only during startup and the 10-second relaunch
+// window. WPF stays fully unloaded while this tiny native thread runs.
+static DWORD WINAPI WatchGameAndReopen(LPVOID parameter)
+{
+    GameWatch *watch = (GameWatch *)parameter;
+    ULONGLONG deadline = GetTickCount64() + GAME_RELAUNCH_GRACE_MS;
+observe_game:
+    for (;;) {
+        if (WaitForSingleObject(watch->cancel, 0) == WAIT_OBJECT_0) goto done;
+        HANDLE game = FindGameHandle();
+        if (game) {
+            HANDLE waits[2] = { watch->cancel, game };
+            DWORD result = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+            CloseHandle(game);
+            if (result != WAIT_OBJECT_0 + 1) goto done;
+            // An early PID exit may be a launcher transition or relaunch.
+            deadline = GetTickCount64() + GAME_RELAUNCH_GRACE_MS;
+            continue;
+        }
+        ULONGLONG now = GetTickCount64();
+        if (now >= deadline) break;
+        DWORD remaining = (DWORD)(deadline - now);
+        if (WaitForSingleObject(watch->cancel, remaining < 250 ? remaining : 250)
+            == WAIT_OBJECT_0) goto done;
+    }
+
+    // The existing elevated observer will gracefully stop/flush the ETW
+    // writer. Also handles a successful launch that never made a game PID.
+    RequestOwnedObserverStop(watch->sessionId);
+    for (;;) {
+        if (WaitForSingleObject(watch->cancel, 0) == WAIT_OBJECT_0) goto done;
+        HANDLE writer = FindOwnedPresentMonHandle();
+        if (!writer) break; // No PresentMon: reopen without requiring it.
+        HANDLE waits[2] = { watch->cancel, writer };
+        DWORD result = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+        CloseHandle(writer);
+        if (result != WAIT_OBJECT_0 + 1) goto done;
+    }
+
+    // A late Cyberpunk launch during PresentMon shutdown must not get a
+    // foreground UI. Observe it and give its exit another full grace window.
+    {
+        HANDLE lateGame = FindGameHandle();
+        if (lateGame) {
+            CloseHandle(lateGame);
+            deadline = GetTickCount64() + GAME_RELAUNCH_GRACE_MS;
+            goto observe_game;
+        }
+    }
+    if (WaitForSingleObject(watch->cancel, 0) != WAIT_OBJECT_0)
+        (void)PostMessageW(watch->window, TRAY_GAME_FINISHED,
+                           (WPARAM)watch->generation, 0);
+done:
+    HeapFree(GetProcessHeap(), 0, watch);
+    return 0;
+}
+
+static void CancelGameWatch(void)
+{
+    ++g_gameWatchGeneration; // invalidate previously queued completions
+    if (g_gameWatchCancel) SetEvent(g_gameWatchCancel);
+    if (g_gameWatchThread) {
+        WaitForSingleObject(g_gameWatchThread, INFINITE);
+        CloseHandle(g_gameWatchThread);
+        g_gameWatchThread = NULL;
+    }
+    if (g_gameWatchCancel) {
+        CloseHandle(g_gameWatchCancel);
+        g_gameWatchCancel = NULL;
+    }
+}
+
+static BOOL ArmGameWatch(const wchar_t *sessionId)
+{
+    if (!IsCaptureId(sessionId)) return FALSE;
+    CancelGameWatch();
+    g_gameWatchCancel = CreateEventW(NULL, TRUE, FALSE, NULL);
+    if (!g_gameWatchCancel) return FALSE;
+    GameWatch *watch = (GameWatch *)HeapAlloc(GetProcessHeap(),
+                                              HEAP_ZERO_MEMORY, sizeof(GameWatch));
+    if (!watch) {
+        CancelGameWatch();
+        return FALSE;
+    }
+    watch->cancel = g_gameWatchCancel;
+    watch->window = g_window;
+    watch->generation = g_gameWatchGeneration;
+    wcscpy_s(watch->sessionId, ARRAYSIZE(watch->sessionId), sessionId);
+    g_gameWatchThread = CreateThread(NULL, 0, WatchGameAndReopen, watch, 0, NULL);
+    if (!g_gameWatchThread) {
+        HeapFree(GetProcessHeap(), 0, watch);
+        CancelGameWatch();
+        return FALSE;
+    }
+    return TRUE;
+}
+
 static BOOL StopBundledPresentMon(const wchar_t *exe, HANDLE writer)
 {
     wchar_t cmd[MAX_PATH * 4 + 100];
@@ -327,7 +482,7 @@ static int ObservePresentMon(DWORD pid, const wchar_t *id)
             CloseHandle(game);
             game = NULL;
             // Distinguish the final exit from an early transient game PID.
-            graceUntil = GetTickCount64() + 3000;
+            graceUntil = GetTickCount64() + GAME_RELAUNCH_GRACE_MS;
             continue;
         }
         reason = "observer-wait-error";
@@ -418,14 +573,33 @@ static LRESULT CALLBACK TrayProc(HWND window, UINT message, WPARAM wp, LPARAM lp
 {
     if (message == g_taskbar_created) { AddTrayIcon(); return 0; }
     switch (message) {
+        case WM_COPYDATA: {
+            const COPYDATASTRUCT *copy = (const COPYDATASTRUCT *)lp;
+            if (!copy || copy->dwData != GCO_WATCH_COPYDATA ||
+                copy->cbData != 33 * sizeof(wchar_t) || !copy->lpData)
+                return FALSE;
+            const wchar_t *id = (const wchar_t *)copy->lpData;
+            if (id[32] != L'\0' || !IsCaptureId(id)) return FALSE;
+            return ArmGameWatch(id);
+        }
+        case TRAY_GAME_FINISHED:
+            if (g_gameWatchThread && (DWORD)wp == g_gameWatchGeneration) {
+                CancelGameWatch();
+                if (!LaunchOrShowGui())
+                    MessageBoxW(window, L"Could not reopen GCO after Cyberpunk ended.",
+                                L"GCO", MB_ICONERROR);
+            }
+            return 0;
         case TRAY_EVENT:
             if (lp == WM_LBUTTONUP || lp == WM_LBUTTONDBLCLK) {
+                CancelGameWatch();
                 if (!LaunchOrShowGui())
                     MessageBoxW(window, L"Could not reopen the GCO interface.", L"GCO", MB_ICONERROR);
             } else if (lp == WM_RBUTTONUP) TrayMenu();
             return 0;
         case WM_COMMAND:
             if (LOWORD(wp) == TRAY_OPEN) {
+                CancelGameWatch();
                 if (!LaunchOrShowGui())
                     MessageBoxW(window, L"Could not reopen the GCO interface.", L"GCO", MB_ICONERROR);
             } else if (LOWORD(wp) == TRAY_EXIT) {
@@ -440,6 +614,7 @@ static LRESULT CALLBACK TrayProc(HWND window, UINT message, WPARAM wp, LPARAM lp
             }
             return 0;
         case WM_DESTROY:
+            CancelGameWatch();
                     Shell_NotifyIconW(NIM_DELETE, &g_icon);
             PostQuitMessage(0);
             return 0;
@@ -510,6 +685,30 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR commandLine, int show)
         }
         if (args) LocalFree(args);
         return result;
+    }
+
+    if (commandLine && wcsncmp(commandLine, L"--watch-game ", 13) == 0) {
+        int count = 0;
+        LPWSTR *args = CommandLineToArgvW(GetCommandLineW(), &count);
+        int code = 8;
+        if (args && count == 3 && wcscmp(args[1], L"--watch-game") == 0 &&
+            IsCaptureId(args[2])) {
+            wchar_t name[80];
+            swprintf_s(name, ARRAYSIZE(name),
+                       L"Local\\GCO_Tray_%016llX", (unsigned long long)RootHash(g_root));
+            HWND owner = FindWindowW(L"GCO.Native.Tray.Window", name);
+            if (owner) {
+                COPYDATASTRUCT data = { GCO_WATCH_COPYDATA,
+                                        33 * sizeof(wchar_t), args[2] };
+                DWORD_PTR accepted = 0;
+                if (SendMessageTimeoutW(owner, WM_COPYDATA, 0, (LPARAM)&data,
+                                        SMTO_ABORTIFHUNG | SMTO_BLOCK, 2000,
+                                        &accepted) && accepted)
+                    code = 0;
+            }
+        }
+        if (args) LocalFree(args);
+        return code;
     }
 
     if (commandLine && (wcscmp(commandLine, L"--tray-exit") == 0 ||

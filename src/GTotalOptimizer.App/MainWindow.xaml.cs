@@ -647,6 +647,36 @@ public partial class MainWindow : Window
         return !IsVisible;
     }
 
+    // Arm the native tray with this attempt's existing 128-bit identity
+    // BEFORE unloading WPF. No new elevation or resident .NET process.
+    private bool ArmNativeGameReopen(string game)
+    {
+        try
+        {
+            var id = Workflow.ReadRecoverySessionId(game)
+                ?? throw new InvalidOperationException("Capture identity unavailable.");
+            var launcher = Path.Combine(packageRoot, PortablePackagePaths.RootLauncherName);
+            using var control = Process.Start(new ProcessStartInfo(launcher)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = packageRoot,
+                ArgumentList = { "--watch-game", id }
+            }) ?? throw new InvalidOperationException("Native game observer unavailable.");
+            if (!control.WaitForExit(2500) || control.ExitCode != 0)
+                throw new InvalidOperationException("Native tray rejected the game watcher.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Keep WPF usable if the native tray has unexpectedly vanished.
+            // Never claim automatic reopening when no watcher was armed.
+            Trace.TraceWarning("GCO native game-exit watcher: " + ex);
+            PinStatus("Cyberpunk started. Automatic return unavailable; GCO remains open.");
+            return false;
+        }
+    }
+
     private void GameStarted(int pid)
     {
         launchProcessGuardUntilUtc = DateTime.MinValue;
@@ -1367,7 +1397,7 @@ public partial class MainWindow : Window
             // Handoff when the launch request succeeds. The native tray and
             // observer are independent of whether Cyberpunk is observable
             // yet; the user can reopen GCO after a slow start or crash.
-            if (!launched || !HibernateAfterLaunch())
+            if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
         }
     }
