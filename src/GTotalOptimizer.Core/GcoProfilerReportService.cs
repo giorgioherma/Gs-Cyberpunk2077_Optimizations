@@ -45,6 +45,36 @@ public static class GcoProfilerReportService
         Path.Combine(CollectedCaptureStore.SessionFolder(packageRoot, sessionId),
             "Reports", HtmlFile);
 
+    // A partial report directory is never an analyzer-ready capture. Verify
+    // both source-owned reports and the combined session identity in RESULTS.
+    public static bool HasCompletedReport(string packageRoot, string sessionId)
+    {
+        var html = ReportFile(packageRoot, sessionId);
+        var folder = Path.GetDirectoryName(html)!;
+        if (!File.Exists(html) ||
+            !File.Exists(Path.Combine(folder, JsonFile)) ||
+            !File.Exists(Path.Combine(folder, "CET", "CET_Report.html")) ||
+            !File.Exists(Path.Combine(folder, "CET", "CET_Resolver_Input.json")) ||
+            !File.Exists(Path.Combine(folder, "GRSP", "GRSP_Report.html")) ||
+            !File.Exists(Path.Combine(folder, "GRSP", "GRSP_Summary.json")))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(
+                Path.Combine(folder, JsonFile)));
+            var root = document.RootElement;
+            return root.TryGetProperty("schemaVersion", out var schema) &&
+                schema.ValueKind == JsonValueKind.String &&
+                schema.GetString() == "gco.profiler.report.v1" &&
+                root.TryGetProperty("sessionId", out var identity) &&
+                identity.ValueKind == JsonValueKind.String &&
+                identity.GetString() == sessionId;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+        catch (JsonException) { return false; }
+    }
+
     public static async Task<GcoProfilerReportOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
         CancellationToken cancellationToken = default)
@@ -61,11 +91,12 @@ public static class GcoProfilerReportService
         var machine = Path.Combine(outputFolder, JsonFile);
         // Results are derived, never part of the sealed native owner inventory.
         // A completed report is immutable; do not replace it on reopening GCO.
-        if (File.Exists(html) && File.Exists(machine))
+        if (File.Exists(html) || File.Exists(machine))
         {
+            if (!HasCompletedReport(packageRoot, sessionId))
+                throw new InvalidDataException(
+                    "Previous profiler report is incomplete; captured evidence is preserved.");
             using var existing = JsonDocument.Parse(File.ReadAllText(machine));
-            if (existing.RootElement.GetProperty("sessionId").GetString() != sessionId)
-                throw new InvalidDataException("Previous GCO report belongs to a different session.");
             var frameCount = existing.RootElement.GetProperty("presentMonFrameCount").GetInt32();
             return new(html, machine, frameCount, 0, 0);
         }

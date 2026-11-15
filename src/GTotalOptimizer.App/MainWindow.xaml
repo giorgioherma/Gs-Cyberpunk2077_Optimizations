@@ -902,8 +902,8 @@
                             IsEnabled="False"/>
                 </Grid>
 
-                <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
-                      Background="#000000" Margin="0,3,0,3">
+                <Grid x:Name="ResultsPage" Grid.Row="0" Visibility="Collapsed"
+                      Background="Transparent" Margin="0,3,0,3">
                     <ScrollViewer x:Name="ResultsScrollViewer" FocusVisualStyle="{x:Null}"
                                   VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
@@ -916,36 +916,16 @@
                                        FontSize="23" FontWeight="ExtraBold"/>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        TextWrapping="Wrap" FontSize="13" Margin="0,6,0,0"/>
-                            <Grid Margin="0,12,0,0">
-                                <fx:ChamferOutline Fill="#081012" Stroke="#36535B"
-                                                   StrokeThickness="2.0" CornerCut="14"
-                                                   IsHitTestVisible="False"/>
-                                <StackPanel Margin="12">
-                                    <TextBlock Text="CET   /   LUA  ·  NATIVE  ·  G-GC"
-                                               Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                               FontWeight="Bold" FontSize="14"/>
-                                    <TextBox x:Name="CetReportText" Text="No verified CET capture analyzed."
-                                             IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                                             Background="#081012" Foreground="#B7CED6" BorderThickness="0"
-                                             MinHeight="70" Margin="0,7,0,0"
-                                             VerticalScrollBarVisibility="Auto"/>
-                                </StackPanel>
-                            </Grid>
-                            <Grid Margin="0,10,0,0">
-                                <fx:ChamferOutline Fill="#081012" Stroke="#36535B"
-                                                   StrokeThickness="2.0" CornerCut="14"
-                                                   IsHitTestVisible="False"/>
-                                <StackPanel Margin="12">
-                                    <TextBlock Text="REDscript  /  CALLSITES  ·  COMPILATION"
-                                               Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                               FontWeight="Bold" FontSize="14"/>
-                                    <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
-                                             IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                                             Background="#081012" Foreground="#B7CED6" BorderThickness="0"
-                                             MinHeight="70" Margin="0,7,0,0"
-                                             VerticalScrollBarVisibility="Auto"/>
-                                </StackPanel>
-                            </Grid>
+                            <!-- No second panel: reuse the black canvas and
+                                 existing V side-image fade behind these texts. -->
+                            <StackPanel Margin="3,18,0,0">
+                                <TextBlock x:Name="CetReportText" Text="CET capture not collected."
+                                           Foreground="#B7CED6" FontSize="13"
+                                           TextWrapping="Wrap" Margin="0,0,0,7"/>
+                                <TextBlock x:Name="RedReportText" Text="REDscript capture not collected."
+                                           Foreground="#B7CED6" FontSize="13"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
                             <Grid Margin="0,12,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -953,15 +933,15 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"/>
-                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE CET PASS"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
-                                        Click="GenerateCetPass_Click"/>
+                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"
+                                        Click="Analyze_Click"/>
+                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE ZIP"
+                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"/>
                                 <Button x:Name="OpenResultsButton" Grid.Column="2" Content="OPEN RESULTS"
                                         Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
-                            <TextBlock Text="CET pass uses the existing source-owned Resolver. REDscript generation and the combined ZIP are separate stages."
+                            <TextBlock Text="Resolver analysis and unified ZIP generation will be enabled when both backends are integrated."
                                        Foreground="#98A9B1" TextWrapping="Wrap" FontSize="12"
                                        Margin="3,9,0,0"/>
                         </StackPanel>
