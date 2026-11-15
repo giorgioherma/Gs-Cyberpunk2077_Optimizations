@@ -101,71 +101,36 @@ foreach ($project in @(
 if ($Integrated) {
   & ./integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1
   if ($LASTEXITCODE -ne 0) { throw 'GCO owner source adaptation failed' }
-  # Native instrumentation must come from independent GRSP manual CI.
-  # No fallback cargo build, source patch, or package cache on this path.
-  if (-not [string]::IsNullOrWhiteSpace($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT)) {
-    $artifact=Join-Path (Get-Location) $env:GCO_GRSP_NATIVE_ARTIFACT_ROOT
-    $proofPath=Join-Path $artifact 'provenance.json'
-    if (!(Test-Path -LiteralPath $proofPath -PathType Leaf)) {
-      throw 'Missing independent GRSP native artifact provenance'
-    }
-    $proof=Get-Content -LiteralPath $proofPath -Raw | ConvertFrom-Json
-    $ownerSource=(git -C vendor-grsp rev-parse HEAD).Trim()
-    if ($ownerSource.Length -ne 40 -or $proof.schema -ne 1 -or
-        $proof.sourceCommit -ne $ownerSource -or
-        $proof.nativeVariant -ne 'gco_explicit_f11' -or
-        $proof.strictF11StopOnly -ne $true -or
-        $proof.dllSha256 -notmatch '^[0-9a-fA-F]{64}$') {
-      throw 'GRSP instrumentation DLL source/F11/SHA provenance refused'
-    }
-    $native=Join-Path $artifact 'G-REDscript-Profiler.dll'
-    VerifyFile $native $proof.dllSha256
-    $destination=Join-Path $gr 'payload/G-REDscript-Profiler.dll'
-    Copy-Item -LiteralPath $native -Destination $destination -Force
-    VerifyFile $destination $proof.dllSha256
-    Write-Host 'PASS verified GRSP native instrumentation imported; no GCO native build'
+  # Never rebuild native GRSP in GCO. The independent GRSP owner CI
+  # emits the exact F11/Developer-CSV variant, provenance and SHA-256.
+  if ([string]::IsNullOrWhiteSpace($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT)) {
+    throw 'Missing GRSP owner-native artifact; old GRSP DLL is not an acceptable fallback'
   }
-  else {
-  # Existing stable source-adapter build remains the baseline for ordinary CI.
-  # The official release Cargo.lock accompanies the verified release package.
-  $lock=Join-Path $grSource 'docs/Cargo.lock'
-  if (!(Test-Path $lock -PathType Leaf)) { throw 'Pinned GRSP Cargo.lock absent from verified release' }
-  Copy-Item $lock 'vendor-grsp/Cargo.lock' -Force
-  $cacheRoot=Join-Path (Get-Location) '.gco-grsp-native'
-  $cachedNative=Join-Path $cacheRoot 'G-REDscript-Profiler.dll'
-  $cacheProof=Join-Path $cacheRoot 'proof.json'
-  $destination=Join-Path $gr 'payload/G-REDscript-Profiler.dll'
-  $reuse=Test-Path -LiteralPath $cacheProof -PathType Leaf
-  if ($reuse) {
-    $proof=Get-Content -LiteralPath $cacheProof -Raw | ConvertFrom-Json
-    if (!$env:GCO_GRSP_NATIVE_CACHE_KEY -or $proof.schema -ne 1 -or
-        $proof.key -ne $env:GCO_GRSP_NATIVE_CACHE_KEY) {
-      throw 'Cached GRSP native identity differs from the pinned Rust and adapter inputs.'
-    }
-    VerifyFile $cachedNative $proof.sha256
-    Copy-Item -LiteralPath $cachedNative -Destination $destination -Force
-    Write-Host 'PASS exact-input cached GCO GRSP native DLL; Rust recompilation skipped'
+  $artifact=Join-Path (Get-Location) $env:GCO_GRSP_NATIVE_ARTIFACT_ROOT
+  $proofPath=Join-Path $artifact 'provenance.json'
+  if (!(Test-Path -LiteralPath $proofPath -PathType Leaf)) {
+    throw 'Missing independent GRSP native producer provenance'
   }
-  else {
-    Push-Location 'vendor-grsp'
-    try {
-      & cargo build --release --locked
-      if ($LASTEXITCODE -ne 0) { throw 'GCO-specific GRSP native build failed' }
-    } finally { Pop-Location }
-    $native=Join-Path 'vendor-grsp/target/release' 'g_redscript_profiler.dll'
-    if (!(Test-Path $native -PathType Leaf)) { throw 'GCO GRSP native DLL missing after source build' }
-    Copy-Item -LiteralPath $native -Destination $destination -Force
-    if ($env:GCO_GRSP_NATIVE_CACHE_KEY) {
-      New-Item -ItemType Directory -Force $cacheRoot | Out-Null
-      Copy-Item -LiteralPath $native -Destination $cachedNative -Force
-      $digest=(Get-FileHash -LiteralPath $cachedNative -Algorithm SHA256).Hash.ToLowerInvariant()
-      @{ schema=1; key=$env:GCO_GRSP_NATIVE_CACHE_KEY; sha256=$digest } |
-        ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $cacheProof -Encoding UTF8
-      VerifyFile $cachedNative $digest
-      Write-Host 'PASS compiled GCO GRSP native DLL staged for exact-input reuse'
-    }
+  $proof=Get-Content -LiteralPath $proofPath -Raw | ConvertFrom-Json
+  $source=(git -C vendor-grsp rev-parse HEAD).Trim()
+  if ($source.Length -ne 40 -or $proof.schema -ne 1 -or
+      $proof.producer -ne 'GRSP_NATIVE_CALLBACK_INSTRUMENTATION' -or
+      $proof.sourceCommit -ne $source -or
+      $proof.nativeVariant -ne 'gco_explicit_f11' -or
+      $proof.strictF11StopOnly -ne $true -or
+      $proof.dllSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+    throw 'GRSP owner-native source, explicit-F11 or hash proof failed'
   }
+  $native=Join-Path $artifact 'G-REDscript-Profiler.dll'
+  VerifyFile $native $proof.dllSha256
+  $dest=Join-Path $gr 'payload/G-REDscript-Profiler.dll'
+  Copy-Item -LiteralPath $native -Destination $dest -Force
+  VerifyFile $dest $proof.dllSha256
+  $text=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Resolve-Path $dest)))
+  foreach($marker in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv')) {
+    if (!$text.Contains($marker)) { throw "GRSP DLL missing instrumentation contract: $marker" }
   }
+  Write-Host 'PASS source-owned GRSP native instrumentation in the GCO package'
   $grManifest=Join-Path $gr 'MANIFEST.json'
   $grMetadata=Get-Content $grManifest -Raw | ConvertFrom-Json
   $grMetadata.shutdown_behavior='GCO: incomplete captures discarded; explicit F11 stop required'
@@ -406,7 +371,7 @@ Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6
 Write-Host 'PASS official PresentMon CLI 2.6.0'
 
 # One coreclr in entire bundle. CET native payload remains source-owned and pinned.
-# Integrated GRSP native payload is built from its pinned source with GCO-only F11 semantics.
+# Integrated GRSP native payload is imported unchanged from GRSP native CI.
 $core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
 if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Expected one shared .NET runtime; found $($core.Count)"
@@ -427,9 +392,7 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
     $nativeOwnerRun -notmatch '^[1-9][0-9]{5,18}$') {
   throw 'Owner-native provenance run ID missing for GCO instrumentation'
 }
-$nativeMode=if ($nativeOwnerRun) { 'GRSP_CI_MANUAL_GCO_STRICT_F11' } else {
-  'LEGACY_VERIFIED_GCO_DISPOSABLE_SOURCE'
-}
+$nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
 $provenance=@{
   testOnly=$true
   cet=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
