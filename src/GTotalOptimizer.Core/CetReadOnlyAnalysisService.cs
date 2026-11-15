@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -7,8 +8,8 @@ namespace GTotalOptimizer.Core;
 /// <summary>
 /// Page 2 read-only CET analysis. The source owner remains responsible for
 /// CET capture reporting, Resolver interpretation and G-GC. This class only
-/// validates GCO restoration, immutable inputs and a disposable execution
-/// workspace; it NEVER generates or applies an optimization pass.
+/// consumes COLLECT's indexed evidence in a disposable workspace. CET's
+/// existing source-owned Resolver owns all optimization selection and ZIP generation.
 /// </summary>
 public sealed record CetAnalysisOutcome(
     string SessionId, int InstalledCetMods, int CapturedCetFiles, int CapturedRedscriptFiles,
@@ -18,6 +19,8 @@ public sealed record CetAnalysisOutcome(
     string FrameEvidence, string RuntimeInterpretation, string SourceVerification,
     string[] BlacklistedMods);
 
+public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount);
+
 public sealed class CetReadOnlyAnalysisService
 {
     private static readonly TimeSpan ResolverTimeout = TimeSpan.FromMinutes(4);
@@ -26,21 +29,27 @@ public sealed class CetReadOnlyAnalysisService
     public async Task<CetAnalysisOutcome> AnalyzeAsync(
         string packageRoot, string gameRoot, string sessionId,
         CancellationToken cancellationToken = default)
+        => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
+            generatePass: false, cancellationToken).ConfigureAwait(false)).Analysis;
+
+    public async Task<CetPassOutcome> GenerateCetPassAsync(
+        string packageRoot, string gameRoot, string sessionId,
+        CancellationToken cancellationToken = default)
+        => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
+            generatePass: true, cancellationToken).ConfigureAwait(false)).Pass
+            ?? throw new InvalidOperationException("CET owner did not return a pass.");
+
+    private async Task<(CetAnalysisOutcome Analysis, CetPassOutcome? Pass)> ExecuteAsync(
+        string packageRoot, string gameRoot, string sessionId,
+        bool generatePass, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         packageRoot = Path.GetFullPath(packageRoot);
         gameRoot = Path.GetFullPath(gameRoot);
-        var workflow = new UnifiedProfilerWorkflow(packageRoot);
-        if (workflow.HasRecoveryJournal || workflow.HasOwnerRestoreState(gameRoot))
-            throw new InvalidOperationException("Restore both original profilers before analyzing.");
-        if (IsCyberpunkRunning())
-            throw new InvalidOperationException("Close Cyberpunk before analyzing the restored capture.");
-
-        // ReadRestored validates the exact session/game identity, restored
-        // owner state and SHA-256/length of every sealed CET/GRSP/PresentMon
-        // file. Never rewrite collection.json or fake a profiler handoff.
-        var saved = CollectedCaptureStore.ReadRestored(
-            packageRoot, gameRoot, sessionId);
+        // COLLECT owns admission; CONTINUE owns uninstall. ANALYZE and
+        // GENERATE consume the selected indexed capture independently of
+        // profiler install/restore state. No second lifecycle gate.
+        var saved = CollectedCaptureStore.Read(packageRoot, gameRoot, sessionId);
         if (saved.Cet is null || saved.Redscript is null)
             throw new InvalidDataException("Both collected native owner archives are required.");
 
@@ -128,11 +137,48 @@ public sealed class CetReadOnlyAnalysisService
             if (!SameInventory(originalSources, now))
                 throw new InvalidDataException(
                     "Live CET source changed during analysis. No result can be trusted; capture is untouched.");
-            _ = CollectedCaptureStore.ReadRestored(packageRoot, gameRoot, sessionId);
-            if (workflow.HasRecoveryJournal || workflow.HasOwnerRestoreState(gameRoot) ||
-                IsCyberpunkRunning())
-                throw new InvalidOperationException(
-                    "Profiler/game state changed during analysis; results are invalid.");
+            // The source owner already recomposes the current installed tree
+            // during generation. Never publish if that tree drifted mid-pass.
+            CetPassOutcome? generatedPass = null;
+            if (generatePass)
+            {
+                var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
+                using var generation = await RunOwnerAsync(executable,
+                    ["--capture", stagedCapture, "--game", gameRoot,
+                     "--generate-pass", "--pass-output", temporaryZip, "--json"],
+                    packageRoot, cancellationToken).ConfigureAwait(false);
+                var cliPass = generation.RootElement;
+                RequireOk(cliPass, "CET pass generator");
+                if (!cliPass.TryGetProperty("pass", out var pass) ||
+                    pass.ValueKind != JsonValueKind.Object ||
+                    Text(pass, "ZipPath") != temporaryZip)
+                    throw new InvalidDataException("CET owner returned an invalid pass location.");
+                var expectedFiles = Nonnegative(pass, "FileCount");
+                if (expectedFiles == 0 || !File.Exists(temporaryZip))
+                    throw new InvalidDataException("CET owner produced no optimization ZIP.");
+                VerifyCetOverlay(temporaryZip, expectedFiles);
+                if (!SameInventory(originalSources,
+                        FingerprintLiveSource(source, cancellationToken)))
+                    throw new InvalidDataException(
+                        "CET source changed while generating; ZIP was not published.");
+
+                // Only a clean game-relative ZIP reaches RESULTS, never the
+                // owner report/manifest, profiler binaries, or source files.
+                var results = Path.Combine(packageRoot, "RESULTS");
+                Directory.CreateDirectory(results);
+                var destination = Path.Combine(results, "G-CET_PASS_" + sessionId + ".zip");
+                if (File.Exists(destination))
+                    throw new IOException("A CET pass already exists for this capture; it was not overwritten.");
+                var publishing = destination + ".partial-" + Guid.NewGuid().ToString("N");
+                try
+                {
+                    File.Copy(temporaryZip, publishing, overwrite: false);
+                    File.Move(publishing, destination, overwrite: false);
+                }
+                finally { if (File.Exists(publishing)) File.Delete(publishing); }
+                generatedPass = new CetPassOutcome(destination, expectedFiles,
+                    Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"));
+            }
 
             var grspCount = saved.Redscript.Files.Count;
             var usedFrame = saved.FrameTimeEvidence is not null;
@@ -142,7 +188,7 @@ public sealed class CetReadOnlyAnalysisService
                     ? blocked.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String)
                         .Select(x => x.GetString() ?? "").ToArray()
                     : Array.Empty<string>();
-            return new CetAnalysisOutcome(
+            var analysis = new CetAnalysisOutcome(
                 sessionId, installed, saved.Cet.Files.Count, grspCount,
                 usedFrame, saved.PresentMonAlignedFrames,
                 Nonnegative(cli, "FamilyCount"), Nonnegative(cli, "RankedCallbackCount"),
@@ -153,6 +199,7 @@ public sealed class CetReadOnlyAnalysisService
                 sourceMode,
                 "CURRENT_SOURCE_READ_ONLY; CAPTURE_SOURCE_IDENTITY_UNVERIFIED",
                 blacklisted);
+            return (analysis, generatedPass);
         }
         finally
         {
@@ -167,11 +214,25 @@ public sealed class CetReadOnlyAnalysisService
         }
     }
 
-    private static bool IsCyberpunkRunning()
+    private static void VerifyCetOverlay(string path, int expectedFiles)
     {
-        var found = Process.GetProcessesByName("Cyberpunk2077");
-        try { return found.Length != 0; }
-        finally { foreach (var process in found) process.Dispose(); }
+        // Inspect only the owner's actual output, do not transform or repair.
+        using var archive = ZipFile.OpenRead(path);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (archive.Entries.Count != expectedFiles || expectedFiles < 1)
+            throw new InvalidDataException("CET generated ZIP file inventory disagrees with owner manifest.");
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (!seen.Add(name) || entry.Length == 0 ||
+                name.Contains('\\') || name.StartsWith('/') ||
+                name.Split('/').Any(x => x is "" or "." or "..") ||
+                !(name.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
+                    StringComparison.OrdinalIgnoreCase) ||
+                  name.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
+                    StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("CET generated ZIP contains an invalid game-relative entry.");
+        }
     }
 
     private static string VerifyOwnedResolver(string root)
