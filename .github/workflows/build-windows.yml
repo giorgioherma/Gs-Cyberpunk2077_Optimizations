@@ -4,7 +4,7 @@ name: Gs-Cyberpunk2077_Optimizer
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, feature/presentmon-resolver-integration ]
     paths:
       - '.github/workflows/build-windows.yml'
       - 'Directory.Build.props'
