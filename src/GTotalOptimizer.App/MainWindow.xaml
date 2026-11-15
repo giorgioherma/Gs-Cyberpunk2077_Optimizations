@@ -954,13 +954,14 @@
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
                                         Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"/>
-                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE ZIP"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"/>
+                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE CET PASS"
+                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
+                                        Click="GenerateCetPass_Click"/>
                                 <Button x:Name="OpenResultsButton" Grid.Column="2" Content="OPEN RESULTS"
                                         Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
-                            <TextBlock Text="Generation remains disabled until source-aware CET and REDscript compilation checks pass."
+                            <TextBlock Text="CET pass uses the existing source-owned Resolver. REDscript generation and the combined ZIP are separate stages."
                                        Foreground="#98A9B1" TextWrapping="Wrap" FontSize="12"
                                        Margin="3,9,0,0"/>
                         </StackPanel>
