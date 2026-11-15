@@ -2,7 +2,10 @@ param(
     [Parameter(Mandatory=$true)][string]$FixtureZip,
     [Parameter(Mandatory=$true)][string]$PrivateSourceRoot,
     [Parameter(Mandatory=$true)][string]$ResolverDll,
-    [Parameter(Mandatory=$true)][string]$SourceAuditJson
+    [Parameter(Mandatory=$true)][string]$SourceAuditJson,
+    [Parameter(Mandatory=$true)][string]$OwnerCompilerScript,
+    [Parameter(Mandatory=$true)][string]$CompilerArchive,
+    [Parameter(Mandatory=$true)][string]$CleanBaselineArchive
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -203,6 +206,14 @@ try {
                 $preview.stagedFiles + ' observedLoopOperatorEdges=' +
                 $preview.measuredOperatorEdgesInApplicableLoops +
                 ' compilerValidated=false deployable=false originalSourceUnchanged=true')
+
+    # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
+    # The GCO harness must not duplicate its compiler logic or publish output.
+    $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
+    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GRSP_OWNER_R6_SCC_FULL_SOURCE_COMPILATION_FAILED'
+    }
 
     if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $zipBefore) {
         throw 'GRSP_REAL_CAPTURE_ARCHIVE_MUTATED'
