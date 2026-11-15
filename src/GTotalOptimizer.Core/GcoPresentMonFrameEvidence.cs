@@ -212,10 +212,16 @@ public static class GcoPresentMonFrameEvidence
         string stagedCetCaptureFolder)
     {
         var source = Path.GetFullPath(sealedCaptureFolder).TrimEnd(Path.DirectorySeparatorChar);
-        var destination = Path.GetFullPath(stagedCetCaptureFolder);
-        var relative = Path.GetRelativePath(source, destination);
-        if (relative == "." || relative != ".." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        var destination = Path.GetFullPath(stagedCetCaptureFolder).TrimEnd(Path.DirectorySeparatorChar);
+        // Path.GetRelativePath returns an ABSOLUTE destination for different
+        // Windows volumes; it is NOT evidence of child containment. Authorize
+        // a temp workspace on C: when the game/capture is on D:, while still
+        // rejecting exact equality or any actual descendant of the sealed
+        // session. Compare fully normalized native paths, not relative
+        // strings that assume both directories share one drive.
+        if (destination.Equals(source, StringComparison.OrdinalIgnoreCase) ||
+            destination.StartsWith(source + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Derived PresentMon chronology cannot be written inside sealed capture.");
         var result = Build(source, index, verifiedOverlap);
         var destinationFolder = Path.Combine(destination, "PresentMon");
