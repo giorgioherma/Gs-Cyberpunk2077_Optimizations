@@ -582,9 +582,7 @@ public partial class MainWindow : Window
             savedCapture = saved;
             UpdateResultTexts(saved);
             SetPortraitStage(PortraitStage.Collected);
-            CapturePage.Visibility = Visibility.Collapsed;
-            ResultsPage.Visibility = Visibility.Visible;
-            SetActiveTab(true);
+            ShowResultsPage();
             RefreshCompletedWorkspace();
         }
         catch (Exception ex)
@@ -593,6 +591,17 @@ public partial class MainWindow : Window
             PinStatus("Saved Analyze workspace unavailable. Capture files are unchanged.",
                 ex.ToString());
         }
+    }
+
+    // Page 2 occupies only the original content row. Preserve the same bottom
+    // console from Capture and release its space from the Continue button.
+    internal void ShowResultsPage()
+    {
+        CapturePage.Visibility = Visibility.Collapsed;
+        ResultsPage.Visibility = Visibility.Visible;
+        ContinueButton.Visibility = Visibility.Collapsed;
+        Grid.SetColumnSpan(ConsoleTextHost, 2);
+        SetActiveTab(true);
     }
 
     private void DispatchGameEvent(Action action)
@@ -1529,11 +1538,20 @@ public partial class MainWindow : Window
             }
             else SetPortraitStage(PortraitStage.Black);
 
+            // COLLECT finishes the actual reports now, before enabling CONTINUE.
+            // A report failure preserves sealed evidence and cannot block
+            // profiler restoration, but it must not claim resolver readiness.
+            SetStatus("Preparing CET, REDscript and PresentMon reports...");
+            var reportsReady = await GenerateCollectedProfilerReportAsync(game, saved.SessionId);
+            UpdateResultTexts(saved);
             var nativeWarning = native.Ok &&
                 (saved.CetReadyBeforeAttempt || saved.RedscriptReadyBeforeAttempt)
                     ? native.Detail : native.Ok ? null : native.Detail;
-            PinStatus(UserFacingConsoleText.CollectionGuidance(saved),
+            PinStatus(reportsReady
+                    ? "Results and reports saved. Click CONTINUE."
+                    : "Capture saved. Reports incomplete; CONTINUE still restores profilers.",
                 "Collection: " + native.Detail +
+                " | Reports: " + (reportsReady ? "COMPLETE" : "INCOMPLETE") +
                 (frameWarning is null ? "" : " | PresentMon: " + frameWarning) +
                 (nativeWarning is null ? "" : " | Native: " + nativeWarning));
         }
@@ -1573,17 +1591,11 @@ public partial class MainWindow : Window
             SetBusy(false);
             await RefreshSourceAsync();
         }
-        // Reporting belongs to COLLECT's immutable profiler evidence. It
-        // never gates CONTINUE, owner restoration or Resolver generation.
-        if (sealedSuccess && savedCapture is { } complete)
-            _ = GenerateCollectedProfilerReportAsync(game, complete.SessionId);
     }
 
-    private async Task GenerateCollectedProfilerReportAsync(string game, string sessionId)
+    private async Task<bool> GenerateCollectedProfilerReportAsync(string game, string sessionId)
     {
-        if (profilerReportRunning || File.Exists(
-                GcoProfilerReportService.ReportFile(packageRoot, sessionId)))
-            return;
+        if (profilerReportRunning) return false;
         profilerReportRunning = true;
         try
         {
@@ -1591,35 +1603,29 @@ public partial class MainWindow : Window
                 GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
-            if (IsLoaded && completedSessionId == sessionId &&
-                completedGameRoot == game &&
-                !RedReportText.Text.Contains("Combined profiler report:", StringComparison.Ordinal))
-                RedReportText.Text += Environment.NewLine +
-                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
+            return GcoProfilerReportService.HasCompletedReport(packageRoot, sessionId);
         }
         catch (Exception ex)
         {
-            // Failure to render derived reports must never unseal a successful
-            // collection or strand the profiler restore workflow.
+            // Keep the immutable capture and the existing owner-restore path.
             Trace.TraceWarning("GCO combined profiler reporting: " + ex);
+            return false;
         }
         finally { profilerReportRunning = false; }
     }
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
+        var reportsReady = GcoProfilerReportService.HasCompletedReport(packageRoot, saved.SessionId);
         CetReportText.Text = saved.Cet is null
-            ? "CET native capture not available."
-            : "CET capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
+            ? "CET: NOT_CAPTURED"
+            : "CET: captured" + (reportsReady ? " · report saved" : " · reports incomplete");
         RedReportText.Text = saved.Redscript is null
-            ? "REDscript native capture not available."
-            : "REDscript capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
+            ? "REDscript: NOT_CAPTURED"
+            : "REDscript: captured" + (reportsReady ? " · report saved" : " · reports incomplete");
         RedReportText.Text += saved.FrameTimeCsv is null
-            ? Environment.NewLine + "PresentMon: NOT_CAPTURED."
-            : Environment.NewLine + "PresentMon CSV: " + saved.FrameTimeCsv;
-        if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
-            RedReportText.Text += Environment.NewLine +
-                "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
+            ? Environment.NewLine + "PresentMon: NOT_CAPTURED"
+            : Environment.NewLine + "PresentMon: captured";
     }
 
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
@@ -1629,9 +1635,7 @@ public partial class MainWindow : Window
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
-            CapturePage.Visibility = Visibility.Collapsed;
-            ResultsPage.Visibility = Visibility.Visible;
-            SetActiveTab(true);
+            ShowResultsPage();
             return;
         }
         var game = inspection.GameRoot;
@@ -1673,9 +1677,7 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("Workspace reopening metadata: " + ex);
             }
             UpdateResultTexts(saved);
-            CapturePage.Visibility = Visibility.Collapsed;
-            ResultsPage.Visibility = Visibility.Visible;
-            SetActiveTab(true);
+            ShowResultsPage();
             RefreshCompletedWorkspace();
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
@@ -1689,24 +1691,36 @@ public partial class MainWindow : Window
             return;
         try
         {
-            var saved = CollectedCaptureStore.Read(packageRoot, completedGameRoot, completedSessionId);
+            var saved = CollectedCaptureStore.ReadRestored(
+                packageRoot, completedGameRoot, completedSessionId);
             if (!HasNative(saved))
                 throw new InvalidDataException("The restored capture has no CET or REDscript native evidence.");
             UpdateResultTexts(saved);
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            ResultsStatusText.Text = "CET Resolver will use the collected data and current installed source.";
+            var reportsReady = GcoProfilerReportService.HasCompletedReport(packageRoot, saved.SessionId);
+            ResultsStatusText.Text = reportsReady
+                ? "Results and reports saved. Profilers restored and uninstalled."
+                : "Captures saved and profilers restored. Profiler reports incomplete.";
+            PinStatus(reportsReady
+                ? "Reports saved in RESULTS. Profilers uninstalled. ANALYZE next."
+                : "Capture saved; reports incomplete. Profilers uninstalled.");
             OpenResultsButton.IsEnabled = true;
-            GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
-                analyzedSessionId == saved.SessionId;
-            if (!analysisRunning && analyzedSessionId != saved.SessionId)
-                _ = RunReadOnlyAnalysisAsync(saved);
+            AnalyzeButton.IsEnabled = reportsReady;
+            GenerateButton.IsEnabled = false;
         }
         catch (Exception ex)
         {
             ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
+            AnalyzeButton.IsEnabled = false;
+            GenerateButton.IsEnabled = false;
             OpenResultsButton.IsEnabled = false;
         }
     }
+
+    // The current Page 2 is a validated handoff, not an implicit analysis
+    // request. The future combined CET + GRSP Resolver will own this action.
+    private void Analyze_Click(object sender, RoutedEventArgs e) =>
+        PinStatus("ANALYZE is reserved for the combined CET and REDscript Resolvers.");
 
     private async Task RunReadOnlyAnalysisAsync(CollectedCaptureIndex saved)
     {
