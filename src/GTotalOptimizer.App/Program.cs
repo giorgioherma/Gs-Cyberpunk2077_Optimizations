@@ -68,6 +68,7 @@ internal static class Program
             }
             if (!extraElevationRefused)
                 throw new InvalidOperationException("PresentMon stop requested a second elevation.");
+            VerifyAbsentPresentMonRecovery();
             using var events = new GameProcessEvents("cmd.exe");
             var starts = new ConcurrentQueue<int>();
             var exits = new ConcurrentQueue<int>();
@@ -103,6 +104,85 @@ internal static class Program
         {
             Console.Error.WriteLine("FAIL Windows game process notifications: " + ex);
             return 5;
+        }
+    }
+
+    // A game-exited PresentMon must never keep RESTORE locked just because
+    // the controller record or observer event remains in RESULTS. Preserve
+    // original CSV evidence and refuse to modify any source-owner files.
+    private static void VerifyAbsentPresentMonRecovery()
+    {
+        var processes = Process.GetProcessesByName("PresentMon");
+        try
+        {
+            if (processes.Length != 0)
+                throw new InvalidOperationException(
+                    "PresentMon recovery smoke requires no active writer.");
+        }
+        finally { foreach (var process in processes) process.Dispose(); }
+
+        var root = Path.Combine(Path.GetTempPath(), "GCO-stop-test-" +
+            Guid.NewGuid().ToString("N"));
+        var id = Guid.NewGuid().ToString("N");
+        var directory = Path.Combine(root, "RESULTS", "GCO-Capture-" + id, "PresentMon");
+        var csv = Path.Combine(directory, "PresentMon.csv");
+        var controller = Path.Combine(directory, "PresentMon-controller.json");
+        var tracking = Path.Combine(root, "RESULTS", "GCO-current-PresentMon.txt");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(csv, "Application,CPUStartQPC\nCyberpunk2077.exe,12345678\n");
+            var csvProof = File.ReadAllText(csv);
+
+            // Stale fully formed controller: its old process and observer no
+            // longer exist. The same tracked path must still be eligible for
+            // collection when clearTracking=false.
+            File.WriteAllText(tracking, csv);
+            File.WriteAllText(controller, JsonSerializer.Serialize(new
+            {
+                ok = true, action = "restart", pid = int.MaxValue, sessionId = id
+            }));
+            var kept = PresentMonCaptureController.StopTrackedAsync(
+                root, clearTracking: false).GetAwaiter().GetResult();
+            if (!kept.Stopped || kept.Csv != csv || !File.Exists(tracking))
+                throw new InvalidOperationException(
+                    "Already-exited writer did not preserve Collect's CSV pointer.");
+
+            // RESTORE retires only its stale pointer, never the original CSV.
+            var stopped = PresentMonCaptureController.StopTrackedAsync(
+                root).GetAwaiter().GetResult();
+            if (!stopped.Stopped || stopped.Csv != csv || File.Exists(tracking))
+                throw new InvalidOperationException(
+                    "Already-exited writer kept RESTORE in a pending state.");
+
+            // Missing or corrupt controller records also cannot hold recovery
+            // pending when the operating system has no PresentMon process.
+            foreach (var broken in new[] { "not-json", "" })
+            {
+                File.WriteAllText(tracking, csv);
+                if (broken.Length == 0) File.Delete(controller);
+                else File.WriteAllText(controller, broken);
+                stopped = PresentMonCaptureController.StopTrackedAsync(
+                    root).GetAwaiter().GetResult();
+                if (!stopped.Stopped || File.Exists(tracking))
+                    throw new InvalidOperationException(
+                        "Missing/corrupt PresentMon controller blocked completed cleanup.");
+            }
+
+            // Invalid stale tracking metadata must clear ONLY after proving
+            // no writer remains, without deleting any preserved frame data.
+            File.WriteAllText(tracking, Path.Combine(root, "outside", "PresentMon.csv"));
+            stopped = PresentMonCaptureController.StopTrackedAsync(
+                root).GetAwaiter().GetResult();
+            if (!stopped.Stopped || File.Exists(tracking) ||
+                File.ReadAllText(csv) != csvProof)
+                throw new InvalidOperationException(
+                    "Stale PresentMon tracking either blocked RESTORE or damaged the CSV.");
+            Console.WriteLine("PASS stopped PresentMon recovers Collect/RESTORE after stale PID, missing or invalid controller, and bad tracking without losing CSV");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
     }
 

@@ -58,6 +58,59 @@ internal static class PresentMonCaptureController
         if (File.Exists(tracking)) File.Delete(tracking);
     }
 
+    // A finished game may leave its controller JSON and stop event behind.
+    // Windows process enumeration, not those stale files, proves that no
+    // PresentMon writer exists. Never delete a recorded CSV here.
+    private static bool NoPresentMonRunning()
+    {
+        var processes = Process.GetProcessesByName("PresentMon");
+        try { return processes.Length == 0; }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    private static bool WriterPidRunning(int pid)
+    {
+        var processes = Process.GetProcessesByName("PresentMon");
+        try { return processes.Any(process => process.Id == pid); }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    // Authoritative stop/cleanup used by Collect, Restore and failed launch.
+    // Tracking is never a reason to keep a clean, already-exited capture
+    // pending. While a writer exists, the native observer still owns its stop.
+    public static async Task<(string? Csv, bool Stopped, string? Error)> StopTrackedAsync(
+        string root, bool clearTracking = true)
+    {
+        string? tracked = null;
+        try
+        {
+            tracked = ReadTrackedCsv(root);
+            if (tracked is null) return (null, true, null);
+            await WaitForAutoStopAsync(root, tracked);
+            if (clearTracking) ClearTrackedCsv(root);
+            return (tracked, true, null);
+        }
+        catch (Exception ex)
+        {
+            // A corrupt/outdated pointer or expired observer must not strand
+            // RESTORE when the writer is gone. Preserve any actual CSV.
+            try
+            {
+                if (NoPresentMonRunning())
+                {
+                    if (clearTracking) ClearTrackedCsv(root);
+                    return (tracked, true, null);
+                }
+            }
+            catch (Exception cleanupError)
+            {
+                return (tracked, false,
+                    "PresentMon cleanup unavailable: " + cleanupError.Message);
+            }
+            return (tracked, false, "PresentMon stop pending: " + ex.Message);
+        }
+    }
+
     public static async Task RunAsync(string packageRoot, string csv, bool restart,
         string? captureSessionId = null)
     {
@@ -149,22 +202,19 @@ internal static class PresentMonCaptureController
         CancellationToken token = default)
     {
         var ownedCsv = PresentMonLifecyclePolicy.ValidateOutputCsv(root, csv);
+        // No writer means stop is complete. Neither a stale controller record
+        // nor a vanished observer event requires another process or UAC.
+        if (NoPresentMonRunning()) return;
+
         var resultPath = Path.Combine(Path.GetDirectoryName(ownedCsv)!, ResultName);
-        // A crashed/missing controller report must not strand Restore when
-        // no PresentMon process exists anywhere to keep the CSV open.
-        // If a writer is still present, fail closed without owner proof.
-        static bool AnyPresentMon()
-        {
-            var found = Process.GetProcessesByName("PresentMon");
-            try { return found.Length != 0; }
-            finally { foreach (var process in found) process.Dispose(); }
-        }
         if (!File.Exists(resultPath))
         {
-            if (!AnyPresentMon()) return;
+            if (NoPresentMonRunning()) return; // It exited during inspection.
             throw new InvalidDataException("PresentMon startup proof is missing; stop remains unverified.");
         }
+
         int pid;
+        string? observerSession = null;
         try
         {
             using var proof = JsonDocument.Parse(File.ReadAllText(resultPath));
@@ -175,46 +225,37 @@ internal static class PresentMonCaptureController
                 pidNode.ValueKind != JsonValueKind.Number ||
                 !pidNode.TryGetInt32(out pid) || pid <= 0)
                 throw new InvalidDataException("PresentMon startup proof is incomplete.");
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
-        {
-            if (!AnyPresentMon()) return;
-            throw;
-        }
-        // A stopped game or failed launch requests an authorized graceful
-        // ETW flush. Older captures without an observer identity are accepted
-        // only if their writer has already exited.
-        string? observerSession = null;
-        using (var proof = JsonDocument.Parse(File.ReadAllText(resultPath)))
-        {
-            var item = proof.RootElement;
             if (item.TryGetProperty("sessionId", out var session) &&
                 session.ValueKind == JsonValueKind.String)
                 observerSession = session.GetString();
         }
-        var live = Process.GetProcessesByName("PresentMon");
-        bool ownedLive;
-        try { ownedLive = live.Any(p => p.Id == pid); }
-        finally { foreach (var p in live) p.Dispose(); }
-        if (ownedLive && observerSession is not null)
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
         {
-            // Missing/denied observer events cannot justify assuming an ETW
-            // stop succeeded. Preserve its CSV/journal for the next START.
-            RequestObserverStop(observerSession);
+            if (NoPresentMonRunning()) return;
+            throw;
         }
 
-        // Enumerate PIDs instead of opening an elevated process handle.
-        // PROCESS_SYNCHRONIZE/MainModule can be denied to non-admin WPF;
-        // enumeration of the exact startup-reported PID does not require
-        // a second elevation and has no dependency on other PresentMon PIDs.
+        // Only the exact writer PID reported by this attempt can hold its
+        // collection pending. Another PresentMon process is not this writer.
+        if (!WriterPidRunning(pid)) return;
+        if (observerSession is not null)
+        {
+            try { RequestObserverStop(observerSession); }
+            catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or
+                UnauthorizedAccessException or InvalidDataException)
+            {
+                // The observer may have exited between the two process reads.
+                // A still-running writer must continue to fail closed.
+                if (WriterPidRunning(pid)) throw;
+                return;
+            }
+        }
+
+        // Enumerate the verified PID without opening elevated process handles.
         for (var attempt = 0; attempt < 80; attempt++)
         {
             token.ThrowIfCancellationRequested();
-            var processes = Process.GetProcessesByName("PresentMon");
-            bool ownedStillRunning;
-            try { ownedStillRunning = processes.Any(p => p.Id == pid); }
-            finally { foreach (var p in processes) p.Dispose(); }
-            if (!ownedStillRunning) return;
+            if (!WriterPidRunning(pid)) return;
             await Task.Delay(250, token);
         }
         throw new TimeoutException("PresentMon is still recording. Close Cyberpunk and retry.");

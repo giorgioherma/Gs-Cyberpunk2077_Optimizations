@@ -1212,8 +1212,6 @@ public partial class MainWindow : Window
                 "Verified, game-bound profiler installation is required. RESTORE PROFILERS remains available.");
         if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
             throw new InvalidOperationException("Bundled profiler provenance changed.");
-        var oldId = Workflow.ReadRecoverySessionId(game) ??
-                    Guid.NewGuid().ToString("N");
         // Reset native owners while the game is closed. The old ETW writer is
         // separate and must be gracefully stopped by its existing controller.
         var reset = await Workflow.ResetNativeOutputAsync(game);
@@ -1243,7 +1241,8 @@ public partial class MainWindow : Window
             // Optional startup failure may fall back to CET/GRSP, but only
             // after proving neither an OLD nor a newly-started PresentMon
             // still owns an active CSV. Never delete a running writer's scope.
-            var oldStopped = await StopOwnedPresentMonAsync(oldId, clearTracking: false);
+            var oldStopped = await PresentMonCaptureController.StopTrackedAsync(
+                packageRoot, clearTracking: false);
             if (!oldStopped.Stopped)
                 throw new InvalidOperationException(
                     "Previous PresentMon could not be reset; old output preserved. " +
@@ -1359,9 +1358,7 @@ public partial class MainWindow : Window
                 // A failed game launch is not a meaningful capture. Flush ETW,
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
-                var id = Workflow.ReadRecoverySessionId(game) ??
-                         Guid.NewGuid().ToString("N");
-                var stop = await StopOwnedPresentMonAsync(id);
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
                 if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
                 throw;
             }
@@ -1384,33 +1381,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // Collect and independent recovery share ONE PresentMon stop policy:
-    // only our named ETW session/process can be stopped, and only a verified
-    // graceful exit permits Continue. No F11 handler is installed by GCO.
-    private async Task<(string? Csv, bool Stopped, string? Error)> StopOwnedPresentMonAsync(
-        string sessionId, bool clearTracking = true)
-    {
-        string? tracked;
-        try { tracked = PresentMonCaptureController.ReadTrackedCsv(packageRoot); }
-        catch (Exception ex) { return (null, false, "PresentMon tracking invalid: " + ex.Message); }
 
-        if (tracked is null) return (null, true, null);
-        try
-        {
-            // Explicit cleanup may signal the elevated native observer.
-            // Automatic game-exit shutdown is exclusively native-owned.
-            await PresentMonCaptureController.WaitForAutoStopAsync(packageRoot, tracked);
-            if (clearTracking)
-            {
-                PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            }
-            return (tracked, true, null);
-        }
-        catch (Exception ex)
-        {
-            return (tracked, false, "PresentMon stop pending: " + ex.Message);
-        }
-    }
 
     private async void Collect_Click(object sender, RoutedEventArgs e) => await CollectResultsAsync();
     private async Task CollectResultsAsync()
@@ -1467,7 +1438,7 @@ public partial class MainWindow : Window
                     CaptureAdmissionPolicy.PendingCaptureGuidance(ready));
             // After the owned writer is stopped, first hash/copy BOTH native
             // F11 archives; they are the clock authority for frame alignment.
-            var stop = await StopOwnedPresentMonAsync(attempt.SessionId,
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot,
                 clearTracking: false);
             string? frameWarning = stop.Error;
             var native = await Workflow.CollectResultsAsync(game);
@@ -1540,9 +1511,8 @@ public partial class MainWindow : Window
                 // file can be cleared while the owned PresentMon writer runs.
                 try
                 {
-                    var session = Workflow.ReadRecoverySessionId(game);
-                    var stopped = await StopOwnedPresentMonAsync(
-                        session ?? Guid.NewGuid().ToString("N"), clearTracking: false);
+                    var stopped = await PresentMonCaptureController.StopTrackedAsync(
+                        packageRoot, clearTracking: false);
                     if (stopped.Stopped)
                     {
                         var reset = await Workflow.ResetNativeOutputAsync(game);
@@ -1689,9 +1659,7 @@ public partial class MainWindow : Window
         {
             // No capture index/collection attempt is required. Recover even
             // directly after a partial install, including after GCO restarts.
-            var sessionId = Workflow.ReadRecoverySessionId(game) ??
-                            Guid.NewGuid().ToString("N");
-            var stop = await StopOwnedPresentMonAsync(sessionId);
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
             // Restore original source files even when stopping PresentMon
             // fails, but keep the durable journal and uncollected results
             // until the full reset can be verified on a subsequent click.
