@@ -1,5 +1,30 @@
 using GTotalOptimizer.Core;
 
+// CI-only bridge exerciser. Use the real GCO production class against
+// extracted sealed source evidence, never package test utilities to players.
+if (args.Length > 0 && args[0] == "--stage-presentmon")
+{
+    if (args.Length != 3)
+        throw new ArgumentException("Usage: --stage-presentmon <sealedSessionFolder> <stagedCetCaptureFolder>");
+    var session = Path.GetFullPath(args[1]);
+    var parent = Directory.GetParent(session)?.Parent?.FullName ??
+        throw new InvalidDataException("Real GCO capture must be under RESULTS.");
+    var index = System.Text.Json.JsonSerializer.Deserialize<CollectedCaptureIndex>(
+        File.ReadAllText(Path.Combine(session, "collection.json"))) ??
+        throw new InvalidDataException("Collected GCO capture index is empty.");
+    // Recover overlap from the actual verified CET and GRSP native F11
+    // marker files. Do not use saved timezones or fabricate a capture window.
+    var overlap = PresentMonCaptureAlignment.RequireOverlap(parent, index);
+    var output = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+        session, index, overlap, args[2]);
+    var derived = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(output));
+    var frameCount = derived.RootElement.GetProperty("frames").GetArrayLength();
+    if (frameCount < 2 || frameCount != index.PresentMonAlignedFrames)
+        throw new InvalidDataException("Derived PresentMon frame count does not match sealed GCO index.");
+    Console.WriteLine($"PASS verified GCO PresentMon 2.6 QPC chronology into staged CET capture: frames={frameCount}");
+    return;
+}
+
 var checks = 0;
 void Require(bool valid, string message)
 {
