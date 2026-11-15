@@ -78,7 +78,13 @@ try {
     if ($cetSummaries.Count -ne 1) {
         throw 'Real GCO fixture must contain exactly one CET capture summary.'
     }
-    $cetCapture=$cetSummaries[0].DirectoryName
+    # The extracted GCO capture is SEALED. CET --report overwrites its
+    # CET_Report.html/CET_Summary.json/handoff. Never run it on the extracted
+    # indexed source: Stage 3 must see the exact original indexed SHA-256.
+    # All transformations happen only inside this distinct derived workspace.
+    $sealedCetCapture=$cetSummaries[0].DirectoryName
+    $cetCapture=Join-Path $stage 'GCO-CET-Report-Derived'
+    Copy-Item -LiteralPath $sealedCetCapture -Destination $cetCapture -Recurse -ErrorAction Stop
     $handoff=Join-Path $cetCapture 'CET_Resolver_Input.json'
     # Stage 2: actual sealed index/CET+GRSP F11 markers, no imported fake
     # CapFrameX JSON. Mirror the captured RESULTS tree in CI temporary space.
@@ -228,6 +234,18 @@ try {
     if (Test-Path -LiteralPath (Join-Path $PackageRoot 'GCO-Capture-15112026_021913')) {
         throw 'Private CET source fixture leaked into GCO distributable package.'
     }
+    # Verify all original hash-indexed CET/GRSP evidence in the *extracted*
+    # source session remains byte-identical after Stage 2 generated reports.
+    $sourceIndex=Get-Content -LiteralPath $indexes[0].FullName -Raw | ConvertFrom-Json -Depth 70
+    foreach ($entry in @($sourceIndex.Cet.Files)) {
+        $original=Join-Path $sealedCetCapture ([string]$entry.Path).Replace('/','\')
+        if (!(Test-Path -LiteralPath $original -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne [string]$entry.Sha256) {
+            throw 'Stage 2 modified original indexed CET capture evidence.'
+        }
+    }
+    Write-Host 'PASS Stage 2 original sealed CET report/handoff/CSV hashes unchanged after derived report generation'
+
     # Stage 3 additionally exercises the production Page 2 GCO analysis
     # service on a TEMP physical CET source copy and simulated restored
     # GCO session; never alter the real private original source checkout.
