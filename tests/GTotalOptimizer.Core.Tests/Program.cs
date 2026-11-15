@@ -1,5 +1,41 @@
 using GTotalOptimizer.Core;
 
+// GCO profiler reporting: the source owners' real CET/GRSP report engines
+// and GCO's genuine PresentMon chronology, independent of optimization.
+if (args.Length > 0 && args[0] == "--stage5-profiler-report")
+{
+    if (args.Length != 4)
+        throw new ArgumentException("Usage: --stage5-profiler-report <GCO package> <test game> <collected session ID>");
+    var output = await GcoProfilerReportService.GenerateAsync(args[1], args[2], args[3]);
+    using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(output.JsonPath));
+    var evidence = report.RootElement.GetProperty("frameEvidence");
+    if (evidence.GetProperty("provider").GetString() != "PRESENTMON_2_6" ||
+        report.RootElement.GetProperty("presentMonFrameCount").GetInt32() != output.PresentMonFrames ||
+        output.PresentMonFrames < 2 || output.CetWindowCount < 1 ||
+        output.RedscriptFrameCount < 1)
+        throw new InvalidDataException("GCO consolidated profiler report lacks real three-source measurements.");
+    using var owner = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
+        Path.Combine(Path.GetDirectoryName(output.HtmlPath)!, "CET", "CET_Resolver_Input.json")));
+    if (owner.RootElement.GetProperty("frameEvidence").GetProperty("provider").GetString() != "PRESENTMON_2_6")
+        throw new InvalidDataException("GCO CET Resolver JSON is not genuinely PresentMon-backed.");
+    using var red = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
+        Path.Combine(Path.GetDirectoryName(output.HtmlPath)!, "GRSP", "GRSP_Summary.json")));
+    if (red.RootElement.TryGetProperty("frameTime", out var legacy) &&
+        legacy.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
+        throw new InvalidDataException("GCO GRSP report silently consumed CapFrameX data.");
+    var html = File.ReadAllText(output.HtmlPath);
+    if (!html.Contains("CET/CET_Report.html", StringComparison.Ordinal) ||
+        !html.Contains("GRSP/GRSP_Report.html", StringComparison.Ordinal) ||
+        !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
+        !html.Contains("redscriptExclusiveInstrumentedMs", StringComparison.Ordinal))
+        throw new InvalidDataException("Consolidated report is missing source-owned report links or real graph series.");
+    Console.WriteLine("PASS GCO real CET+GRSP+PresentMon profiler report: " +
+        "presentFrames=" + output.PresentMonFrames +
+        ", cetWindows=" + output.CetWindowCount +
+        ", redscriptFrames=" + output.RedscriptFrameCount);
+    return;
+}
+
 // Stage 4 uses the SAME production GCO service and CET owner's original
 // --generate-pass path. Never simulate generated Lua or create a second engine.
 if (args.Length > 0 && args[0] is "--stage4-generate" or "--stage4-idempotent")
