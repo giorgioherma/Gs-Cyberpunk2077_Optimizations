@@ -135,15 +135,19 @@ try {
         $app=[Array]::IndexOf($columns,'Application')
         $qpc=[Array]::IndexOf($columns,'CPUStartQPC')
         $localTime=[Array]::IndexOf($columns,'CPUStartDateTime')
-        $frameTime=[Array]::IndexOf($columns,'FrameTime')
+        # PresentMon 2.6.0 emits MsBetweenPresents (milliseconds between
+        # submitted Presents), not a synthetic FrameTime column. Do not
+        # confuse this interval with displayed-frame duration or GPU time.
+        $frameInterval=[Array]::IndexOf($columns,'MsBetweenPresents')
+        $intervalField='MsBetweenPresents'
         # The sealed user capture can predate GCO's switch to --qpc_time.
         # Mirror the actual GCO collection consumer: QPC is preferred, but
         # valid historical --date_time CSVs retain local wall-clock evidence.
         # This check NEVER converts timezones or changes the original CSV.
         $clockIndex=if ($qpc -ge 0) { $qpc } else { $localTime }
         $clockKind=if ($qpc -ge 0) { 'QPC' } else { 'LocalDateTime' }
-        if ($app -lt 0 -or $clockIndex -lt 0 -or $frameTime -lt 0) {
-            throw ('PresentMon fixture is missing Application, FrameTime or a supported ' +
+        if ($app -lt 0 -or $clockIndex -lt 0 -or $frameInterval -lt 0) {
+            throw ('PresentMon fixture is missing Application, MsBetweenPresents or a supported ' +
                 'CPUStartQPC/CPUStartDateTime clock; actual columns: ' + ($columns -join ', '))
         }
         $frames=0
@@ -187,7 +191,7 @@ try {
                 }
             }
             $value=0.0
-            if ([double]::TryParse($fields[$frameTime].Trim('"'),
+            if ([double]::TryParse($fields[$frameInterval].Trim('"'),
                   [Globalization.NumberStyles]::Float,
                   [Globalization.CultureInfo]::InvariantCulture,[ref]$value) -and
                   [double]::IsFinite($value) -and $value -ge 0) {
@@ -197,7 +201,7 @@ try {
         if ($frames -lt 2 -or $invalidClocks -ne 0 -or $finiteFrameTimes -lt 2) {
             throw "PresentMon invalid: frames=$frames invalid$clockKind=$invalidClocks finiteMs=$finiteFrameTimes"
         }
-        Write-Host "PASS real PresentMon clock=$clockKind, frames=$frames, valid clocks=$($frames-$invalidClocks), finiteMs=$finiteFrameTimes"
+        Write-Host "PASS real PresentMon clock=$clockKind, interval=$intervalField, frames=$frames, valid clocks=$($frames-$invalidClocks), finite intervals=$finiteFrameTimes"
         if ($null -ne $index.PresentMonAlignedFrames -and
             $frames -ne [int]$index.PresentMonAlignedFrames) {
             throw "Aligned PresentMon frame index disagrees with actual retained Cyberpunk rows: index=$($index.PresentMonAlignedFrames), rows=$frames"
