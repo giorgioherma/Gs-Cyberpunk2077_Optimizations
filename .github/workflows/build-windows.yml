@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
-          ref: f4a9c03bc118d7c17c412a71a7f29e550622417c
+          ref: e6cac6c9c745fca5e96f8656cf24b9826d833ed7
           path: unified/.gco-ci-grsp-resolver
           persist-credentials: false
       - name: Checkout private live REDscript source for GRSP admission audit
@@ -196,6 +196,39 @@ jobs:
                       " native=" + $audit.nativeExternalDeclarations +
                       " declarationOnly=" + $audit.declarationOnlySignatures +
                       " expression=" + $audit.expressionBodiedFunctions)
+      # Real R3 milestone: capture lives on a separate GCO commit. Check out
+      # ONLY that immutable fixture; never merge unrelated branch changes.
+      - name: Checkout exact real GRSP 15:51 capture fixture
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
+          ref: a8d355462dcc1ac5bc42ee7f41f549368676638a
+          path: unified/.gco-ci-real-grsp-capture
+          persist-credentials: false
+          sparse-checkout: |
+            tests/fixtures/real-captures
+          sparse-checkout-cone-mode: true
+      - name: Replay real sealed GRSP capture with private REDscript source
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = '.gco-ci-real-grsp-capture/tests/fixtures/real-captures/GCO-Capture-15112026_155121.zip'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $resolver = '.gco-ci-grsp-resolver/resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $sourceAudit = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit
+          if ($LASTEXITCODE -ne 0) { throw 'Real GRSP R3 owner capture replay failed' }
+      - name: Remove exact real GRSP fixture checkout
+        if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          if (Test-Path -LiteralPath '.gco-ci-real-grsp-capture') {
+            Remove-Item -LiteralPath '.gco-ci-real-grsp-capture' -Recurse -Force -ErrorAction Stop
+          }
       - name: Remove private REDscript source and GRSP CI checkout
         if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
         shell: pwsh
