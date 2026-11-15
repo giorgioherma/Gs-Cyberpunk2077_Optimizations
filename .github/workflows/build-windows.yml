@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 7f3489d8fd7e02d595f4a053616044cf2f6b2dab
+          ref: 08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44
           path: unified/vendor-cet
           persist-credentials: false
       - uses: actions/checkout@v4
