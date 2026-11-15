@@ -272,6 +272,12 @@ jobs:
           # measured-callback evidence. Do not edit sealed user captures.
           & ./tests/GTotalOptimizer.Core.Tests/Verify-CetResolverPackage.ps1 -PackageRoot $root -OwnerArtifactRoot 'downloaded-cet-resolver'
           if ($LASTEXITCODE -ne 0) { throw 'Packaged CET Resolver owner-equivalence contract failed' }
+          # Replay the owner's uploaded REAL sealed GCO capture (CET, GRSP,
+          # official PresentMon CSV). A disposable extraction checks every
+          # collection.json file hash and the retained Cyberpunk frame rows.
+          # This input is strictly a test fixture, never a release payload.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCaptureFixture.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'Real collected GCO CET/GRSP/PresentMon fixture contract failed' }
           # Regression: transient startup PID exit must not trigger duplicate
           # automatic ETW stop from WPF. Native observer owns that decision.
           $wpfCapture=Get-Content 'src/GTotalOptimizer.App/MainWindow.xaml.cs' -Raw
