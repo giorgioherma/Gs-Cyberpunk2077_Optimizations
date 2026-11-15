@@ -1151,8 +1151,8 @@ try
     // Keep historical properly-localized --date_time evidence readable for
     // legacy sessions, without ever applying a fixed country or DST offset.
     Require(PresentMonCaptureAlignment.TrimToOverlap(
-            root, automaticCsv, new NativeCaptureWindow(sampleUnix + 110, sampleUnix + 850)) == 2,
-        "legacy locally formatted PresentMon CSV remains supported");
+            pmRoot, automaticCsv, new NativeCaptureWindow(sampleUnix + 110, sampleUnix + 850)) == 2,
+        "legacy locally formatted PresentMon CSV remains supported under its actual package root");
     var nativeWindowRejected = false;
     try { PresentMonCaptureAlignment.RequireOverlap(
         datedPackage, datedRed with { Cet = null }); }
