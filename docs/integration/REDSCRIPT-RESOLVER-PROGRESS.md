@@ -38,3 +38,8 @@
 ### Mandatory updates for future agents
 
 **On every meaningful code or design change, immediately append:** (1) date, exact repo/branch/commit and files; (2) approved decisions and rejected alternatives; (3) exact real-source/capture/CI/compilation tests with PASS/FAIL/SKIP and links, not promises; (4) drift/idempotence/install/gameplay proof level; (5) unresolved regressions and next action. Update `docs/LATEST-WORK.md` promptly and update GRSP's `docs/RESOLVER_PROGRESS.md`/`docs/LATEST-WORK.md` for owner code. Record a failure before retry, not only the final green. Do not create parallel CI workflows or leak private source archives to public build artifacts.
+
+### 2026-11-15 — CI trigger routing for REDscript feature
+
+- Existing sole `.github/workflows/build-windows.yml` push branch list now includes `feature/redscript-resolver-integration`; no new workflow, skipped checks, reduced package/test contracts or code changes. This workflow config change should trigger the first REDscript-branch baseline Windows run; **result pending until exact Actions conclusion is recorded**.
+- This tests the inherited GCO/CET/GRSP bundle at existing owner pins, **not the future GRSP Resolver/Generator**. The later GRSP implementation needs independently proven source/compilation and GCO owner pin/CLI integration. Private CET current-source replay remains manual milestone-only.

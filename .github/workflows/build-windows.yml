@@ -10,7 +10,7 @@ on:
         required: false
         default: false
   push:
-    branches: [ main, feature/presentmon-resolver-integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration ]
     paths:
       - '.github/workflows/build-windows.yml'
       - 'Directory.Build.props'
