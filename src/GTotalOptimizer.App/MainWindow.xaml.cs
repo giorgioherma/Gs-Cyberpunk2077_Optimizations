@@ -1654,12 +1654,12 @@ public partial class MainWindow : Window
             return;
         try
         {
-            var saved = CollectedCaptureStore.ReadRestored(packageRoot, completedGameRoot, completedSessionId);
+            var saved = CollectedCaptureStore.Read(packageRoot, completedGameRoot, completedSessionId);
             if (!HasNative(saved))
                 throw new InvalidDataException("The restored capture has no CET or REDscript native evidence.");
             UpdateResultTexts(saved);
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            ResultsStatusText.Text = "Original profiler files restored. Read-only CET analysis uses the current installed source; ZIP generation is not yet available.";
+            ResultsStatusText.Text = "CET Resolver will use the collected data and current installed source.";
             OpenResultsButton.IsEnabled = true;
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
                 analyzedSessionId == saved.SessionId;
@@ -1677,7 +1677,7 @@ public partial class MainWindow : Window
     {
         // Automatically launched by CONTINUE and by reopening a previously
         // verified, restored workspace. No new mandatory Analyze action.
-        if (analysisRunning || !captureAndRestoreVerified ||
+        if (analysisRunning ||
             completedGameRoot is null || completedSessionId != saved.SessionId ||
             ResultsPage.Visibility != Visibility.Visible)
             return;
