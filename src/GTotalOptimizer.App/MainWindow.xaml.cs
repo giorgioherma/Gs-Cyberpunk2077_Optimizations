@@ -34,6 +34,10 @@ public partial class MainWindow : Window
     private string? completedSessionId;
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
+    private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
+    private CancellationTokenSource? analysisCancellation;
+    private bool analysisRunning;
+    private string? analyzedSessionId;
     // WMI can report our game process before Process.Start returns.
     // Classify that event as GCO-owned; the tray handoff itself never waits.
     private bool gcoLaunchInProgress;
@@ -838,6 +842,8 @@ public partial class MainWindow : Window
         glitchTimer.Stop();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
+        analysisCancellation?.Cancel();
+        analysisCancellation?.Dispose();
         if (!WpfVerificationMode && !captureHibernationClose)
         {
             // User X/Alt+F4 terminates the package-bound native host as well.
@@ -1652,15 +1658,76 @@ public partial class MainWindow : Window
                 throw new InvalidDataException("The restored capture has no CET or REDscript native evidence.");
             UpdateResultTexts(saved);
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            ResultsStatusText.Text = "Original game files restored. " +
-                ((saved.Skipped?.Count ?? 0) > 0 ? "Skipped: " + string.Join(", ", saved.Skipped!) + ". " : "") +
-                "Combined source analysis and generation are not yet integrated.";
+            ResultsStatusText.Text = "Original profiler files restored. Read-only CET analysis uses the current installed source; ZIP generation is not yet available.";
             OpenResultsButton.IsEnabled = true;
+            GenerateButton.IsEnabled = false;
+            if (!analysisRunning && analyzedSessionId != saved.SessionId)
+                _ = RunReadOnlyAnalysisAsync(saved);
         }
         catch (Exception ex)
         {
             ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
             OpenResultsButton.IsEnabled = false;
+        }
+    }
+
+    private async Task RunReadOnlyAnalysisAsync(CollectedCaptureIndex saved)
+    {
+        // Automatically launched by CONTINUE and by reopening a previously
+        // verified, restored workspace. No new mandatory Analyze action.
+        if (analysisRunning || !captureAndRestoreVerified ||
+            completedGameRoot is null || completedSessionId != saved.SessionId ||
+            ResultsPage.Visibility != Visibility.Visible)
+            return;
+
+        analysisRunning = true;
+        analysisCancellation?.Dispose();
+        analysisCancellation = new CancellationTokenSource();
+        var cancel = analysisCancellation;
+        AnalyzeButton.Content = "ANALYZING";
+        AnalyzeButton.IsEnabled = false;
+        GenerateButton.IsEnabled = false;
+        ResultsStatusText.Text = "Analyzing verified CET capture and current source...";
+        try
+        {
+            var report = await readOnlyAnalyzer.AnalyzeAsync(
+                packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
+            if (cancel.IsCancellationRequested || !IsLoaded ||
+                completedSessionId != saved.SessionId) return;
+            analyzedSessionId = saved.SessionId;
+            CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
+                " | Measured callback families: " + report.MeasuredCallbackFamilies +
+                " | Ranked callbacks: " + report.RankedCallbacks + Environment.NewLine +
+                "Generic candidates: " + report.GenericCandidates +
+                " | Semantic candidates: " + report.SemanticCandidates +
+                " | Already satisfied: " + report.AlreadySatisfied + Environment.NewLine +
+                "Remaining: " + report.MaterialRemaining +
+                " | Unresolved: " + report.Unresolved + Environment.NewLine +
+                "PresentMon: " + (report.HasPresentMon
+                    ? "QPC F11-aligned (" + report.PresentMonFrames + " intervals)"
+                    : "NOT_CAPTURED") + Environment.NewLine +
+                "Source: current installation verified read-only. Historical capture/source identity is unproven.";
+            RedReportText.Text = "REDscript captured: " + report.CapturedRedscriptFiles +
+                " verified files." + Environment.NewLine +
+                "REDscript optimization is not implemented in this stage; no REDscript performance gains claimed.";
+            AnalyzeButton.Content = "ANALYZED";
+            ResultsStatusText.Text = "CET analysis complete. No game files modified. " +
+                "ZIP generation stays disabled pending source-safe CET generation and REDscript validation.";
+        }
+        catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
+        catch (Exception ex)
+        {
+            if (cancel.IsCancellationRequested || !IsLoaded) return;
+            Trace.TraceWarning("Read-only CET analysis: " + ex);
+            ResultsStatusText.Text = "CET analysis unavailable: " + ex.Message +
+                " Collected results remain untouched.";
+            CetReportText.Text = "No trusted CET analysis produced. Use the restored capture and current installed source.";
+            AnalyzeButton.Content = "UNAVAILABLE";
+        }
+        finally
+        {
+            analysisRunning = false;
+            GenerateButton.IsEnabled = false;
         }
     }
 
