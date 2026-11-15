@@ -111,6 +111,90 @@ try {
         $null -eq $reportHandoff.hitchPressure) {
         throw 'CET report failed to consume real PresentMon with truthful callback uncertainty.'
     }
+
+    # Independent numerical oracle from *raw derived PresentMon intervals*;
+    # never accept a CET report simply because it reports provider=PRESENTMON.
+    $chronology=Get-Content -LiteralPath $frames -Raw | ConvertFrom-Json -Depth 70
+    $summary=Get-Content -LiteralPath (Join-Path $cetCapture 'CET_Summary.json') -Raw |
+        ConvertFrom-Json -Depth 70
+    $frameReport=$summary.frameTime
+    if ($frameReport.provider -ne 'PRESENTMON_2_6' -or
+        $frameReport.frames.captureEndExclusionPolicy -ne 'NONE_GCO_F11_TRIMMED' -or
+        $frameReport.frames.excludedCaptureEndCount -ne 0 -or
+        $frameReport.pcLatencyStatus -ne 'NOT_CAPTURED' -or
+        $frameReport.frameTypeStatus -ne 'NOT_CAPTURED' -or
+        $frameReport.frames.cpuMetric -ne 'MsCPUBusy' -or
+        $frameReport.frames.gpuMetric -ne 'MsGPUBusy' -or
+        $frameReport.sync.exactAlignment -ne $false) {
+        throw 'CET frame report has misleading PresentMon provenance, tail exclusion or unavailable metrics.'
+    }
+    if (@($frameReport.worstFrames).Count -lt 1 -or
+        $null -ne $frameReport.worstFrames[0].pcLatencyMs -or
+        $null -ne $frameReport.worstFrames[0].frameType) {
+        throw 'Missing PresentMon PC latency and frame type must remain null in worst-frame evidence.'
+    }
+    [double[]]$allIntervals=@($chronology.frames | ForEach-Object { [double]$_.intervalMs })
+    [Array]::Sort($allIntervals)
+    if ($allIntervals.Length -lt 2 -or
+        $allIntervals.Length -ne [int]$frameReport.frames.count -or
+        $allIntervals.Length -ne [int]$frameReport.frames.capturedCount -or
+        $allIntervals[0] -le 0) {
+        throw 'Actual PresentMon report did not retain the complete positive F11 frame interval series.'
+    }
+    function MeasuredPercentile([double[]]$numbers,[double]$fraction) {
+        $offset=($numbers.Length-1)*$fraction
+        $low=[int][Math]::Floor($offset)
+        $high=[int][Math]::Ceiling($offset)
+        return $numbers[$low]+($numbers[$high]-$numbers[$low])*($offset-$low)
+    }
+    function AssertFrameNumber([double]$expected,[double]$actual,[double]$precision,[string]$metric) {
+        if (![double]::IsFinite($actual) -or
+            [Math]::Abs($expected-$actual) -gt $precision) {
+            throw ("Independent real PresentMon arithmetic mismatch: "+$metric+
+                " expected="+$expected+" actual="+$actual)
+        }
+    }
+    $median=MeasuredPercentile $allIntervals 0.50
+    $p95=MeasuredPercentile $allIntervals 0.95
+    $p99=MeasuredPercentile $allIntervals 0.99
+    $mean=($allIntervals | Measure-Object -Sum).Sum / $allIntervals.Length
+    AssertFrameNumber $mean ([double]$frameReport.frames.meanMs) 0.00001 'mean'
+    AssertFrameNumber $median ([double]$frameReport.frames.medianMs) 0.00001 'P50'
+    AssertFrameNumber $p95 ([double]$frameReport.frames.p95Ms) 0.00001 'P95'
+    AssertFrameNumber $p99 ([double]$frameReport.frames.p99Ms) 0.00001 'P99'
+    AssertFrameNumber $allIntervals[-1] ([double]$frameReport.frames.maxMs) 0.00001 'maximum'
+    AssertFrameNumber (1000.0/$mean) ([double]$frameReport.frames.averageFps) 0.001 'average FPS'
+    $tolerance=[Math]::Max(25.0,$median*1.5)
+    AssertFrameNumber $tolerance ([double]$frameReport.hitchPressure.tolerance.thresholdFrameMs) 0.00001 'hitch threshold'
+    $hitchCount=0
+    $hitchToll=0.0
+    foreach ($interval in $allIntervals) {
+        if ($interval -ge $tolerance) {
+            $hitchCount++
+            $hitchToll += $interval-$tolerance
+        }
+    }
+    if ([int]$frameReport.hitchPressure.frequency.hitchFrames -ne $hitchCount) {
+        throw 'Independent real PresentMon hitch-frame count differs from CET report.'
+    }
+    AssertFrameNumber $hitchToll ([double]$frameReport.hitchPressure.frequency.hitchTollMs) 0.0001 'hitch toll'
+    $episodes=0
+    $previousEnd=[double]::NegativeInfinity
+    foreach ($row in @($chronology.frames | Sort-Object { [double]$_.relativeStartMs })) {
+        $duration=[double]$row.intervalMs
+        if ($duration -lt $tolerance) { continue }
+        $start=[double]$row.relativeStartMs
+        $end=$start+$duration
+        if ($start-$previousEnd -gt 250.0) { $episodes++ }
+        $previousEnd=[Math]::Max($previousEnd,$end)
+    }
+    if ([int]$frameReport.hitchPressure.frequency.episodes -ne $episodes) {
+        throw ('Independent real PresentMon 250 ms-merged hitch episodes disagree: CET='+
+            $frameReport.hitchPressure.frequency.episodes+' independently='+$episodes)
+    }
+    Write-Host ("PASS independent Stage 2 real PresentMon numerical oracle: "+
+        $allIntervals.Length+" frames, P95="+$p95+", P99="+$p99+
+        ", hitch episodes="+$episodes+", tollMs="+$hitchToll)
     $result=InvokeOwnerCli $resolver @('--capture',$cetCapture,'--mods',$mods,'--json')
     if (!$result.ResolverPath -or !(Test-Path -LiteralPath $result.ResolverPath -PathType Leaf)) {
         throw 'Real CET Resolver did not produce an analysis document.'
