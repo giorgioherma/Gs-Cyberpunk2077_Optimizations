@@ -297,6 +297,11 @@ public sealed class CetReadOnlyAnalysisService
             if (elements.Any(x => x is "" or "." or "..") ||
                 Path.IsPathRooted(relative) || !names.Add(relative))
                 throw new InvalidDataException("CET capture index has duplicate/unsafe file paths.");
+            // The standalone owner may have historical CapFrameX files.
+            // GCO reporting/Resolver execution uses only real PresentMon or
+            // NOT_CAPTURED. Never stage a legacy FrameTime companion here.
+            if (elements.Any(x => x.Equals("FrameTime", StringComparison.OrdinalIgnoreCase)))
+                continue;
             var current = Path.Combine(original, relative.Replace('/', Path.DirectorySeparatorChar));
             var target = Path.Combine(stage, relative.Replace('/', Path.DirectorySeparatorChar));
             if (!InsideDirectory(current, original) || !InsideDirectory(target, stage) ||
