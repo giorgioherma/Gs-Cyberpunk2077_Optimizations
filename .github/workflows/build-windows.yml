@@ -315,6 +315,12 @@ jobs:
           # This input is strictly a test fixture, never a release payload.
           & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCaptureFixture.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PackageRoot $root
           if ($LASTEXITCODE -ne 0) { throw 'Real collected GCO CET/GRSP/PresentMon fixture contract failed' }
+          # The consolidated GCO report runs actual CET + GRSP reporter
+          # commands against the public, hash-sealed triple capture and real
+          # PresentMon QPC evidence. It does NOT require private mod sources
+          # or the expensive milestone-only CET generation replay.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-GcoPresentMonProfilerReport.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'PresentMon-backed consolidated CET/GRSP GCO report regression failed' }
           # Regression: transient startup PID exit must not trigger duplicate
           # automatic ETW stop from WPF. Native observer owns that decision.
           $wpfCapture=Get-Content 'src/GTotalOptimizer.App/MainWindow.xaml.cs' -Raw
