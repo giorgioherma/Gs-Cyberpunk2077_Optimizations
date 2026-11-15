@@ -129,7 +129,7 @@ jobs:
           }
           $before = @{}
           foreach ($file in $original) {
-            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]'\\')
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]92)
             if ($before.ContainsKey($key)) { throw 'Duplicate normalized source path' }
             $before[$key] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
           }
@@ -162,7 +162,7 @@ jobs:
             throw 'GRSP_PRIVATE_SOURCE_MUTATION: file inventory changed'
           }
           foreach ($file in $after) {
-            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]'\\')
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]92)
             if (!$before.ContainsKey($key) -or
                 $before[$key] -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
               throw 'GRSP_PRIVATE_SOURCE_MUTATION: source bytes changed'
