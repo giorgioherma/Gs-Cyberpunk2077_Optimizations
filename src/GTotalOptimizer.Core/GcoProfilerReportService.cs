@@ -41,6 +41,168 @@ public static class GcoProfilerReportService
         public int RedscriptFrames { get; set; }
     }
 
+    // Native source-owner rankings, never cross-domain total-CPU estimates.
+    // GRSP "calls" are outgoing VM call edges, not callback entries.
+    private sealed record RankEntry(
+        string Owner, string Name, long Calls, double CallsPerSec,
+        double ExclusiveMs, double ExclusiveMsPerSec, string Attribution);
+    private sealed record RankPair(RankEntry[] ByWork, RankEntry[] ByFrequency);
+    private sealed record Rankings(
+        RankPair CetMods, RankPair CetCallbacks,
+        RankPair RedscriptMods, RankPair RedscriptFunctions);
+
+    private static RankPair ReadRankPair(
+        string folder, string filename,
+        Func<IReadOnlyDictionary<string, string>, RankEntry?> convert,
+        CancellationToken token)
+    {
+        var path = FindNamed(folder, filename) ??
+            throw new InvalidDataException("Source-owned ranking input missing: " + filename);
+        var entries = new List<RankEntry>();
+        ReadCsv(path, row =>
+        {
+            var item = convert(row);
+            if (item is { Calls: >= 0, CallsPerSec: >= 0, ExclusiveMs: >= 0, ExclusiveMsPerSec: >= 0 } &&
+                double.IsFinite(item.CallsPerSec) &&
+                double.IsFinite(item.ExclusiveMs) &&
+                double.IsFinite(item.ExclusiveMsPerSec) &&
+                !string.IsNullOrWhiteSpace(item.Owner))
+                entries.Add(item);
+        }, token);
+        if (entries.Count == 0)
+            throw new InvalidDataException("Source-owned ranking input has no valid rows: " + filename);
+        // Independent top lists: high frequency is not the same as high cost.
+        var byWork = entries.OrderByDescending(x => x.ExclusiveMsPerSec)
+            .ThenByDescending(x => x.ExclusiveMs)
+            .ThenBy(x => x.Owner, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(15).ToArray();
+        var byFrequency = entries.OrderByDescending(x => x.CallsPerSec)
+            .ThenByDescending(x => x.ExclusiveMsPerSec)
+            .ThenBy(x => x.Owner, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(15).ToArray();
+        return new(byWork, byFrequency);
+    }
+
+    private static Rankings ReadRankings(string cet, string red, CancellationToken token)
+    {
+        var duration = 0.0;
+        var summary = FindNamed(red, "GRSP_Summary.csv") ??
+            throw new InvalidDataException("GRSP duration evidence missing.");
+        ReadCsv(summary, row =>
+        {
+            var ms = Number(row, "duration_ms");
+            if (ms is > 0 && duration == 0) duration = ms.Value / 1000.0;
+        }, token);
+        if (duration <= 0)
+            throw new InvalidDataException("GRSP duration evidence is invalid.");
+
+        RankEntry? CetMod(IReadOnlyDictionary<string, string> row) =>
+            new(row.GetValueOrDefault("Mod", ""),
+                "Lua mod",
+                Whole(row, "Calls"),
+                Number(row, "CallsPerSecond") ?? -1,
+                Number(row, "ExclusiveTotalMs") ?? -1,
+                Number(row, "ExclusiveMsPerSecond") ?? -1,
+                "CET measured exclusive workload");
+
+        RankEntry? CetCallback(IReadOnlyDictionary<string, string> row) =>
+            new(row.GetValueOrDefault("Mod", ""),
+                row.GetValueOrDefault("Kind", "") + ": " +
+                    row.GetValueOrDefault("Target", ""),
+                Whole(row, "Calls"),
+                Number(row, "CallsPerSecond") ?? -1,
+                Number(row, "ExclusiveTotalMs") ?? -1,
+                Number(row, "ExclusiveMsPerSecond") ?? -1,
+                "CET registered callback/observation, exclusive workload");
+
+        RankEntry? RedMod(IReadOnlyDictionary<string, string> row) =>
+            new(row.GetValueOrDefault("owner", ""),
+                "REDscript owner",
+                Whole(row, "calls"),
+                Number(row, "calls_per_sec") ?? -1,
+                Number(row, "exclusive_instrumented_ms") ?? -1,
+                Number(row, "exclusive_ms_per_sec") ?? -1,
+                row.GetValueOrDefault("attribution_note", ""));
+
+        RankEntry? RedFunction(IReadOnlyDictionary<string, string> row)
+        {
+            var name = row.GetValueOrDefault("source_function", "");
+            var note = name.Contains("wrapper$", StringComparison.OrdinalIgnoreCase) ||
+                       name.Contains("proxy$", StringComparison.OrdinalIgnoreCase)
+                ? "Wrapper/proxy attribution; inspect underlying target"
+                : "Outgoing call edges, NOT callback entries";
+            var measuredMs = Number(row, "exclusive_instrumented_ms") ?? -1;
+            return new(row.GetValueOrDefault("owner", ""), name,
+                Whole(row, "outgoing_calls"),
+                Number(row, "calls_per_sec") ?? -1,
+                measuredMs,
+                measuredMs < 0 ? -1 : measuredMs / duration,
+                note);
+        }
+
+        return new(
+            ReadRankPair(cet, "CET_Runtime_Profile_ByMod.csv", CetMod, token),
+            ReadRankPair(cet, "CET_Runtime_Profile_Detail.csv", CetCallback, token),
+            ReadRankPair(red, "GRSP_ByMod.csv", RedMod, token),
+            ReadRankPair(red, "GRSP_ByFunction.csv", RedFunction, token));
+    }
+
+    private static string RankingsHtml(Rankings ranks)
+    {
+        var html = new StringBuilder();
+        void Table(string title, RankEntry[] rows, bool frequency)
+        {
+            html.Append("<section class=\"rankcard\"><h3>")
+                .Append(WebUtility.HtmlEncode(title))
+                .Append("</h3><div class=\"rankscroll\"><table><thead><tr><th>#</th><th>Owner / callback</th><th>")
+                .Append(frequency ? "Calls/s" : "Exclusive ms/s")
+                .Append("</th><th>")
+                .Append(frequency ? "Exclusive ms/s" : "Calls/s")
+                .Append("</th></tr></thead><tbody>");
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var row = rows[i];
+                html.Append("<tr><td>").Append(i + 1).Append("</td><td><strong>")
+                    .Append(WebUtility.HtmlEncode(row.Owner))
+                    .Append("</strong>");
+                if (row.Name is not ("Lua mod" or "REDscript owner"))
+                    html.Append("<div class=\"muted\">").Append(WebUtility.HtmlEncode(row.Name))
+                        .Append("</div>");
+                if (!string.IsNullOrWhiteSpace(row.Attribution) &&
+                    (row.Attribution.Contains("CAUTION", StringComparison.OrdinalIgnoreCase) ||
+                     row.Attribution.Contains("Wrapper", StringComparison.OrdinalIgnoreCase)))
+                    html.Append("<div class=\"muted\">")
+                        .Append(WebUtility.HtmlEncode(row.Attribution)).Append("</div>");
+                html.Append("</td><td>")
+                    .Append((frequency ? row.CallsPerSec : row.ExclusiveMsPerSec)
+                        .ToString("N2", CultureInfo.InvariantCulture))
+                    .Append("</td><td>")
+                    .Append((frequency ? row.ExclusiveMsPerSec : row.CallsPerSec)
+                        .ToString("N2", CultureInfo.InvariantCulture))
+                    .Append("</td></tr>");
+            }
+            html.Append("</tbody></table></div></section>");
+        }
+        void Domain(string heading, string clarification, RankPair mods, RankPair callbacks)
+        {
+            html.Append("<h3>").Append(WebUtility.HtmlEncode(heading)).Append("</h3><p class=\"muted\">")
+                .Append(WebUtility.HtmlEncode(clarification)).Append("</p><div class=\"rankgrid\">");
+            Table("Heaviest mods — measured work", mods.ByWork, false);
+            Table("Most frequent mods — observed calls", mods.ByFrequency, true);
+            Table("Heaviest callbacks/functions — measured work", callbacks.ByWork, false);
+            Table("Most frequent callbacks/functions — observed calls", callbacks.ByFrequency, true);
+            html.Append("</div>");
+        }
+        Domain("CET / Lua", "CET registered callback counts and measured exclusive Lua work.",
+            ranks.CetMods, ranks.CetCallbacks);
+        Domain("GRSP / REDscript",
+            "REDscript rates count outgoing VM call edges from source functions, NOT callback invocations. Wrapper/proxy work may be unresolved.",
+            ranks.RedscriptMods, ranks.RedscriptFunctions);
+        return html.ToString();
+    }
+
     public static string ReportFile(string packageRoot, string sessionId) =>
         Path.Combine(CollectedCaptureStore.SessionFolder(packageRoot, sessionId),
             "Reports", HtmlFile);
@@ -249,6 +411,9 @@ public static class GcoProfilerReportService
                 redscriptNativeFrames = mon is null ? (int?)null : pair.Value.RedscriptFrames
             }).ToArray();
 
+            // Rank actual source-owner measurements. Never merge CET and
+            // GRSP timing domains or treat outgoing edges as callback entries.
+            var rankings = ReadRankings(cet, red, cancellationToken);
             Directory.CreateDirectory(publishing);
             var report = new
             {
@@ -276,6 +441,7 @@ public static class GcoProfilerReportService
                 grspNativeSummary = "GRSP/GRSP_Summary.json",
                 cetWindows = cetWindows,
                 redscriptFrames = grspFrames,
+                rankings,
                 timeline = rows
             };
 
@@ -283,7 +449,8 @@ public static class GcoProfilerReportService
                 JsonSerializer.Serialize(report, Json), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(publishing, HtmlFile),
                 HtmlReport(report.frameEvidence.provider, mon?.Frames.Count ?? 0,
-                    JsonSerializer.Serialize(rows, Json), grspFrames, cetWindows), new UTF8Encoding(false));
+                    JsonSerializer.Serialize(rows, Json), grspFrames, cetWindows,
+                    RankingsHtml(rankings)), new UTF8Encoding(false));
             // Keep the full original CET and GRSP reports and their data links
             // accessible beneath the consolidated report. This is RESULTS
             // only, never part of the optimizer pass ZIP.
@@ -480,7 +647,7 @@ public static class GcoProfilerReportService
     }
 
     private static string HtmlReport(string provider, int monFrames,
-        string timelineJson, int grspFrames, int cetWindows)
+        string timelineJson, int grspFrames, int cetWindows, string rankingHtml)
     {
         // Standalone/offline HTML: no CDN, network, external scripts or files.
         // Three independent y-axis ranges with ONE shared F11 time axis.
@@ -503,6 +670,15 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .tip{display:none;position:absolute;pointer-events:none;z-index:2;white-space:pre-line;max-width:300px;background:#071014f5;border:1px solid var(--cyan);padding:10px;border-radius:6px;font:12px Consolas,monospace}
 .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px}.sw{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:currentColor}
 .note{background:#152128;border-left:3px solid var(--yellow);padding:10px 13px;margin:12px 0}
+.rankgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:12px;margin:12px 0 23px}
+.rankcard{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px}
+.rankcard h3{font-size:14px;color:var(--yellow);margin:3px 0 12px}
+.rankscroll{overflow:auto;max-height:420px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #2b454f;vertical-align:top}
+th{font-size:12px;position:sticky;top:0;background:#172832;color:#b8d8e0}
+td:nth-child(n+3),th:nth-child(n+3){text-align:right;white-space:nowrap}
+td strong{font-size:12px}td .muted{font-size:11px;max-width:420px;overflow-wrap:anywhere}
+@media(max-width:650px){.rankgrid{grid-template-columns:1fr}}
 @media(max-width:650px){main{padding:12px}canvas{height:450px}}
 </style></head><body><main>
 <h1>GCO / Combined Profiler Report</h1>
@@ -525,6 +701,9 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 <span style="color:var(--magenta)"><i class="sw"></i>GRSP measured exclusive instrumented work / 50ms bucket</span>
 </div></div>
 <p class="muted">A missing PresentMon capture is shown as NOT_CAPTURED. GRSP's recorded frame Unix clocks and CET 50ms bucket clocks are used directly; no frame-index lag fitting or CapFrameX format is synthesized.</p>
+<h2>Source-owned hotspot rankings</h2>
+<div class="note">Ranked by <strong>exclusive measured work per second</strong> and separately by <strong>observed call frequency</strong>. CET and GRSP are independent measurement domains and must not be combined. GRSP source-function calls are <strong>outgoing edges, not callback entries</strong>; wrapper attribution is provisional.</div>
+__RANKING_SECTIONS__
 <h2>Full source-owned profiler reports</h2>
 <nav><a href="CET/CET_Report.html">Full CET report (native/GC/allocations/callbacks)</a>
 <a href="GRSP/GRSP_Report.html">Full REDscript report (functions/frames/spikes)</a>
@@ -600,6 +779,7 @@ canvas.addEventListener('wheel',e=>{
             .Replace("__MONFRAMES__", monFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__CETWINDOWS__", cetWindows.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__REDFRAMES__", grspFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal);
+            .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal)
+            .Replace("__RANKING_SECTIONS__", rankingHtml, StringComparison.Ordinal);
     }
 }
