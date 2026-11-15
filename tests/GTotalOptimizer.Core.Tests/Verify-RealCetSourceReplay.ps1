@@ -228,6 +228,16 @@ try {
     if (Test-Path -LiteralPath (Join-Path $PackageRoot 'GCO-Capture-15112026_021913')) {
         throw 'Private CET source fixture leaked into GCO distributable package.'
     }
+    # Stage 3 additionally exercises the production Page 2 GCO analysis
+    # service on a TEMP physical CET source copy and simulated restored
+    # GCO session; never alter the real private original source checkout.
+    & ./tests/GTotalOptimizer.Core.Tests/Verify-Stage3ReadOnlyAnalysis.ps1 -StagedSealedSession $sealedSession -PrivateSourceRoot $PrivateSourceRoot -PackageRoot $PackageRoot -WorkRoot $stage
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Stage 3 restored-source analysis regression failed.'
+    }
+    if ((Get-FileHash -LiteralPath $FixtureZip -Algorithm SHA256).Hash -ne $zipHash) {
+        throw 'Stage 3 changed the immutable real GCO capture ZIP.'
+    }
     Write-Host ('PASS real sealed CET capture + private live-source replay: callback families=' +
         [int]$result.FamilyCount + ', ranked=' + [int]$result.RankedCallbackCount +
         ', original source files unchanged=' + $hashes.Count)
