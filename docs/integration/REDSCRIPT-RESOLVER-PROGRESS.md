@@ -50,3 +50,9 @@
 - **R1 is private reference inventory only**, not authority to start semantic code. **R7 is blocked** until R5/R6 generic coverage is evidenced and the per-operation five-status gap matrix has skip reasons. Many/zero semantic changes are both acceptable if justified; neither 61 modified files nor historical pass numbering is a success metric.
 - **Verification:** decision/docs only. No fresh captures, source transforms, REDscript compiler runs or in-game tests performed by this change. CET original CI #416 and GCO PresentMon report CI #426 remain historical baselines; do not treat them as new optimizer validation.
 - **Next:** collect fresh evidence, rank full-stack generic candidates, establish structural safety and measure/test the first useful generic pass. Build the portfolio semantic gap matrix after generics.
+
+### 2026-11-15 — first REDscript-branch baseline CI result recorded
+
+- **[GCO Windows CI #427](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43704425184) COMPLETED SUCCESS**, source `41681da885a529708d7231f1f2d59293fba8e77c`, verifying inherited GCO Windows build/package workflow on `feature/redscript-resolver-integration`. This is **NOT** a GRSP REDscript Resolver/Generator, full-stack REDscript compilation or gameplay test; subsequent documentation-only generic-first commits were not CI-built.
+- Documentation-only generic-first sequencing commit `a064acf511d94d75922cf33dd295cea80513870b`; GRSP owner matching commit `479be2425dc13462cb30ad6cff24ea7332cd27ea`. Existing CET branch and GCO `main` unchanged.
+- **Next:** fresh source-matched capture and high-return generic candidate audit; no semantic port until R5/R6 output and R7 matrix.
