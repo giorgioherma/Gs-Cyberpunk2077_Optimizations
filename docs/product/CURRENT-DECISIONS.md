@@ -617,3 +617,7 @@ The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1
 - When Cyberpunk remains absent past the grace, use the original **single-UAC observer stop event** to request graceful PresentMon shutdown. If the package's own PresentMon writer is running, wait for it to stop before reopening WPF; if PresentMon is absent/already stopped, immediately reopen at the end of the game grace. PresentMon exit alone never causes an early UI return.
 - Manual tray reopening cancels automatic reopening; X still exits the tray. Do not auto-collect, restore, discard native captures, change profiler ownership, add setup UI or bump v1.2.5.
 - **Verification:** canonical Windows CI #382 (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43665223701) **SUCCESS**, tested source 54ab118336630e76d83a0893a867a910864b6f23, 308/308 core/package contracts, automatic real native-tray WPF reopening with no PresentMon, manual reopen/X and owner install/restore. Packaged artifact 14142231031. Actual game shutdown and elevated PresentMon flush remain unverified by gameplay testing.
+
+## 2026-11-15 — Normal foreground activation on GCO WPF reopen
+
+- Native-tray automatic return after game exit should show the WPF child as an active ordinary window. Request WPF Activate()/Focus() once after Loaded; never use Topmost, force z-order, native foreground-attach workarounds or change layout. The 10-second game grace and PresentMon writer stop remain authoritative.

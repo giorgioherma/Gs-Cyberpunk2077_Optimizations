@@ -523,6 +523,16 @@ public partial class MainWindow : Window
         ApplyMaximizedCaptureLayout();
         QueueHeaderTabAlignment();
         if (WpfVerificationMode) return; // Visual-only native CI window.
+        // A fresh WPF child reopened by the native tray should be active,
+        // not remain behind ordinary applications. Never use Topmost.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (IsVisible && WindowState != System.Windows.WindowState.Minimized)
+            {
+                Activate();
+                Focus();
+            }
+        }));
         // Subscribe before the one-time initial enumeration so no process
         // launch can fall between enumeration and notification registration.
         var notificationsAvailable = gameProcesses.TryStartNotifications(out var error);
