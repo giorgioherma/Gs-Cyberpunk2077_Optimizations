@@ -150,6 +150,60 @@ try {
     }
     finally { $stream.Dispose() }
 
+    # R4/R5 real measured candidate preview: the GRSP owner handles
+    # source matching and rewriting. A GCO test checks only structural,
+    # read-only and provenance contracts, never produces a deployable ZIP.
+    $previewFolder = Join-Path $work 'grsp-generic-preview'
+    $previewLog = Join-Path $work 'grsp-generic-preview.log'
+    & dotnet $dll preview-generic --game $game --analysis $result --out $previewFolder *> $previewLog
+    if ($LASTEXITCODE -ne 0 -or
+        !(Test-Path -LiteralPath (Join-Path $previewFolder 'preview.json') -PathType Leaf)) {
+        throw 'GRSP_GENERIC_REAL_SOURCE_PREVIEW_FAILED: owner CLI refused the real fixture.'
+    }
+    $preview = Get-Content -LiteralPath (Join-Path $previewFolder 'preview.json') -Raw |
+        ConvertFrom-Json -Depth 80
+    $applied = @($preview.candidates | Where-Object {
+        $_.state -eq 'PRISTINE_APPLICABLE' -or $_.state -eq 'PARTIALLY_APPLICABLE'
+    })
+    if ($preview.schemaVersion -ne 'grsp.generic.preview.v1' -or
+        $preview.rule -ne 'CNAME_ARRAY_MEMBERSHIP_V1' -or
+        $preview.sourceStackSha256 -ne $expectedSourceHash -or
+        $preview.applicableFileCount -lt 1 -or
+        $preview.stagedFiles -ne $preview.applicableFileCount -or
+        $preview.stagedFiles -ne $applied.Count -or
+        $preview.measuredOperatorEdgesInApplicableLoops -le 0 -or
+        $preview.compilerValidated -ne $false -or
+        $preview.generationAuthorized -ne $false -or
+        $preview.deployable -ne $false) {
+        throw 'GRSP_GENERIC_REAL_SOURCE_PREVIEW_CONTRACT_FAILED'
+    }
+    foreach ($candidate in $applied) {
+        $relative = [string]$candidate.path
+        if ([string]::IsNullOrWhiteSpace($relative) -or
+            $relative.Contains('..') -or $relative.Contains(':') -or
+            $relative.Contains('\\')) {
+            throw 'GRSP_GENERIC_INVALID_SOURCE_OWNERSHIP'
+        }
+        $originalFile = Join-Path $game ('r6/scripts/' + $relative)
+        $stagedFile = Join-Path $previewFolder ('overlay/r6/scripts/' + $relative)
+        if (!(Test-Path -LiteralPath $originalFile -PathType Leaf) -or
+            !(Test-Path -LiteralPath $stagedFile -PathType Leaf)) {
+            throw 'GRSP_GENERIC_EXPECTED_PREVIEW_OVERLAY_MISSING'
+        }
+        $originalText = Get-Content -LiteralPath $originalFile -Raw
+        $stagedText = Get-Content -LiteralPath $stagedFile -Raw
+        if ($stagedText -notmatch 'GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1' -or
+            $stagedText -notmatch 'ArrayContains' -or
+            (Get-FileHash -LiteralPath $originalFile -Algorithm SHA256).Hash -eq
+            (Get-FileHash -LiteralPath $stagedFile -Algorithm SHA256).Hash) {
+            throw 'GRSP_GENERIC_PREVIEW_OUTPUT_NOT_STRUCTURALLY_DISTINCT'
+        }
+    }
+    Write-Host ('PASS GRSP generic measured source preview: files=' +
+                $preview.stagedFiles + ' observedLoopOperatorEdges=' +
+                $preview.measuredOperatorEdgesInApplicableLoops +
+                ' compilerValidated=false deployable=false originalSourceUnchanged=true')
+
     if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $zipBefore) {
         throw 'GRSP_REAL_CAPTURE_ARCHIVE_MUTATED'
     }
