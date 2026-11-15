@@ -80,6 +80,108 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # R4 validation: private live REDscript source is checked out ONLY on
+      # this REDscript development branch, from GCO's existing scoped token.
+      # Source stays outside publish/release and is removed even on failure.
+      - name: Verify existing GCO private-source token for REDscript
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        shell: pwsh
+        env:
+          REDSCRIPT_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:REDSCRIPT_PRIVATE_SOURCE_TOKEN)) {
+            throw 'GCO existing private source token is missing; source audit must fail closed.'
+          }
+      - name: Checkout tested GRSP-owned .NET10 Resolver source
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/GRSP-G-REDscript-Profiler
+          ref: 7bf2bdd63f55266f7789d0c46b0591d9305ce3c3
+          path: unified/.gco-ci-grsp-resolver
+          persist-credentials: false
+      - name: Checkout private live REDscript source for GRSP admission audit
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: unified/.gco-ci-private-redscript
+          sparse-checkout: |
+            GCO-Capture-15112026_021913/r6/scripts
+          sparse-checkout-cone-mode: true
+      - name: Audit private REDscript stack with actual GRSP owner CLI
+        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $privateRoot = Join-Path (Get-Location) '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $scripts = Join-Path $privateRoot 'r6/scripts'
+          if (!(Test-Path -LiteralPath $scripts -PathType Container)) {
+            throw 'PRIVATE_REDSCRIPT_SOURCE_MISSING: expected r6/scripts tree'
+          }
+          $original = @(Get-ChildItem -LiteralPath $scripts -Filter '*.reds' -Recurse -File)
+          if ($original.Count -lt 100) {
+            throw 'PRIVATE_REDSCRIPT_SOURCE_INCOMPLETE: no meaningful live source inventory'
+          }
+          $before = @{}
+          foreach ($file in $original) {
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]'\\')
+            if ($before.ContainsKey($key)) { throw 'Duplicate normalized source path' }
+            $before[$key] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          dotnet build '.gco-ci-grsp-resolver/resolver/GRSP.Resolver.csproj' -c Release --nologo
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GRSP_OWNER_RESOLVER_BUILD_FAILED'
+          }
+          $dll = '.gco-ci-grsp-resolver/resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $report = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
+          $auditLog = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.log'
+          & dotnet $dll source-audit --game $privateRoot --out $report *> $auditLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report)) {
+            throw 'GRSP_PRIVATE_SOURCE_AUDIT_FAILED: private diagnostic log retained only on runner'
+          }
+          $audit = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($audit.schemaVersion -ne 'grsp.source.audit.v1' -or
+              $audit.sourceFiles -ne $original.Count -or
+              ($audit.lexicallyIndexedFiles + $audit.structurallyUnprovenFiles) -ne $original.Count -or
+              $audit.lexicallyIndexedFiles -lt 1 -or
+              $audit.recognizedFunctionSpans -lt 1 -or
+              $audit.sourceState -ne 'UNSAFE_OR_UNPROVEN' -or
+              $audit.generatedFiles -ne 0 -or
+              $audit.codeRewritten -ne $false -or
+              $audit.compilerValidated -ne $false -or
+              $audit.privateSourcePathsIncluded -ne $false) {
+            throw 'GRSP_PRIVATE_SOURCE_ADMISSION_CONTRACT_FAILED: nonread-only or unproven evidence'
+          }
+          $after = @(Get-ChildItem -LiteralPath $scripts -Filter '*.reds' -Recurse -File)
+          if ($after.Count -ne $original.Count) {
+            throw 'GRSP_PRIVATE_SOURCE_MUTATION: file inventory changed'
+          }
+          foreach ($file in $after) {
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]'\\')
+            if (!$before.ContainsKey($key) -or
+                $before[$key] -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+              throw 'GRSP_PRIVATE_SOURCE_MUTATION: source bytes changed'
+            }
+          }
+          Write-Host ("PASS GRSP real private source read-only audit: files=" +
+                      $audit.sourceFiles + " indexed=" + $audit.lexicallyIndexedFiles +
+                      " unproven=" + $audit.structurallyUnprovenFiles +
+                      " functionSpans=" + $audit.recognizedFunctionSpans)
+      - name: Remove private REDscript source and GRSP CI checkout
+        if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          foreach ($directory in @('.gco-ci-private-redscript', '.gco-ci-grsp-resolver')) {
+            if (Test-Path -LiteralPath $directory) {
+              Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction Stop
+            }
+          }
       # High-value physical compiler contract: validate the exact supported
       # upstream release archive, then exercise GCO's real path/hash detector.
       - name: Verify official redscript 0.5.31 reference binaries
