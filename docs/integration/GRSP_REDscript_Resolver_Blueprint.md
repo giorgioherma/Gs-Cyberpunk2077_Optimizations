@@ -219,3 +219,7 @@ The table below is a **path and source-state audit**, not a claim that every ref
 | `scripts/zzy_bChipwareExpansion/chipsScripts/reflexChipsScripts/flashAndThunderclap.reds` | Different | Perk/cache helper; guard ordering |
 | `scripts/zzy_bChipwareExpansion/chipsScripts/reflexChipsScripts/wreckingBall.reds` | Different | Perk/cache helper; guard ordering |
 | `scripts/zzy_bChipwareExpansion/chipsScripts/softwareChipsScripts/kerenzikovUpdate.reds` | Different | Perk/cache helper; guard ordering |
+
+## 2026-11-15 — native player and NEAR/FAR planned dependency
+
+The existing CET Resolver-generated native player/state and location cache is a known **planned** combined-ZIP dependency and may be considered during generic opportunity discovery even if absent from unoptimized game source. See [CET native player and near/far contract](GRSP-NATIVE-PLAYER-PROXIMITY.md). Final deployment still requires verified CET owner output and REDscript-visible ABI, and must fail open on UNKNOWN. FE fixed point checks are candidate generic targets; FE minimap wrappedMethod is a different unresolved hotspot. R7 semantic-only work remains last.
