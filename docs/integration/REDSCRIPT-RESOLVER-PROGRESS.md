@@ -1,6 +1,19 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
 
+## 2026-11-16 — second source-owned generic: fixed literal OnAction membership
+
+**Scope:** GCO `dev/redscript/resolver_handoff` only. Separate from targeted per-mod fixes, native profiler owners, the GCO installer/Restore, and the user installation. The earlier `CNAME_FIXED_INDEX_V1` preview remains untouched.
+
+- Added `GenericActionFilterPass.cs`, `scan-action-filter` and `preview-action-filter`. A standard `OnAction` that reads the action name, constructs a proven literal `array<CName>` through one uniquely defined static expression-bodied provider, and immediately checks `!ArrayContains` before returning false can now use ordered direct `Equals` tests instead. All subsequent branches, consumption, event registration and wrapped game behavior are preserved byte-for-byte.
+- **Safety:** function's fixed return-list shape; exact provider module import; single unambiguous class + method declaration; no matching `@wrapMethod`, `@replaceMethod` or `@addMethod`; no dynamic selectors; full captured/current source fingerprint; refusal for altered logic, missing/changed sources and incomplete generated markers. The already-optimized state compares actual CName literal **bytes**, not just lexer token kinds.
+- Added negative/positive/idempotence Python tests and one real private-stack read-only scanner step. The real 15:51 source-matched capture runner stages this second generic in a *separate temporary output* and permits SCC only after proving all generated files have disjoint original paths from the first generic's overlay. Then the existing SCC 0.5.31 runner compiles the actual combined preview against the same complete RED4ext external script dependency set and untouched original comparator; no second compiler implementation.
+- **Evidence:** the actual November 16 `GCO-Capture-16112026_132224.zip` records 5 high-frequency DrugDealer `OnAction` methods totaling **720.8838 ms instrumented exclusive workload** and **4,108,325 outgoing call edges** during that capture. These are *total observed callback-scope work*, not avoided allocations, proven callback entries or expected savings. Their dated source independently shows repeated literal-only `InputRegisteredActions` construction and `ArrayContains` checks. No per-mod allowlist or gameplay optimization claim.
+- **Status:** the private-stack scan and real capture/official SCC stages in [CI run #43969908759](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43969908759) returned success; overall packaging and final checks were in progress when this entry was recorded. No native profiler, CET Lua, installer, main branch or game sources modified.
+- **Remaining generic families:** G-Input callback dispatch with external CET/Lua bridge side effects remains blocked pending reliable entry/state/side-effect evidence; UI `SetData` caching remains blocked pending full output tuple/instance/lifecycle proof; shared getter reuse requires invalidation/alias proof. Do not bypass those gates to manufacture generic coverage. Gameplay behavior and matched before/after captures are required before any source pass becomes deployable.
+
+
+
 ## 2026-11-16 — first CET-inspired generic callback implementation, source scan and native SCC proof
 
 **Owner and branch:** GCO `dev/redscript/resolver_handoff` only; GCO main, CET, GRSP native, installed game, original private sources and UI/Restore remain untouched.
