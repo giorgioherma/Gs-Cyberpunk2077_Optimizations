@@ -277,7 +277,9 @@ jobs:
           $resolverDll=Join-Path $root 'components/redscript-resolver/app/GRedscript.Resolver.dll'
           $provenance=Get-Content (Join-Path $root 'components/COMPONENT-PROVENANCE.json') -Raw | ConvertFrom-Json
           $dllHash=(Get-FileHash $resolverDll -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($dllHash -ne $red.sha256 -or
+          $exeHash=(Get-FileHash (Join-Path $root $red.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($dllHash -ne $red.assemblySha256 -or
+              $exeHash -ne $red.sha256 -or
               $dllHash -ne $provenance.redscriptResolver.sha256 -or
               $provenance.redscriptResolver.generationAuthorized -ne $false) {
             throw 'Bundled REDscript executable/provenance mismatch'
