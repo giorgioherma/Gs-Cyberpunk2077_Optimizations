@@ -184,6 +184,30 @@ Copy-Item -LiteralPath $nativeResolverDll -Destination (Join-Path $nativeResolve
 VerifyFile (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll') $nativeResolverHash
 Write-Host 'PASS pinned CET Resolver recompiled for one shared .NET10 runtime with unmodified owner assets'
 
+# GCO-local REDscript Resolver/Generator is a private, separately owned
+# .NET 10 application component, never another GRSP-managed executable or
+# an extra .NET runtime. Generation stays evidence-only/nondeployable until
+# all source-state, SCC and gameplay gates are satisfied.
+$redscriptResolverApp=Join-Path $components 'redscript-resolver/app'
+New-Item -ItemType Directory -Force $redscriptResolverApp | Out-Null
+PublishManager 'src/GRedscript.Resolver/GRSP.Resolver.csproj' $redscriptResolverApp
+$redscriptResolverDll=Join-Path $redscriptResolverApp 'GRedscript.Resolver.dll'
+$redscriptResolverConfig=Join-Path $redscriptResolverApp 'GRedscript.Resolver.runtimeconfig.json'
+foreach($file in @($redscriptResolverDll,$redscriptResolverConfig)) {
+  if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
+    throw "Bundled GCO REDscript Resolver missing: $file"
+  }
+}
+$redscriptRuntime=Get-Content -LiteralPath $redscriptResolverConfig -Raw
+if ($redscriptRuntime -notmatch 'net10\.0' -or $redscriptRuntime -notmatch 'Microsoft.NETCore.App') {
+  throw 'GCO REDscript Resolver does not target the shared .NET 10 runtime'
+}
+if (@(Get-ChildItem -LiteralPath $redscriptResolverApp -Recurse -File |
+      Where-Object { $_.Name -eq 'coreclr.dll' }).Count -ne 0) {
+  throw 'Second .NET runtime found in GCO REDscript Resolver'
+}
+Write-Host 'PASS GCO REDscript Resolver included as framework-dependent component in original app artifact'
+
 # Source of truth for both Windows executables and WPF windows.
 # Keep the owner-provided multi-resolution ICO intact (no resampling).
 $iconSource=(Resolve-Path 'assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico' -ErrorAction Stop).Path
@@ -393,12 +417,14 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
   throw 'Owner-native provenance run ID missing for GCO instrumentation'
 }
 $nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
+$redscriptResolverSha=(Get-FileHash $redscriptResolverDll -Algorithm SHA256).Hash.ToLowerInvariant()
 $provenance=@{
   testOnly=$true
   cet=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
   cetResolver=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  redscriptResolver=@{ sourceRepository='GCO_MAIN'; sourceCommit=[string]$env:GITHUB_SHA; framework='net10.0'; sha256=$redscriptResolverSha; generationAuthorized=$false }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
@@ -435,13 +461,31 @@ if ($Integrated) {
     files=$resolverAssetEntries
   }
   $resolverEntry.sha256=(Get-FileHash (Join-Path $cetResolverApp 'G-CET-Resolver.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+  $redscriptResolverFiles=@(Get-ChildItem -LiteralPath $redscriptResolverApp -File -Recurse |
+    Sort-Object FullName | ForEach-Object {
+      @{ path=([IO.Path]::GetRelativePath($root,$_.FullName).Replace('\','/'));
+         sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+    })
+  $redscriptResolverEntry=@{
+    id='redscript-resolver'
+    executable='components/redscript-resolver/app/GRedscript.Resolver.exe'
+    sourceRepository='GCO_MAIN'
+    sourceCommit=[string]$env:GITHUB_SHA
+    framework='net10.0'
+    generationAuthorized=$false
+    files=$redscriptResolverFiles
+  }
+  if (!(Test-Path (Join-Path $root $redscriptResolverEntry.executable) -PathType Leaf)) {
+    throw 'Bundled GCO REDscript Resolver application executable missing'
+  }
+  $redscriptResolverEntry.sha256=$redscriptResolverSha
   $payloads=@($payloadPaths | ForEach-Object {
     @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
   })
   VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
   VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
   VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
-  @{ schemaVersion=2; components=$entries; payloads=$payloads; analysisTools=@($resolverEntry) } |
+  @{ schemaVersion=2; components=$entries; payloads=$payloads; analysisTools=@($resolverEntry,$redscriptResolverEntry) } |
     ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
   # The GitHub artifact contains ONE portable app directory plus a short
   # adjacent user guide. Never copy the guide into the game optimization ZIP.
