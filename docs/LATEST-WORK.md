@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-16 — consume GRSP crash-safety branch without GCO native rebuild
+
+- Following a gameplay crash with newly added proxy-child instrumentation, the owner-native Rust changes moved to the proper GRSP `dev/native-instrumentation` branch. GCO `main` canonical `build-windows.yml` now selects and verifies owner-DLL artifacts from that branch rather than the obsolete GRSP `dev/resolver-profiler-handoff`. Existing original GCO two-page application, manager/restore, one `.NET 10` runtime and owner-native SHA/Cargo.lock/provenance checks are unchanged; no Rust rebuild in GCO.
+- Source-level native mitigations: TLS bookkeeping re-entrancy guard; reserved bounded proxy-child/name counters; F11 quiescence now waits for both active roots and in-flight bookkeeping before accessing `UnsafeCell` shards; failed merges do not emit complete capture artifacts. No new VM hooks or proof of a solved crash. GCO `main` does not own managed REDscript Resolver passes; continue those on GCO `dev/redscript/resolver_handoff`.
+- **Validation status:** GitHub source changes committed; GRSP Windows compilation, native CI artifact, new GCO app ZIP, in-game F11 safety and measured overhead **NOT VERIFIED**. Do not advertise a stable crash fix or automatically overwrite an existing user installation. The known-stable profiler remains the rollback baseline.
+
+
 ## 2026-11-16 — GCO main now gates its app ZIP on GRSP native proxy instrumentation
 
 - Owner requested **the actual GCO app artifact**, not a standalone native archive. GCO `main` already resolves the newest successful, SHA/run/provenance-verified GRSP native owner-CI artifact and packages its DLL under `components/grsp/payload/G-REDscript-Profiler.dll`, preserving the original installer and two-page application. The workflow was updated at `47c2ffb` and package assembly at `b4ea4ce` to **require** the native DLL contain both `RSP_ProxyAttribution.csv` and `RSP_ProxyChildren.csv`, in addition to F11 and existing callback evidence. Older native DLL artifacts now fail the GCO build instead of silently shipping.
