@@ -158,6 +158,12 @@ internal static class Program
                     work, rate, edges, match.Status, resolution, caveat));
             }
 
+            object proxyAttribution = ProxyAttributionEvidence.Interpret(
+                tables.TryGetValue("Developer/RSP_ProxyAttribution.csv",
+                    out var proxyTable) ? proxyTable.Rows : null,
+                callsites,
+                sourceAdmission);
+
             int sourceCount = sourceAdmission.InspectedFileCount;
             var top = ranks.OrderByDescending(x => x.ExclusiveInstrumentedMs)
                 .ThenByDescending(x => x.OutgoingEdgesPerSec)
@@ -198,6 +204,7 @@ internal static class Program
                     sourceMatchStatus = statusCount
                 },
                 rankedObservedCallsites = top,
+                proxyAttribution,
                 sourceObservations = observations,
                 rawTables = tables,
                 safety = new {
