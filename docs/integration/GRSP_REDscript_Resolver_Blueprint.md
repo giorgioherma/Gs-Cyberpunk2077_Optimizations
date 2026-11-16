@@ -1,18 +1,20 @@
-# GRSP-owned REDscript Resolver / Generator — implementation blueprint
+# GCO-owned REDscript Resolver / Generator — implementation blueprint
 
 **Date:** 2026-11-15  
-**Status:** design and source audit only; no repository changes, generated REDscript, compiler execution, or gameplay test performed in this review.
+**Status:** historical source audit/R0–R10 sequence from 2026-11-15, updated for 2026-11-16 GCO-local component ownership. The previous managed GRSP prototype compiled one strict CName preview against the private full stack in GCO CI #482; game behavior remains untested. See [current migration handoff](REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md).
 
 ## 1. Fixed architecture and ownership
+
+**2026-11-16 ownership override:** this GCO-local location supersedes older GRSP-owned managed Resolver instructions. Preserve the previous GRSP CLI/CI as tested migration input until local parity is established; GRSP continues to develop instrumentation only. All R0–R10 generic-first prerequisites remain unchanged.
 
 | Owner | Authoritative responsibility |
 | --- | --- |
 | G-CET | Existing Lua profiling, source-owned Resolver/Generator, native integration and G-GC. Freeze its four-stage GCO integration. |
-| GRSP (`dev/resolver-profiler-handoff`) | Native REDscript instrumentation, complete REDscript evidence contract, **new REDscript Resolver, generator, and full-stack compiler validation**. Preserve standalone GRSP 1.0.0 stable release and original install/restore managers. |
+| GRSP (`dev/resolver-profiler-handoff`) | **Native REDscript profiling, F11 instrumentation, measurement evidence and source-owned install/restore.** Its former managed Resolver prototype is migration input only, not the future generator owner. |
 | G-REDruntime (`main`) | Optional source-owned REDscript shared caching, scheduling, input/event and framework services. Expand only in response to measured, proof-backed generic demand. |
-| GCO | Existing COLLECT, independent genuine PresentMon-backed consolidated reports, cross-domain planning, invocation of *both* original owner Resolvers, compatibility checks and **one final game-relative ZIP**. No REDscript rewrite engine in GCO. |
+| GCO (`dev/redscript/resolver_handoff`) | Existing COLLECT, genuine PresentMon reporting, cross-domain planning, **independent in-repo REDscript Resolver/Generator with headless SCC**, orchestration of CET's original Lua Resolver, and **one final game-relative ZIP**. One existing user-facing UI. |
 
-**Workflow:** `COLLECT` seals actual CET + GRSP + PresentMon → independent GCO profiler report → GCO `ANALYZE` invokes source-owned CET and GRSP Resolver JSON using the same sealed evidence and *current live source* → `GENERATE` calls both source-owned generators → GCO validates/merges into one clean ZIP. Existing `CONTINUE` still performs profiler-owner restoration. Neither reporting nor ANALYZE adds a second restoration/lifecycle gate. No extra page/UI, second .NET runtime or CapFrameX imitation.
+**Workflow:** `COLLECT` seals actual CET + GRSP + PresentMon → independent GCO profiler report → GCO `ANALYZE` invokes CET's original owner Resolver and the separate GCO-local REDscript Resolver using the same sealed evidence and *current live source* → `GENERATE` calls CET's source-owned generator and the GCO-local REDscript generator → GCO validates/merges into one clean ZIP. Existing `CONTINUE` still performs profiler-owner restoration. Neither reporting nor ANALYZE adds a second restoration/lifecycle gate. No extra page/UI, second .NET runtime or CapFrameX imitation.
 
 **Frame evidence:** Use GCO's existing versioned PresentMon 2.6 QPC/Unix chronology and F11 overlap as native REDscript Resolver evidence. Model missing data as `NOT_CAPTURED`, unknown overlap as unknown and optional CPU/GPU metrics as null. Never fake CapFrameX JSON, infer PC latency/FG, add CET+GRSP workload as total CPU, or pretend a hot function caused a particular render hitch.
 
@@ -68,8 +70,8 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 
 ### Stage R0 — record new owner contract and protect existing baselines
 
-- Update GRSP `docs/RESOLVER_HANDOFF.md`, relevant GRSP handoff and GCO architecture/decisions: GRSP owns REDscript Resolver, generator and compilation; GCO invokes and combines. Record approval and exact baseline commits. Never silently promote the CET feature branch or touch GCO `main`.
-- Explicitly freeze current GCO PresentMon reporting / CET source-owner generation; retain one canonical Windows CI, one .NET10 runtime, GRSP native install/restore. New GRSP code lives on `dev/resolver-profiler-handoff`.
+- Update GCO and GRSP active handoffs/architecture/decisions: **GCO owns the REDscript Resolver, Generator and compilation as one separate internal component; GRSP owns measurements and native profiler instrumentation**. GCO orchestrates the CET owner backend. Record approval and exact baseline commits. Never silently promote the CET feature branch or touch GCO `main`.
+- Explicitly freeze current GCO PresentMon reporting / CET source-owner generation; retain one canonical Windows CI, one .NET10 runtime, GRSP native install/restore. New managed REDscript Resolver code lives **only in GCO `dev/redscript/resolver_handoff`**; any new native GRSP instrumentation remains in its original repo.
 - **Exit:** both handoffs agree on owner CLI/data contracts; no source rewriting/UI changes.
 
 ### Stage R1 — privately index the 61-file reference (NO semantic implementation)
@@ -88,7 +90,7 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 
 ### Stage R3 — build source-owned, machine-readable REDscript Resolver evidence
 
-- Create a GRSP-owned, versioned `GRSP_Resolver_Input.json` (name/version final at source contract), generated from native raw evidence and GCO's **actual** PresentMon chronology, independent of any HTML report or visual chart.
+- Maintain the versioned `GRSP_Resolver_Input.json` in the **GCO-local REDscript Resolver component**, consuming native GRSP evidence (name/version final at source contract), generated from native raw evidence and GCO's **actual** PresentMon chronology, independent of any HTML report or visual chart.
 - Include original file/callsite IDs, owner attribution, complete cadence/frame workload, source path and line, observation/quality status, measured overlaps and uncertainty. `frameEvidence.provider=PRESENTMON_2_6` if truly available; otherwise `NOT_CAPTURED`. Accept no legacy CapFrameX fallback inside GCO.
 - Prove exact indexing and chronological alignment from the sealed input, no mutation, no loss of rows, no sum of overlapping CET/GRSP CPU. For GRSP standalone use, do not break existing optional CapFrameX report support.
 - **Exit:** stable owner headless JSON schema, rigorous negative tests and real-capture replay; no source edits yet.
@@ -130,17 +132,17 @@ Earlier passes and untagged edits cannot be assigned to a stage reliably from th
 - Assemble the **entire current effective** REDscript stack plus the proposed changed/new files in a disposable mirror; verify all optional modules and the deployed G-REDruntime API version. Locate/use the authoritative supported REDscript compiler (baseline user stack `0.5.31`) with actual compile logs; neither supplied ZIP contains `scc.exe`.
 - Run pristine → first generation → partial input → remaining work → fully overlaid second run (zero transforms) on real source states; structural diff, deterministic output, no unrelated changes, negative drift/missing-dependency/compile/error tests.
 - Preserve file and mod ownership, callback/wrapper ordering, full signatures, lifecycle, unload/reload, game state and fallback semantics. Reject *only* the unsafe owner/pass where possible; never publish an uncompiled or partially invalid overlay as safe.
-- **Exit:** fully compiled, changed-only, game-relative GRSP-owned `r6/scripts/...` overlay ZIP with sidecar source/dependency/exclusion proof **outside** the ZIP. Gameplay remains independently unproven until tested.
+- **Exit:** fully compiled, changed-only, game-relative GCO-local REDscript component `r6/scripts/...` overlay ZIP with sidecar source/dependency/exclusion proof **outside** the ZIP. Gameplay remains independently unproven until tested.
 
-### Stage R9 — GRSP-owned headless integration into GCO
+### Stage R9 — GCO-local REDscript component and headless integration
 
-- Provide GRSP-owned CLI commands conceptually equivalent to `--analyze --capture <verified-GRSP> --game <root> --frame-evidence <GCO-PresentMon-Frames> --json` and `--generate-pass --pass-output <zip> --json` (freeze exact switches/schema only after first tested contract).
-- GCO consumes owner JSON and generation ZIP **without** implementing a parallel REDscript Resolver or modifying GRSP's native raw measurements. Package the original owner source on the same shared .NET 10 runtime and use the one existing Windows CI workflow, with real source-replay gated to milestones as with CET.
+- Provide GCO-local REDscript component CLI commands conceptually equivalent to `--analyze --capture <verified-GRSP> --game <root> --frame-evidence <GCO-PresentMon-Frames> --json` and `--generate-pass --pass-output <zip> --json` (freeze exact switches/schema only after first tested contract).
+- GCO's orchestrator invokes **one in-repo REDscript component**, never a competing GRSP managed generator. Consume native GRSP measured evidence unchanged; preserve the CET owner Resolver. Package the in-repo component under the same shared .NET 10 runtime, with the existing Windows CI, and real private source replay gated to milestones.
 - **Exit:** independent REDscript owner parity, live-source read-only analysis, real generated ZIP/compile, bounded failure, repeatable source-state CI; GCO Capture/Restore/CET unaffected.
 
 ### Stage R10 — combine CET and REDscript outputs and validate in game
 
-- GCO merges source-owned CET and GRSP clean contributions into **one** game-root-relative ZIP: `bin/...` and `r6/scripts/...` plus optional proven shared files. Reject collisions, unsafe dependencies and original-source drift; put manifests, reports, profiler binaries, logs, compiler artifacts and PDBs **outside** the release ZIP.
+- GCO merges source-owned CET and its **GCO-local REDscript component** clean contributions into **one** game-root-relative ZIP: `bin/...` and `r6/scripts/...` plus optional proven shared files. Reject collisions, unsafe dependencies and original-source drift; put manifests, reports, profiler binaries, logs, compiler artifacts and PDBs **outside** the release ZIP.
 - Validate Vortex overlay/rollback ownership. Run real Cyberpunk loading, representative saved games, relevant mod features, F11 before/after performance and instability regression checks. Separately report script-domain activity and PresentMon frame intervals; never claim additive CPU or fabricated gain.
 - **Exit:** original 2-page workflow, verified one ZIP, verified full-stack REDscript compile, reproduced gameplay validation and measured outcomes. Do not promote to `main` or release on green CI alone.
 
