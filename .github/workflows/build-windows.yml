@@ -10,7 +10,7 @@ on:
         required: false
         default: false
   push:
-    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff ]
     paths:
       - '.github/workflows/build-windows.yml'
       - 'Directory.Build.props'
@@ -20,6 +20,8 @@ on:
       - 'assets/ui/elements/**'
       - 'src/GTotalOptimizer.Launcher/**'
       - 'src/GTotalOptimizer.Core/**'
+      - 'src/GRedscript.Resolver/**'
+      - 'tests/GRedscript.Resolver.Tests/**'
       - 'tests/GTotalOptimizer.Core.Tests/**'
 
 permissions:
@@ -84,7 +86,7 @@ jobs:
       # this REDscript development branch, from GCO's existing scoped token.
       # Source stays outside publish/release and is removed even on failure.
       - name: Verify existing GCO private-source token for REDscript
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
         env:
           REDSCRIPT_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
@@ -92,16 +94,30 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:REDSCRIPT_PRIVATE_SOURCE_TOKEN)) {
             throw 'GCO existing private source token is missing; source audit must fail closed.'
           }
-      - name: Checkout tested GRSP-owned .NET10 Resolver source
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
-        uses: actions/checkout@v4
+      # REDscript managed Resolver is source-owned by this GCO branch.
+      # GRSP's separate native profiler checkout above is unchanged.
+      - uses: actions/setup-python@v5
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         with:
-          repository: giorgioherma/GRSP-G-REDscript-Profiler
-          ref: 1da43d9a7197ad4fd1c2debc004a2f3ee31b9dab
-          path: unified/.gco-ci-grsp-resolver
-          persist-credentials: false
-      - name: Checkout private live REDscript source for GRSP admission audit
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+          python-version: '3.12'
+      - name: Build GCO-local REDscript Resolver and test native-evidence safety contracts
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_BUILD_FAILED' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_SAFETY_TESTS_FAILED' }
+          $runtime = Get-Content src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.runtimeconfig.json -Raw
+          if (!$runtime.Contains('"net10.0"') -or
+              (Test-Path src/GRedscript.Resolver/bin/Release/net10.0/G-REDscript-Profiler.dll)) {
+            throw 'GCO_LOCAL_REDSCRIPT_SHARED_RUNTIME_OR_NATIVE_BOUNDARY_FAILED'
+          }
+          Write-Host 'PASS GCO-local REDscript Resolver .NET10 build, safety tests and native boundary'
+      - name: Checkout private live REDscript source for GCO-local admission audit
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/original_cet_source
@@ -113,8 +129,8 @@ jobs:
             GCO-Capture-15112026_021913/r6/scripts
             Compiler
           sparse-checkout-cone-mode: true
-      - name: Audit private REDscript stack with actual GRSP owner CLI
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+      - name: Audit private REDscript stack with GCO-local REDscript CLI
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -134,11 +150,7 @@ jobs:
             if ($before.ContainsKey($key)) { throw 'Duplicate normalized source path' }
             $before[$key] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
           }
-          dotnet build '.gco-ci-grsp-resolver/resolver/GRSP.Resolver.csproj' -c Release --nologo
-          if ($LASTEXITCODE -ne 0) {
-            throw 'GRSP_OWNER_RESOLVER_BUILD_FAILED'
-          }
-          $dll = '.gco-ci-grsp-resolver/resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
           $report = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
           $auditLog = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.log'
           & dotnet $dll source-audit --game $privateRoot --out $report *> $auditLog
@@ -200,7 +212,7 @@ jobs:
       # Real R3 milestone: capture lives on a separate GCO commit. Check out
       # ONLY that immutable fixture; never merge unrelated branch changes.
       - name: Checkout exact real GRSP 15:51 capture fixture
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
@@ -211,7 +223,7 @@ jobs:
             tests/fixtures/real-captures
           sparse-checkout-cone-mode: true
       - name: Replay real sealed GRSP capture with private REDscript source
-        if: ${{ github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         timeout-minutes: 12
         shell: pwsh
         working-directory: unified
@@ -219,29 +231,29 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $fixture = '.gco-ci-real-grsp-capture/tests/fixtures/real-captures/GCO-Capture-15112026_155121.zip'
           $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
-          $resolver = '.gco-ci-grsp-resolver/resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $resolver = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
           $sourceAudit = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
-          $ownerCompiler = '.gco-ci-grsp-resolver/resolver/Verify-RealStackCompile.ps1'
+          $ownerCompiler = 'src/GRedscript.Resolver/Verify-RealStackCompile.ps1'
           $compilerArchive = '.gco-ci-private-redscript/Compiler/ssc.zip'
           $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
           $effectiveCache = '.gco-ci-private-redscript/Compiler/modded/final.zip'
           $pluginsArchive = '.gco-ci-private-redscript/Compiler/plugins.zip'
           & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive
-          if ($LASTEXITCODE -ne 0) { throw 'Real GRSP R3 owner capture replay failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
       - name: Remove exact real GRSP fixture checkout
-        if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
         working-directory: unified
         run: |
           if (Test-Path -LiteralPath '.gco-ci-real-grsp-capture') {
             Remove-Item -LiteralPath '.gco-ci-real-grsp-capture' -Recurse -Force -ErrorAction Stop
           }
-      - name: Remove private REDscript source and GRSP CI checkout
-        if: ${{ always() && github.ref == 'refs/heads/feature/redscript-resolver-integration' }}
+      - name: Remove private REDscript source checkout
+        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
         working-directory: unified
         run: |
-          foreach ($directory in @('.gco-ci-private-redscript', '.gco-ci-grsp-resolver')) {
+          foreach ($directory in @('.gco-ci-private-redscript')) {
             if (Test-Path -LiteralPath $directory) {
               Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction Stop
             }
