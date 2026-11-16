@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-16 — GCO #514 rerun GREEN with new GRSP callback-reuse instrumentation
+
+- **Verified source owner:** GRSP [CI #23](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43861198409) **SUCCESS** (two jobs), source SHA `03542a8ebea04803d84afc20534b01f7246c0b0f`, signed-by-checksum/provenance native `gco_explicit_f11` DLL with `RSP_CallbackReuse.csv` PE marker.
+- **Verified one-app integration:** GCO [#514 attempt 2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43862048161) **SUCCESS** after the correct owner binary became available: managed REDscript Resolver evidence/tests, owner-native artifact selection, official SCC reference fingerprints, single .NET10 package assembly, both independent Resolvers, exact native marker check, real GRSP installation/discard/Restore smoke, original 323 app/package contracts, complete CET owner equivalence and artifact upload. The first attempt was red because it correctly refused the old native DLL before producer #23 finished; no gate weakened.
+- **Verified GitHub Actions artifact:** `Gs-Cyberpunk2077_Optimizer-v1.2.5-run514-a2`, **90,069,117 bytes**, nonexpired, digest `sha256:e29062466d57778b1a39fd692fe20406501a70711adacc55d3314cf7d779462a`. Version unchanged.
+- **Next:** user should run one representative complete F11 capture on the new app, leaving G-GC optional/independent; confirm `RSP_CallbackReuse.csv` populated and that callback read overlaps survive GC-clean windows. Do **not** claim actual callback-entry counts, safe shared caching, source-compiling optimization output, or another successful crash-free game test for this new DLL before evidence.
+
+
 ## 2026-11-16 — callback-level repeated/shared-state work, independent of GC
 
 - User clarified target: **cross-board recurring callback behavior**, not mod-specific optimization or isolated spike elimination. CET callback registration and shared provider methodology are the reference. CET G-GC is separate measurement/collector control, **not an installation dependency or a requirement before REDscript generic analysis**.
