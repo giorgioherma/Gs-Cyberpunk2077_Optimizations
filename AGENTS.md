@@ -1,5 +1,12 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## CURRENT 2026-11-16 owner routing and native safety — overrides contradictory older text
+
+- **Native REDscript profiler/instrumentation only:** `giorgioherma/GRSP-G-REDscript-Profiler` branch `dev/native-instrumentation`. The old GRSP `dev/resolver-profiler-handoff` is obsolete. Native output is built and tested by GRSP's independent `.github/workflows/native-instrumentation.yml`, not compiled or modified in GCO.
+- **Managed REDscript Resolver/Generator/SCC** belongs to GCO `dev/redscript/resolver_handoff`, not GRSP. The managed component and safety tests were migrated and verified by GCO CI #483. Do not create competing managed optimizer logic on GCO `main` without integration approval.
+- **GCO `main`** owns the existing one-artifact two-page .NET10 app and imports exactly a successful GRSP **native-only branch** run with source SHA, provenance and native DLL hash. It refuses stale/missing DLLs. Changes to native capture correctness are only authoritative after owner CI and real game tests. Do not interpret an owner-CI green build as crash safety.
+- A crash was reported after the experimental proxy-child instrumentation. The GRSP native-only development branch now guards bookkeeping re-entry, preallocates bounded proxy counters and drains in-flight hook bookkeeping before F11 shard merge. **Runtime safety remains unverified.** Preserve easy Restore and known-stable profiler rollback.
+
 **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Work on `main` only** unless the user explicitly changes that decision. Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
 ## Current MAIN workflow — COLLECT reports → CONTINUE restores → Page 2 (2026-11-15, owner-approved)
