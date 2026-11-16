@@ -209,6 +209,63 @@ try {
                 $preview.measuredOperatorEdgesInApplicableLoops +
                 ' compilerValidated=false deployable=false originalSourceUnchanged=true')
 
+    # R4/R5 full installed-stack discovery uses GRSP's exact structural
+    # matcher, not a GCO parser. Paths stay private in runner temp.
+    $scanOutput = Join-Path $work 'private-grsp-generic-opportunities.json'
+    $scanLog = Join-Path $work 'private-grsp-generic-scan.log'
+    & dotnet $dll scan-generic --game $game --analysis $result --out $scanOutput *> $scanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $scanOutput -PathType Leaf)) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SCAN_FAILED'
+    }
+    $scan = Get-Content -LiteralPath $scanOutput -Raw | ConvertFrom-Json -Depth 80
+    $measuredCandidates = @($scan.candidates | Where-Object {
+        $_.state -eq 'ELIGIBLE_MEASURED'
+    })
+    if ($scan.schemaVersion -ne 'grsp.generic.opportunities.v1' -or
+        $scan.rule -ne 'CNAME_ARRAY_MEMBERSHIP_V1' -or
+        $scan.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$scan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        $scan.evidenceKind -ne 'GRSP_SOURCE_MATCHED_OPERATOR_EDGES' -or
+        [int]$scan.eligibleMeasured -lt 1 -or
+        [int]$scan.eligibleMeasured -ne $measuredCandidates.Count -or
+        [int]$scan.candidateLoopsExamined -ne
+            ([int]$scan.eligibleMeasured + [int]$scan.eligibleUnmeasured +
+             [int]$scan.rejectedUnproven) -or
+        $scan.generationAuthorized -ne $false -or
+        $scan.deployable -ne $false -or
+        $scan.sourceModified -ne $false -or
+        [int]$scan.generatedFiles -ne 0) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SCAN_CONTRACT_FAILED'
+    }
+    foreach($candidate in $applied) {
+        $expectedPath = 'r6/scripts/' + [string]$candidate.path
+        if (@($measuredCandidates | Where-Object { $_.path -ceq $expectedPath }).Count -eq 0) {
+            throw 'GRSP_REAL_SOURCE_WIDE_MEASURED_PREVIEW_MISMATCH'
+        }
+    }
+    $unmeasuredScan = Join-Path $work 'private-grsp-unmeasured-opportunities.json'
+    $unmeasuredLog = Join-Path $work 'private-grsp-unmeasured-scan.log'
+    & dotnet $dll scan-generic --game $game --out $unmeasuredScan *> $unmeasuredLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $unmeasuredScan -PathType Leaf)) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SOURCE_ONLY_SCAN_FAILED'
+    }
+    $plain = Get-Content -LiteralPath $unmeasuredScan -Raw | ConvertFrom-Json -Depth 80
+    if ($plain.schemaVersion -ne 'grsp.generic.opportunities.v1' -or
+        $plain.evidenceKind -ne 'NOT_CAPTURED' -or
+        $plain.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$plain.eligibleMeasured -ne 0 -or
+        [int]$plain.structuralMatches -ne [int]$scan.structuralMatches -or
+        [int]$plain.rejectedUnproven -ne [int]$scan.rejectedUnproven -or
+        $plain.deployable -ne $false -or
+        [int]$plain.generatedFiles -ne 0) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SOURCE_ONLY_INCONSISTENT'
+    }
+    Write-Host ('PASS GRSP source-wide generic scanner: files=' +
+        $scan.sourceFiles + ' examined=' + $scan.candidateLoopsExamined +
+        ' measured=' + $scan.eligibleMeasured + ' unmeasured=' +
+        $scan.eligibleUnmeasured + ' rejected=' + $scan.rejectedUnproven +
+        ' sourceOnlyEquivalent=true generated=0 liveSourcesUntouched=true')
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
