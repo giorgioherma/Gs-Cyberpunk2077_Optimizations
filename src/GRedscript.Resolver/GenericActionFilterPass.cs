@@ -362,6 +362,20 @@ internal static class GenericActionFilterPass
         var expected = SourceAdmission.ReadTokens(statement);
         if (!MatchWords(t, p, expected.Select(x => x.Value).ToArray()))
             return null;
+        // The lexer deliberately uses <literal> as the token KIND; therefore
+        // token-kind equality alone would wrongly accept n"WrongName" in a
+        // partially modified generated guard. Prove literal BYTES as well.
+        for (int k = 1; k < expected.Count; k++)
+        {
+            if (expected[k].Value != "<literal>") continue;
+            if (expected[k - 1].Value != "n" || t[p + k - 1].Value != "n")
+                return null;
+            string actualLiteral = file.Text[t[p + k - 1].Start..t[p + k].End];
+            string originalLiteral = statement[
+                expected[k - 1].Start..expected[k].End];
+            if (!string.Equals(actualLiteral, originalLiteral, StringComparison.Ordinal))
+                return null;
+        }
         return new Candidate(0, 0, options[0].Names, owner, function,
             name, "ALREADY_COMPLETE", t[p].Line);
     }
