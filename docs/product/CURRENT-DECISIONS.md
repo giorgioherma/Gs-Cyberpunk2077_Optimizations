@@ -2,6 +2,14 @@
 
 **Authority model.** The original [UNIFIED-TWO-PAGE-WORKFLOW](UNIFIED-TWO-PAGE-WORKFLOW.md) is copied **unchanged** from the accepted 2026-10-16 user/agent design. This file records **later explicit user decisions and implementation interpretation only**. If a suggestion here conflicts with original behavior without a direct user authorization, the original wins; ask the user before changing it.
 
+## Latest explicit decision — 2026-11-16 (supersedes older REDscript managed ownership)
+
+- **Develop the REDscript Resolver/Generator in GCO** on `dev/redscript/resolver_handoff` as a distinct internal `.NET 10` source-aware component. GRSP stays the authority for native profiling, F11 instrumentation and measurement evidence only. CET retains its Lua Resolver/Generator; G-REDruntime owns optional common runtime services.
+- Maintain one existing two-page application and one user-facing workflow, joint CET/GRSP/PresentMon evidence, one ZIP and one canonical CI; no second form, competing generator or managed runtime.
+- [GCO-local handoff](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) supersedes older contradictory managed ownership text below. The working GRSP managed prototype remains a migration source until GCO-local parity is verified; no code move is claimed yet. Do not alter stable `main`.
+
+## Earlier decisions below (superseded where inconsistent)
+
 ## Explicitly approved since the original specification
 
 1. **New repository, `main`.** User created [Gs-Cyberpunk2077_total_optimization_generator_v2.31](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations) on 2026-11-04 and explicitly rejected using its temporary `dev/resolver-profiler-handoff` as the development branch. Keep this product on `main`. This does not change existing CET/GRSP branch choices.
