@@ -529,6 +529,15 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .digest-table th{font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);padding:7px}
 .digest-table td{border-bottom:1px solid #243b45;padding:8px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .digest-table tr:last-child td{border-bottom:0}
+.digest-table.ranking th:first-child,.digest-table.ranking td:first-child{width:60%}
+.digest-table.ranking th:nth-child(2),.digest-table.ranking td:nth-child(2){width:23%}
+.digest-table.ranking th:last-child,.digest-table.ranking td:last-child{width:17%}
+.digest-table.spikes th:first-child,.digest-table.spikes td:first-child{width:20%}
+.digest-table.spikes th:nth-child(2),.digest-table.spikes td:nth-child(2){width:57%;text-align:left}
+.digest-table.spikes th:last-child,.digest-table.spikes td:last-child{width:23%}
+.digest-table.windows th:first-child,.digest-table.windows td:first-child{width:14%}
+.digest-table.windows th:not(:first-child),.digest-table.windows td:not(:first-child){width:21.5%}
+
 .digest-table td:first-child{max-width:0}
 .digest-table td:not(:first-child),.digest-table th:not(:first-child){text-align:right}
 .digest-table .jump-row,.jump-row{cursor:pointer}
