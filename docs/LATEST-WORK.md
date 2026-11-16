@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-16 — fixed red GCO native artifact selector and verified GRSP producer
+
+- **GCO CI #499–#505 regression root cause**: `.github/workflows/build-windows.yml` queried GitHub Actions with `branch=dev%2Fresolver-profiler-handoff` but correctly required each returned run's `head_branch` to equal `dev/native-instrumentation`. Every returned run was filtered out, and packaging stopped with `No successful GRSP independent native CI with a verified instrumentation DLL artifact`. This was not a failure to build native Rust.
+- **Fix committed** to GCO `main` at `8ec4ac3a34d0af6de25ee65cbd2ee37874c8a30b` (and GCO Resolver dev at `29174b68...`): both query and validation now target the same `dev/native-instrumentation` branch. No fallback, workflow replacement, or weakening of existing source ancestry/SHA checks.
+- **Live source-owner verification:** GRSP native CI [#19](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43823005911) completed **SUCCESS**, commit `18a860ee95a12919cd090236a15c035dfff77857`, with both native jobs successful and exact named artifact `GRSP-native-callback-instrumentation-18a860ee95a12919cd090236a15c035dfff77857` (not expired). GitHub's branch/status query now returns exactly that successful run.
+- **GCO next run:** [#506](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43850175353) auto-triggered and **in progress when checked**. The final bundle and gameplay stability are NOT yet verified.
+
+
 ## 2026-11-16 — unified GCO main artifact now includes managed REDscript Resolver
 
 - **Single GCO `main` application ZIP:** preserved the existing two-page WPF UI, CET/GRSP managers and profilers, genuine PresentMon, CET Resolver and shared .NET 10 runtime. Imported GCO-owned managed REDscript Resolver (`src/GRedscript.Resolver`) and its CLI/safety tests byte-for-byte from `dev/redscript/resolver_handoff` (12 source/test files, exact SHA copies verified before documentation-only README update). No separate user download or second workflow.
