@@ -296,10 +296,68 @@ try {
         $scan.eligibleUnmeasured + ' rejected=' + $scan.rejectedUnproven +
         ' sourceOnlyEquivalent=true generated=0 liveSourcesUntouched=true')
 
+    # GCO-local CET-inspired callback generic: scan every private source,
+    # stage only the exact proven fixed CName index shape, then reuse the SAME
+    # official isolated SCC runner used by the established membership pass.
+    $callbackScan = Join-Path $work 'gco-callback-scan.json'
+    $callbackScanLog = Join-Path $work 'gco-callback-scan.log'
+    & dotnet $dll scan-callbacks --game $game --out $callbackScan *> $callbackScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $callbackScan -PathType Leaf)) {
+        throw 'GCO_CALLBACK_REAL_SOURCE_SCAN_FAILED'
+    }
+    $callbackReport = Get-Content -LiteralPath $callbackScan -Raw | ConvertFrom-Json -Depth 70
+    if ($callbackReport.schemaVersion -ne 'gco.redscript.callback.scan.v1' -or
+        $callbackReport.sourceStackSha256 -ne $expectedSourceHash -or
+        $callbackReport.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $callbackReport.generationAuthorized -ne $false -or
+        $callbackReport.sourceWrites -ne $false) {
+        throw 'GCO_CALLBACK_REAL_SOURCE_SCAN_CONTRACT_FAILED'
+    }
+    $callbackCount = [int]$callbackReport.fixedCnameIndexEligible
+    $callbackFolder = Join-Path $work 'gco-callback-fixed-index-preview'
+    if ($callbackCount -gt 0) {
+        $callbackPreviewLog = Join-Path $work 'gco-callback-preview.log'
+        & dotnet $dll preview-callback-index --game $game --analysis $result --out $callbackFolder *> $callbackPreviewLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_CALLBACK_REAL_SOURCE_PREVIEW_FAILED'
+        }
+        $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $callbackScripts -PathType Container)) {
+            throw 'GCO_CALLBACK_REAL_SOURCE_PREVIEW_MISSING'
+        }
+        $callbackFiles = @(Get-ChildItem -LiteralPath $callbackScripts -Recurse -File)
+        if ($callbackFiles.Count -lt 1 -or $callbackFiles.Count -gt $callbackCount) {
+            throw 'GCO_CALLBACK_REAL_SOURCE_PREVIEW_COUNT_UNPROVEN'
+        }
+        foreach ($file in $callbackFiles) {
+            if ($file.Extension -ne '.reds') { throw 'GCO_CALLBACK_PREVIEW_EXTENSION_UNSAFE' }
+            $relative = [System.IO.Path]::GetRelativePath($callbackScripts, $file.FullName)
+            if ([System.IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..')) {
+                throw 'GCO_CALLBACK_PREVIEW_PATH_ESCAPE'
+            }
+            $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+            if (!(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+                throw 'GCO_CALLBACK_PREVIEW_ORIGINAL_OWNERSHIP_OR_DIFFERENCE_UNPROVEN'
+            }
+        }
+        Write-Host ('PASS GCO generic callback source preview: candidateMethods=' +
+            $callbackCount + ' stagedFiles=' + $callbackFiles.Count +
+            ' compilerValidated=false deployable=false originalSourceUnchanged=true')
+    }
+    else {
+        Write-Host 'GCO generic callback index shape absent from real stack; no source staged.'
+    }
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
-    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive
+    $extra = @{}
+    if ($callbackCount -gt 0) {
+        $extra.CallbackPreviewRoot = $callbackFolder
+    }
+    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
     if ($LASTEXITCODE -ne 0) {
         throw 'GRSP_OWNER_R6_SCC_FULL_SOURCE_COMPILATION_FAILED'
     }
