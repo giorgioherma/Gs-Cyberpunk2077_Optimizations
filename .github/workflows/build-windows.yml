@@ -69,6 +69,14 @@ jobs:
               $_.name -eq $required -and $_.expired -eq $false
             })
             if ($match.Count -eq 1) {
+              # A run from the new native branch may predate the F11 quiescence
+              # and re-entrancy fixes. Reject those older crash-risk DLLs.
+              $safetyBase='78dd87635bc7cba77c427c3928f10e0be18d7eea'
+              $comparison=(& gh api "repos/$repo/compare/$safetyBase...$($run.head_sha)") | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0 -or $comparison.status -notin @('identical','ahead')) {
+                Write-Host 'Skipping native artifact predating required F11 safety correction'
+                continue
+              }
               $selected=$run
               break
             }
