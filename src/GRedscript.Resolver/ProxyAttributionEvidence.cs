@@ -56,6 +56,7 @@ internal static class ProxyAttributionEvidence
                 _ = Field(row, column);
 
             string id = Field(row, "stable_callsite_id");
+            string captureId = Field(row, "capture_id");
             string owner = Field(row, "source_owner");
             string method = Field(row, "source_function");
             string path = Field(row, "source_path");
@@ -74,8 +75,8 @@ internal static class ProxyAttributionEvidence
             long sparse = NonnegativeLong(row, "sparse_observed_paths");
             _ = NonnegativeLong(row, "sparse_observed_max_depth");
             long dropped = NonnegativeLong(row, "hot_paths_dropped_global");
-            if (line <= 0 || !target.Contains("proxy$", StringComparison.Ordinal) &&
-                !target.Contains("wrapper$", StringComparison.Ordinal))
+            if (line <= 0 || (!target.Contains("proxy$", StringComparison.Ordinal) &&
+                !target.Contains("wrapper$", StringComparison.Ordinal)))
                 throw new InvalidDataException("PROXY_EVIDENCE_SHAPE_INVALID: source line or target");
             if (Field(row, "receiver_proven") != "false" ||
                 Field(row, "callback_entries_known") != "false" ||
@@ -92,6 +93,7 @@ internal static class ProxyAttributionEvidence
                 throw new InvalidDataException("PROXY_EVIDENCE_ATTRIBUTION_MISMATCH");
             if (!sourceCallsites.TryGetValue(id, out var candidates) ||
                 !candidates.Any(c =>
+                    Field(c, "capture_id") == captureId &&
                     Field(c, "owner") == owner &&
                     Field(c, "source_function") == method &&
                     Field(c, "source_path") == path &&
