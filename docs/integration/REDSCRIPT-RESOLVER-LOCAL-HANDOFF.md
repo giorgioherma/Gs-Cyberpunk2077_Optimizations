@@ -6,6 +6,8 @@
 
 **Active development branch:** `dev/redscript/resolver_handoff`, created from GCO `feature/redscript-resolver-integration` at `0d62eaff7b19ca9263dc355250beccbe184461da`. **GCO `main` stays untouched.** This decision supersedes the November 15 **repository-location/ownership** decision that GRSP would be the permanent home of the REDscript Resolver. It does **not** revoke the generic-first blueprint, past test results, or source-owner profiling boundaries.
 
+**Approved optimization backlog:** [REDscript Resolver agreed optimization candidates and mandatory generic-first gate](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). The numbered mod review is an investigation record, not permission to implement targeted recipes before R5 generic coverage and the R7 gap ledger.
+
 ## Approved component boundaries
 
 - **GCO repository:** develop the REDscript Resolver, source-aware generic Generator, compiler/output validation and their tests as a **separate internal .NET 10 component**. The existing CET Resolver remains CET-owned and invoked as-is, with its fixed generation order preserved.
