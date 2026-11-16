@@ -1,5 +1,15 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## CURRENT GCO REDscript Resolver development — owner decision 2026-11-16
+
+- **Active branch is `dev/redscript/resolver_handoff`**. It branches from the completed integration documentation at `0d62eaff7b19ca9263dc355250beccbe184461da` and **supersedes the 2026-11-15 branch restriction below**. GCO `main` and earlier integration branch are protected.
+- **Read [GCO-local REDscript handoff](docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) first**, then the R0–R10 blueprint and progress. The original generic-first sequence remains authoritative; prior GRSP-owned managed Resolver/Generator instructions are historical.
+- **REDscript Resolver, source-aware generic Generator, scanner and full-stack SCC validation belong in this GCO repository as one separate `.NET 10` component.** CET retains ownership of its existing Lua Resolver and fixed generation order. **GRSP owns profiling, native F11 instrumentation and measured evidence writers only**; G-REDruntime owns optional shared framework services.
+- One original GCO **two-page application and one user-facing workflow**, shared CET/REDscript evidence, same canonical Windows CI and single clean game-relative ZIP. Never make another UI form, second .NET runtime, parallel active generator or duplicate CI pipeline.
+- **Migration has not been completed yet:** the GRSP development-branch managed Resolver code and tests are only the proven source for a controlled relocation. Do not delete or disable their current working GCO CI pin until the local code passes exact CLI, source-state, private-stack SCC and packaging parity. Record precise outcomes in both progress ledgers without claiming gameplay or gains.
+
+## Historical 2026-11-15 directives below (superseded where ownership/branch differs)
+
 **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Protect `main`; work on explicitly approved feature branches for their specific tasks.** Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
 ## Active REDscript integration branch — approved 2026-11-15 (CURRENT ON THIS BRANCH)
