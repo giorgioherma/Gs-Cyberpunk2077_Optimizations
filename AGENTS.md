@@ -1,5 +1,14 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## CURRENT 2026-11-16 single GCO artifact integration — latest user-approved request
+
+**Deliver everything through ONE existing GCO `main` downloadable application ZIP.** This supersedes older text saying GCO `main` has no REDscript Resolver implementation. GCO `src/GRedscript.Resolver` is the one managed .NET 10 REDscript Resolver/Generator source (copied from the verified `dev/redscript/resolver_handoff` baseline). It is packaged as `components/redscript-resolver/app/`, alongside the CET Resolver, source-owned CET/GRSP profilers and PresentMon. All share the existing private .NET 10 runtime, one two-page WPF application and one `.github/workflows/build-windows.yml`; **never introduce another UI, parallel release pipeline or extra managed runtime**.
+
+The separate GRSP `dev/native-instrumentation` branch exclusively owns Rust VM hooks, F11 and native evidence; GCO's existing Windows workflow downloads the independently built, successful source-owner DLL, verifies SHA256/provenance/Cargo.lock and refuses artifacts that predate the safety barrier commit `78dd87635bc7cba77c427c3928f10e0be18d7eea`. There is **no GCO Rust build or silent old-binary fallback**. Native compilation, artifact availability and crash-free gameplay remain unverified until actual CI/live testing; preserve Restore/rollback.
+
+Bundling a managed source preview **does not enable** automatic REDscript optimization or generation. Existing Page 2 controls stay unchanged until safe production integration is proven. GCO `dev/redscript/resolver_handoff` remains the development workstream for new generic passes; update/merge into `main` only after relevant real-source/SCC/contracts. The current bundled component is a verified identical source snapshot, not a duplicate implementation.
+
+
 ## CURRENT 2026-11-16 owner routing and native safety — overrides contradictory older text
 
 - **Native REDscript profiler/instrumentation only:** `giorgioherma/GRSP-G-REDscript-Profiler` branch `dev/native-instrumentation`. The old GRSP `dev/resolver-profiler-handoff` is obsolete. Native output is built and tested by GRSP's independent `.github/workflows/native-instrumentation.yml`, not compiled or modified in GCO.
