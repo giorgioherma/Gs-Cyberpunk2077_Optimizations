@@ -49,3 +49,7 @@ Per source-matched widget/controller `SetData` family, measure complete tuple eq
 5. Preserve R7 semantic remainder as blocked; do not optimize the 61-file portfolio to manufacture coverage.
 
 **Validation on this document change:** read-only documentation/review only. NO Rust native build, actual game capture, new source scan, SCC compile, CI, generated ZIP or performance measurement is claimed.
+
+## Existing native instrumentation verification (2026-11-16)
+
+Read original GRSP `src/callback_pressure.rs` and `OUTPUT_SCHEMA.md` on `dev/resolver-profiler-handoff`. The writer derives `RSP_CallbackPressure.csv` and `RSP_CallbackTargets.csv` solely **after STOP** from `CALLSITES`, `ROOTS`, `FUNCTIONS` and frame maps. It already exports outgoing-edge rate, source/target identity, exclusive ticks, active-frame percentage, max edges/frame and unresolved/wrapper cautions. These should be **reused** rather than implemented again. Its deliberate `entry_count_status` says callback entries UNKNOWN; it has **no** argument values, unchanged-device/grace ratio, UI tuple equality, widget replacement or side-effect evidence. Consequently **no existing CSV answers the actual avoidable-work question**. Next implementation must be a narrowly scoped GRSP-owned native/capture measurement, only if it can observe those facts without changing game behavior and with measured bounded overhead; otherwise record the evidence gap and change priorities.
