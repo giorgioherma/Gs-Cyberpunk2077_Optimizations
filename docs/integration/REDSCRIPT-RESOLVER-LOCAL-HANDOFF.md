@@ -1,11 +1,15 @@
 # GCO-local REDscript Resolver handoff — approved 2026-11-16
 
+## Agent routing rule (2026-11-16)
+
+**This GCO branch is the only active development location for the managed REDscript Resolver.** All Resolver research, rule generation, source proof, SCC validation and combined analysis continue here even when the profiler evidence comes from GRSP. Do not restart managed implementation on the historic GRSP `dev/resolver-profiler-handoff` branch. GRSP retains only Rust native profiler measurement and F11/install/restore; the original `src/proxy_attribution.rs` remains GRSP-owned and the GCO copy is a non-executable reference. See both repositories' `AGENTS.md`. The historic GRSP Resolver handoffs were preserved in `docs/integration/reference/` and removed from its active tree.
+
 **Active development branch:** `dev/redscript/resolver_handoff`, created from GCO `feature/redscript-resolver-integration` at `0d62eaff7b19ca9263dc355250beccbe184461da`. **GCO `main` stays untouched.** This decision supersedes the November 15 **repository-location/ownership** decision that GRSP would be the permanent home of the REDscript Resolver. It does **not** revoke the generic-first blueprint, past test results, or source-owner profiling boundaries.
 
 ## Approved component boundaries
 
 - **GCO repository:** develop the REDscript Resolver, source-aware generic Generator, compiler/output validation and their tests as a **separate internal .NET 10 component**. The existing CET Resolver remains CET-owned and invoked as-is, with its fixed generation order preserved.
-- **GRSP repository:** continues owning REDscript native instrumentation, F11 capture, profiler measurements and native evidence writers. Existing managed resolver/preview/scanner code in the GRSP development branch is the verified **migration source** for the GCO-local component; preserve it until the GCO replacement passes real regression parity. Do not independently develop duplicate optimizers indefinitely.
+- **GRSP repository:** continues owning REDscript native instrumentation, F11 capture, profiler measurements and native evidence writers. The managed resolver/preview/scanner migrated into GCO and passed the verified parity gate at GCO CI #483; the original managed implementation, CI and two obsolete handoff documents were subsequently removed from GRSP's active development branch. Preserve Git history and native profiler ownership, not a second managed implementation.
 - **G-REDruntime repository:** continues owning optional shared REDscript runtime services and any proven native player-state/NEAR-FAR bridge contract.
 - **Unified GCO application:** owns orchestration, genuine PresentMon-backed combined reporting, shared CET/REDscript candidate planning, one existing two-page WPF interface and final **one game-relative optimization ZIP**. This does **not** authorize a second UI form/page, an additional runtime or a second CI workflow.
 
