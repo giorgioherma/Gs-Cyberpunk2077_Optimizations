@@ -21,6 +21,10 @@ internal static class Program
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-action-filter")
+                return RunActionFilterScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-action-filter")
+                return RunActionFilterPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-callback-index")
                 return RunCallbackIndexPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scc-headless")
@@ -360,6 +364,35 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript fixed-index preview: transformed=" + count +
             " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunActionFilterScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Action filter scan only accepts --game and --out");
+        var summary = GenericActionFilterPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript generic action filter: files=" +
+            summary.SourceFiles + " OnAction=" + summary.OnActionMethods +
+            " eligible=" + summary.Eligible + " already=" +
+            summary.AlreadyComplete + " refused=" + summary.Refused +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunActionFilterPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key =>
+                key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Action filter preview accepts only --game, --analysis, --out");
+        int rewritten = GenericActionFilterPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript action filter preview: transformed=" +
+            rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
     }
 
