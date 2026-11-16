@@ -515,28 +515,51 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .tip{display:none;position:absolute;pointer-events:none;z-index:2;white-space:pre-line;max-width:300px;background:#071014f5;border:1px solid var(--cyan);padding:10px;border-radius:6px;font:12px Consolas,monospace}
 .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px}.sw{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;background:currentColor}
 .note{background:#152128;border-left:3px solid var(--yellow);padding:10px 13px;margin:12px 0}
-@media(max-width:650px){main{padding:12px}canvas{height:450px}}
+.digest-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.digest-metric{background:#101b21;border:1px solid var(--border);padding:14px;border-radius:8px}
+.digest-metric span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em}
+.digest-metric strong{display:block;font-size:22px;margin:7px 0}
+.digest-metric small{display:block;font-size:12px;line-height:1.4;color:var(--muted)}
+.side-by-side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.digest-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;min-width:0}
+.digest-panel h3{font-size:15px;color:#e5f7fa;margin:0 0 12px}
+.digest-table{border-collapse:collapse;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12px}
+.digest-table th{font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);padding:7px}
+.digest-table td{border-bottom:1px solid #243b45;padding:8px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.digest-table tr:last-child td{border-bottom:0}
+.digest-table td:first-child{max-width:0}
+.digest-table td:not(:first-child),.digest-table th:not(:first-child){text-align:right}
+.digest-table .jump-row,.jump-row{cursor:pointer}
+.digest-table .jump-row:hover,.jump-row:hover{background:#173741}
+.table-scroll{overflow-x:auto}
+.facts{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:12px;margin:0}
+.facts dt{color:var(--muted)}.facts dd{margin:0;text-align:right;font-weight:600}
+.small{font-size:12px}
+.chartbox canvas{height:410px}
+button[aria-pressed=true]{background:#1e545f;border-color:#50d9e8;color:#fff}
+#scaleNote{font-size:12px;min-height:20px;margin-top:8px;color:var(--muted)}
+@media(max-width:850px){.side-by-side{grid-template-columns:1fr}}
+@media(max-width:650px){main{padding:12px}.chartbox canvas{height:400px}.toolbar{flex-wrap:wrap}.digest-kpis{grid-template-columns:1fr 1fr}}
 </style></head><body><main>
 <h1>GCO / Combined Profiler Report</h1>
 <p class="muted">Real source-owned CET and REDscript measurements, alongside <strong>__PROVIDER__</strong> frame evidence. Derived from the collected capture; no game or original capture files modified.</p>
-<section class="grid">
-<div class="card">Frame-time source<strong>__PROVIDER__</strong><span class="muted">No CapFrameX substitution or synthetic frame data</span></div>
-<div class="card">PresentMon frames<strong>__MONFRAMES__</strong><span class="muted">Verified common F11 intersection</span></div>
-<div class="card">CET timeline rows<strong>__CETWINDOWS__</strong><span class="muted">Measured native 50 ms owner buckets</span></div>
-<div class="card">GRSP frames<strong>__REDFRAMES__</strong><span class="muted">Measured instrumented call-edge work in the overlap</span></div>
-</section>
-<h2>CET + REDscript + PresentMon</h2>
+__DIGEST__
+<h2>CET + REDscript + PresentMon timeline</h2>
 <div class="note"><strong>Measurement boundaries:</strong> PresentMon measures present-to-present intervals, not displayed latency. CET and REDscript values are distinct observed/instrumented workloads, not whole-process CPU; they can overlap and must <strong>not</strong> be added or subtracted. Timing alignment is coarse 50 ms association using recorded QPC/Unix F11 anchors, not proof that either profiler caused a particular hitch. PC latency and frame-generation flags are NOT_CAPTURED.</div>
 <div class="chartbox"><div class="toolbar">
-<button id="full">Full capture</button><button id="worst">Worst PresentMon interval</button>
-<span class="muted">Hold Shift and scroll to zoom · Hover for actual values</span></div>
-<canvas id="graph" role="img" aria-label="Three aligned time-series panels: PresentMon, measured CET and REDscript work"></canvas>
+<button id="combined" aria-pressed="true">Combined timeline</button>
+<button id="tracks" aria-pressed="false">Three synchronized tracks</button>
+<button id="full">Full capture</button>
+<button id="worst">Worst PresentMon interval</button>
+<span class="muted">Shift + scroll to zoom · Select a time in the tables above</span>
+</div>
+<canvas id="graph" role="img" aria-label="CET REDscript and PresentMon timeline with switchable combined and three-track views"></canvas>
 <div class="tip" id="tip"></div><div class="legend">
 <span style="color:var(--cyan)"><i class="sw"></i>PresentMon maximum interval / 50ms bucket</span>
 <span style="color:var(--yellow)"><i class="sw"></i>CET measured exclusive work / 50ms bucket</span>
 <span style="color:var(--magenta)"><i class="sw"></i>GRSP measured exclusive instrumented work / 50ms bucket</span>
-</div></div>
-<p class="muted">A missing PresentMon capture is shown as NOT_CAPTURED. GRSP's recorded frame Unix clocks and CET 50ms bucket clocks are used directly; no frame-index lag fitting or CapFrameX format is synthesized.</p>
+</div><div id="scaleNote"></div></div>
+<p class="muted">Combined view scales each source to its own visible peak to compare <strong>timing patterns</strong>, not CPU cost. Three-track mode shows each source in measured milliseconds with independent axes and verified native spike timestamps. GRSP uses absolute Unix F11 anchors; no frame-index lag fitting or CapFrameX substitution.</p>
 <h2>Full source-owned profiler reports</h2>
 <nav><a href="CET/CET_Report.html">Full CET report (native/GC/allocations/callbacks)</a>
 <a href="GRSP/GRSP_Report.html">Full REDscript report (functions/frames/spikes)</a>
