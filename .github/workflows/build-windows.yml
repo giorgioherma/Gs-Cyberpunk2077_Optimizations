@@ -247,6 +247,37 @@ jobs:
                       " native=" + $audit.nativeExternalDeclarations +
                       " declarationOnly=" + $audit.declarationOnlySignatures +
                       " expression=" + $audit.expressionBodiedFunctions)
+      - name: Discover generic callback shapes in private effective REDscript stack
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit=Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.json'
+          $privateLog=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.log'
+          & dotnet $dll scan-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_PRIVATE_CALLBACK_SCAN_FAILED'
+          }
+          $scan=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.callback.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.callbackMethods -lt 1 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceWrites -ne $false) {
+            throw 'GCO_CALLBACK_SCAN_CONTRACT_FAILED'
+          }
+          # No private paths, source lines or raw scan JSON leave the runner.
+          Write-Host ('PASS GCO generic callback inventory: files=' + $scan.sourceFiles +
+            ' callbacks=' + $scan.callbackMethods +
+            ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
+            ' already=' + $scan.fixedCnameIndexAlreadyComplete +
+            ' generated=0 originalSourcesUntouched=true')
       # Real R3 milestone: capture lives on a separate GCO commit. Check out
       # ONLY that immutable fixture; never merge unrelated branch changes.
       - name: Checkout exact real GRSP 15:51 capture fixture
