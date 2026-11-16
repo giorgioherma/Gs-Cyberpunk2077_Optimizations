@@ -523,6 +523,8 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .side-by-side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
 .digest-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;min-width:0}
 .digest-panel h3{font-size:15px;color:#e5f7fa;margin:0 0 12px}
+.finding{padding:10px 0;border-bottom:1px solid #243b45}.finding:last-child{border-bottom:0}
+.finding strong{color:#e4edf1;font-size:13px}.finding p{color:var(--muted);font-size:12px;margin:5px 0 0;line-height:1.5}
 .digest-table{border-collapse:collapse;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12px}
 .digest-table th{font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);padding:7px}
 .digest-table td{border-bottom:1px solid #243b45;padding:8px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
