@@ -67,6 +67,9 @@ internal static class GenericCallbackRules
                 if (!IsIndexSignature(tokens, method)) continue;
                 var candidate = InspectIndex(text, tokens, methods, method);
                 if (candidate is null) continue;
+                if (candidate.State == "PRISTINE_APPLICABLE" &&
+                    HasOtherSourceMethodOverride(scripts, method.Owner, candidate.Helper))
+                    candidate = candidate with { State = "UNPROVEN_OR_DRIFTED" };
                 if (candidate.State == "PRISTINE_APPLICABLE") eligible++;
                 else if (candidate.State == "ALREADY_COMPLETE") already++;
                 else rejected++;
@@ -144,7 +147,9 @@ internal static class GenericCallbackRules
             {
                 if (!IsIndexSignature(tokens, method)) continue;
                 var candidate = InspectIndex(text, tokens, methods, method);
-                if (candidate?.State != "PRISTINE_APPLICABLE") continue;
+                if (candidate?.State != "PRISTINE_APPLICABLE" ||
+                    HasOtherSourceMethodOverride(scripts, method.Owner, candidate.Helper))
+                    continue;
                 var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
                 var lines = new List<string> { "    " + Marker + candidate.Helper };
                 for (int i = 0; i < candidate.Literals.Length; i++)
@@ -346,6 +351,45 @@ internal static class GenericCallbackRules
             return false;
         literals = parsed.ToArray();
         return true;
+    }
+
+    // Denial-only whole-stack check: a same-class REDscript @wrapMethod or
+    // @replaceMethod can change the helper's supposedly fixed return value.
+    // Do not treat a local literal-return body as authoritative in that case.
+    // Uses the same validated lexer to ignore comments and quoted text.
+    private static bool HasOtherSourceMethodOverride(
+        string scripts, string owner, string helper)
+    {
+        foreach (string file in Directory.EnumerateFiles(scripts, "*.reds",
+                     SearchOption.AllDirectories))
+        {
+            IReadOnlyList<SourceAdmission.Token> tokens;
+            try { tokens = SourceAdmission.ReadTokens(
+                File.ReadAllText(file, Encoding.UTF8)); }
+            catch (InvalidDataException) { return true; } // UNKNOWN -> refuse
+            for (int i = 0; i + 4 < tokens.Count; i++)
+            {
+                if (tokens[i].Value != "@" ||
+                    tokens[i + 1].Value is not ("wrapMethod" or "replaceMethod") ||
+                    tokens[i + 2].Value != "(") continue;
+                int end = i + 3;
+                while (end < tokens.Count && end < i + 24 &&
+                       tokens[end].Value != ")") end++;
+                if (end >= tokens.Count || end >= i + 24 ||
+                    !tokens.Skip(i + 3).Take(end - i - 3)
+                        .Any(t => t.Value == owner))
+                    continue;
+                int next = end + 1;
+                while (next + 1 < tokens.Count && next < end + 30 &&
+                       tokens[next].Value is not ("func" or "{" or "@"))
+                    next++;
+                if (next + 1 < tokens.Count &&
+                    tokens[next].Value == "func" &&
+                    tokens[next + 1].Value == helper)
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static void AssertStable(SourceAdmission source)
