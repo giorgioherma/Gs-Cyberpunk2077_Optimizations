@@ -5,7 +5,7 @@
 
 ## 1. Fixed architecture and ownership
 
-**2026-11-16 ownership override:** this GCO-local location supersedes older GRSP-owned managed Resolver instructions. Preserve the previous GRSP CLI/CI as tested migration input until local parity is established; GRSP continues to develop instrumentation only. All R0–R10 generic-first prerequisites remain unchanged.
+**2026-11-16 ownership override:** GCO's local component supersedes older GRSP-owned managed Resolver instructions. Local source migration and exact parity passed GCO CI #483; the former GRSP managed implementation/CI was retired from the GRSP dev branch after parity. GRSP continues to develop native instrumentation only. R4 token-shape discovery is source-wide and fail-closed as proven by GCO CI #486; no broadened transform or gameplay approval is implied. All R0–R10 generic-first prerequisites remain unchanged.
 
 | Owner | Authoritative responsibility |
 | --- | --- |
