@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-16 — unified GCO main artifact now includes managed REDscript Resolver
+
+- **Single GCO `main` application ZIP:** preserved the existing two-page WPF UI, CET/GRSP managers and profilers, genuine PresentMon, CET Resolver and shared .NET 10 runtime. Imported GCO-owned managed REDscript Resolver (`src/GRedscript.Resolver`) and its CLI/safety tests byte-for-byte from `dev/redscript/resolver_handoff` (12 source/test files, exact SHA copies verified before documentation-only README update). No separate user download or second workflow.
+- Existing `.github/workflows/build-windows.yml` now builds/tests the local managed Resolver on every relevant push; `integrations/three-profiler-test/Build-Test.ps1` publishes it as `components/redscript-resolver/app` within the same release directory, enumerates SHA256 file manifest and component provenance, and enforces one shared runtime. Package smoke verifies *both* Resolver tools, new GRSP proxy CSV support, artifact hashes and disabled generation.
+- Native Rust is **not** built in GCO. The owner-native `GRSP dev/native-instrumentation` workflow alone builds the safety-hardened DLL; GCO main selects only successful exact-source artifacts and refuses predecessors of crash-safety barrier `78dd87635bc7cba77c427c3928f10e0be18d7eea`. No old crash-prone DLL fallback.
+- **Verification pending:** new owner native Windows CI and DLL, completed canonical GCO Windows CI + download artifact, real game F11/capture/restore and gameplay stability. Source SHA equality and workflow code modifications were verified; these are **not** substitutes for a successful build. No claim of automatic safe REDscript generation or optimization ZIP yet. Keep existing UI Analyze/Generate gating, source-state/SCC proof and rollback.
+
+
 ## 2026-11-16 — consume GRSP crash-safety branch without GCO native rebuild
 
 - Following a gameplay crash with newly added proxy-child instrumentation, the owner-native Rust changes moved to the proper GRSP `dev/native-instrumentation` branch. GCO `main` canonical `build-windows.yml` now selects and verifies owner-DLL artifacts from that branch rather than the obsolete GRSP `dev/resolver-profiler-handoff`. Existing original GCO two-page application, manager/restore, one `.NET 10` runtime and owner-native SHA/Cargo.lock/provenance checks are unchanged; no Rust rebuild in GCO.
