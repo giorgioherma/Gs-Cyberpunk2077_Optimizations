@@ -21,3 +21,22 @@ by GRSP CI #61, and the 2,319-file external compiler baseline by GCO #482.
   the GCO-local component is used for new active development after parity.
 
 See `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md`.
+
+## R5 native proxy evidence interpretation
+
+The existing `analyze --capture ... --game ... --out ...` command now consumes
+the **optional source-owned** `G-REDscript/Data/Developer/RSP_ProxyAttribution.csv`
+after normal sealed-F11 status and source-stack checks. The resulting JSON
+`proxyAttribution` section reports `NOT_CAPTURED` for legacy captures, or
+`CAPTURED_UNRESOLVED` with source/callsite-linked proxy rows for new captures.
+Native CSV observations are reconciled with `RSP_CallSites.csv` by original
+capture ID, stable callsite ID, owner, source function/line/path, invocation
+kind/target/resolution and observed edge count. Contradictions, malformed
+numbers or invented receiver/causality claims fail closed.
+
+Interpretation is intentionally **not** new native instrumentation: Rust hooks,
+actual virtual receivers, callback-entry counting and in-game evidence remain
+owned by GRSP. This GCO implementation makes existing bounded native evidence
+useful for source-wide hotspot diagnosis without copying profiler hooks,
+changing game source, creating a second report pipeline or authorizing output.
+Neither inclusive time nor CET/GRSP domains may be summed as overall CPU cost.
