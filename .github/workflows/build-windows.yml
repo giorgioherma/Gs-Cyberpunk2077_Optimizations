@@ -386,7 +386,7 @@ jobs:
           }
           $bytes=[IO.File]::ReadAllBytes((Resolve-Path $dll))
           $ascii=[Text.Encoding]::ASCII.GetString($bytes)
-          foreach ($name in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
+          foreach ($name in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_CallbackReuse.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
             if (!$ascii.Contains($name)) { throw "GRSP native DLL missing contract $name" }
           }
           Write-Host "PASS source-owned GRSP native DLL: SHA256=$hash, run=$runText"
