@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## Current ownership and branch — 2026-11-16
+
+**Active REDscript Resolver branch: `dev/redscript/resolver_handoff`.** [Approved GCO-local Resolver handoff](REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md). The earlier `feature/redscript-resolver-integration` results remain the baseline, but **prior GRSP-managed Resolver/Generator instructions below are superseded**. GCO owns the separate internal REDscript Resolver/Generator plus SCC validation; GRSP only owns profiling/native evidence and CET retains its Lua backend. One two-page UI and single ZIP.
+
+**Migration status:** branch/decision recorded; managed code not yet moved. Last pre-migration [GCO CI #482 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43794814481) and [GRSP managed CI #61 SUCCESS](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43794298639). Source: 2,319 REDscript files, 48 shallow candidates, 1 strict measured match, 47 rejected; original and one-file optimized SCC both compiled. Next is GCO-local code migration and full parity checks before generic expansion.
+
+## Historical progress (kept as evidence)
+
 **Active GCO branch:** `feature/redscript-resolver-integration`, forked from finished `feature/presentmon-resolver-integration` at `3caccafbdf39ec2b6474b69ed8f34c9392e2ff20` (2026-11-15). **Protected GCO `main`:** `f7b8e6baa66ce363fd272f5cb8370548383e8bd2`.
 **Canonical full blueprint:** [GRSP-owned REDscript Resolver blueprint](GRSP_REDscript_Resolver_Blueprint.md).
 **Authoritative REDscript code branch:** [GRSP `dev/resolver-profiler-handoff`](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/tree/dev/resolver-profiler-handoff), [owner handoff](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_HANDOFF.md), [owner progress](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_PROGRESS.md); GRSP ownership/docs commit `b82e73cfe1bf43389cbc35cf9c65bd7a312ab5f0`.
