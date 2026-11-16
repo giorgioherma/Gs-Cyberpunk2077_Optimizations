@@ -1,5 +1,14 @@
 # Product decisions and explicit delta to the October 16 design
 
+## One complete GCO application artifact — 2026-11-16
+
+**Owner request:** bundle CET profiling + CET Resolver, REDscript profiling + GCO-owned REDscript Resolver, genuine PresentMon, WPF interface, installer/restore, evidence/reporting and necessary shared runtime into **one GitHub Actions GCO app artifact** on `main`. Component ownership remains separated at source; users should not manually download separate GRSP native artifacts.
+
+Implementation: copied the GCO `dev/redscript/resolver_handoff` managed source/test files byte-for-byte into GCO `main`; added one canonical Windows CI build/test step, shared-runtime publication into `components/redscript-resolver/app`, SHA256 provenance/manifest entries and end-of-package integrity smoke. GRSP remains Rust profiler-only, with verified native artifacts imported from `dev/native-instrumentation` and a minimum safety ancestor check. Keep the existing app version, UI and production lifecycle unchanged.
+
+**Scope limitation:** bundled Resolver is presently internal/read-only for analysis, strict source audit and conservative nondeployable preview; the user-facing combined REDscript Analyze/Generate flow remains disabled pending real source/compile/gameplay verification. Native post-crash refactor and this new GCO assembly require *actual* green CI and a stable real game session before claiming availability or safety.
+
+
 ## Native profiler safety / owner branch — 2026-11-16
 
 - The user reported a game crash after installing newly developed native proxy-child instrumentation. Treat this as a **suspected instrumentation regression**, not a proven root cause or automatically fixed defect; preserve easy Restore and stable prior installation recovery.
