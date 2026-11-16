@@ -70,6 +70,45 @@ try {
         @($json.timeline | Where-Object {$null -ne $_.presentIntervalMaxMs}).Count -lt 2) {
         throw 'Consolidated profiler report does not preserve authentic indexed PresentMon evidence.'
     }
+    # New readable digest must be sourced from both native summaries, and
+    # its two graph modes must coexist without changing the chronology.
+    if($null -eq $json.digest -or
+       $json.digest.relativeWorkloadDomainsNotAdditive -ne $true -or
+       $json.digest.timeCoincidenceDoesNotProveCausation -ne $true -or
+       [double]$json.digest.cetMeasuredExclusiveMsPerSecond -le 0 -or
+       [double]$json.digest.redscriptExclusiveInstrumentedMsPerSecond -le 0 -or
+       @($json.digest.cetTopOwners).Count -lt 1 -or
+       @($json.digest.redscriptTopOwners).Count -lt 1 -or
+       @($json.digest.cetCallbackFamilies).Count -lt 1 -or
+       @($json.digest.redscriptTopFunctions).Count -lt 1 -or
+       @($json.digest.worstPresentWindows).Count -lt 1 -or
+       @($json.spikeMarkers).Count -lt 1) {
+       throw 'GCO side-by-side native profiler digest or spike evidence missing.'
+    }
+    $htmlReport=Get-Content -LiteralPath (Join-Path $reportFolder 'GCO_Profiler_Report.html') -Raw
+    foreach($phrase in @(
+        'Which mods are doing the work?',
+        'What is keeping them busy?',
+        'Runtime pressure and health',
+        'Notable moments on the shared timeline',
+        'Combined timeline',
+        'Three synchronized tracks',
+        'RELATIVE TO EACH VISIBLE SERIES PEAK',
+        'const data=',
+        'spikes=',
+        'source-owned profiler reports'
+    )) {
+        if(!$htmlReport.Contains($phrase)){
+            throw ('GCO digest visualization is missing a required section: '+$phrase)
+        }
+    }
+    if($htmlReport.Contains('__DIGEST__') -or
+       $htmlReport.Contains('__TIMELINE__') -or
+       $htmlReport.Contains('__SPIKES__')) {
+       throw 'GCO report has unexpanded template variables.'
+    }
+    # Only current report JSON receives new derived digest fields.
+    # The preserved original native CET and GRSP summaries stay unchanged.
     # The identical GCO-owned verified per-present QPC chronology must be
     # available to the GRSP Resolver, not only the staged CET reporter.
     # This is derived report evidence, never a modified capture or release ZIP.
