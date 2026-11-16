@@ -350,11 +350,78 @@ try {
         Write-Host 'GCO generic callback index shape absent from real stack; no source staged.'
     }
 
+    # Generic pass 2: a cross-module, exact static literal array provider,
+    # immediately consumed by the first OnAction ArrayContains guard. Scan
+    # the full real source, preview only independently evidenced candidates.
+    # Merge disjoint source overlays with pass 1 only inside disposable CI.
+    $actionScanFile = Join-Path $work 'gco-action-filter-scan.json'
+    $actionScanLog = Join-Path $work 'gco-action-filter-scan.log'
+    & dotnet $dll scan-action-filter --game $game --out $actionScanFile *> $actionScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $actionScanFile -PathType Leaf)) {
+        throw 'GCO_ACTION_FILTER_REAL_SOURCE_SCAN_FAILED'
+    }
+    $actionScan = Get-Content -LiteralPath $actionScanFile -Raw | ConvertFrom-Json -Depth 70
+    if ($actionScan.schemaVersion -ne 'gco.redscript.action-filter.scan.v1' -or
+        $actionScan.sourceStackSha256 -ne $expectedSourceHash -or
+        $actionScan.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $actionScan.generationAuthorized -ne $false -or
+        $actionScan.compilerValidated -ne $false -or
+        $actionScan.sourceModified -ne $false -or
+        $actionScan.measuredSavingsClaimed -ne $false) {
+        throw 'GCO_ACTION_FILTER_REAL_SOURCE_SCAN_CONTRACT_FAILED'
+    }
+    $actionCount = [int]$actionScan.eligible
+    if ($actionCount -gt 0) {
+        $actionFolder = Join-Path $work 'gco-action-filter-preview'
+        $actionLog = Join-Path $work 'gco-action-filter-preview.log'
+        & dotnet $dll preview-action-filter --game $game --analysis $result --out $actionFolder *> $actionLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_ACTION_FILTER_REAL_SOURCE_PREVIEW_FAILED'
+        }
+        $actionScripts = Join-Path $actionFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $actionScripts -PathType Container)) {
+            throw 'GCO_ACTION_FILTER_REAL_SOURCE_OVERLAY_MISSING'
+        }
+        $actionFiles = @(Get-ChildItem -LiteralPath $actionScripts -Recurse -File)
+        if ($actionFiles.Count -lt 1 -or $actionFiles.Count -gt $actionCount) {
+            throw 'GCO_ACTION_FILTER_REAL_SOURCE_COUNT_UNPROVEN'
+        }
+        $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $actionFiles) {
+            $relative = [System.IO.Path]::GetRelativePath($actionScripts, $file.FullName)
+            if ($file.Extension -ne '.reds' -or
+                [System.IO.Path]::IsPathRooted($relative) -or
+                $relative.StartsWith('..') -or $relative.Contains(':')) {
+                throw 'GCO_ACTION_FILTER_UNSAFE_SOURCE'
+            }
+            $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+            $target = Join-Path $callbackScripts $relative
+            if (!(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+                (Test-Path -LiteralPath $target) -or
+                (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+                throw 'GCO_ACTION_FILTER_SOURCE_OWNERSHIP_OR_OVERLAY_COLLISION'
+            }
+            if ((Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:ACTION_LITERAL_MEMBERSHIP_V1') {
+                throw 'GCO_ACTION_FILTER_EXPECTED_MARKER_MISSING'
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        }
+        Write-Host ('PASS GCO action-filter real-source preview: admitted=' +
+            $actionCount + ' stagedFiles=' + $actionFiles.Count +
+            ' mutuallyDisjoint=true sourcesUntouched=true compilerValidated=false')
+    }
+    else {
+        Write-Host 'GCO action-filter: no source-proven match in current stack; not rewritten.'
+    }
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
     $extra = @{}
-    if ($callbackCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
