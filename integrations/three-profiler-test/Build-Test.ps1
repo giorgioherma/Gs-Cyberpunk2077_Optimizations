@@ -127,7 +127,7 @@ if ($Integrated) {
   Copy-Item -LiteralPath $native -Destination $dest -Force
   VerifyFile $dest $proof.dllSha256
   $text=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Resolve-Path $dest)))
-  foreach($marker in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
+  foreach($marker in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_CallbackReuse.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
     if (!$text.Contains($marker)) { throw "GRSP DLL missing instrumentation contract: $marker" }
   }
   Write-Host 'PASS source-owned GRSP native instrumentation in the GCO package'
