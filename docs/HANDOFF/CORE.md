@@ -1,5 +1,12 @@
 # Mandatory unified optimizer startup / handoff
 
+## 2026-11-16 — single distributable GCO app, native safety gating
+
+- User approved packaging all components in **one GCO `main` application artifact**, not separate user-downloaded GRSP/CET/Resolver packages. The canonical `build-windows.yml` already bundles CET, GRSP, PresentMon and CET Resolver; it now builds and packages GCO-owned `src/GRedscript.Resolver` (verified same source bytes as the GCO development branch), runs its own CLI/safety tests and includes it as a manifest-indexed internal tool. Preserve a single runtime and original two-page UI.
+- The GRSP owner-native workflow on `dev/native-instrumentation` is the *producer* of the Rust DLL only; GCO imports its verified artifact, requires the F11 in-flight safety baseline `78dd876`, and packages it at `components/grsp/payload/G-REDscript-Profiler.dll`. No GCO native rebuild or unsafe previous-DLL fallback.
+- **Not yet production-accepted:** new native CI build and artifact, actual installed Windows game crash stability, in-game F11 evidence, managed combined Analyze wiring and safe final one-ZIP generation. Internal read-only/preview Resolver inclusion does not authorize game writes or automatic optimization. Retain normal owner install/restore safety and no UI redesign.
+
+
 **This repository**: `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Working branch: `main`** (user decision 2026-11-04). Do not use this repository's temporary/historical `dev/resolver-profiler-handoff` branch as the active line. Related component repos may legitimately use branches with that name.
 
 ## Read order
