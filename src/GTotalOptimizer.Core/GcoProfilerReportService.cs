@@ -626,7 +626,7 @@ function draw(){
   }
   for(let j=0;j<series.length;j++){
    if(mode!=='combined'&&i!==j)continue;
-   const s=series[j],max=Math.max(1,peaks[j])*(mode==='combined'?1:1.08);
+   const s=series[j],max=mode==='combined'?Math.max(0.000001,peaks[j]):Math.max(1,peaks[j])*1.08;
    ctx.strokeStyle=s.color;ctx.lineWidth=mode==='combined'?1.8:1.4;
    ctx.beginPath();let started=false;
    for(const p of view){
