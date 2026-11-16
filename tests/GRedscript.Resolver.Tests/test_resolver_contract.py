@@ -892,6 +892,80 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertNotEqual(0, r.returncode)
         self.assertIn("RSP_CallbackTargets.csv", r.stderr)
 
+    def write_proxy_evidence(self, *, receiver="false", edges="2",
+                             source_line="4", label="NAMED_TARGET_RECEIVER_NOT_PROVEN"):
+        """GRSP post-F11 writer schema; identical identity to first native callsite."""
+        columns = [
+            "capture_id", "stable_callsite_id", "source_owner", "source_function",
+            "source_path", "source_line", "call_kind", "target", "target_resolution",
+            "attribution_status", "outgoing_edges", "outgoing_edges_per_sec",
+            "exclusive_instrumented_ms", "observed_inclusive_ms", "max_inclusive_ms",
+            "active_frames", "max_edges_per_frame", "sparse_observed_paths",
+            "sparse_observed_max_depth", "sparse_observed_parent",
+            "hot_paths_dropped_global", "receiver_proven",
+            "callback_entries_known", "causality_proven"
+        ]
+        original = self.native / "Data" / "Developer" / "RSP_CallSites.csv"
+        with original.open(newline="", encoding="utf-8") as stream:
+            callsite = next(csv.DictReader(stream))
+        row = dict(zip(columns, [
+            "1", callsite["stable_callsite_id"], callsite["owner"],
+            callsite["source_function"], callsite["source_path"], source_line,
+            callsite["call_kind"], "proxy$fixture", callsite["target_resolution"],
+            label, edges, "1.0", "0.3", "0.4", "0.4", "1", "2",
+            "1", "2", "ExampleController::Work", "0", receiver,
+            "false", "false"
+        ]))
+        # Reconcile with native callsite without inventing a second ID.
+        with original.open(newline="", encoding="utf-8") as stream:
+            callsites = list(csv.DictReader(stream))
+        callsites[0]["target"] = "proxy$fixture"
+        write_csv(original, list(callsites[0]), callsites)
+        write_csv(self.native / "Data" / "Developer" / "RSP_ProxyAttribution.csv",
+                  columns, [row])
+
+    def test_proxy_diagnostic_is_read_only_and_never_proves_receiver(self):
+        self.write_proxy_evidence()
+        before = self.source.read_bytes()
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = json.loads(self.output.read_text())
+        evidence = payload["proxyAttribution"]
+        self.assertEqual("CAPTURED_UNRESOLVED", evidence["status"])
+        self.assertEqual(1, evidence["proxyCallsiteRows"])
+        self.assertFalse(evidence["receiverIdentitiesKnown"])
+        self.assertFalse(evidence["generationAuthorized"])
+        self.assertEqual(
+            "NAMED_TARGET_RECEIVER_NOT_PROVEN",
+            evidence["rankedProxyCallsites"][0]["attributionStatus"])
+        self.assertEqual(before, self.source.read_bytes())
+
+    def test_proxy_absent_is_unknown_not_zero_cost(self):
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text())
+        self.assertEqual("NOT_CAPTURED", report["proxyAttribution"]["status"])
+        self.assertFalse(report["proxyAttribution"]["generationAuthorized"])
+
+    def test_proxy_mismatched_native_callsite_refused(self):
+        self.write_proxy_evidence(edges="999")
+        result = self.run_cli()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PROXY_EVIDENCE_CALLSITE_MISMATCH", result.stderr)
+
+    def test_proxy_false_native_receiver_proof_claim_refused(self):
+        self.write_proxy_evidence(receiver="true")
+        result = self.run_cli()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PROXY_EVIDENCE_UNSUPPORTED_PROOF_CLAIM", result.stderr)
+
+    def test_proxy_bad_source_line_refused(self):
+        self.write_proxy_evidence(source_line="0")
+        result = self.run_cli()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PROXY_EVIDENCE_SHAPE_INVALID", result.stderr)
+
+
 
 if __name__ == "__main__":
     unittest.main()
