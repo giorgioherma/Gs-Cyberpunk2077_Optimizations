@@ -1,5 +1,11 @@
 # GCO-local REDscript Resolver
 
+## GCO main integration — 2026-11-16
+
+This component is **now included in the single GCO `main` portable application artifact**, at `components/redscript-resolver/app/GRedscript.Resolver.dll` and `GRedscript.Resolver.exe`, sharing the one bundled .NET 10 runtime with the WPF app and other components. The original GCO `build-windows.yml` builds, runs the inherited CLI/safety tests, publishes this component, records file hashes in `components/manifest.json` and verifies the final package.
+
+This is internal **read-only analysis / conservative source preview** infrastructure. The existing Page 2 ANALYZE/GENERATE lifecycle remains unchanged: **do not claim that automatic combined generation is ready or deployable**. The native GRSP profiler is not implemented here; GCO imports an independently verified native DLL from the source-owner `dev/native-instrumentation` branch. The tested component was copied byte-for-byte from `dev/redscript/resolver_handoff` before this packaging change; further managed development stays source-owned by GCO.
+
 Relocated **unchanged in behavior** from GRSP development branch commit `1da43d9a7197ad4fd1c2debc004a2f3ee31b9dab`
 into this independent internal .NET 10 component, following the 2026-11-16
 owner decision. The original GRSP version and 41 contract tests were accepted
@@ -20,7 +26,7 @@ by GRSP CI #61, and the 2,319-file external compiler baseline by GCO #482.
 - The source-owner GRSP CLI remains a historical migration fixture; only
   the GCO-local component is used for new active development after parity.
 
-See `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md`.
+See GCO `docs/product/CURRENT-DECISIONS.md` and the development branch's `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md` for the detailed R0–R10 work ledger.
 
 ## R5 native proxy evidence interpretation
 
