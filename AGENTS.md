@@ -12,7 +12,7 @@
 
 **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Protect `main`; work on explicitly approved feature branches for their specific tasks.** Do not assume the historically created `dev/resolver-profiler-handoff` ref in THIS repository is the active branch.
 
-## Active REDscript integration branch — approved 2026-11-15 (CURRENT ON THIS BRANCH)
+## Historical REDscript feature integration instructions — 2026-11-15 (SUPERSEDED)
 
 - **Use only `feature/redscript-resolver-integration` for GCO REDscript integration**, branched from finished CET/PresentMon feature at `3caccafbdf39ec2b6474b69ed8f34c9392e2ff20`. Stable GCO `main` (`f7b8e6b`) and the completed CET feature remain unchanged; do not silently merge or promote either.
 - **Read before any REDscript work:** [complete source-audited R0–R10 blueprint](docs/integration/GRSP_REDscript_Resolver_Blueprint.md); [mandatory live REDscript ledger](docs/integration/REDSCRIPT-RESOLVER-PROGRESS.md); [GRSP owner handoff](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_HANDOFF.md) and [GRSP progress](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_PROGRESS.md). Existing CET four-stage instructions below are **historical for this branch** and must not stop the newly approved REDscript milestone.
