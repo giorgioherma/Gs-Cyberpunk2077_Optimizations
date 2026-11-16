@@ -247,6 +247,52 @@ jobs:
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
+      - name: Verify single GCO application ZIP contains both Resolvers and owner-native profiler
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          $manifest=Get-Content (Join-Path $root 'components/manifest.json') -Raw | ConvertFrom-Json
+          $tools=@($manifest.analysisTools)
+          if ($tools.Count -ne 2 -or
+              @($tools | Where-Object id -eq 'cet-resolver').Count -ne 1 -or
+              @($tools | Where-Object id -eq 'redscript-resolver').Count -ne 1) {
+            throw 'Single GCO application does not contain both independent Resolver components'
+          }
+          $red=@($tools | Where-Object id -eq 'redscript-resolver')[0]
+          if ($red.framework -ne 'net10.0' -or
+              $red.generationAuthorized -ne $false -or
+              @($red.files).Count -lt 4) {
+            throw 'GCO managed REDscript component provenance or safety state invalid'
+          }
+          foreach($file in $red.files) {
+            $full=Join-Path $root ([string]$file.path)
+            if (!(Test-Path -LiteralPath $full -PathType Leaf)) {
+              throw "Bundled REDscript file is missing: $($file.path)"
+            }
+            $sha=(Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($sha -ne $file.sha256) { throw "Bundled REDscript file hash mismatch: $($file.path)" }
+          }
+          $resolverDll=Join-Path $root 'components/redscript-resolver/app/GRedscript.Resolver.dll'
+          $provenance=Get-Content (Join-Path $root 'components/COMPONENT-PROVENANCE.json') -Raw | ConvertFrom-Json
+          $dllHash=(Get-FileHash $resolverDll -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($dllHash -ne $red.sha256 -or
+              $dllHash -ne $provenance.redscriptResolver.sha256 -or
+              $provenance.redscriptResolver.generationAuthorized -ne $false) {
+            throw 'Bundled REDscript executable/provenance mismatch'
+          }
+          $native=Join-Path $root 'components/grsp/payload/G-REDscript-Profiler.dll'
+          if (!(Test-Path -LiteralPath $native -PathType Leaf)) {
+            throw 'Native GRSP profiler missing from bundled GCO application'
+          }
+          $nativeBytes=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($native))
+          foreach($name in @('RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv','GCO-F11-Complete.flag')) {
+            if (!$nativeBytes.Contains($name)) { throw "Bundled native profiler missing $name" }
+          }
+          $coreclr=@(Get-ChildItem -LiteralPath $root -Filter 'coreclr.dll' -Recurse -File)
+          if ($coreclr.Count -ne 1) { throw 'Expected exactly one shared .NET runtime in GCO app' }
+          Write-Host 'PASS one GCO application: CET/REDscript Resolvers, native GRSP, shared runtime and strict evidence gates'
       - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
         shell: pwsh
         working-directory: unified
