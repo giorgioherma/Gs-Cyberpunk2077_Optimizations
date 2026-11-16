@@ -36,6 +36,9 @@ internal static class GcoProfilerDigest
         var redFunctions = RankFunctions(Item(red, "topFunctions"), 7);
         var gc = Item(cet, "collectorGc");
         var heap = Item(cet, "luaHeap");
+        var allocation = Item(Item(cet, "phase3PressureScorecard"), "allocation");
+        var cetFindings = Item(cet, "findings");
+        var redFindings = Item(red, "findings");
         var redHealth = Item(red, "health");
 
         var validIntervals = presentIntervals.Where(x => double.IsFinite(x) && x > 0)
@@ -106,6 +109,12 @@ internal static class GcoProfilerDigest
             "REDscript " + F(Number(redCapture, "durationSeconds"), 1) + " s · same F11 session");
         html.AppendLine("</section>");
 
+        html.AppendLine("<h2>What stands out in the original profiler reports?</h2>");
+        html.AppendLine("<div class=\"side-by-side\">");
+        Findings(html, "CET / measured events", cetFindings);
+        Findings(html, "REDscript / instrumented events", redFindings);
+        html.AppendLine("</div>");
+
         html.AppendLine("<h2>Which mods are doing the work?</h2>");
         html.AppendLine("<div class=\"side-by-side\">");
         RankedTable(html, "CET / busiest Lua owners", "Measured exclusive ms/s",
@@ -127,6 +136,10 @@ internal static class GcoProfilerDigest
         html.AppendLine("<h2>Runtime pressure and health</h2>");
         html.AppendLine("<div class=\"side-by-side\">");
         html.AppendLine("<section class=\"digest-panel\"><h3>CET / Lua memory and collection</h3><dl class=\"facts\">");
+        Fact(html, "Positive LuaJIT allocation",
+            F(Number(allocation, "positiveAllocatedMiBPerSecond"), 1) + " MiB/s");
+        Fact(html, "Allocation operations",
+            F(Number(allocation, "allocationRequestsPerSecond"), 0) + " /s");
         Fact(html, "Observed LuaJIT GC", F(Number(gc, "collectorMsPerSecond"), 1) + " ms/s");
         Fact(html, "Completed collection cycles", F(Number(gc, "completedCycles"), 0));
         Fact(html, "Heap observations", F(Number(heap, "minHeapMiB"), 1) + "–" +
@@ -181,11 +194,37 @@ internal static class GcoProfilerDigest
             cetCallbackFamilies = cetCallbacks, redscriptTopFunctions = redFunctions,
             worstPresentWindows = worstWindows,
             cetCollectorMsPerSecond = Number(gc, "collectorMsPerSecond"),
+            cetPositiveAllocatedMiBPerSecond = Number(allocation, "positiveAllocatedMiBPerSecond"),
+            cetAllocationRequestsPerSecond = Number(allocation, "allocationRequestsPerSecond"),
             redscriptFrameP99InstrumentedMs = Number(redCapture, "p99ScriptMsPerFrame"),
             relativeWorkloadDomainsNotAdditive = true,
             timeCoincidenceDoesNotProveCausation = true
         };
         return new(html.ToString(), facts, spikes.ToArray());
+    }
+
+    private static void Findings(StringBuilder html, string title, JsonElement findings)
+    {
+        html.Append("<section class=\"digest-panel\"><h3>").Append(H(title))
+            .AppendLine("</h3>");
+        if (findings.ValueKind != JsonValueKind.Array)
+        {
+            html.AppendLine("<p class=\"muted\">No source-owned findings captured.</p></section>");
+            return;
+        }
+        int shown = 0;
+        foreach (var item in findings.EnumerateArray())
+        {
+            if (shown == 3) break;
+            string name = Text(item, "Title");
+            string evidence = Text(item, "Evidence");
+            if (name.Length == 0 || evidence.Length == 0) continue;
+            html.Append("<div class=\"finding\"><strong>").Append(H(name))
+                .Append("</strong><p>").Append(H(evidence))
+                .AppendLine("</p></div>");
+            shown++;
+        }
+        html.AppendLine("</section>");
     }
 
     private static void SpikeTable(StringBuilder html, string title,
