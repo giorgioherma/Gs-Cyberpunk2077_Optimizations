@@ -612,8 +612,8 @@ function draw(){
   if(mode==='combined'){
    ctx.fillStyle='#d2e1e6';
    ctx.fillText('RELATIVE TO EACH VISIBLE SERIES PEAK',5,y0+13);
-   ctx.fillStyle='#a6bbc4';ctx.fillText('100%',wPad-43,yt+4);
-   ctx.fillText('0%',wPad-27,yb+1);
+   ctx.fillStyle='#a6bbc4';ctx.fillText('peak',wPad-47,yt+4);
+   ctx.fillText('zero',wPad-34,yb+1);
   }else{
    const s=series[i],mx=Math.max(1,peaks[i])*1.08;
    ctx.fillStyle=s.color;ctx.fillText(s.name,6,y0+14);
