@@ -505,6 +505,72 @@ class GrspResolverContracts(unittest.TestCase):
                 self.assertEqual(0, scan['generatedFiles'])
                 self.assertEqual(original, self.source.read_bytes())
 
+    def test_source_wide_scanner_classifies_real_structural_variations(self):
+        """Each variation remains rejected; distinguish tokens, not mod IDs."""
+        cases = [
+            ('reversed_comparison',
+             'if Equals(entry, actionName) {',
+             'if Equals(actionName, entry) {',
+             'EQUALS_LEFT_NOT_ITERATED_VALUE'),
+            ('left_member_expression',
+             'if Equals(entry, actionName) {',
+             'if Equals(this.names[0], actionName) {',
+             'EQUALS_LEFT_NOT_ITERATED_VALUE'),
+            ('left_index',
+             'if Equals(entry, actionName) {',
+             'if Equals(entry[0], actionName) {',
+             'EQUALS_LEFT_NOT_SINGLE_IDENTIFIER'),
+            ('right_member_expression',
+             'if Equals(entry, actionName) {',
+             'if Equals(entry, this.names[0]) {',
+             'EQUALS_RIGHT_NOT_SINGLE_IDENTIFIER'),
+            ('right_call',
+             'if Equals(entry, actionName) {',
+             'if Equals(entry, ResolveName()) {',
+             'EQUALS_RIGHT_NOT_SINGLE_IDENTIFIER'),
+            ('right_nonidentifier',
+             'if Equals(entry, actionName) {',
+             'if Equals(entry, (actionName)) {',
+             'EQUALS_RIGHT_NOT_BARE_IDENTIFIER'),
+            ('compound_condition',
+             'if Equals(entry, actionName) {',
+             'if Equals(entry, actionName) && IsActive() {',
+             'EQUALS_CONDITION_NOT_DIRECT_BLOCK'),
+            ('return_instead_of_flag',
+             'matched = true;', 'return;',
+             'MATCH_BODY_RETURNS_INSTEAD_OF_FLAG'),
+            ('same_item_and_flag',
+             'matched = true;', 'entry = true;',
+             'LOOP_IDENTIFIERS_COLLIDE'),
+            ('increment_instead_of_assign',
+             'matched = true;', 'matched += true;',
+             'MATCH_BODY_NOT_FLAG_ASSIGNMENT'),
+            ('false_instead_of_true',
+             'matched = true;', 'matched = false;',
+             'MATCH_BODY_NOT_TRUE_ASSIGNMENT'),
+        ]
+        for name, original, changed, code in cases:
+            with self.subTest(name=name):
+                self.prepare_measured_membership(
+                    lambda text: text.replace(original, changed))
+                before = self.source.read_bytes()
+                result, path = self.scan_generic(target=self.root /
+                                                 ('variation-' + name + '.json'))
+                self.assertEqual(0, result.returncode, result.stderr)
+                report = json.loads(path.read_text())
+                self.assertEqual(1, report['candidateLoopsExamined'])
+                self.assertEqual(0, report['structuralMatches'])
+                self.assertEqual(1, report['rejectedUnproven'])
+                self.assertEqual(code, report['candidates'][0]['reasonCode'])
+                self.assertEqual({code: 1},
+                                 report['firstFailedPrerequisiteCounts'])
+                self.assertEqual('REJECTED_UNPROVEN',
+                                 report['candidates'][0]['state'])
+                self.assertFalse(report['generationAuthorized'])
+                self.assertFalse(report['deployable'])
+                self.assertEqual(0, report['generatedFiles'])
+                self.assertEqual(before, self.source.read_bytes())
+
     def test_source_wide_scanner_refuses_stale_capture_and_unsafe_output(self):
         self.prepare_measured_membership()
         self.assertEqual(0, self.run_cli().returncode)

@@ -282,9 +282,35 @@ internal static class GenericMembershipPass
         string field = t[i + 5].Value;
         string value = t[i + 12].Value;
         string flag = t[i + 15].Value;
-        if (!Ident(member) || !Ident(field) || !Ident(value) || !Ident(flag) ||
-            member == flag || member == value || value == flag)
-        { rejection = "LOOP_IDENTIFIERS_NOT_DISTINCT"; return null; }
+        // Diagnose the FIRST syntactic deviation without admitting any
+        // additional rewrites. These checks are subsets of the exact loop
+        // predicate below, and share this one authoritative matcher.
+        // In particular, an offset is not a "needle" until the left argument
+        // and comma have been proven: otherwise we would mislabel expressions.
+        if (!Ident(member))
+        { rejection = "LOOP_MEMBER_NOT_IDENTIFIER"; return null; }
+        if (!Ident(field))
+        { rejection = "ARRAY_FIELD_NOT_IDENTIFIER"; return null; }
+        if (t[i + 10].Value != member)
+        { rejection = "EQUALS_LEFT_NOT_ITERATED_VALUE"; return null; }
+        if (t[i + 11].Value != ",")
+        { rejection = "EQUALS_LEFT_NOT_SINGLE_IDENTIFIER"; return null; }
+        if (!Ident(value))
+        { rejection = "EQUALS_RIGHT_NOT_BARE_IDENTIFIER"; return null; }
+        if (t[i + 13].Value != ")")
+        { rejection = "EQUALS_RIGHT_NOT_SINGLE_IDENTIFIER"; return null; }
+        if (t[i + 14].Value != "{")
+        { rejection = "EQUALS_CONDITION_NOT_DIRECT_BLOCK"; return null; }
+        if (t[i + 15].Value == "return")
+        { rejection = "MATCH_BODY_RETURNS_INSTEAD_OF_FLAG"; return null; }
+        if (!Ident(flag))
+        { rejection = "MATCH_BODY_RESULT_NOT_IDENTIFIER"; return null; }
+        if (member == flag || member == value || value == flag)
+        { rejection = "LOOP_IDENTIFIERS_COLLIDE"; return null; }
+        if (t[i + 16].Value != "=")
+        { rejection = "MATCH_BODY_NOT_FLAG_ASSIGNMENT"; return null; }
+        if (t[i + 17].Value != "true")
+        { rejection = "MATCH_BODY_NOT_TRUE_ASSIGNMENT"; return null; }
         bool hasExactLoop = t[i + 2].Value == "in" &&
             t[i + 3].Value == "this" && t[i + 4].Value == "." &&
             t[i + 6].Value == "{" && t[i + 7].Value == "if" &&
