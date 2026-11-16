@@ -19,6 +19,6 @@
 
 ## Current status
 
-**Branch and decision only.** No resolver source has been moved yet; GCO still invokes the pinned GRSP owner in its current CI. The existing green CI #482 is a **pre-migration** baseline, not validation of GCO-local code. Game installation, GCO main, old feature branch, CET and GRSP repositories remain unchanged by this branch-creation milestone.
+**Managed source and tests moved into GCO:** commit [`f291b0f`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/f291b0ff0a9c76bd4c3f43d971a85a70bcc5be80) imports the actual proven GRSP managed CLI, source admission, scanner, membership preview, SCC 0.5.31 runner and tests into `src/GRedscript.Resolver/` and `tests/GRedscript.Resolver.Tests/`. Commit `6b498bed` reuses the canonical GCO Windows CI and **removes the external managed GRSP Resolver checkout** on this branch; GCO now builds/tests/compiles its own component. [GCO CI #483](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43798781332) passed local build/tests, actual private source audit, sealed-capture replay and full-stack SCC steps; ordinary app/package checks were still running at this checkpoint. All GRSP native profiler and manager sources, CET sources, live game files and GCO main remain unchanged.
 
-**Next:** migrate the tested managed component into GCO without redesigning the product, then demonstrate CLI and full private SCC parity in the original workflow before doing further generic candidate work.
+**Next:** confirm #483 final package verification, then retire the now-unused GRSP managed development/CI code only after complete parity. Continue R4/R5 typed source-gate classification in GCO. Game testing and measured performance improvements remain independent.
