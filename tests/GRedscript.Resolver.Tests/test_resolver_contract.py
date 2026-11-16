@@ -967,5 +967,85 @@ class GrspResolverContracts(unittest.TestCase):
 
 
 
+    def write_callback_reuse(self, **overrides):
+        target = "ScriptGameInstance::GetPlayerSystem"
+        write_csv(self.native / "Data" / "Developer" / "RSP_CallbackTargets.csv",
+                  ["capture_id", "call_kind", "target", "outgoing_edges"],
+                  [{"capture_id": "1", "call_kind": "static",
+                    "target": target, "outgoing_edges": "400"}])
+        row = {
+            "capture_id": "1",
+            "read_target_id": "RSPR-0123456789ABCDEF",
+            "call_kind": "static",
+            "target": target,
+            "target_resolution": "DIRECT",
+            "read_candidate_class": "SHARED_SYSTEM_OR_CONTEXT_READ",
+            "callback_source_functions": "1",
+            "source_owners": "1",
+            "source_callsites": "1",
+            "outgoing_edges": "400",
+            "edges_per_sec": "1.100",
+            "exclusive_instrumented_ms": "3.200",
+            "observed_active_frames": "100",
+            "same_frame_extra_edges": "250",
+            "multi_callback_source_frames": "0",
+            "multi_owner_frames": "0",
+            "max_edges_per_frame": "4",
+            "frame_evidence_status": "CAPTURED_FRAME_OVERLAP",
+            "dropped_frame_rows": "0",
+            "callback_entries_proven": "false",
+            "cache_safe_proven": "false",
+        }
+        row.update(overrides)
+        write_csv(self.native / "Data" / "Developer" / "RSP_CallbackReuse.csv",
+                  list(row), [row])
+
+    def test_callback_reuse_optional_old_capture_is_unknown(self):
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text())
+        self.assertEqual("NOT_CAPTURED", report["callbackReuse"]["status"])
+        self.assertFalse(report["callbackReuse"]["generationAuthorized"])
+
+    def test_callback_reuse_reports_repeated_reads_without_rewrite_proof(self):
+        self.write_callback_reuse()
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text())
+        reuse = report["callbackReuse"]
+        self.assertEqual("CAPTURED_READ_LIKE_ONLY", reuse["status"])
+        self.assertEqual(1, reuse["candidateTargets"])
+        self.assertEqual(250, reuse["rankedReadTargets"][0]["sameFrameExtraEdges"])
+        self.assertFalse(reuse["callbackEntriesKnown"])
+        self.assertFalse(reuse["cacheSafetyKnown"])
+        self.assertFalse(reuse["generationAuthorized"])
+
+    def test_callback_reuse_forged_purity_and_entry_claims_fail_closed(self):
+        for value in ("callback_entries_proven", "cache_safe_proven"):
+            with self.subTest(field=value):
+                self.write_callback_reuse(**{value: "true"})
+                result = self.run_cli()
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("CALLBACK_REUSE_UNSUPPORTED_PROOF_OR_SCHEMA",
+                              result.stderr)
+
+    def test_callback_reuse_mismatched_native_counts_fail_closed(self):
+        self.write_callback_reuse(outgoing_edges="401")
+        result = self.run_cli()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("CALLBACK_REUSE_NATIVE_CALLSITE_MISMATCH",
+                      result.stderr)
+
+    def test_callback_reuse_truncation_is_not_zero_work(self):
+        self.write_callback_reuse(frame_evidence_status="TRUNCATED_NOT_ZERO_WORK",
+                                  dropped_frame_rows="21")
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text())
+        reuse = report["callbackReuse"]["rankedReadTargets"][0]
+        self.assertEqual("TRUNCATED_NOT_ZERO_WORK", reuse["frameEvidenceStatus"])
+        self.assertEqual(21, reuse["droppedFrameRows"])
+
+
 if __name__ == "__main__":
     unittest.main()
