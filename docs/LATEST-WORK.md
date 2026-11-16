@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-16 — GCO main now gates its app ZIP on GRSP native proxy instrumentation
+
+- Owner requested **the actual GCO app artifact**, not a standalone native archive. GCO `main` already resolves the newest successful, SHA/run/provenance-verified GRSP native owner-CI artifact and packages its DLL under `components/grsp/payload/G-REDscript-Profiler.dll`, preserving the original installer and two-page application. The workflow was updated at `47c2ffb` and package assembly at `b4ea4ce` to **require** the native DLL contain both `RSP_ProxyAttribution.csv` and `RSP_ProxyChildren.csv`, in addition to F11 and existing callback evidence. Older native DLL artifacts now fail the GCO build instead of silently shipping.
+- GRSP owns all Rust capture-time VM hook changes; GCO main **does not** rebuild Rust or ship a second native profiler. Managed REDscript Resolver development remains on GCO `dev/redscript/resolver_handoff`. The GRSP native output measures bounded direct proxy child call relationships, **not** resolved receiver identities or proven optimization gains.
+- **Validation:** GitHub source commits and required marker checks were verified; an actual new successful GRSP owner CI build, GCO Windows artifact download, real in-game F11 output and gameplay validation are **NOT YET VERIFIED**. If owner CI has no successful new DLL artifact, current GCO main should fail closed rather than produce an app with old instrumentation.
+
+
 **Date:** 2026-11-04. **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Branch:** `main`.
 
 ## Completed — documentation and planning only
