@@ -237,6 +237,82 @@ try {
         [int]$scan.generatedFiles -ne 0) {
         throw 'GRSP_REAL_SOURCE_WIDE_SCAN_CONTRACT_FAILED'
     }
+    # First failing prerequisite is produced by GRSP's authoritative matcher.
+    # Public CI prints only reason codes and aggregated counts, never paths.
+    $failureBuckets = @($scan.firstFailedPrerequisiteCounts.PSObject.Properties |
+        Sort-Object Name)
+    $failureSum = 0
+    foreach($failure in $failureBuckets) {
+        if ($failure.Name -cnotmatch '^[A-Z_]+
+        if (@($measuredCandidates | Where-Object { $_.path -ceq $expectedPath }).Count -eq 0) {
+            throw 'GRSP_REAL_SOURCE_WIDE_MEASURED_PREVIEW_MISMATCH'
+        }
+    }
+    $unmeasuredScan = Join-Path $work 'private-grsp-unmeasured-opportunities.json'
+    $unmeasuredLog = Join-Path $work 'private-grsp-unmeasured-scan.log'
+    & dotnet $dll scan-generic --game $game --out $unmeasuredScan *> $unmeasuredLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $unmeasuredScan -PathType Leaf)) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SOURCE_ONLY_SCAN_FAILED'
+    }
+    $plain = Get-Content -LiteralPath $unmeasuredScan -Raw | ConvertFrom-Json -Depth 80
+    if ($plain.schemaVersion -ne 'grsp.generic.opportunities.v1' -or
+        $plain.evidenceKind -ne 'NOT_CAPTURED' -or
+        $plain.sourceStackSha256 -ne $expectedSourceHash -or
+        (($plain.firstFailedPrerequisiteCounts | ConvertTo-Json -Compress) -cne
+         ($scan.firstFailedPrerequisiteCounts | ConvertTo-Json -Compress)) -or
+        [int]$plain.eligibleMeasured -ne 0 -or
+        [int]$plain.structuralMatches -ne [int]$scan.structuralMatches -or
+        [int]$plain.rejectedUnproven -ne [int]$scan.rejectedUnproven -or
+        $plain.deployable -ne $false -or
+        [int]$plain.generatedFiles -ne 0) {
+        throw 'GRSP_REAL_SOURCE_WIDE_SOURCE_ONLY_INCONSISTENT'
+    }
+    $breakdown = ($failureBuckets | ForEach-Object {
+        $_.Name + '=' + [int]$_.Value
+    }) -join ','
+    Write-Host ('PASS GRSP generic first-failed prerequisites: ' + $breakdown)
+    Write-Host ('PASS GRSP source-wide generic scanner: files=' +
+        $scan.sourceFiles + ' examined=' + $scan.candidateLoopsExamined +
+        ' measured=' + $scan.eligibleMeasured + ' unmeasured=' +
+        $scan.eligibleUnmeasured + ' rejected=' + $scan.rejectedUnproven +
+        ' sourceOnlyEquivalent=true generated=0 liveSourcesUntouched=true')
+
+    # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
+    # The GCO harness must not duplicate its compiler logic or publish output.
+    $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
+    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GRSP_OWNER_R6_SCC_FULL_SOURCE_COMPILATION_FAILED'
+    }
+
+    if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $zipBefore) {
+        throw 'GRSP_REAL_CAPTURE_ARCHIVE_MUTATED'
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $work) {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop
+    }
+}
+$global:LASTEXITCODE = 0
+ -or
+            [int]$failure.Value -lt 1) {
+            throw 'GRSP_GENERIC_INVALID_REJECTION_REASON'
+        }
+        $failureSum += [int]$failure.Value
+        if (@($scan.candidates | Where-Object {
+            $_.state -eq 'REJECTED_UNPROVEN' -and
+            $_.reasonCode -ceq $failure.Name
+        }).Count -ne [int]$failure.Value) {
+            throw 'GRSP_GENERIC_REJECTION_COUNT_MISMATCH'
+        }
+    }
+    if ($failureSum -ne [int]$scan.rejectedUnproven -or
+        @($scan.candidates | Where-Object {
+            $_.state -eq 'REJECTED_UNPROVEN'
+        }).Count -ne $failureSum) {
+        throw 'GRSP_GENERIC_REJECTION_ACCOUNTING_INCOMPLETE'
+    }
     foreach($candidate in $applied) {
         $expectedPath = 'r6/scripts/' + [string]$candidate.path
         if (@($measuredCandidates | Where-Object { $_.path -ceq $expectedPath }).Count -eq 0) {
