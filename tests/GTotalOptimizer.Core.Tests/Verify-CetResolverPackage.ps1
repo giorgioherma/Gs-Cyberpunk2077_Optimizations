@@ -8,14 +8,21 @@ $PackageRoot=(Resolve-Path -LiteralPath $PackageRoot).Path
 $OwnerArtifactRoot=(Resolve-Path -LiteralPath $OwnerArtifactRoot).Path
 $manifest=Get-Content -LiteralPath (Join-Path $PackageRoot 'components/manifest.json') -Raw | ConvertFrom-Json
 $tools=@($manifest.analysisTools)
-if ($tools.Count -ne 1 -or $tools[0].id -ne 'cet-resolver' -or
-    $tools[0].sourceCommit -ne '08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44' -or
-    $tools[0].ownerCiRun -ne 41820765951 -or
-    $tools[0].ownerArtifactId -ne 13317096524 -or
-    $tools[0].framework -ne 'net10.0-windows') {
-    throw 'CET Resolver source/provenance manifest is not exact.'
+$cetTools=@($tools | Where-Object { $_.id -eq 'cet-resolver' })
+$redscriptTools=@($tools | Where-Object { $_.id -eq 'redscript-resolver' })
+# The CET source-owner equivalence test must remain exact, but the unified
+# GCO app now also bundles one independent GCO-owned REDscript Resolver.
+# Reject missing/duplicate/unknown tools rather than assuming CET is alone.
+if ($tools.Count -ne 2 -or $cetTools.Count -ne 1 -or $redscriptTools.Count -ne 1 -or
+    $cetTools[0].sourceCommit -ne '08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44' -or
+    $cetTools[0].ownerCiRun -ne 41820765951 -or
+    $cetTools[0].ownerArtifactId -ne 13317096524 -or
+    $cetTools[0].framework -ne 'net10.0-windows' -or
+    $redscriptTools[0].framework -ne 'net10.0' -or
+    $redscriptTools[0].generationAuthorized -ne $false) {
+    throw 'Combined CET/REDscript Resolver manifest fails exact source-owner provenance or generation safety.'
 }
-$tool=$tools[0]
+$tool=$cetTools[0]
 $rootPrefix=$PackageRoot.TrimEnd('\') + '\'
 $files=@($tool.files)
 if ($files.Count -lt 12) { throw 'Complete CET Resolver file/hash inventory missing.' }
