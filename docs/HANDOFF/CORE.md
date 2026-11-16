@@ -19,7 +19,7 @@
 4. [Architecture and state machine](../technical/ARCHITECTURE.md), [headless component contracts](../technical/COMPONENT-CONTRACTS.md), [document index](../README.md).
 5. Project-specific source-of-truth docs for the component being modified.
 
-## Active REDscript Resolver handoff — 2026-11-15 (supersedes older owner text below)
+## Historical REDscript integration handoff — 2026-11-15 (SUPERSEDED by 2026-11-16 owner move)
 
 - **Current branch:** `feature/redscript-resolver-integration`, forked at `3caccafbdf39ec2b6474b69ed8f34c9392e2ff20` from completed CET/PresentMon integration. Stable GCO `main` remains protected. GCO CET original generator and genuine PresentMon reporting are frozen baselines (full private source CI #416; reporting CI #426), *not* new work.
 - **Source-of-truth:** [complete GRSP-owned implementation blueprint](../integration/GRSP_REDscript_Resolver_Blueprint.md), [live stage ledger](../integration/REDSCRIPT-RESOLVER-PROGRESS.md), GRSP [authoritative owner handoff](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_HANDOFF.md) and [owner progress](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/RESOLVER_PROGRESS.md).
