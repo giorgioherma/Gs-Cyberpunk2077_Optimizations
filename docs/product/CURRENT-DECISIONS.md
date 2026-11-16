@@ -6,7 +6,7 @@
 
 - **Develop the REDscript Resolver/Generator in GCO** on `dev/redscript/resolver_handoff` as a distinct internal `.NET 10` source-aware component. GRSP stays the authority for native profiling, F11 instrumentation and measurement evidence only. CET retains its Lua Resolver/Generator; G-REDruntime owns optional common runtime services.
 - Maintain one existing two-page application and one user-facing workflow, joint CET/GRSP/PresentMon evidence, one ZIP and one canonical CI; no second form, competing generator or managed runtime.
-- [GCO-local handoff](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) supersedes older contradictory managed ownership text below. The working GRSP managed prototype remains a migration source until GCO-local parity is verified; no code move is claimed yet. Do not alter stable `main`.
+- [GCO-local handoff](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) supersedes older contradictory managed ownership text below. The tested GRSP managed code and its source/CLI contracts have now been copied into GCO `src/GRedscript.Resolver` and `tests/GRedscript.Resolver.Tests` (GCO `f291b0f`), with the original GCO Windows CI switched to local managed source at `6b498bed`. Native GRSP profiler and CET owner remain separate. Retain historical GRSP managed code only until verified migration parity; do not alter stable `main`.
 
 ## Earlier decisions below (superseded where inconsistent)
 
