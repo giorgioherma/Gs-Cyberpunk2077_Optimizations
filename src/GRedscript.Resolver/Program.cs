@@ -164,6 +164,11 @@ internal static class Program
                 callsites,
                 sourceAdmission);
 
+            object callbackReuse = CallbackReuseEvidence.Interpret(
+                tables.TryGetValue("Developer/RSP_CallbackReuse.csv",
+                    out var reuseTable) ? reuseTable.Rows : null,
+                tables["Developer/RSP_CallbackTargets.csv"].Rows);
+
             int sourceCount = sourceAdmission.InspectedFileCount;
             var top = ranks.OrderByDescending(x => x.ExclusiveInstrumentedMs)
                 .ThenByDescending(x => x.OutgoingEdgesPerSec)
@@ -205,6 +210,7 @@ internal static class Program
                 },
                 rankedObservedCallsites = top,
                 proxyAttribution,
+                callbackReuse,
                 sourceObservations = observations,
                 rawTables = tables,
                 safety = new {
