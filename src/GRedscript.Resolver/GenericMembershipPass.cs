@@ -292,9 +292,31 @@ internal static class GenericMembershipPass
         if (!Ident(field))
         { rejection = "ARRAY_FIELD_NOT_IDENTIFIER"; return null; }
         if (t[i + 10].Value != member)
-        { rejection = "EQUALS_LEFT_NOT_ITERATED_VALUE"; return null; }
+        {
+            // Swapped *syntax* is not type or equality-purity proof.
+            // Keep it rejected until the enclosing declarations and
+            // ArrayContains equivalence can be established at R4/R5.
+            bool bareReverse = Ident(t[i + 10].Value) &&
+                t[i + 11].Value == "," &&
+                t[i + 12].Value == member &&
+                t[i + 13].Value == ")";
+            rejection = bareReverse ? "EQUALS_OPERANDS_REVERSED_SHAPE_UNPROVEN"
+                : "EQUALS_LEFT_NOT_ITERATED_VALUE";
+            return null;
+        }
         if (t[i + 11].Value != ",")
-        { rejection = "EQUALS_LEFT_NOT_SINGLE_IDENTIFIER"; return null; }
+        {
+            // First non-comma token distinguishes common source structures.
+            // Never infer element type, purity or value semantics from it.
+            rejection = t[i + 11].Value switch
+            {
+                "." => "EQUALS_LEFT_MEMBER_ACCESS",
+                "[" => "EQUALS_LEFT_INDEXED_EXPRESSION",
+                "(" => "EQUALS_LEFT_CALL_EXPRESSION",
+                _ => "EQUALS_LEFT_NOT_SINGLE_IDENTIFIER"
+            };
+            return null;
+        }
         if (!Ident(value))
         { rejection = "EQUALS_RIGHT_NOT_BARE_IDENTIFIER"; return null; }
         if (t[i + 13].Value != ")")
