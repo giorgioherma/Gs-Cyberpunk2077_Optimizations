@@ -207,6 +207,27 @@ public static class GcoProfilerReportService
                     grspFrames++;
                 }, cancellationToken);
 
+            // The REDscript spike CSV has absolute native Unix clocks.
+            // Use the same CET F11 origin as the verified PresentMon chronology;
+            // do not align spikes by frame index, inferred lag or guessed timezone.
+            var redSpikeMarkers = new List<GcoProfilerSpike>();
+            var redSpikeCsv = FindNamed(red, "GRSP_Spikes.csv");
+            if (mon is not null && redSpikeCsv is not null)
+                ReadCsv(redSpikeCsv, row =>
+                {
+                    var unix = Number(row, "unix_ms");
+                    var cost = Number(row, "exclusive_instrumented_ms");
+                    if (unix is null || unix < 1_000_000_000_000 ||
+                        cost is null || cost <= 0) return;
+                    var relative = unix.Value - mon.CetStartUnixMs;
+                    if (relative < mon.OverlapStartUnixMs - mon.CetStartUnixMs ||
+                        relative >= mon.OverlapEndUnixMs - mon.CetStartUnixMs)
+                        return;
+                    var owner = row.TryGetValue("owner", out var name) ? name : "";
+                    redSpikeMarkers.Add(new GcoProfilerSpike(
+                        relative, "REDscript", owner, cost.Value));
+                }, cancellationToken);
+
             var rows = bins.Select(pair => new
             {
                 timeMs = pair.Key * BucketMs,
@@ -221,6 +242,15 @@ public static class GcoProfilerReportService
                 redscriptCalls = mon is null ? (long?)null : pair.Value.RedscriptCalls,
                 redscriptNativeFrames = mon is null ? (int?)null : pair.Value.RedscriptFrames
             }).ToArray();
+
+            // Only source-owned owner summaries and verified coarse chronology
+            // feed the human digest. The original reports remain intact.
+            var timelineJson = JsonSerializer.Serialize(rows, Json);
+            var digest = GcoProfilerDigest.Build(
+                cetJson.RootElement, grspJson.RootElement,
+                mon is null ? Array.Empty<double>() :
+                    mon.Frames.Select(frame => frame.IntervalMs).ToArray(),
+                timelineJson, redSpikeMarkers);
 
             Directory.CreateDirectory(publishing);
             if (stagedFrameHandoff is not null)
@@ -253,6 +283,8 @@ public static class GcoProfilerReportService
                 grspNativeSummary = "GRSP/GRSP_Summary.json",
                 cetWindows = cetWindows,
                 redscriptFrames = grspFrames,
+                digest = digest.Data,
+                spikeMarkers = digest.SpikeMarkers,
                 timeline = rows
             };
 
@@ -260,7 +292,9 @@ public static class GcoProfilerReportService
                 JsonSerializer.Serialize(report, Json), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(publishing, HtmlFile),
                 HtmlReport(report.frameEvidence.provider, mon?.Frames.Count ?? 0,
-                    JsonSerializer.Serialize(rows, Json), grspFrames, cetWindows), new UTF8Encoding(false));
+                    timelineJson, grspFrames, cetWindows,
+                    digest.Html, JsonSerializer.Serialize(digest.SpikeMarkers, Json)),
+                new UTF8Encoding(false));
             // Keep the full original CET and GRSP reports and their data links
             // accessible beneath the consolidated report. This is RESULTS
             // only, never part of the optimizer pass ZIP.
@@ -457,7 +491,8 @@ public static class GcoProfilerReportService
     }
 
     private static string HtmlReport(string provider, int monFrames,
-        string timelineJson, int grspFrames, int cetWindows)
+        string timelineJson, int grspFrames, int cetWindows,
+        string digestHtml, string markersJson)
     {
         // Standalone/offline HTML: no CDN, network, external scripts or files.
         // Three independent y-axis ranges with ONE shared F11 time axis.
@@ -577,6 +612,8 @@ canvas.addEventListener('wheel',e=>{
             .Replace("__MONFRAMES__", monFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__CETWINDOWS__", cetWindows.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__REDFRAMES__", grspFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal);
+            .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal)
+            .Replace("__DIGEST__", digestHtml, StringComparison.Ordinal)
+            .Replace("__SPIKES__", markersJson, StringComparison.Ordinal);
     }
 }
