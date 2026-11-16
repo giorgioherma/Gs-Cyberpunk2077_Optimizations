@@ -109,6 +109,18 @@ try {
     }
     # Only current report JSON receives new derived digest fields.
     # The preserved original native CET and GRSP summaries stay unchanged.
+    # Native frame-start attribution is sparse. Never present an unobserved
+    # GRSP 50ms window as an instrumented 0ms execution measurement.
+    if(@($json.timeline | Where-Object {
+        [int]$_.redscriptNativeFrames -eq 0 -and
+        $null -ne $_.redscriptExclusiveInstrumentedMs
+    }).Count -ne 0 -or
+       @($json.timeline | Where-Object {
+           [int]$_.redscriptNativeFrames -gt 0 -and
+           $null -ne $_.redscriptExclusiveInstrumentedMs
+       }).Count -lt 2) {
+       throw 'GCO REDscript timeline confused unobserved frames with measured work.'
+    }
     # The identical GCO-owned verified per-present QPC chronology must be
     # available to the GRSP Resolver, not only the staged CET reporter.
     # This is derived report evidence, never a modified capture or release ZIP.
