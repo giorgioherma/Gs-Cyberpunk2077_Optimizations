@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — complete native producer and GCO app integration verified
+
+- Native owner GRSP CI #23 `43861198409` **SUCCESS**; new `RSP_CallbackReuse.csv` post-F11 writer compiled into the source-owned release DLL. GCO `main` CI #514 attempt 2 `43862048161` **SUCCESS** with a single verified GCO portable application artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run514-a2`; all relevant source-safety, provenance, packaged native marker, shared runtime and GRSP Restore checks passed.
+- Managed `CallbackReuseEvidence` exists on this branch and GCO `main`, accepts optional legacy captures, refuses invented receiver/caching/entry authority and contradictory native callsite totals. This is a no-rewrite diagnostic stage. Next require actual game F11 recording and live source argument/lifecycle proof, not a mod-specific semantic catalog or separate application.
+
+
 ## 2026-11-16 — generic callback read/reuse measurement and shared framework handoff
 
 - CET example: registration-scoped CPU/alloc pressure, source-proven shared state providers and explicit lifecycle ownership; **not** generic mod-name-based blame. User wants recurring callback work uncorrelated to GC as the priority, independently from CET optimization installation.
