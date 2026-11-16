@@ -1015,7 +1015,7 @@ class GrspResolverContracts(unittest.TestCase):
         reuse = report["callbackReuse"]
         self.assertEqual("CAPTURED_READ_LIKE_ONLY", reuse["status"])
         self.assertEqual(1, reuse["candidateTargets"])
-        self.assertEqual(250, reuse["rankedReadTargets"][0]["SameFrameExtraEdges"])
+        self.assertEqual(250, reuse["rankedReadTargets"][0]["sameFrameExtraEdges"])
         self.assertFalse(reuse["callbackEntriesKnown"])
         self.assertFalse(reuse["cacheSafetyKnown"])
         self.assertFalse(reuse["generationAuthorized"])
@@ -1043,8 +1043,8 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         report = json.loads(self.output.read_text())
         reuse = report["callbackReuse"]["rankedReadTargets"][0]
-        self.assertEqual("TRUNCATED_NOT_ZERO_WORK", reuse["FrameEvidenceStatus"])
-        self.assertEqual(21, reuse["DroppedFrameRows"])
+        self.assertEqual("TRUNCATED_NOT_ZERO_WORK", reuse["frameEvidenceStatus"])
+        self.assertEqual(21, reuse["droppedFrameRows"])
 
 
 if __name__ == "__main__":
