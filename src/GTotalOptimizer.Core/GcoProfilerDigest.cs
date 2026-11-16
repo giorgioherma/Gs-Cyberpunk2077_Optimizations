@@ -218,10 +218,14 @@ internal static class GcoProfilerDigest
             if (shown == 3) break;
             string name = Text(item, "Title");
             string evidence = Text(item, "Evidence");
+            string explanation = Text(item, "Explanation");
             if (name.Length == 0 || evidence.Length == 0) continue;
             html.Append("<div class=\"finding\"><strong>").Append(H(name))
-                .Append("</strong><p>").Append(H(evidence))
-                .AppendLine("</p></div>");
+                .Append("</strong><p>").Append(H(evidence)).Append("</p>");
+            if (explanation.Length > 0)
+                html.Append("<small class=\"muted\">").Append(H(explanation))
+                    .Append("</small>");
+            html.AppendLine("</div>");
             shown++;
         }
         html.AppendLine("</section>");
