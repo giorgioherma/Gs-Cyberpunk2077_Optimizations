@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-16 — owner-approved REDscript Resolver development relocation
+
+- New active **GCO branch `dev/redscript/resolver_handoff`**, forked at `0d62eaff7b19ca9263dc355250beccbe184461da` from the verified integration work. **Decision:** locate the independent REDscript source-aware Resolver, generic Generator and SCC validator as GCO-local `.NET 10` components alongside CET orchestration. **GRSP is profiler/native instrumentation and evidence only**; CET still owns its Lua Resolver. Keep one two-page WPF UI and one game-relative optimization ZIP. The earlier GRSP-managed development decision is superseded; read [local handoff](integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md).
+- Documentation/branch milestone only: GRSP-managed prototype remains available as a verified migration source; no code relocation, pipeline switch, native change or gameplay test has yet been performed. Previous full-source GCO [CI #482 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43794814481), GRSP owner [CI #61 SUCCESS](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43794298639). Next: migrate one authoritative implementation, retain source-state/drift/idempotence and real SCC gates, then retire duplicate managed development after parity.
+
+
 **Date:** 2026-11-04. **Repository:** `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Branch:** `main`.
 
 ## Completed — documentation and planning only
