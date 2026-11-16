@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — GCO pins source-owned GRSP native artifact, no GCO Rust build
+
+- **GCO Resolver branch `dev/redscript/resolver_handoff`** now imports the independently built GRSP native DLL from the newest successful provenance-checked `.github/workflows/native-instrumentation.yml` run. Existing GCO canonical `build-windows.yml` selects exact successful owner source SHA/run/artifact, verifies producer workflow, strict F11 variant, SHA256 sidecar, Cargo.lock and embedded `RSP_CallbackPressure.csv`, `RSP_CallbackTargets.csv`, `RSP_ProxyAttribution.csv`, **new `RSP_ProxyChildren.csv`**. Missing or mismatched native owner output fails closed; no stale binary or local Rust compilation fallback. GCO's existing `integrations/three-profiler-test/Build-Test.ps1` now copies exact owner DLL, validates its SHA, records CI provenance and retains original two-page UI, .NET 10 managers, one package. Workflow commit `13cd6d3`; script commit `c996342`.
+- Native instrumentation source is GRSP-owned and now measures bounded direct hook nesting under virtual proxies during F11, with explicit receiver/causality limits. GCO consumes as evidence; managed `src/GRedscript.Resolver` remains sole Resolver/Generator owner. **CI result, native DLL artifact availability, real game capture and gameplay improvement NOT YET VERIFIED.** Do not infer receiver identity or total CPU by adding nested/inclusive time.
+
+
 ## 2026-11-16 — R5 GCO evidence interpretation implemented on correct Resolver branch
 
 - **Owner and branch:** all managed implementation is in GCO `dev/redscript/resolver_handoff`; GRSP's native profiler remains source-owned, with no Rust code copied into active GCO code or new installer workflow. Added `src/GRedscript.Resolver/ProxyAttributionEvidence.cs` and integrated `proxyAttribution` into the existing `analyze` JSON. This consumes optional native `RSP_ProxyAttribution.csv` after the normal sealed F11, collection and source-stack checks, linking each proxy observation to its original GRSP callsite by **capture ID + stable callsite ID + source owner/function/path/line + target/kind/resolution + outgoing edges**.
