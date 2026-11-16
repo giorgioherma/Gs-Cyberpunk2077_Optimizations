@@ -1,5 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
 
+## Native profiler safety / owner branch — 2026-11-16
+
+- The user reported a game crash after installing newly developed native proxy-child instrumentation. Treat this as a **suspected instrumentation regression**, not a proven root cause or automatically fixed defect; preserve easy Restore and stable prior installation recovery.
+- GRSP native profiler work now uses **`dev/native-instrumentation`**; its obsolete `dev/resolver-profiler-handoff` branch is not a source of new native DLLs. GCO `main` retains its existing two-page application, single .NET10 runtime and canonical Windows workflow, importing only the GRSP-owner CI built DLL with verified source SHA, Cargo.lock, F11 variant and SHA256. GCO never compiles native Rust. Managed REDscript Resolver work belongs in GCO `dev/redscript/resolver_handoff`.
+- Native source safeguards now guard against re-entrant profiler bookkeeping, pre-reserve bounded proxy-child storage and require a full F11 in-flight hook drain before merging per-thread `UnsafeCell` shards. If the merge fails, no F11-complete flag is created. **Green CI is not proof of crash-free gameplay**; real game stability remains the acceptance gate. No automatic modification of live mods or new user-facing workflow.
+
+
 **Authority model.** The original [UNIFIED-TWO-PAGE-WORKFLOW](UNIFIED-TWO-PAGE-WORKFLOW.md) is copied **unchanged** from the accepted 2026-10-16 user/agent design. This file records **later explicit user decisions and implementation interpretation only**. If a suggestion here conflicts with original behavior without a direct user authorization, the original wins; ask the user before changing it.
 
 ## Explicitly approved since the original specification
