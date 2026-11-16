@@ -1,5 +1,10 @@
 # GRSP native proxy-attribution work — preserved GCO handoff
 
+## 2026-11-16 — native hook crash-safety update
+
+GRSP native-only branch `dev/native-instrumentation` now has TLS bookkeeping re-entrancy protection, pre-reserved bounded proxy counters, and a synchronized F11 STOP barrier covering both active root calls and any in-flight TLS bookkeeping before its `UnsafeCell` shard merge. Failed merges cannot seal a valid capture. GCO `main` and `dev/redscript/resolver_handoff` fetch only provenance-checked owner-native artifacts from the native-only branch. The previously archived source snapshot remains historical; do not compile or duplicate native Rust in GCO. **No verified Windows native CI, fresh F11 game evidence or proven crash fix is available yet.**
+
+
 **Status:** read-only source snapshot / implementation record. **NOT compiled, linked, or owned as a new GCO native profiler.** No new native CI, generated mod files, or gameplay proof.
 
 ## Exact source preservation
