@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-16 — native hook crash-safety update
+
+GRSP native-only branch `dev/native-instrumentation` now has TLS bookkeeping re-entrancy protection, pre-reserved bounded proxy counters, and a synchronized F11 STOP barrier covering both active root calls and any in-flight TLS bookkeeping before its `UnsafeCell` shard merge. Failed merges cannot seal a valid capture. GCO `main` and `dev/redscript/resolver_handoff` fetch only provenance-checked owner-native artifacts from the native-only branch. The previously archived source snapshot remains historical; do not compile or duplicate native Rust in GCO. **No verified Windows native CI, fresh F11 game evidence or proven crash fix is available yet.**
+
+
 ## 2026-11-16 — GCO pins source-owned GRSP native artifact, no GCO Rust build
 
 - **GCO Resolver branch `dev/redscript/resolver_handoff`** now imports the independently built GRSP native DLL from the newest successful provenance-checked `.github/workflows/native-instrumentation.yml` run. Existing GCO canonical `build-windows.yml` selects exact successful owner source SHA/run/artifact, verifies producer workflow, strict F11 variant, SHA256 sidecar, Cargo.lock and embedded `RSP_CallbackPressure.csv`, `RSP_CallbackTargets.csv`, `RSP_ProxyAttribution.csv`, **new `RSP_ProxyChildren.csv`**. Missing or mismatched native owner output fails closed; no stale binary or local Rust compilation fallback. GCO's existing `integrations/three-profiler-test/Build-Test.ps1` now copies exact owner DLL, validates its SHA, records CI provenance and retains original two-page UI, .NET 10 managers, one package. Workflow commit `13cd6d3`; script commit `c996342`.
