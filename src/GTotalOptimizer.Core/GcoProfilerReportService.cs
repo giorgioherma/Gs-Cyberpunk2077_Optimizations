@@ -551,7 +551,13 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .facts dt{color:var(--muted)}.facts dd{margin:0;text-align:right;font-weight:600}
 .small{font-size:12px}
 .chartbox canvas{height:410px}
-button[aria-pressed=true]{background:#1e545f;border-color:#50d9e8;color:#fff}
+.graph-tabs{display:flex;gap:0;align-items:flex-end;margin-top:14px;border-bottom:1px solid var(--border)}
+.graph-tabs [role="tab"]{border:1px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;background:transparent;color:var(--muted);padding:11px 18px;font-weight:600;letter-spacing:.02em}
+.graph-tabs [role="tab"]:hover{color:var(--fg);background:#162d36}
+.graph-tabs [role="tab"][aria-selected="true"]{color:var(--cyan);background:var(--panel);border-color:var(--border);box-shadow:inset 0 3px 0 var(--cyan)}
+.graph-tabs [role="tab"]:focus-visible{outline:2px solid var(--yellow);outline-offset:-3px}
+.chartbox [role="tabpanel"][hidden]{display:none}
+.chartbox [role="tabpanel"]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 #scaleNote{font-size:12px;min-height:20px;margin-top:8px;color:var(--muted)}
 @media(max-width:850px){.side-by-side{grid-template-columns:1fr}}
 @media(max-width:650px){main{padding:12px}.chartbox canvas{height:400px}.toolbar{flex-wrap:wrap}.digest-kpis{grid-template-columns:1fr 1fr}}
@@ -561,14 +567,19 @@ button[aria-pressed=true]{background:#1e545f;border-color:#50d9e8;color:#fff}
 __DIGEST__
 <h2>CET + REDscript + PresentMon timeline</h2>
 <div class="note"><strong>Measurement boundaries:</strong> PresentMon measures present-to-present intervals, not displayed latency. CET and REDscript values are distinct observed/instrumented workloads, not whole-process CPU; they can overlap and must <strong>not</strong> be added or subtracted. Timing alignment is coarse 50 ms association using recorded QPC/Unix F11 anchors, not proof that either profiler caused a particular hitch. PC latency and frame-generation flags are NOT_CAPTURED.</div>
+<div class="graph-tabs" role="tablist" aria-label="Timeline graph selection">
+<button id="combined" role="tab" aria-controls="panel-combined" aria-selected="true" tabindex="0">Combined timeline</button>
+<button id="tracks" role="tab" aria-controls="panel-tracks" aria-selected="false" tabindex="-1">Three synchronized tracks</button>
+</div>
 <div class="chartbox"><div class="toolbar">
-<button id="combined" aria-pressed="true">Combined timeline</button>
-<button id="tracks" aria-pressed="false">Three synchronized tracks</button>
 <button id="full">Full capture</button>
 <button id="worst">Worst PresentMon interval</button>
 <span class="muted">Shift + scroll to zoom · Select a time in the tables above</span>
 </div>
-<canvas id="graph" role="img" aria-label="CET REDscript and PresentMon timeline with switchable combined and three-track views"></canvas>
+<div id="panel-combined" role="tabpanel" aria-labelledby="combined" tabindex="0">
+<canvas id="graph" role="img" aria-label="Combined CET REDscript and PresentMon normalized timeline"></canvas>
+</div>
+<div id="panel-tracks" role="tabpanel" aria-labelledby="tracks" tabindex="0" hidden></div>
 <div class="tip" id="tip"></div><div class="legend">
 <span style="color:var(--cyan)"><i class="sw"></i>PresentMon maximum interval / 50ms bucket</span>
 <span style="color:var(--yellow)"><i class="sw"></i>CET measured exclusive work / 50ms bucket</span>
@@ -664,10 +675,23 @@ function resize(){
  canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);
  canvas.getContext('2d').setTransform(ratio,0,0,ratio,0,0);draw();
 }
-function setMode(next){
- mode=next;document.getElementById('combined').setAttribute('aria-pressed',String(mode==='combined'));
- document.getElementById('tracks').setAttribute('aria-pressed',String(mode==='tracks'));
+function setMode(next,focusTab=false){
+ if(next!=='combined'&&next!=='tracks')return;
+ mode=next;
+ for(const name of ['combined','tracks']){
+  const active=name===mode,tab=document.getElementById(name),panel=document.getElementById('panel-'+name);
+  tab.setAttribute('aria-selected',String(active));
+  tab.tabIndex=active?0:-1;
+  panel.hidden=!active;
+ }
+ const currentPanel=document.getElementById('panel-'+mode);
+ currentPanel.appendChild(canvas);
+ canvas.setAttribute('aria-label',mode==='combined'
+  ?'Combined CET REDscript and PresentMon normalized timeline'
+  :'Three synchronized millisecond graphs for PresentMon CET and REDscript, with spike markers');
+ tip.style.display='none';
  resize();
+ if(focusTab)document.getElementById(mode).focus();
 }
 function focusAt(t){
  if(!Number.isFinite(t))return;
@@ -676,8 +700,17 @@ function focusAt(t){
  xmax=xmin+windowMs;setMode('tracks');
  document.querySelector('.chartbox').scrollIntoView({block:'center',behavior:'smooth'});
 }
-document.getElementById('combined').onclick=()=>setMode('combined');
-document.getElementById('tracks').onclick=()=>setMode('tracks');
+for(const name of ['combined','tracks']){
+ const tab=document.getElementById(name);
+ tab.addEventListener('click',()=>setMode(name));
+ tab.addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+  e.preventDefault();
+  const next=e.key==='Home'?'combined':e.key==='End'?'tracks':
+    (name==='combined'?'tracks':'combined');
+  setMode(next,true);
+ });
+}
 document.getElementById('full').onclick=()=>{xmin=fullMin;xmax=fullMax;draw();};
 document.getElementById('worst').onclick=()=>focusAt(worst.timeMs);
 document.querySelectorAll('[data-jump]').forEach(node=>{
