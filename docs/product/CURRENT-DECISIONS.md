@@ -1,5 +1,14 @@
 # Product decisions and explicit delta to the October 16 design
 
+## Generic callback instrumentation and shared state — 2026-11-16
+
+User priority is **frequent, sustained callback work across the whole installed source stack**; mod names and isolated GC spikes are not optimization selectors. Borrow CET's callback/registration evidence methodology and existing shared-state design, but preserve GRSP's distinct runtime and verified native hook safety. CET optimizations or G-GC need **not** be installed to discover or qualify REDscript opportunities.
+
+Source-owner GRSP `dev/native-instrumentation` now emits bounded post-F11 `RSP_CallbackReuse.csv`, measuring named getter-like call-target frequency, repetition within frames, and shared invocation targets across source callback functions/owners. This stage adds **no VM hook** and no per-invocation overhead. It does not measure actual engine-to-REDscript callback entry counts, unchanged parameters, identical receivers, pure getters or cache invalidation. The GCO local managed Resolver reads it into the optional `callbackReuse` JSON field and refuses forged proof/contradictory native callsite totals; all generation remains disabled.
+
+G-REDruntime already has source-owned `StateCache`, `ContextService`, lifecycle and invalidation services. They are candidates for **reuse after source/receiver/lifetime proof**, not authorization to insert a second system or globally memoize volatile values. New generic optimization passes require live installed sources, unchanged gameplay semantics, SCC compilation, idempotence and complete source drift refusal. Keep one GCO app and one game-relative output ZIP.
+
+
 ## One complete GCO application artifact — 2026-11-16
 
 **Owner request:** bundle CET profiling + CET Resolver, REDscript profiling + GCO-owned REDscript Resolver, genuine PresentMon, WPF interface, installer/restore, evidence/reporting and necessary shared runtime into **one GitHub Actions GCO app artifact** on `main`. Component ownership remains separated at source; users should not manually download separate GRSP native artifacts.
