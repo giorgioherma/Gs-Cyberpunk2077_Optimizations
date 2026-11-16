@@ -4,7 +4,7 @@
 
 **Active REDscript Resolver branch: `dev/redscript/resolver_handoff`.** [Approved GCO-local Resolver handoff](REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md). The earlier `feature/redscript-resolver-integration` results remain the baseline, but **prior GRSP-managed Resolver/Generator instructions below are superseded**. GCO owns the separate internal REDscript Resolver/Generator plus SCC validation; GRSP only owns profiling/native evidence and CET retains its Lua backend. One two-page UI and single ZIP.
 
-**Migration status:** branch/decision recorded; managed code not yet moved. Last pre-migration [GCO CI #482 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43794814481) and [GRSP managed CI #61 SUCCESS](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43794298639). Source: 2,319 REDscript files, 48 shallow candidates, 1 strict measured match, 47 rejected; original and one-file optimized SCC both compiled. Next is GCO-local code migration and full parity checks before generic expansion.
+**Migration status:** completed GCO-local source/tests copy at `f291b0f` and switched canonical CI to local Resolver at `6b498bed`. The 41 previously proven GRSP CLI contracts now live under `tests/GRedscript.Resolver.Tests`; all original managed reader/scanner/preview/SCC source is in `src/GRedscript.Resolver`. [GCO CI #483](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43798781332) has passed local component build/tests and real private source/capture/SCC steps; final GCO packaging pending at this checkpoint. Previous [GCO #482](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43794814481) and [GRSP #61](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43794298639) remain known-good pre-migration baselines. No profiler native files, installed user sources or CET generator code modified.
 
 ## Historical progress (kept as evidence)
 
@@ -25,7 +25,7 @@
 | R6 iterative GRSP/G-REDruntime enablement | CONDITIONAL | May interleave with R2–R5 to unlock high-value reusable passes; prove bounded overhead and lifecycle |
 | R7 61-file GAP MATRIX → semantic remainder LAST | BLOCKED BY R5/R6 COVERAGE | After generic output, classify per-operation GENERIC_COVERED / ALREADY_PRESENT / SEMANTIC_REMAINDER / UNPROVEN_OR_DRIFTED / NOT_APPLICABLE; only remaining approved work may be implemented |
 | R8 whole-stack compiler and output safety | REAL UNTOUCHED+OPTIMIZED SCC PASS; END-TO-END STATE/OUTPUT GATES PENDING | Authoritative REDscript compiler, untouched/partial/complete/drift tests, changed-only overlay |
-| R9 GCO-local REDscript component integration | HISTORICAL GRSP CLI VERIFIED; GCO CODE MOVE/PRODUCT ANALYZE-GENERATE PENDING | Source-built separate GCO in-repo REDscript component on shared .NET10, proven owner parity and live-source state, no new lifecycle gates |
+| R9 GCO-local REDscript component integration | MANAGED SOURCE+CI MOVE DONE; PRODUCT ANALYZE-GENERATE PENDING | Source-built separate GCO in-repo REDscript component on shared .NET10, proven owner parity and live-source state, no new lifecycle gates |
 | R10 combined ZIP + real gameplay | NOT STARTED | One collision-safe game-relative ZIP, actual game regression and measured before/after |
 
 ## Immutable existing baselines
