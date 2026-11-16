@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — R5 high-impact evidence pivot after membership-loop CI #486
+
+- Owner decision: freeze `CNAME_ARRAY_MEMBERSHIP_V1` at existing strict proven shape; do not chase the 4 reversed, 40 member-access and other rejected loops without measured value. GCO source-only investigation records two higher-impact measured families: Custom Quickslots input-to-CET bridge and Dark Future buff UI `SetData` updates. See [R5 high-impact evidence plan](docs/integration/R5-HIGH-IMPACT-EVIDENCE-PLAN.md) (in integration-folder-relative documents use `R5-HIGH-IMPACT-EVIDENCE-PLAN.md`).
+- Dated `r6LIVEnow.zip` source inspection confirms per-action `SetLastUsedKBM` bridge and time-varying buff `SetData` arguments; it is **not** current 2,319-file source-byte proof. GRSP native instrumentation should determine true callback entries, device/grace-state transitions, bridge side effects and complete unchanged UI tuple/lifecycle rates before considering rewrites; count unknowns and capture overhead.
+- Commit `62e64122e12fd786defc6a9bc481e968f7a9ab7b` adds planning/evidence contract only. **NO new native hooks, compiler run, CI, pass, gameplay or speedup claimed.** Next: inspect existing GRSP evidence writers for these exact counters and implement a bounded missing-proof probe in GRSP only if the existing data cannot answer it. GCO retains managed Resolver/Generator and current branch; GCO `main` and GRSP stable release untouched.
+
+
 ## Current ownership and branch — 2026-11-16
 
 **Active REDscript Resolver branch: `dev/redscript/resolver_handoff`.** [Approved GCO-local Resolver handoff](REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md). The earlier `feature/redscript-resolver-integration` results remain the baseline, but **prior GRSP-managed Resolver/Generator instructions below are superseded**. GCO owns the separate internal REDscript Resolver/Generator plus SCC validation; GRSP only owns profiling/native evidence and CET retains its Lua backend. One two-page UI and single ZIP.
