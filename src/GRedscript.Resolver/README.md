@@ -82,3 +82,56 @@ new captured performance are independent gates.
 See `docs/integration/REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md` and
 `docs/integration/R5-HIGH-IMPACT-EVIDENCE-PLAN.md`. Do not port CET Lua
 rewrites by regex or change unrelated GCO installer/Restore functionality.
+
+
+## Generic pass 2: ACTION_LITERAL_MEMBERSHIP_V1 (2026-11-16)
+
+**Owner:** GCO-local `GenericActionFilterPass.cs`. This is a literal-array
+construction/membership optimization *inside existing `OnAction` methods*,
+**not** CET `Observe` routing, callback cadence modification, nor early
+filtering of arbitrary downstream handlers.
+
+A source-only diagnostic `scan-action-filter --game <game> --out <external-json>`
+enumerates current callbacks and classifies exact-match source shapes.
+The separately gated `preview-action-filter --game <game> --analysis
+<source-matched-sealed-capture.json> --out <empty-external-folder>` produces
+an isolated **nondeployable** `r6/scripts/...` overlay. Only the same
+`grsp.resolver.input.v1` verified captured-collection identity and complete
+current source-stack SHA are allowed. No live source writes occur.
+
+**Precisely admitted source shape:**
+
+- A standard `OnAction(action: ListenerAction, consumer:
+  ListenerActionConsumer) -> Bool` starts with `let actionName =
+  ListenerAction.GetName(action);`, then `let names = Class.Helper();`,
+  then `if !ArrayContains(names, actionName) { return false; }`.
+- The called `Class.Helper()` has **one** unambiguous source definition,
+  a static zero-argument `-> array<CName>` **expression body containing only
+  two to sixteen literal CNames**; no dynamic input, calls, writes or runtime
+  array lifecycle are admitted.
+- The caller's source explicitly imports that exact class from its module or
+  is in the same module; ambiguous/missing imports and alternate same-name
+  provider definitions are refused.
+- No matching `@wrapMethod`, `@replaceMethod`, or `@addMethod` alters the
+  provider method. A partial generated marker must fail; a complete marker
+  must prove *literal bytes as well as lexer tokens* before claiming
+  `ALREADY_COMPLETE`.
+
+The only rewritten source region is the local temporary array getter call and
+its `ArrayContains` guard. It becomes ordered
+`!Equals(actionName, n"X") && !Equals(actionName, n"Y") ... { return false; }`.
+This preserves the original name read, return-false behavior for unrelated
+actions, callback registration, consumer, all game actions and remaining
+method bytes. The helper definition and every other caller remain intact.
+
+**Cross-mod applicability:** the dated private installed source contains
+multiple input listeners using this structural pattern. Source name/path is
+NEVER a match condition. Real stack admission requires current CI source
+proof and full effective SCC. This does not measure avoided allocations,
+callback entries or FPS savings. It is *not* the proposed finite-action early
+bypass of CET/Lua bridges, widget updates or game-system getter side effects;
+those still need independent evidence and gameplay tests.
+
+The existing first `CNAME_FIXED_INDEX_V1` generic remains independently
+gated. The real-stack replay stages **disjoint** overlays for both generic
+rules in the existing GCO-owned SCC 0.5.31 harness, never installing either.
