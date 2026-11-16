@@ -257,9 +257,8 @@ internal static class GenericActionFilterPass
             else break;
         }
         if (values.Count is < 2 or > 16 ||
-            p + 2 >= classEnd || t[p].Value != "]" ||
-            t[p + 1].Value != ";" ||
-            t[p + 2].Value == "{")
+            p + 1 >= classEnd || t[p].Value != "]" ||
+            t[p + 1].Value != ";")
             return [];
         return values.ToArray();
     }
@@ -300,6 +299,17 @@ internal static class GenericActionFilterPass
         if (!MatchWords(t, p, namePrefix)) return null;
         p += namePrefix.Length;
         int start = p;
+        // Distinguish fully complete generated source from broken/partial
+        // generated source using exact token + source-owned helper proof.
+        // A marker alone never authorizes a second rewrite.
+        string methodText = file.Text[t[bodyOpen].End..t[end].Start];
+        bool hasMarker = methodText.Contains(Marker, StringComparison.Ordinal);
+        if (hasMarker)
+        {
+            var recognized = AlreadyComplete(file, p, providers, all, name);
+            return recognized ?? new Candidate(0, 0, [], "", "",
+                name, "UNPROVEN_OR_DRIFTED", t[bodyOpen].Line);
+        }
         if (t[p].Value != "let" || !Identifier(t[p + 1].Value) ||
             t[p + 2].Value != "=" || !Identifier(t[p + 3].Value) ||
             t[p + 4].Value != "." || !Identifier(t[p + 5].Value) ||
@@ -325,6 +335,35 @@ internal static class GenericActionFilterPass
         return new Candidate(t[start].Start, t[guardEnd].End,
             options![0].Names, owner, method, name, "PRISTINE_APPLICABLE",
             t[bodyOpen].Line);
+    }
+
+    private static Candidate? AlreadyComplete(SourceFile file, int p,
+        Dictionary<string, List<LiteralProvider>> providers,
+        IReadOnlyList<SourceFile> all, string name)
+    {
+        var t = file.Tokens;
+        if (p < 1 || p >= t.Count) return null;
+        string interlude = file.Text[t[p - 1].End..t[p].Start].Trim();
+        if (!interlude.StartsWith(Marker, StringComparison.Ordinal) ||
+            interlude.Contains('\n') || interlude.Contains('\r')) return null;
+        string identity = interlude[Marker.Length..];
+        int dot = identity.IndexOf('.');
+        if (dot <= 0 || dot == identity.Length - 1 ||
+            identity.LastIndexOf('.') != dot) return null;
+        string owner = identity[..dot], function = identity[(dot + 1)..];
+        if (!Identifier(owner) || !Identifier(function)) return null;
+        var options = providers.GetValueOrDefault(owner + "\0" + function);
+        if (options?.Count != 1 || options[0].Names.Length < 2 ||
+            !IsImported(file, options[0]) ||
+            HasProviderOverride(all, owner, function)) return null;
+        string statement = "if " + string.Join(" && ",
+            options[0].Names.Select(n => "!Equals(" + name + ", " + n + ")")) +
+            " { return false; }";
+        var expected = SourceAdmission.ReadTokens(statement);
+        if (!MatchWords(t, p, expected.Select(x => x.Value).ToArray()))
+            return null;
+        return new Candidate(0, 0, options[0].Names, owner, function,
+            name, "ALREADY_COMPLETE", t[p].Line);
     }
 
     private static bool IsImported(SourceFile consumer, LiteralProvider provider)
