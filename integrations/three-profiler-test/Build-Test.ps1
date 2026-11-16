@@ -478,7 +478,8 @@ if ($Integrated) {
   if (!(Test-Path (Join-Path $root $redscriptResolverEntry.executable) -PathType Leaf)) {
     throw 'Bundled GCO REDscript Resolver application executable missing'
   }
-  $redscriptResolverEntry.sha256=$redscriptResolverSha
+  $redscriptResolverEntry.sha256=(Get-FileHash (Join-Path $root $redscriptResolverEntry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
+  $redscriptResolverEntry.assemblySha256=$redscriptResolverSha
   $payloads=@($payloadPaths | ForEach-Object {
     @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
   })
