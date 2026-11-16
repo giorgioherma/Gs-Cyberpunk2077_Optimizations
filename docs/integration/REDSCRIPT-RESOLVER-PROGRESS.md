@@ -19,13 +19,13 @@
 | R0 branch/ownership handoff | DOCUMENTATION COMPLETE | New GCO branch, full canonical blueprint, GRSP+GCO AGENTS/handoffs/decisions/ledgers aligned; no code implementation |
 | R1 private reference inventory only | NOT STARTED | Index 61 paths/owners/helpers/provenance privately; **no semantic recipe implementation** |
 | R2 fresh three-profiler measurement | REAL F11 CAPTURE AND 2,319-FILE SOURCE MATCH VERIFIED; MORE SCENARIOS PENDING | One new genuine 309.6 s WORLD three-profiler capture analyzed (13,377 verified PresentMon frames). R2 owner audit: [GRSP analysis](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/blob/dev/resolver-profiler-handoff/docs/MEASURED-GENERIC-OPPORTUNITIES-2026-11-15.md). Live source and captured identity later verified on the 2,319-file stack; additional scenario repeats still pending |
-| R3 GRSP Resolver evidence contract | REAL FULL GRSP .NET10 + GENUINE PRESENTMON REPLAY PASS | Full GRSP .NET10 sealed-capture replay and real PresentMon chronology verified by GCO CI #446 and #479; product Analyze invocation pending |
+| R3 REDscript evidence contract (managed location transferring to GCO) | REAL FULL HISTORICAL GRSP .NET10 + GENUINE PRESENTMON REPLAY PASS | Full GRSP .NET10 sealed-capture replay and real PresentMon chronology verified by GCO CI #446 and #479; product Analyze invocation pending |
 | R4 structural REDscript source admission | 2,319 INDEXED; SOURCE-WIDE R4 SCAN PASS; RECEIVER/SEMANTICS PENDING | Method-name/line and source SHA audit; receiver, partial/already-complete and rule-specific proof pending |
 | R5 measured generic discovery + passes FIRST | 1 COMPILER-VALIDATED PREVIEW; 48 SCANNED CANDIDATES, 47 REJECTED | Rank full live source from fresh data, apply high-value generic rules regardless of portfolio, compile/behavior/idempotence and coverage proof |
 | R6 iterative GRSP/G-REDruntime enablement | CONDITIONAL | May interleave with R2–R5 to unlock high-value reusable passes; prove bounded overhead and lifecycle |
 | R7 61-file GAP MATRIX → semantic remainder LAST | BLOCKED BY R5/R6 COVERAGE | After generic output, classify per-operation GENERIC_COVERED / ALREADY_PRESENT / SEMANTIC_REMAINDER / UNPROVEN_OR_DRIFTED / NOT_APPLICABLE; only remaining approved work may be implemented |
 | R8 whole-stack compiler and output safety | REAL UNTOUCHED+OPTIMIZED SCC PASS; END-TO-END STATE/OUTPUT GATES PENDING | Authoritative REDscript compiler, untouched/partial/complete/drift tests, changed-only overlay |
-| R9 GCO headless integration | OWNER CLI VERIFIED IN PRIVATE CI; PRODUCT ANALYZE/GENERATE INTEGRATION PENDING | Source-built GRSP on shared .NET10, tested owner interface, source/current-capture proof, no new lifecycle gates |
+| R9 GCO-local REDscript component integration | HISTORICAL GRSP CLI VERIFIED; GCO CODE MOVE/PRODUCT ANALYZE-GENERATE PENDING | Source-built separate GCO in-repo REDscript component on shared .NET10, proven owner parity and live-source state, no new lifecycle gates |
 | R10 combined ZIP + real gameplay | NOT STARTED | One collision-safe game-relative ZIP, actual game regression and measured before/after |
 
 ## Immutable existing baselines
