@@ -237,9 +237,13 @@ public static class GcoProfilerReportService
                 cpuBusyMaxMs = pair.Value.CpuBusyMaxMs,
                 gpuBusyMaxMs = pair.Value.GpuBusyMaxMs,
                 cetExclusiveMeasuredMs = pair.Value.CetExclusiveMs,
-                redscriptExclusiveInstrumentedMs = mon is null
+                // No GRSP frame anchored in this 50ms window means
+                // NO OBSERVATION, not proof of zero REDscript execution.
+                redscriptExclusiveInstrumentedMs = mon is null ||
+                    pair.Value.RedscriptFrames == 0
                     ? (double?)null : pair.Value.RedscriptExclusiveMs,
-                redscriptCalls = mon is null ? (long?)null : pair.Value.RedscriptCalls,
+                redscriptCalls = mon is null || pair.Value.RedscriptFrames == 0
+                    ? (long?)null : pair.Value.RedscriptCalls,
                 redscriptNativeFrames = mon is null ? (int?)null : pair.Value.RedscriptFrames
             }).ToArray();
 
