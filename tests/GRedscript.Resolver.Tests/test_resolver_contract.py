@@ -466,9 +466,9 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertEqual(1, scan['rejectedUnproven'])
         self.assertEqual(0, scan['structuralMatches'])
         self.assertEqual('REJECTED_UNPROVEN', scan['candidates'][0]['state'])
-        self.assertEqual('LOOP_BODY_NOT_EXACT_MEMBERSHIP',
+        self.assertEqual('MATCH_BODY_CALL_BEFORE_FLAG_ASSIGNMENT',
                          scan['candidates'][0]['reasonCode'])
-        self.assertEqual({'LOOP_BODY_NOT_EXACT_MEMBERSHIP': 1},
+        self.assertEqual({'MATCH_BODY_CALL_BEFORE_FLAG_ASSIGNMENT': 1},
                          scan['firstFailedPrerequisiteCounts'])
 
     def test_source_wide_scanner_reports_precise_failed_gate_no_bypass(self):
@@ -484,7 +484,7 @@ class GrspResolverContracts(unittest.TestCase):
              'FALSE_BOOL_DECLARATION_MISSING'),
             ('side_effect', 'matched = true;',
              'DoSomething();\n        matched = true;',
-             'LOOP_BODY_NOT_EXACT_MEMBERSHIP'),
+             'MATCH_BODY_CALL_BEFORE_FLAG_ASSIGNMENT'),
         ]
         for name, old, new, expected in cases:
             with self.subTest(name=name):

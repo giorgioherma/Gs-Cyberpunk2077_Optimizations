@@ -307,6 +307,8 @@ internal static class GenericMembershipPass
         { rejection = "MATCH_BODY_RESULT_NOT_IDENTIFIER"; return null; }
         if (member == flag || member == value || value == flag)
         { rejection = "LOOP_IDENTIFIERS_COLLIDE"; return null; }
+        if (t[i + 16].Value == "(")
+        { rejection = "MATCH_BODY_CALL_BEFORE_FLAG_ASSIGNMENT"; return null; }
         if (t[i + 16].Value != "=")
         { rejection = "MATCH_BODY_NOT_FLAG_ASSIGNMENT"; return null; }
         if (t[i + 17].Value != "true")
