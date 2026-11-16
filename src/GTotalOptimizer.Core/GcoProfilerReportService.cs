@@ -569,65 +569,131 @@ __DIGEST__
 </main>
 <script>
 (function(){
-const data=__TIMELINE__,canvas=document.getElementById('graph'),tip=document.getElementById('tip');
-if(!data.length){canvas.replaceWith(document.createTextNode("No synchronized timeline available; native reports remain accessible."));return;}
-let xmin=data[0].timeMs,xmax=data[data.length-1].timeMs+50;
-const fullMin=xmin,fullMax=xmax;let worst=data.find(p=>p.presentIntervalMaxMs!=null)||data[0];
+const data=__TIMELINE__,spikes=__SPIKES__,canvas=document.getElementById('graph');
+const tip=document.getElementById('tip'),scaleNote=document.getElementById('scaleNote');
+if(!data.length){canvas.replaceWith(document.createTextNode("No synchronized timeline available. The native CET and REDscript reports remain available below."));return;}
+let xmin=data[0].timeMs,xmax=data[data.length-1].timeMs+50,mode='combined';
+const fullMin=xmin,fullMax=xmax;
+let worst=data.find(p=>p.presentIntervalMaxMs!=null)||data[0];
 for(const p of data)if((p.presentIntervalMaxMs||0)>(worst.presentIntervalMaxMs||0))worst=p;
-const panels=[
- {key:'presentIntervalMaxMs',name:'PRESENTMON / present interval',color:'#33daec'},
- {key:'cetExclusiveMeasuredMs',name:'CET / measured exclusive work',color:'#f9d854'},
- {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented exclusive work',color:'#ef71c2'}
+const series=[
+ {key:'presentIntervalMaxMs',name:'PRESENTMON / maximum present interval',short:'PresentMon',color:'#33daec'},
+ {key:'cetExclusiveMeasuredMs',name:'CET / exclusive Lua work',short:'CET',color:'#f9d854'},
+ {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented VM work',short:'REDscript',color:'#ef71c2'}
 ];
-const wPad=61,rPad=20,top=16,bottom=28;
+const wPad=88,rPad=18,top=14,bottom=31;
 function visible(){return data.filter(p=>p.timeMs+50>=xmin&&p.timeMs<=xmax);}
 function draw(){
- const w=canvas.clientWidth,h=canvas.clientHeight,ctx=canvas.getContext('2d');
+ const ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight;
  ctx.clearRect(0,0,w,h);
- const view=visible(),span=Math.max(1,xmax-xmin),panelH=(h-top-bottom)/3;
- const x=t=>wPad+(t-xmin)/span*(w-wPad-rPad);
- for(let i=0;i<3;i++){
-  const p=panels[i],y0=top+i*panelH,vals=view.map(d=>d[p.key]).filter(v=>v!=null);
-  const yMax=Math.max(1,...vals)*1.12;
-  ctx.fillStyle='#10242c';ctx.fillRect(wPad,y0,w-wPad-rPad,panelH-14);
-  ctx.fillStyle=p.color;ctx.font='12px Segoe UI';ctx.fillText(p.name,5,y0+13);
-  ctx.textAlign='right';ctx.fillStyle='#a4b8bf';ctx.fillText(yMax.toFixed(1)+' ms',wPad-6,y0+30);
-  ctx.textAlign='left';ctx.strokeStyle='#243f4b';ctx.lineWidth=1;
-  for(let k=0;k<=3;k++){const y=y0+25+(panelH-52)*k/3;ctx.beginPath();ctx.moveTo(wPad,y);ctx.lineTo(w-rPad,y);ctx.stroke();}
-  ctx.strokeStyle=p.color;ctx.lineWidth=1.35;ctx.beginPath();let started=false;
-  for(const d of view){
-   const v=d[p.key];if(v==null){started=false;continue;}
-   const xx=x(d.timeMs),yy=y0+25+(1-Math.min(1,v/yMax))*(panelH-52);
-   if(!started){ctx.moveTo(xx,yy);started=true;}else ctx.lineTo(xx,yy);
+ const view=visible(),span=Math.max(1,xmax-xmin),plotW=Math.max(20,w-wPad-rPad);
+ const x=t=>wPad+(t-xmin)/span*plotW;
+ const peaks=series.map(s=>Math.max(0,...view.map(p=>p[s.key]||0)));
+ const panels=mode==='combined'?1:3,panelH=(h-top-bottom)/panels;
+ for(let i=0;i<panels;i++){
+  const y0=top+i*panelH,yt=y0+26,yb=y0+panelH-24,box=Math.max(1,yb-yt);
+  ctx.fillStyle='#10242c';ctx.fillRect(wPad,y0,plotW,panelH-5);
+  ctx.strokeStyle='#243f4b';ctx.lineWidth=1;
+  for(let k=0;k<=4;k++){
+   const y=yt+box*k/4;ctx.beginPath();ctx.moveTo(wPad,y);ctx.lineTo(w-rPad,y);ctx.stroke();
   }
-  ctx.stroke();
+  ctx.textAlign='left';ctx.font='12px Segoe UI';
+  if(mode==='combined'){
+   ctx.fillStyle='#d2e1e6';
+   ctx.fillText('RELATIVE TO EACH VISIBLE SERIES PEAK',5,y0+13);
+   ctx.fillStyle='#a6bbc4';ctx.fillText('100%',wPad-43,yt+4);
+   ctx.fillText('0%',wPad-27,yb+1);
+  }else{
+   const s=series[i],mx=Math.max(1,peaks[i])*1.08;
+   ctx.fillStyle=s.color;ctx.fillText(s.name,6,y0+14);
+   ctx.fillStyle='#a6bbc4';ctx.fillText(mx.toFixed(1)+' ms',wPad-66,yt+4);
+   ctx.fillText('0 ms',wPad-45,yb+1);
+  }
+  for(let j=0;j<series.length;j++){
+   if(mode!=='combined'&&i!==j)continue;
+   const s=series[j],max=Math.max(1,peaks[j])*(mode==='combined'?1:1.08);
+   ctx.strokeStyle=s.color;ctx.lineWidth=mode==='combined'?1.8:1.4;
+   ctx.beginPath();let started=false;
+   for(const p of view){
+    const v=p[s.key];
+    if(v==null){started=false;continue;}
+    const xx=x(p.timeMs),yy=yb-Math.min(1,Math.max(0,v/max))*box;
+    if(!started){ctx.moveTo(xx,yy);started=true;}else ctx.lineTo(xx,yy);
+   }
+   ctx.stroke();
+  }
  }
- ctx.fillStyle='#a6bbc4';ctx.font='12px Segoe UI';ctx.fillText((xmin/1000).toFixed(1)+' s',wPad,h-8);
- ctx.textAlign='right';ctx.fillText((xmax/1000).toFixed(1)+' s',w-rPad,h-8);ctx.textAlign='left';
+ if(mode==='tracks'){
+  // Only top source-owned events. Markers are time coincidences, not
+  // cause assignments to the corresponding PresentMon intervals.
+  ctx.setLineDash([4,5]);ctx.lineWidth=1;
+  for(const s of spikes){
+   if(s.timeMs<xmin||s.timeMs>xmax)continue;
+   ctx.strokeStyle=s.domain==='CET'?'#f9d85499':'#ef71c299';
+   ctx.beginPath();ctx.moveTo(x(s.timeMs),top);ctx.lineTo(x(s.timeMs),h-bottom);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+ }
+ ctx.font='12px Segoe UI';ctx.fillStyle='#a6bbc4';ctx.textAlign='left';
+ for(let k=0;k<=4;k++){
+  const t=xmin+k*(xmax-xmin)/4,xx=x(t);
+  ctx.fillText((t/1000).toFixed(1)+'s',Math.max(2,Math.min(w-52,xx-17)),h-8);
+ }
+ scaleNote.textContent=mode==='combined'
+  ? 'Visible peaks (raw): '+series.map((s,i)=>s.short+' '+peaks[i].toFixed(2)+' ms').join('  ·  ')+' — each line scaled independently; compare timing, not total CPU.'
+  : 'Three independent millisecond axes. Dashed lines: top CET / REDscript recorded spike timestamps. Shared F11 origin and same horizontal zoom.';
 }
 function resize(){
+ canvas.style.height=mode==='combined'?'410px':'575px';
  const ratio=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth),h=canvas.clientHeight;
  canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);
  canvas.getContext('2d').setTransform(ratio,0,0,ratio,0,0);draw();
 }
+function setMode(next){
+ mode=next;document.getElementById('combined').setAttribute('aria-pressed',String(mode==='combined'));
+ document.getElementById('tracks').setAttribute('aria-pressed',String(mode==='tracks'));
+ resize();
+}
+function focusAt(t){
+ if(!Number.isFinite(t))return;
+ const windowMs=Math.min(8000,fullMax-fullMin),half=windowMs/2;
+ xmin=Math.max(fullMin,Math.min(fullMax-windowMs,t-half));
+ xmax=xmin+windowMs;setMode('tracks');
+ document.querySelector('.chartbox').scrollIntoView({block:'center',behavior:'smooth'});
+}
+document.getElementById('combined').onclick=()=>setMode('combined');
+document.getElementById('tracks').onclick=()=>setMode('tracks');
 document.getElementById('full').onclick=()=>{xmin=fullMin;xmax=fullMax;draw();};
-document.getElementById('worst').onclick=()=>{xmin=Math.max(fullMin,worst.timeMs-5000);xmax=Math.min(fullMax,worst.timeMs+5000);draw();};
+document.getElementById('worst').onclick=()=>focusAt(worst.timeMs);
+document.querySelectorAll('[data-jump]').forEach(node=>{
+ node.setAttribute('tabindex','0');node.setAttribute('role','button');
+ const jump=()=>focusAt(Number(node.getAttribute('data-jump')));
+ node.addEventListener('click',jump);
+ node.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();jump();}});
+});
 canvas.addEventListener('mousemove',e=>{
  const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad)));
  const t=xmin+ratio*(xmax-xmin);let lo=0,hi=data.length-1;
- while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}const p=data[Math.max(0,lo-1)];
- if(!p)return;const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
- tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresentMon: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' frames)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET measured: '+fmt(p.cetExclusiveMeasuredMs)+'\nGRSP measured: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED calls: '+(p.redscriptCalls??'NOT_CAPTURED');
- tip.style.display='block';tip.style.left=Math.max(5,Math.min(r.width-290,e.clientX-r.left+10))+'px';tip.style.top=Math.max(3,e.clientY-r.top-95)+'px';
+ while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}
+ const p=data[Math.max(0,lo-1)];if(!p)return;
+ const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
+ const near=spikes.filter(s=>Math.abs(s.timeMs-p.timeMs)<75).sort((a,b)=>b.exclusiveMs-a.exclusiveMs).slice(0,2);
+ const markerText=near.length?'\nNearby profiler marker(s): '+near.map(s=>s.domain+' '+s.owner+' '+s.exclusiveMs.toFixed(2)+' ms').join(' | '):'';
+ tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresent interval max: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' presents)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET exclusive: '+fmt(p.cetExclusiveMeasuredMs)+'\nREDscript instrumented: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED outgoing calls: '+(p.redscriptCalls??'NOT_CAPTURED')+markerText;
+ tip.style.display='block';tip.style.left=Math.max(4,Math.min(r.width-305,e.clientX-r.left+9))+'px';
+ tip.style.top=Math.max(5,e.clientY-r.top-115)+'px';
 });
 canvas.addEventListener('mouseleave',()=>tip.style.display='none');
 canvas.addEventListener('wheel',e=>{
  if(!e.shiftKey)return;e.preventDefault();
- const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad))),anchor=xmin+ratio*(xmax-xmin);
- const next=Math.max(500,Math.min(fullMax-fullMin,(xmax-xmin)*(e.deltaY<0?.78:1.28)));
- let a=anchor-ratio*next,b=a+next;if(a<fullMin){a=fullMin;b=a+next;}if(b>fullMax){b=fullMax;a=b-next;}
+ const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad)));
+ const anchor=xmin+ratio*(xmax-xmin),next=Math.max(500,Math.min(fullMax-fullMin,(xmax-xmin)*(e.deltaY<0?.78:1.28)));
+ let a=anchor-ratio*next,b=a+next;
+ if(a<fullMin){a=fullMin;b=a+next;}if(b>fullMax){b=fullMax;a=b-next;}
  xmin=a;xmax=b;draw();
-},{passive:false});window.addEventListener('resize',resize);requestAnimationFrame(resize);
+},{passive:false});
+window.addEventListener('resize',resize);
+requestAnimationFrame(resize);
 })();
 </script></body></html>
 """;
