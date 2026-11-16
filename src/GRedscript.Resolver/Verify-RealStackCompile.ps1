@@ -6,7 +6,8 @@ param(
   [Parameter(Mandatory=$true)][string]$CleanBaselineArchive,
   [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
   [Parameter(Mandatory=$true)][string]$PluginsArchive,
-  [Parameter(Mandatory=$true)][string]$ResolverDll
+  [Parameter(Mandatory=$true)][string]$ResolverDll,
+  [string]$CallbackPreviewRoot = ''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -277,8 +278,29 @@ try {
   Write-Host ('R6 native plugin script providers admitted: names='+(@($providers.Keys | Sort-Object) -join ','))
   Write-Host ('R6 native plugin script providers admitted: providers='+$providers.Count+
     ' files='+$totalProviderFiles+' identicalInBothStacks=true viaOfficialSccAdditionalScriptPath=true')
+  # Reuse this exact isolated SCC implementation for the new generic callback
+  # preview too; the original CName-membership preview contract is unchanged.
+  $callbackOverlay=@()
+  $callbackOverlayRoot=''
+  if (![string]::IsNullOrWhiteSpace($CallbackPreviewRoot)) {
+    $callbackBase=(Resolve-Path -LiteralPath $CallbackPreviewRoot -ErrorAction Stop).Path
+    $callbackOverlayRoot=Join-Path $callbackBase 'r6/scripts'
+    if (!(Test-Path -LiteralPath $callbackOverlayRoot -PathType Container)) {
+      throw 'R6_CALLBACK_PREVIEW_MISSING'
+    }
+    $callbackOverlay=@(Get-ChildItem -LiteralPath $callbackOverlayRoot -File -Recurse)
+    if ($callbackOverlay.Count -lt 1) { throw 'R6_CALLBACK_PREVIEW_EMPTY' }
+    foreach($file in $callbackOverlay) {
+      if ($file.Extension -ne '.reds' -or
+          ($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_CALLBACK_PREVIEW_UNSAFE_SOURCE'
+      }
+    }
+  }
   $outputs=@()
-  foreach($scenario in @('untouched','optimized-preview')) {
+  $scenarios=@('untouched','optimized-preview')
+  if ($callbackOverlay.Count -gt 0) { $scenarios+=@('optimized-callback-preview') }
+  foreach($scenario in $scenarios) {
     $root=Join-Path $work $scenario
     $scripts=Join-Path $root 'r6/scripts'
     $cache=Join-Path $root 'r6/cache/final.redscripts'
@@ -319,6 +341,20 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
+    if ($scenario -eq 'optimized-callback-preview') {
+      foreach($file in $callbackOverlay) {
+        $relative=[System.IO.Path]::GetRelativePath($callbackOverlayRoot,$file.FullName)
+        if ([System.IO.Path]::IsPathRooted($relative) -or
+            $relative.StartsWith('..') -or $relative.Contains(':')) {
+          throw 'R6_CALLBACK_PREVIEW_PATH_ESCAPE'
+        }
+        $target=Join-Path $scripts $relative
+        if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
+          throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+      }
+    }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
     if ($actualCount -ne $liveCount) {
       throw 'R6 isolated base script source count changed.'
@@ -341,8 +377,14 @@ try {
     }
     $outputs+=@([pscustomobject]@{ Scenario=$scenario; Bytes=$result.Length; Sha256=$sha })
   }
-  if ($outputs.Count -ne 2 -or $outputs[0].Sha256 -eq $outputs[1].Sha256) {
+  $expectedScenarios=if($callbackOverlay.Count -gt 0){3}else{2}
+  if ($outputs.Count -ne $expectedScenarios -or
+      $outputs[0].Sha256 -eq $outputs[1].Sha256) {
     throw 'R6 compiled baseline and optimized-preview caches are indistinguishable.'
+  }
+  if ($callbackOverlay.Count -gt 0 -and
+      $outputs[0].Sha256 -eq $outputs[2].Sha256) {
+    throw 'R6 compiled baseline and callback-preview caches are indistinguishable.'
   }
   $audit=Join-Path $work 'verify-source.json'
   $auditLog=Join-Path $work 'verify-source.log'
@@ -355,6 +397,7 @@ try {
       $liveCount + ' optimizedFiles=' + $overlay.Count +
       ' untouchedCacheBytes=' + $outputs[0].Bytes +
       ' optimizedCacheBytes=' + $outputs[1].Bytes +
+      ' callbackPreviewFiles=' + $callbackOverlay.Count +
       ' compiledOutputsDistinct=true originalSourcesUntouched=true ' +
       'inputCache=USER_EFFECTIVE_CANDIDATE_NOT_VANILLA ' +
       'gameplayValidated=false deployable=false')
