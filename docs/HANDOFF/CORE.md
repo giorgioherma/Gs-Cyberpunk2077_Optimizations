@@ -1,5 +1,14 @@
 # Mandatory unified optimizer startup / handoff
 
+## Current REDscript owner/branch override — 2026-11-16
+
+- **Active GCO development branch:** `dev/redscript/resolver_handoff`; GCO `main` and the earlier `feature/redscript-resolver-integration` remain unchanged.
+- **GCO now owns and develops the separate REDscript Resolver, generic Generator, source admission and full REDscript SCC validation component here**, alongside the source-owned CET backend integration. **GRSP only owns REDscript profiling, instrumentation and native evidence**, and G-REDruntime owns optional runtime services. Same two-page WPF user interface and one combined ZIP; no additional form or redundant generator.
+- **Authoritative handoff:** [GCO-local REDscript Resolver migration](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md), then [R0–R10 blueprint](../integration/GRSP_REDscript_Resolver_Blueprint.md) and [progress ledger](../integration/REDSCRIPT-RESOLVER-PROGRESS.md). The November 15 GRSP managed Resolver/Generator ownership language below is **superseded historical context**, not an active build instruction.
+- **Code migration not yet completed.** Preserve the last green GCO [CI #482](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43794814481) and GRSP [CI #61](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43794298639) as pre-migration baselines; retire the old managed owner build path only after proving GCO-local parity.
+
+## Historical handoff below
+
 **This repository**: `giorgioherma/Gs-Cyberpunk2077_Optimizations`. **Stable production branch: `main`** (user decision 2026-11-04); **current approved REDscript work branch: `feature/redscript-resolver-integration`** (2026-11-15). Do not use this repository's temporary/historical `dev/resolver-profiler-handoff` branch as the active line. Related component repos may legitimately use branches with that name.
 
 ## Read order
