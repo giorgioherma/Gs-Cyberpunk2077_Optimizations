@@ -40,3 +40,45 @@ owned by GRSP. This GCO implementation makes existing bounded native evidence
 useful for source-wide hotspot diagnosis without copying profiler hooks,
 changing game source, creating a second report pipeline or authorizing output.
 Neither inclusive time nor CET/GRSP domains may be summed as overall CPU cost.
+
+## CET-inspired generic callback phase (2026-11-16)
+
+This is the **first executable source-local generic callback rule**, not a
+REDscript clone of CET's 0-Engine dispatcher. It keeps original REDscript
+callback registration and invocation unchanged. Source-wide discovery is
+a separate opt-in CLI stage:
+
+- `scan-callbacks --game <current-game-root> --out <external-json>`:
+  enumerate current source into callback families (`ONACTION`, `ONUPDATE`,
+  `ONDRAW`, `ONTICK`, other `ON_EVENT`), observed syntactic properties, and
+  strict source matches for `CNAME_FIXED_INDEX_V1`. Output contains private
+  mod paths and stays local/private; stdout is aggregate-only. This scan
+  does not admit any callback routing or frequency change.
+- `preview-callback-index --game <current-game-root> --analysis <sealed-Resolver-analysis.json> --out <empty-external-directory>`:
+  stage a **nondeployable** generic REDscript preview only when existing
+  verified analysis and current full-source fingerprint agree. Original
+  files are never written. The real whole-stack SCC harness is the separate
+  compiler validation step.
+
+**First admissible mechanical shape:** a static `CName` → `Int32` lookup
+method with one exact local loop over a same-class, zero-argument static
+helper returning a pure literal `array<CName>`. Replace the loop with
+ordered direct `Equals(literal, name)` tests returning the same first-match
+indices and `-1` for a miss. The helper and caller remain unchanged.
+Unknown loop bodies, dynamic arrays, nonliteral selectors, source drift or
+altered generated markers refuse the rewrite. Source shape and
+helper semantics—not a mod/folder name—are the rule.
+
+**Status and limits:** the archived private 2,319-file stack gave 3,545
+callback-family source methods and **one** strict fixed-index match.
+This is a synthetic/real-source admission milestone, **not** a throughput
+claim. Existing targeted examples include input action handling, but the
+rule does **not** claim that arbitrary REDscript `OnAction` or `OnUpdate`
+callbacks can yet be rerouted, deduplicated or slept. CET's callback
+classification/side-effect/lifecycle admission is being adapted to
+REDscript syntax incrementally. Full-stack SCC, tests, gameplay and
+new captured performance are independent gates.
+
+See `docs/integration/REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md` and
+`docs/integration/R5-HIGH-IMPACT-EVIDENCE-PLAN.md`. Do not port CET Lua
+rewrites by regex or change unrelated GCO installer/Restore functionality.
