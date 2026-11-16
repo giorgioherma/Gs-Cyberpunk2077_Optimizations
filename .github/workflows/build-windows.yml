@@ -53,7 +53,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $repo='giorgioherma/GRSP-G-REDscript-Profiler'
-          $runs=(& gh api "repos/$repo/actions/runs?branch=dev%2Fresolver-profiler-handoff&status=success&per_page=30") | ConvertFrom-Json
+          $runs=(& gh api "repos/$repo/actions/runs?branch=dev%2Fnative-instrumentation&status=success&per_page=30") | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Cannot query GRSP native owner CI' }
           $selected=$null
           foreach ($run in $runs.workflow_runs) {
