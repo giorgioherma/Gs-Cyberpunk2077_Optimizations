@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-16 — callback-level repeated/shared-state work, independent of GC
+
+- User clarified target: **cross-board recurring callback behavior**, not mod-specific optimization or isolated spike elimination. CET callback registration and shared provider methodology are the reference. CET G-GC is separate measurement/collector control, **not an installation dependency or a requirement before REDscript generic analysis**.
+- GRSP native `dev/native-instrumentation` now derives `RSP_CallbackReuse.csv` after F11 STOP from its existing callsite per-frame counters and named read-like outgoing targets. New data measures source-function/owner overlap and recurring target calls across frames with bounded post-capture analysis; **no additional VM hooks, game source edits, per-invocation overhead or new app controls**. Pure/stable state, receiver identity, actual callback entries and optimization savings remain unknown.
+- GCO `main` includes the source-owned `src/GRedscript.Resolver/CallbackReuseEvidence.cs`, optional read-only `callbackReuse` JSON section with native-callsite count reconciliation, malformed/forged proof refusal and safe `NOT_CAPTURED` legacy fallback, plus CLI regression tests. Those managed tests succeeded in [GCO CI #512](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43861939830). The canonical GCO single-app build and `Build-Test.ps1` now **require** the owner-native DLL contain `RSP_CallbackReuse.csv`, so old artifacts fail closed.
+- G-REDruntime already provides a `StateCache` (weak references/player invalidation) and `ContextService` (conditional combat/mount read refresh, currently 0.05 s). Do not automatically apply its cache to a measured getter without proving compatible receiver/lifetime, all invalidations, side effects and update ordering in live sources. No mod-specific semantics or second shared state component.
+- **Pending:** GRSP owner CI #23 final native DLL build/artifact, latest canonical GCO main build with that new DLL, and in-game F11 evidence. GCO source CI green alone does not prove the new instrumentation collects expected values or gameplay safety. No combined optimization pass, REDscript compile result or measured speedup is asserted.
+
+
 ## 2026-11-16 — GCO main CI #508 GREEN, one complete app artifact produced
 
 - **Confirmed source-owner:** GRSP native [CI #19](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43823005911) SUCCESS, exact SHA `18a860ee95a12919cd090236a15c035dfff77857`, native DLL artifact with provenance, both native jobs passed.
