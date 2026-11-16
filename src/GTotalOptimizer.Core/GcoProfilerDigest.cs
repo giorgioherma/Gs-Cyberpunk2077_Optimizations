@@ -159,7 +159,7 @@ internal static class GcoProfilerDigest
 
         html.AppendLine("<h2>Notable moments on the shared timeline</h2>");
         html.AppendLine("<p class=\"muted\">Largest <em>present intervals</em> in distinct 50 ms windows, with measured CET and REDscript work in those same coarse windows. Select a time to inspect it in the three-track graph.</p>");
-        html.AppendLine("<div class=\"digest-panel table-scroll\"><table class=\"digest-table\"><thead><tr><th>Time</th><th>PresentMon worst interval</th><th>CET work / bucket</th><th>REDscript work / bucket</th><th>CPU busy max</th></tr></thead><tbody>");
+        html.AppendLine("<div class=\"digest-panel table-scroll\"><table class=\"digest-table windows\"><thead><tr><th>Time</th><th>PresentMon worst interval</th><th>CET work / bucket</th><th>REDscript work / bucket</th><th>CPU busy max</th></tr></thead><tbody>");
         foreach (var row in worstWindows)
         {
             html.Append("<tr class=\"jump-row\" data-jump=\"")
@@ -232,7 +232,7 @@ internal static class GcoProfilerDigest
     {
         html.Append("<section class=\"digest-panel table-scroll\"><h3>")
             .Append(H(title))
-            .AppendLine("</h3><table class=\"digest-table\"><thead><tr><th>At</th><th>Owner</th><th>Exclusive</th></tr></thead><tbody>");
+            .AppendLine("</h3><table class=\"digest-table ranking\"><thead><tr><th>At</th><th>Owner</th><th>Exclusive</th></tr></thead><tbody>");
         foreach (var row in rows.OrderByDescending(x => x.ExclusiveMs))
         {
             html.Append("<tr class=\"jump-row\" data-jump=\"")
@@ -250,7 +250,7 @@ internal static class GcoProfilerDigest
         string measure, IEnumerable<Row> data, string domain, string kind)
     {
         html.Append("<section class=\"digest-panel table-scroll\"><h3>")
-            .Append(H(title)).Append("</h3><table class=\"digest-table\"><thead><tr><th>Owner / ")
+            .Append(H(title)).Append("</h3><table class=\"digest-table spikes\"><thead><tr><th>Owner / ")
             .Append(kind == "owner" ? "mod" : kind)
             .Append("</th><th>").Append(H(measure))
             .AppendLine("</th><th>Calls/s</th></tr></thead><tbody>");
