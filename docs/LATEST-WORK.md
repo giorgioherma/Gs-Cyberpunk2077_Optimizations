@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-16 — GCO main CI #508 GREEN, one complete app artifact produced
+
+- **Confirmed source-owner:** GRSP native [CI #19](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43823005911) SUCCESS, exact SHA `18a860ee95a12919cd090236a15c035dfff77857`, native DLL artifact with provenance, both native jobs passed.
+- **GCO #506 red cause #1:** native artifact selector still queried obsolete GRSP `dev/resolver-profiler-handoff`, while its own strict validator required `dev/native-instrumentation`. Fixed on `main` at `8ec4ac3a34d0af6de25ee65cbd2ee37874c8a30b` (also applied to Resolver branch).
+- **GCO #506 red cause #2:** the existing CET Resolver regression required `analysisTools.Count == 1`, but the now-complete GCO artifact intentionally includes both independent `cet-resolver` and `redscript-resolver`. Updated the exact source-owner regression in `tests/GTotalOptimizer.Core.Tests/Verify-CetResolverPackage.ps1` at `8c90681afb17a59afbcd26acc69289c7b028f68c` to require **exactly two known tools**, exactly one of each, preserve original CET SHA/run/asset/CLI equivalence checks, and require REDscript `generationAuthorized=false`. No test disabled, no old native fallback.
+- **Verified** GCO [CI #508](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43850760274) **SUCCESS** (both resolver source/safety contracts, original redscript 0.5.31 fingerprints, verified independent native import, .NET10 single-runtime package assembly, two-Resolver/native package SHA check, profiler install/discard/restore smoke, 323 app package contracts, original CET Resolver owner equivalence, final WPF/UI checks and upload-artifact).
+- **Verified real artifact exists:** `Gs-Cyberpunk2077_Optimizer-v1.2.5-run508-a1`, size **90,053,113 bytes** (artifact metadata), non-expired. The portable app remains one downloadable artifact with the same product version `v1.2.5`; this run proves CI/package correctness, **not actual crash-free gameplay**. The native VM-hook crash regression still requires user gameplay/F11 test with restore ready.
+
+
 ## 2026-11-16 — fixed red GCO native artifact selector and verified GRSP producer
 
 - **GCO CI #499–#505 regression root cause**: `.github/workflows/build-windows.yml` queried GitHub Actions with `branch=dev%2Fresolver-profiler-handoff` but correctly required each returned run's `head_branch` to equal `dev/native-instrumentation`. Every returned run was filtered out, and packaging stopped with `No successful GRSP independent native CI with a verified instrumentation DLL artifact`. This was not a failure to build native Rust.
