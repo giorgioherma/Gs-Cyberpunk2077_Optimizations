@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — first GRSP-native proxy-boundary instrumentation implementation (not yet CI validated)
+
+- Profiler owner `GRSP dev/resolver-profiler-handoff` now exports `RSP_ProxyAttribution.csv` after complete F11. Implementation `src/proxy_attribution.rs` and native registration in `src/lib.rs`; commits `f194089`, `a898195`, and optimized bounded single-pass aggregation `fa676e9`. Capture-timed Invoke hooks, existing `RSP_CallSites` and profiler install/restore unchanged. The result preserves exact source/target identity, proxy/virtual unresolved labels, observed work and sparse path context; receiver/entry/causal proof are explicitly **false**. See GRSP `OUTPUT_SCHEMA.md`.
+- This is instrumentation interpretation based on **previously captured** frames, not yet a virtual receiver resolution hook or state-unchanged measurement. It cannot establish that FE proximity polling is hot or that a rewrite is safe. `cargo test/check`, owner release CI, real game F11 output, and measured runtime impact are still **NOT VERIFIED** for this commit; green historical CI must not be reused as proof.
+- Next: verify GRSP owner CI/build and developer CSV on a new F11 capture; if the receiver remains unknown, design bounded receiver-identity capture with tested overhead rather than optimize `wrappedMethod()` speculatively. GCO analyzer can then consume the actual owner evidence on the managed development branch, preserving single ZIP/one workflow.
+
+
 ## 2026-11-16 — R5 high-impact evidence pivot after membership-loop CI #486
 
 - Owner decision: freeze `CNAME_ARRAY_MEMBERSHIP_V1` at existing strict proven shape; do not chase the 4 reversed, 40 member-access and other rejected loops without measured value. GCO source-only investigation records two higher-impact measured families: Custom Quickslots input-to-CET bridge and Dark Future buff UI `SetData` updates. See [R5 high-impact evidence plan](docs/integration/R5-HIGH-IMPACT-EVIDENCE-PLAN.md) (in integration-folder-relative documents use `R5-HIGH-IMPACT-EVIDENCE-PLAN.md`).
