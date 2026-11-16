@@ -19,6 +19,10 @@ internal static class Program
                 return RunGenericPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-generic")
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-callbacks")
+                return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-callback-index")
+                return RunCallbackIndexPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scc-headless")
                 return HeadlessScc.Run(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length == 0 || args[0] != "analyze")
@@ -326,6 +330,36 @@ internal static class Program
             " candidates=" + report.Candidates + " measured=" + report.Measured +
             " unmeasured=" + report.Unmeasured + " rejected=" + report.Rejected +
             " generated=0 deployable=false");
+        return 0;
+    }
+
+    // CET-inspired callback family discovery is deliberately read-only.
+    private static int RunCallbackScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Callback scan only accepts --game and --out");
+        var result = GenericCallbackRules.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript callback inventory: files=" + result.SourceFiles +
+            " callbacks=" + result.Callbacks +
+            " fixedIndexCandidates=" + result.IndexCandidates +
+            " already=" + result.AlreadyComplete +
+            " rejected=" + result.Rejected +
+            " generated=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunCallbackIndexPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Callback preview only accepts --game, --analysis and --out");
+        int count = GenericCallbackRules.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript fixed-index preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
     }
 
