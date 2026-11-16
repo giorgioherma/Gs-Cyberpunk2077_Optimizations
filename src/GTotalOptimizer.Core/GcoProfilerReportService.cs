@@ -588,7 +588,7 @@ function draw(){
  ctx.clearRect(0,0,w,h);
  const view=visible(),span=Math.max(1,xmax-xmin),plotW=Math.max(20,w-wPad-rPad);
  const x=t=>wPad+(t-xmin)/span*plotW;
- const peaks=series.map(s=>Math.max(0,...view.map(p=>p[s.key]||0)));
+ const peaks=series.map(s=>{let peak=0;for(const row of view){const value=row[s.key];if(value!=null&&value>peak)peak=value;}return peak;});
  const panels=mode==='combined'?1:3,panelH=(h-top-bottom)/panels;
  for(let i=0;i<panels;i++){
   const y0=top+i*panelH,yt=y0+26,yb=y0+panelH-24,box=Math.max(1,yb-yt);
