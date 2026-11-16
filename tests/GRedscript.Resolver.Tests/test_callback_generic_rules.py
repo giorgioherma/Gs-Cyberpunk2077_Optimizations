@@ -147,6 +147,22 @@ class GenericCallbackContracts(unittest.TestCase):
                 self.assertEqual(data["fixedCnameIndexEligible"], 0)
                 self.report.unlink()
 
+    def test_other_source_method_override_blocks_fixed_helper(self):
+        external = self.source.parent / "Override.reds"
+        external.write_text(
+            'module Example\n'
+            '@wrapMethod(ExampleActions)\n'
+            'public static func InterestedActions() -> array<CName> {\n'
+            '  return wrappedMethod();\n'
+            '}\n', encoding="utf-8")
+        result = self.cli("scan-callbacks", "--game", self.game,
+                          "--out", self.report)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(self.report.read_text())
+        self.assertEqual(data["fixedCnameIndexEligible"], 0)
+        self.assertEqual(data["fixedCnameIndexRejected"], 1)
+        self.assertFalse(data["generationAuthorized"])
+
     def test_preview_refuses_stale_or_unverified_analysis(self):
         self.make_analysis()
         raw = json.loads(self.analysis.read_text())
