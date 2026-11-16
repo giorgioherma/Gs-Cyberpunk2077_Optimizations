@@ -278,6 +278,36 @@ jobs:
             ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
             ' already=' + $scan.fixedCnameIndexAlreadyComplete +
             ' generated=0 originalSourcesUntouched=true')
+      - name: Scan private REDscript OnAction literal membership candidates
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.log'
+          & dotnet $dll scan-action-filter --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_FAILED'
+          }
+          $scan = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.action-filter.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.onActionMethods -le 0 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceModified -ne $false) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_CONTRACT_FAILED'
+          }
+          # No private file paths, names or candidate JSON leave the runner.
+          Write-Host ('PASS GCO generic fixed-action filter scanner: callbacks=' +
+            $scan.onActionMethods + ' sourceProven=' + $scan.eligible +
+            ' already=' + $scan.alreadyComplete + ' unproven=' + $scan.refused +
+            ' sourceWrites=0 deployable=false')
       # Real R3 milestone: capture lives on a separate GCO commit. Check out
       # ONLY that immutable fixture; never merge unrelated branch changes.
       - name: Checkout exact real GRSP 15:51 capture fixture
