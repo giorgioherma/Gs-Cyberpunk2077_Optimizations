@@ -234,7 +234,7 @@ jobs:
           }
           $bytes=[IO.File]::ReadAllBytes((Resolve-Path $dll))
           $ascii=[Text.Encoding]::ASCII.GetString($bytes)
-          foreach ($name in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
+          foreach ($name in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_CallbackReuse.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
             if (!$ascii.Contains($name)) { throw "GRSP native DLL missing contract $name" }
           }
           Write-Host "PASS source-owned GRSP native DLL: SHA256=$hash, run=$runText"
@@ -289,7 +289,7 @@ jobs:
             throw 'Native GRSP profiler missing from bundled GCO application'
           }
           $nativeBytes=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($native))
-          foreach($name in @('RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv','GCO-F11-Complete.flag')) {
+          foreach($name in @('RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv','RSP_CallbackReuse.csv','GCO-F11-Complete.flag')) {
             if (!$nativeBytes.Contains($name)) { throw "Bundled native profiler missing $name" }
           }
           $coreclr=@(Get-ChildItem -LiteralPath $root -Filter 'coreclr.dll' -Recurse -File)
