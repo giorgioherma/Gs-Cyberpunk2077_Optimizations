@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — native crash-safety handoff for managed Resolver
+
+- GRSP `dev/native-instrumentation` is the authoritative native profiler branch, superseding the Resolver-named historical GRSP branch. Its native VM hooks are now guarded against re-entrant bookkeeping, bounded by reserved per-thread proxy target/child capacities, and protected by a full F11 in-flight-bookkeeping quiescence barrier. New `RSP_ProxyChildren.csv` can report skipped name registrations; caller/receiver proof remains incomplete. GCO managed Resolver implementation and source/SCC proof remain here, with no native-hook implementation copied into GCO.
+- GCO canonical workflow in `main` and this branch selects independently verified GRSP native CI output by exact source commit and SHA, not by local Rust compilation. Actual Windows owner CI and gameplay stability are unverified. Continue generic optimization only when complete measured native evidence and source proof are available.
+
+
 ## 2026-11-16 — GCO pins source-owned GRSP native artifact, no GCO Rust build
 
 - **GCO Resolver branch `dev/redscript/resolver_handoff`** now imports the independently built GRSP native DLL from the newest successful provenance-checked `.github/workflows/native-instrumentation.yml` run. Existing GCO canonical `build-windows.yml` selects exact successful owner source SHA/run/artifact, verifies producer workflow, strict F11 variant, SHA256 sidecar, Cargo.lock and embedded `RSP_CallbackPressure.csv`, `RSP_CallbackTargets.csv`, `RSP_ProxyAttribution.csv`, **new `RSP_ProxyChildren.csv`**. Missing or mismatched native owner output fails closed; no stale binary or local Rust compilation fallback. GCO's existing `integrations/three-profiler-test/Build-Test.ps1` now copies exact owner DLL, validates its SHA, records CI provenance and retains original two-page UI, .NET 10 managers, one package. Workflow commit `13cd6d3`; script commit `c996342`.
