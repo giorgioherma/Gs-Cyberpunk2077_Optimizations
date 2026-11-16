@@ -13,6 +13,18 @@ function Patch([string]$Path,[string]$Old,[string]$New) {
   }
   [IO.File]::WriteAllText($file,$txt.Replace($Old,$New),[Text.UTF8Encoding]::new($false))
 }
+# Pinned native implementation assertion only. No Rust source mutations in GCO.
+function RequirePinned([string]$Path,[string]$Expected) {
+  $file=(Resolve-Path -LiteralPath $Path).Path
+  $crlf=[string][char]13 + [string][char]10
+  $txt=[IO.File]::ReadAllText($file).Replace($crlf,[string][char]10)
+  $Expected=$Expected.Replace($crlf,[string][char]10)
+  if (!$txt.Contains($Expected) -or
+      $txt.IndexOf($Expected,[StringComparison]::Ordinal) -ne
+        $txt.LastIndexOf($Expected,[StringComparison]::Ordinal)) {
+    throw "GRSP native strict-F11 pinned-source contract failed in $Path; refusal without native source mutation."
+  }
+}
 $cc='vendor-cet/src/G.CETProfiler.Core/Services/ProfilerService.cs'
 $cp='vendor-cet/src/G.CETProfiler.App/Program.cs'
 $gm='vendor-grsp/manager/ManagerServices.cs'
@@ -53,39 +65,28 @@ Patch $cp '            "restore" => new' @'
             "restore" => new
 '@
 
-# GRSP's GCO variant never implicitly completes recording on game shutdown.
-Patch $gr @'
+# GRSP's native owner now implements strict F11 behavior at build time, using
+# the gco_explicit_f11 feature. Verify the exact expected pinned source, but
+# NEVER rewrite native Rust here: GCO imports the independently built owner DLL
+# with verified provenance. Standalone GRSP retains its shutdown export.
+RequirePinned $gr @'
 unsafe extern "C" fn on_shutdown(_app: &GameApp) {
-    // There is no pause/resume mode. Closing the game while recording acts as
-    // an implicit STOP so useful work is exported instead of discarded.
-    // Use a short drain window so shutdown cannot be delayed by the normal
-    // interactive STOP timeout.
+    // Standalone compatibility: a crash/shutdown can still export diagnostics.
+    // In the GCO opt-in native variant, ONLY explicit completed F11 can seal
+    // capture evidence; no implicit shutdown, crash or partial capture.
+    #[cfg(not(feature = "gco_explicit_f11"))]
     if PROFILE_STATE.load(Ordering::Acquire) == STATE_RECORDING {
         finish_capture_internal(false, 1_000);
     }
 }
-'@ @'
-unsafe extern "C" fn on_shutdown(_app: &GameApp) {
-    // Bundled GCO capture: no export without the user's second F11.
-}
 '@
-Patch $gr @'
-    let dump_ok = dump_results().is_ok();
-    LAST_DUMP_OK.store(dump_ok, Ordering::Release);
-    let _ = write_status_file();
-
-    if dump_ok {
-'@ @'
-    let dump_ok = dump_results().is_ok();
-    LAST_DUMP_OK.store(dump_ok, Ordering::Release);
-    let _ = write_status_file();
+RequirePinned $gr @'
+    #[cfg(feature = "gco_explicit_f11")]
     if dump_ok && play_stop_signal {
         if let Some(dir) = capture_results_dir() {
             let _ = fs::write(dir.join("GCO-F11-Complete.flag"), b"F11_STOP\n");
         }
     }
-
-    if dump_ok {
 '@
 Patch $gm '        File.Exists(Path.Combine(path, "GRSP_Status.txt"));' @'
         File.Exists(Path.Combine(path, "GRSP_Status.txt")) &&
@@ -216,4 +217,4 @@ Patch $gm @'
 '@
 Patch $gp '?? (parsed.Has("collect") ? "collect" : null)' ('?? (parsed.Has("collect") ? "collect" : null)' + [Environment]::NewLine + '                ?? (parsed.Has("discard-live") ? "discard-live" : null)')
 Patch $gp '                "collect" => CollectWithReport(gameRoot),' ('                "collect" => CollectWithReport(gameRoot),' + [Environment]::NewLine + '                "discard-live" => new { discarded = ManagerServices.DiscardLive(gameRoot) },')
-Write-Host 'PASS pinned disposable GCO-only source adaptations'
+Write-Host 'PASS pinned GCO-only managed adaptations and source-owned GRSP strict-F11 feature checks'
