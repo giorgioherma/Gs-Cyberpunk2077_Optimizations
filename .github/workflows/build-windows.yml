@@ -17,6 +17,8 @@ on:
       - 'integrations/three-profiler-test/Build-Test.ps1'
       - 'integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1'
       - 'src/GTotalOptimizer.App/**'
+      - 'src/GRedscript.Resolver/**'
+      - 'tests/GRedscript.Resolver.Tests/**'
       - 'assets/ui/elements/**'
       - 'src/GTotalOptimizer.Launcher/**'
       - 'src/GTotalOptimizer.Core/**'
@@ -121,6 +123,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate bundled GCO-local REDscript Resolver source and safety contracts
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'GCO-owned REDscript Resolver build failed' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GCO-owned REDscript Resolver safety/CLI contracts failed' }
+          Write-Host 'PASS GCO-local REDscript Resolver contract tests; this does not authorize source mutations'
       # High-value physical compiler contract: validate the exact supported
       # upstream release archive, then exercise GCO's real path/hash detector.
       - name: Verify official redscript 0.5.31 reference binaries
