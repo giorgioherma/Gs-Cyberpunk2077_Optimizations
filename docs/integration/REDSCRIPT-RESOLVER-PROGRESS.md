@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-16 — generic callback read/reuse measurement and shared framework handoff
+
+- CET example: registration-scoped CPU/alloc pressure, source-proven shared state providers and explicit lifecycle ownership; **not** generic mod-name-based blame. User wants recurring callback work uncorrelated to GC as the priority, independently from CET optimization installation.
+- GRSP owner `dev/native-instrumentation` adds bounded post-F11 `RSP_CallbackReuse.csv` from existing VM callsite/frame aggregates with no new hooks; actual callback entry counts and safe sharing remain unproven. GCO owns `CallbackReuseEvidence.cs` and `Program.cs` read-only interpretation, native callsite reconciliation and forged evidence rejection. These were synced from GCO `main` to this development branch; do not reimplement in GRSP.
+- Existing G-REDruntime `StateCache`, `DirtyFlags` and `ContextService` are potential **reuse targets**, not automatically authorized rewrite templates. Next work: capture evidence, identify high-frequency repeated *read shapes* across distinct callback functions, prove live-source argument/receiver invariants and mutation invalidation, then consider minimal generic source pass with SCC and game validation. Never equate same-frame reads with redundant work; retain original callback ordering, user code and rollback.
+- GRSP native CI #23 source-contracts passed; native DLL artifact and game test remain pending. GCO managed CI #512 passed; GCO package check now requires the new PE marker. No generation authority.
+
+
 ## 2026-11-16 — native crash-safety handoff for managed Resolver
 
 - GRSP `dev/native-instrumentation` is the authoritative native profiler branch, superseding the Resolver-named historical GRSP branch. Its native VM hooks are now guarded against re-entrant bookkeeping, bounded by reserved per-thread proxy target/child capacities, and protected by a full F11 in-flight-bookkeeping quiescence barrier. New `RSP_ProxyChildren.csv` can report skipped name registrations; caller/receiver proof remains incomplete. GCO managed Resolver implementation and source/SCC proof remain here, with no native-hook implementation copied into GCO.
