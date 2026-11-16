@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-16 — GRSP managed Resolver cleanup and exact GCO preservation
+
+- Verified GCO already owns active `src/GRedscript.Resolver`. Before any GRSP deletion, migrated the two remaining historical GRSP-managed handoffs to `docs/integration/reference/GRSP-historical-RESOLVER_HANDOFF.md` and `GRSP-historical-RESOLVER_PROGRESS.md`, byte-for-byte with identical Git blob SHA. Also preserved GRSP native `src/proxy_attribution.rs` as `reference/GRSP-proxy_attribution.rs` (identical Git blob `3807c74b255b4f6f6e44136fca9820552402b7da`) and added [native proxy handoff](GRSP-NATIVE-PROXY-ATTRIBUTION-HANDOFF.md); this is **nonexecuting archival reference**, not a duplicate native implementation in GCO.
+- After verified preservation, GRSP deleted `docs/RESOLVER_HANDOFF.md` and `docs/RESOLVER_PROGRESS.md` from `dev/resolver-profiler-handoff`. Managed Resolver code/tests and workflow had already been removed in earlier owner migration. GRSP remains native profiler owner, not source-aware optimizer owner. Its independent native workflow now tracks/tests proxy-attribution changes, but actual Windows native CI and gameplay F11 output remain unverified for this follow-up.
+- Protected GCO `main` and standalone GRSP `main` unchanged. Do not infer branch-name retirement, gameplay validation or native receipt from this cleanup.
+
+
 ## 2026-11-16 — first GRSP-native proxy-boundary instrumentation implementation (not yet CI validated)
 
 - Profiler owner `GRSP dev/resolver-profiler-handoff` now exports `RSP_ProxyAttribution.csv` after complete F11. Implementation `src/proxy_attribution.rs` and native registration in `src/lib.rs`; commits `f194089`, `a898195`, and optimized bounded single-pass aggregation `fa676e9`. Capture-timed Invoke hooks, existing `RSP_CallSites` and profiler install/restore unchanged. The result preserves exact source/target identity, proxy/virtual unresolved labels, observed work and sparse path context; receiver/entry/causal proof are explicitly **false**. See GRSP `OUTPUT_SCHEMA.md`.
