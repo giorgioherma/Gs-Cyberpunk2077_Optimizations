@@ -1,5 +1,10 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## Shared player lifecycle signal — owner source and CI #593 (2026-11-17)
+
+**Mandatory handoff:** [R5 shared player signal status](docs/integration/R5-SHARED-PLAYER-SIGNAL-STATUS.md). G-REDruntime **owner `main`** now provides authoritative attach/detach player reference, runtime-local generation and explicitly UNKNOWN state using existing `Runtime`, `StateCache`, `DirtyFlags`, `EventBus` and `InputHub`. Detach invalidates the shared handle and suspends InputHub registrations; legacy `GetPlayer()` preserves an **uncached original live fallback**, which is NOT authoritative shared state. There is no new poll, scheduler, native hook or REDscript mod rewrite. GCO dev has **7 mutation-backed owner-source lifecycle contracts** in existing canonical real-stack replay. [GCO CI #593 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44073412408): 89/89 managed tests, 7/7 owner framework signal contracts, official SCC 0.5.31 with 2,319 live-source fixture files + 10 owner framework files, 323/323 package contracts. **No gameplay, speedup, general event state, shared mod consumers, production optimizer ZIP or player reload behavior proven.** Do not substitute 50-ms lazy ContextService combat/vehicle values as event-exact state. Maintain generic-first and all mod inclusion.
+
+
 ## BLACKBOARD definition reuse — CI #587 full success (2026-11-17)
 
 **Mandatory continuation document:** [R5 BLACKBOARD / shared-state status](docs/integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md). CET caches **12 immutable PSM definition keys**, not changing blackboard state. GCO generic `BLACKBOARD_DEFINITION_STATEMENT_V1` shares identical definition-group references within one proven REDscript statement, keeping all live getters, writes and callback timing. Source/capture cost was **45,308 outgoing GetAllBlackboardDefs calls / 14.9077 ms direct** over 384.517 seconds; do not transfer CET's separate ~95% allocation result to REDscript.

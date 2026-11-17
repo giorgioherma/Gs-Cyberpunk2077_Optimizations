@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — R5 shared player lifecycle producer: code and real-source SCC verified
+
+- **Ownership:** G-REDruntime `main` implements the state producer in existing `Runtime.reds`, `StateCache.reds`, `InputHub.reds`. GCO `dev/redscript/resolver_handoff` added only owner-checkout source contracts in `tests/GTotalOptimizer.Core.Tests/test_framework_player_signal.py` and integrated them in the existing `Verify-RealGrspResolverReplay.ps1` before original isolated SCC. No separate binary, Rust hook, REDscript optimizer recipe, WPF change, installer operation or stable GCO branch mutation.
+- **Producer behavior:** attach sets weak shared player + known bit and advances local generation; detach rejects stale prior-player owner, clears authoritative shared state, marks UNKNOWN and advances generation; invalidates ContextService and DirtyFlags.PLAYER; releases InputHub engine input registrations/device observer until attach; conditionally publishes `PLAYER/DETACHED`. The preexisting legacy `GetPlayer()` still performs an **uncached live getter fallback on UNKNOWN** so callers are not silently disabled, but the unknown value is never adopted into the shared signal.
+- **[GCO Windows CI #593 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44073412408), code `6ea380423`:** 89/89 managed safety tests, 7/7 mutation-negative owner framework lifecycle tests, sealed real replay and private 2,319-source SCC 0.5.31 including 10 latest G-REDruntime source files and 22 combined generic preview files; 323 GCO package/installation contracts passed. GCO app artifact ID 14323554476. #590/#592 failed on diagnostic/negative-test contract logic; repaired without dropping checks. No original game, private fixture or owner profiler source writes. All generics remain source previews.
+- **Measured relevance:** F11 shared getter exposure is much smaller than high-cost callback/geometry/UI work; e.g. `GetPlayer` target around 228k calls/359ms exclusive over 384.517 s, **not** saved work. No cross-owner adoption or FPS win claimed. Runtime gameplay, player reload, fallback, event subscription effects, combined final optimizer ZIP remain open. Next classify source-proven high-cost consumers + complete mutator/dirty/lifecycle evidence before adding generic source-admitted adapters. Details [R5 shared player signal status](R5-SHARED-PLAYER-SIGNAL-STATUS.md).
+
+
 
 ## 2026-11-17 — blackboard effective-source composition verified in CI #587
 

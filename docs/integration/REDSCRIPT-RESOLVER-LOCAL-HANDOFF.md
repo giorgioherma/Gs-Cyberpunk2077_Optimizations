@@ -1,5 +1,12 @@
 # GCO-local REDscript Resolver handoff — approved 2026-11-16
 
+## 2026-11-17 shared player-state foundation — actual owner and CI gate
+
+**Read [R5-SHARED-PLAYER-SIGNAL-STATUS.md](R5-SHARED-PLAYER-SIGNAL-STATUS.md)** before extending cross-mod state. G-REDruntime `main` owns an additive, source-first, generation-tagged and UNKNOWN-aware `StateCache` player signal sourced from native `PlayerAttachRequest`/`PlayerDetachRequest`. `Runtime` coordinates existing ContextService, DirtyFlags.PLAYER, EventBus, and the opt-in InputHub listener cleanup. The historical `StateCache.GetPlayer()` remains callable and, after detach/unknown, uses an **uncached original PlayerSystem live fallback** instead of incorrectly restoring the shared handle. All consumers must validate `Runtime.IsReady()`, known state and generation and retain original source fallback. No combat/vehicle/position/menu or derived gameplay-state cache added, no CET native ABI assumed.
+
+**[GCO CI #593 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44073412408)**: 89 managed tests, seven negative lifecycle contracts run against actual framework checkout, full real 2,319-file source + 10 framework source SCC 0.5.31, 323 package contracts. Stable GCO main/CET/GRSP unchanged. This proves source compatibility and fail-closed tests, **not** in-game player attach/detach/reload safety, cross-mod adoption, GPU/FPS gain, or a production optimizer ZIP. Next source-rank high-cost repeat state consumers and fully traced UI/observer dirty publishers, then verify actual engine events with user gameplay before authorizing structural source changes.
+
+
 ## Agent routing rule (2026-11-16)
 
 **This GCO branch is the only active development location for the managed REDscript Resolver.** All Resolver research, rule generation, source proof, SCC validation and combined analysis continue here even when the profiler evidence comes from GRSP. Do not restart managed implementation on the historic GRSP `dev/resolver-profiler-handoff` branch. GRSP retains only Rust native profiler measurement and F11/install/restore; the original `src/proxy_attribution.rs` remains GRSP-owned and the GCO copy is a non-executable reference. See both repositories' `AGENTS.md`. The historic GRSP Resolver handoffs were preserved in `docs/integration/reference/` and removed from its active tree.

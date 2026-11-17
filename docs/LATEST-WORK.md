@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-17 — framework-owned player signal foundation, GCO #593 SUCCESS
+
+- **[GCO canonical Windows CI #593](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44073412408) fully SUCCESS** at development source `6ea38042343f4a508263be792ccdecbfbdc686ed`: **89/89** .NET10 managed Resolver tests, **7/7** mutation-backed G-REDruntime owner-source player-lifecycle tests, real source replay over 2,319 `.reds` files and official SCC 0.5.31 `framework-all-generics-preview` exit 0 with 22 callback/generic overlay files and 10 latest authoritative framework source files, **323/323** integrated installation/CLI/package contracts. Produced one GCO portable app artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run593-a1`, ID `14323554476`; NOT an optimized game-relative mod ZIP.
+- **G-REDruntime owner `main`**, existing framework services only: `Runtime.OnPlayerDetach` and old-player identity protection, `StateCache` known/UNKNOWN shared player + runtime-local generation, invalidation of ContextService/DirtyFlags.PLAYER, conditional EventBus `PLAYER/DETACHED`, and `InputHub.OnPlayerUnavailable` to release engine listeners/device polling until next attach. Existing `GetPlayer()` retains the **original uncached live PlayerSystem fallback** when shared player is UNKNOWN, but does not promote that fallback to authoritative cached state. No extra poll, scheduler, native hook or existing-mod rewriting.
+- **Limit:** This is a reusable lifecycle/invalidations **foundation**, not a measured CPU/FPS optimization or new automatic GCO generic pass. Runtime game load/detach/reload behavior, subscribed mod consumers, EventBus side-effect equivalence, REDscript-native NEAR/FAR, general combat/vehicle/menu/district event producers, gameplay A/B and final optimization ZIP **NOT VERIFIED**. All original private source files stayed unchanged, GCO `main`, CET and GRSP owner code untouched. Follow [exact status/gates](integration/R5-SHARED-PLAYER-SIGNAL-STATUS.md); prior blackboard same-file SCC composition remains verified (22 candidates/16 files, 14 disjoint + 2 composed, zero deferred).
+
+
 
 ## 2026-11-17 — REDscript blackboard same-file composition: CI #587 SUCCESS
 
