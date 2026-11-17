@@ -109,6 +109,13 @@ def verify(runtime, signals):
          "FACT_SIGNAL_SESSION_EXPOSES_STALE_VALUE")
     need(invalidate, "watch.version += 1u",
          "FACT_SIGNAL_SESSION_NO_VERSION_INVALIDATION")
+    need(invalidate, 'this.m_dirty.Mark(n"QUEST_FACT")',
+         "FACT_SIGNAL_SESSION_DIRTY_NOT_PUBLISHED")
+    need(invalidate, 'RuntimeEvent.Create(n"QUEST_FACT", n"SESSION_INVALIDATED")',
+         "FACT_SIGNAL_SESSION_EVENT_MISSING")
+    if not (invalidate.index("watch.version += 1u") <
+            invalidate.index("RuntimeEvent.Create(")):
+        raise AssertionError("FACT_SIGNAL_REENTRANT_INVALIDATION_ORDER_UNSAFE")
     need(known, "return watch.hasObservedValue", "FACT_SIGNAL_KNOWN_GATE_MISSING")
     need(version, "return watch.version", "FACT_SIGNAL_EXACT_NAME_VERSION_MISSING")
     for name in ("AcquireFact", "ReleaseFact", "OnFactChanged", "InvalidateSession"):
@@ -151,6 +158,14 @@ class FactSignalContracts(unittest.TestCase):
         old = method(self.signals, "InvalidateSession")
         bad = self.signals.replace(old, old.replace("watch.hasObservedValue = false", ""))
         with self.assertRaisesRegex(AssertionError, "FACT_SIGNAL_SESSION_EXPOSES_STALE_VALUE"):
+            verify(self.runtime, bad)
+
+    def test_reject_session_change_without_notification(self):
+        old = method(self.signals, "InvalidateSession")
+        bad = self.signals.replace(old, old.replace(
+            'RuntimeEvent.Create(n"QUEST_FACT", n"SESSION_INVALIDATED")',
+            'RuntimeEvent.Create(n"QUEST_FACT", n"UNKNOWN")'))
+        with self.assertRaisesRegex(AssertionError, "FACT_SIGNAL_SESSION_EVENT_MISSING"):
             verify(self.runtime, bad)
 
     def test_reject_missing_real_engine_listener_cleanup(self):
