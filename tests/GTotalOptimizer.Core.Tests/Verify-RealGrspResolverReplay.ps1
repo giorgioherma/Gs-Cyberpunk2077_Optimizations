@@ -1449,6 +1449,38 @@ try {
         $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
         ' realSourceOutputMatchesExistingCI=true productionZip=false')
 
+    # Compile the REDscript native RTTI declarations from the REAL CET
+    # test DLL, separate from all source-only generic passes. The owner
+    # compiler then catches bad @addMethod native signatures/syntax.
+    $nativeZip = Join-Path $PSScriptRoot '../G-CETtoNATIVEplayer_state_machine/G-CET_TO_C++_PLAYER_STATE_MACHINE.zip'
+    if (!(Test-Path -LiteralPath $nativeZip -PathType Leaf)) {
+        throw 'GCO_SHARED_NATIVE_REAL_DLL_FIXTURE_MISSING'
+    }
+    $nativeExtract = Join-Path $work 'gco-native-cet-fixture'
+    Expand-Archive -LiteralPath $nativeZip -DestinationPath $nativeExtract -Force
+    $nativeFixtureDll = Join-Path $nativeExtract 'red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+    if (!(Test-Path -LiteralPath $nativeFixtureDll -PathType Leaf)) {
+        throw 'GCO_SHARED_NATIVE_REAL_DLL_MISSING'
+    }
+    $nativeOwnerRoot = Join-Path $work 'gco-native-runtime-owner'
+    $nativeOwnerDir = Join-Path $nativeOwnerRoot 'runtime/native'
+    New-Item -ItemType Directory -Force -Path $nativeOwnerDir | Out-Null
+    Copy-Item -LiteralPath $nativeFixtureDll -Destination (Join-Path $nativeOwnerDir 'GCETStaticLocations.dll')
+    $nativeStage = Join-Path $work 'gco-shared-native-stage'
+    $nativeStageLog = Join-Path $work 'gco-shared-native-stage.log'
+    & dotnet $dll stage-shared-native --game $game --cet-runtime $nativeOwnerRoot --out $nativeStage *> $nativeStageLog
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GCO_SHARED_NATIVE_REAL_DLL_DISPATCH_FAILED'
+    }
+    $nativeBridge = Join-Path $nativeStage 'r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds'
+    if (!(Test-Path -LiteralPath $nativeBridge -PathType Leaf)) {
+        throw 'GCO_SHARED_NATIVE_REDSCRIPT_BRIDGE_MISSING'
+    }
+    $nativeScriptDestination = Join-Path $callbackFolder 'r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds'
+    New-Item -ItemType Directory -Force -Path (Split-Path $nativeScriptDestination -Parent) | Out-Null
+    Copy-Item -LiteralPath $nativeBridge -Destination $nativeScriptDestination -ErrorAction Stop
+    Write-Host 'PASS GCO real CET native DLL first-writer dispatch + REDscript RTTI bridge staged for official SCC'
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
