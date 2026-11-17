@@ -92,6 +92,8 @@ def verify(runtime: str, state: str) -> None:
     ):
         for field in fields:
             must_contain(body, field, reason)
+    must_contain(getter, "this.m_playerDiscoveryBlocked",
+                 "PLAYER_GETTER_CAN_REACQUIRE_AFTER_DETACH")
     if not (getter.index("this.m_playerDiscoveryBlocked") <
             getter.index("this.GetPlayerSystem()")):
         raise AssertionError("PLAYER_GETTER_CAN_REACQUIRE_AFTER_DETACH")
