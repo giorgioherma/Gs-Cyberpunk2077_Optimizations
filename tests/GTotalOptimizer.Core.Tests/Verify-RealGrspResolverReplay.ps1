@@ -568,6 +568,80 @@ try {
         Write-Host 'No source-proven late-system action read in current stack; no generated files.'
     }
 
+    # Generic pass 5: statement-local immutable BlackboardDefs group reuse.
+    # No cached gameplay values, no new timer, no new framework service.
+    # Source states and capture evidence are verified by the SAME GCO code.
+    $bbScanFile = Join-Path $work 'gco-blackboard-definition-scan.json'
+    $bbScanLog = Join-Path $work 'gco-blackboard-definition-scan.log'
+    & dotnet $dll scan-blackboard-defs --game $game --out $bbScanFile *> $bbScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $bbScanFile -PathType Leaf)) {
+        throw 'GCO_BLACKBOARD_DEFINITION_REAL_SOURCE_SCAN_FAILED'
+    }
+    $bbScan = Get-Content -LiteralPath $bbScanFile -Raw | ConvertFrom-Json
+    if ($bbScan.schemaVersion -ne 'gco.redscript.bbdefs.scan.v1' -or
+        $bbScan.sourceStackSha256 -ne $expectedSourceHash -or
+        $bbScan.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $bbScan.generationAuthorized -ne $false -or
+        $bbScan.compilerValidated -ne $false -or
+        $bbScan.measuredSavingsClaimed -ne $false -or
+        $bbScan.sourceWrites -ne $false) {
+        throw 'GCO_BLACKBOARD_DEFINITION_REAL_SOURCE_CONTRACT_FAILED'
+    }
+    $bbCount = [int]$bbScan.eligible
+    $bbFolder = Join-Path $work 'gco-blackboard-definition-preview'
+    $bbStageCount = 0
+    $bbConflictCount = 0
+    if ($bbCount -gt 0) {
+        $bbLog = Join-Path $work 'gco-blackboard-definition-preview.log'
+        & dotnet $dll preview-blackboard-defs --game $game --analysis $result --out $bbFolder *> $bbLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_BLACKBOARD_DEFINITION_REAL_SOURCE_PREVIEW_FAILED'
+        }
+        $bbScripts = Join-Path $bbFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $bbScripts -PathType Container)) {
+            throw 'GCO_BLACKBOARD_DEFINITION_PREVIEW_MISSING'
+        }
+        $bbFiles = @(Get-ChildItem -LiteralPath $bbScripts -Recurse -File)
+        if ($bbFiles.Count -lt 1 -or $bbFiles.Count -gt $bbCount) {
+            throw 'GCO_BLACKBOARD_DEFINITION_PREVIEW_COUNT_UNPROVEN'
+        }
+        $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $bbFiles) {
+            $relative = [IO.Path]::GetRelativePath($bbScripts, $file.FullName)
+            $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+            $target = Join-Path $callbackScripts $relative
+            if ($file.Extension -ne '.reds' -or
+                [IO.Path]::IsPathRooted($relative) -or
+                $relative.StartsWith('..') -or $relative.Contains(':') -or
+                !(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+                (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:BLACKBOARD_DEFINITION_STATEMENT_V1') {
+                throw 'GCO_BLACKBOARD_DEFINITION_OUTPUT_INVALID'
+            }
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                # Both passes own the same game-relative source. Do not
+                # overwrite one with the other or claim composition.
+                $bbConflictCount++
+                continue
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+            $bbStageCount++
+        }
+        if ($bbStageCount + $bbConflictCount -ne $bbFiles.Count) {
+            throw 'GCO_BLACKBOARD_DEFINITION_MERGE_ACCOUNTING_FAILED'
+        }
+        Write-Host ('PASS GCO blackboard immutable-definition source preview: eligible=' +
+            $bbCount + ' files=' + $bbFiles.Count + ' stagedDisjoint=' +
+            $bbStageCount + ' deferredFileCollisions=' + $bbConflictCount +
+            ' originalSourceUntouched=true deployable=false')
+    }
+    else {
+        Write-Host 'GCO blackboard definitions: no matching source shape; no files staged.'
+    }
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
@@ -575,7 +649,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
