@@ -2,6 +2,9 @@
 
 ## 2026-11-17 — REDscript immutable BLACKBOARD metadata reuse implemented as preview
 
+- **GCO #580 VERIFIED SUCCESS (2026-11-17):** [canonical Windows CI](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44026362823), **86/86** managed REDscript tests, current source **22 strictly eligible statements in 16 files** (2,319 source files total), **14 disjoint files merged with 2 same-file collisions explicitly deferred**, **22 total callback/generic preview files** SCC-compiled against all current private sources plus **10 G-REDruntime owner source files** with official SCC 0.5.31; `framework-all-generics-preview` exit 0 in 7.3 seconds, **323 GCO install/CLI/package contracts passed**. No original source or current game installed files changed. This is preview/SCC proof, **not** full six-pass composition, gameplay validation, or measured performance gain.
+
+
 - **CI now verified:** [#579](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44026242741) **SUCCESS**, 86/86 REDscript source-safety tests, fresh source scan 22 eligible/0 already-complete, 2,319 .reds files unchanged, existing official SCC compilation and 323 GCO package contracts passed. [#580](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44026362823) **real replay and new generated-blackboard source SCC step PASSED**; full workflow conclusion still pending when last checked. No gameplay/P99 gain asserted.
 
 
