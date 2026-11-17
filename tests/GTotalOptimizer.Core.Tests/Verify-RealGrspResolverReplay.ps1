@@ -421,6 +421,36 @@ try {
             throw 'GCO_SHARED_WORK_UNPROVEN_TRIGGER_EXPORTED_AS_PROVEN'
         }
     }
+    # The 1,013 methods without exact source-aligned measured callsites
+    # are NOT player-state-only. Demand a separate dependency distribution
+    # for measured and unmeasured methods with complete accounting.
+    $measuredPrimaryCount = 0
+    foreach ($entry in $shared.measuredPrimaryTriggerCounts.PSObject.Properties) {
+        $measuredPrimaryCount += [int]$entry.Value
+    }
+    $unmeasuredPrimaryCount = 0
+    foreach ($entry in $shared.unmeasuredPrimaryTriggerCounts.PSObject.Properties) {
+        $unmeasuredPrimaryCount += [int]$entry.Value
+    }
+    if ($measuredPrimaryCount -ne [int]$shared.sourceMatchedMeasured -or
+        $unmeasuredPrimaryCount -ne [int]$shared.unmeasured -or
+        $measuredPrimaryCount + $unmeasuredPrimaryCount -ne $primaryCount) {
+        throw 'GCO_SHARED_WORK_MEASURED_UNMEASURED_PRIMARY_SPLIT_FAILED'
+    }
+    foreach ($entry in $direct.PSObject.Properties) {
+        $category = [string]$entry.Name
+        $meas = $shared.measuredDependencyCategoryCounts.PSObject.Properties[$category]
+        $unmeas = $shared.unmeasuredDependencyCategoryCounts.PSObject.Properties[$category]
+        $measuredCategory = if ($null -eq $meas) { 0 } else { [int]$meas.Value }
+        $unmeasuredCategory = if ($null -eq $unmeas) { 0 } else { [int]$unmeas.Value }
+        if ($measuredCategory + $unmeasuredCategory -ne [int]$entry.Value) {
+            throw 'GCO_SHARED_WORK_MEASURED_UNMEASURED_CATEGORY_SPLIT_FAILED'
+        }
+    }
+    Write-Host ('PASS GCO source-only dependency coverage: measuredMethods=' +
+        $measuredPrimaryCount + ' unmeasuredMethods=' + $unmeasuredPrimaryCount +
+        ' writerClosureProven=false noSharedTriggerAuthorized=true')
+
     Write-Host ('PASS GCO shared-work direct dependencies: methods=' +
         $shared.candidateMethods + ' directFieldRead=' +
         $direct.INSTANCE_FIELDS + ' ownMethodCalls=' + $direct.INSTANCE_METHOD_CALLS +
