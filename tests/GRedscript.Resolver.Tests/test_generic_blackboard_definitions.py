@@ -189,5 +189,63 @@ class ImmutableBlackboardDefinitionContracts(unittest.TestCase):
                       r.stderr + r.stdout)
 
 
+    def test_same_file_effective_preview_preserves_prior_generic_and_values(self):
+        self.seal()
+        earlier = self.preview.parent / "prior-preview"
+        prior_file = earlier / "r6/scripts/IndependentAuthor/Example.reds"
+        prior_file.parent.mkdir(parents=True)
+        prior_file.write_text(SOURCE.replace(
+            "    return true;\\n",
+            "    // GCO-GENERIC:ACTION_LITERAL_MEMBERSHIP_V1\\n"
+            "    let previousState = frame;\\n"
+            "    return true;\\n"
+        ), encoding="utf8")
+        r = self.cli("preview-blackboard-defs", "--game", self.game,
+                     "--analysis", self.analysis, "--base-preview", earlier,
+                     "--out", self.preview)
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("transformed=2", r.stdout)
+        generated = (self.preview /
+                     "r6/scripts/IndependentAuthor/Example.reds").read_text(encoding="utf8")
+        self.assertIn("GCO-GENERIC:ACTION_LITERAL_MEMBERSHIP_V1", generated)
+        self.assertIn("let previousState = frame;", generated)
+        self.assertEqual(generated.count(
+            "GCO-GENERIC:BLACKBOARD_DEFINITION_STATEMENT_V1"), 2)
+        self.assertIn("GetInt(__gcoBbDefL", generated)
+        self.assertIn("SetVariant(__gcoBbDefL", generated)
+        self.assertEqual(self.source.read_text(encoding="utf8"), SOURCE)
+
+    def test_same_statement_mutation_refused_without_losing_prior_preview(self):
+        self.seal()
+        earlier = self.preview.parent / "prior-drift"
+        prior_file = earlier / "r6/scripts/IndependentAuthor/Example.reds"
+        prior_file.parent.mkdir(parents=True)
+        modified = SOURCE.replace(
+            "GetInt(GetAllBlackboardDefs().PlayerStateMachine.SceneTier)",
+            "GetBool(GetAllBlackboardDefs().PlayerStateMachine.SceneTier)"
+        )
+        prior_file.write_text(modified, encoding="utf8")
+        r = self.cli("preview-blackboard-defs", "--game", self.game,
+                     "--analysis", self.analysis, "--base-preview", earlier,
+                     "--out", self.preview)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("BBDEFS_COMPOSITION_STATEMENT_OVERLAP_OR_DRIFT",
+                      r.stderr + r.stdout)
+        self.assertFalse(self.preview.exists())
+        self.assertEqual(prior_file.read_text(encoding="utf8"), modified)
+        self.assertEqual(self.source.read_text(encoding="utf8"), SOURCE)
+
+    def test_same_file_base_preview_must_be_external_and_distinct(self):
+        self.seal()
+        r = self.cli("preview-blackboard-defs", "--game", self.game,
+                     "--analysis", self.analysis,
+                     "--base-preview", self.game,
+                     "--out", self.preview)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("BBDEFS_BASE_PREVIEW_NOT_ISOLATED",
+                      r.stderr + r.stdout)
+        self.assertFalse(self.preview.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
