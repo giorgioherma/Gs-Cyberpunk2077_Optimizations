@@ -39,6 +39,9 @@ public class OtherFactReader extends IScriptable {
         let ignored = this.m_quests.RegisterListener(n"test_shared_fact",
             this, n"OnChanged");
     }
+    public func RegisterWidgetCallback() -> Void {
+        this.m_widget.RegisterListener(n"test_shared_fact", this, n"OnClick");
+    }
 }
 """
 
@@ -79,10 +82,12 @@ class QuestFactGraphTests(unittest.TestCase):
         j = json.loads(self.out.read_text(encoding="utf8"))
         self.assertEqual(j["schemaVersion"], "gco.redscript.quest-fact.graph.v1")
         self.assertEqual(j["sourceFiles"], 2)
-        self.assertEqual(j["factCallsites"], 7)
-        self.assertEqual(j["literalCallsites"], 6)
+        self.assertEqual(j["factCallsites"], 8)
+        self.assertEqual(j["literalCallsites"], 7)
         self.assertEqual(j["dynamicOrUnresolvedCallsites"], 1)
         self.assertEqual(j["factsWithCrossOwnerLiteralRegistrations"], 1)
+        self.assertGreaterEqual(
+            j["lexicalListenerCallsitesReceiverUnverified"], 1)
         facts = {x["fact"]: x for x in j["facts"]}
         self.assertEqual(set(facts), {"test_shared_fact", "local_own_fact"})
         shared = facts["test_shared_fact"]
