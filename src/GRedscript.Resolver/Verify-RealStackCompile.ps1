@@ -8,6 +8,7 @@ param(
   [Parameter(Mandatory=$true)][string]$PluginsArchive,
   [Parameter(Mandatory=$true)][string]$ResolverDll,
   [string]$CallbackPreviewRoot = '',
+  [string]$FrameworkPreviewRoot = '',
   [string]$FrameworkRoot = ''
 )
 $ErrorActionPreference='Stop'
@@ -298,6 +299,34 @@ try {
       }
     }
   }
+  # A distinct *framework-dependent* overlay contains the source-generated
+  # shared-player consumers and the exact single GCO native bridge. Do not
+  # reclassify these as legacy callback-only rewrites or weaken their gate.
+  $frameworkOverlay=@()
+  $frameworkOverlayRoot=''
+  if (![string]::IsNullOrWhiteSpace($FrameworkPreviewRoot)) {
+    if ([string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+      throw 'R6_FRAMEWORK_PREVIEW_REQUIRES_OWNER_FRAMEWORK'
+    }
+    $frameworkBase=(Resolve-Path -LiteralPath $FrameworkPreviewRoot -ErrorAction Stop).Path
+    if ($frameworkBase.Equals($game,[StringComparison]::OrdinalIgnoreCase) -or
+        $frameworkBase.StartsWith($game+[IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'R6_FRAMEWORK_PREVIEW_MUST_BE_EXTERNAL'
+    }
+    $frameworkOverlayRoot=Join-Path $frameworkBase 'r6/scripts'
+    if (!(Test-Path -LiteralPath $frameworkOverlayRoot -PathType Container)) {
+      throw 'R6_FRAMEWORK_PREVIEW_SCRIPTS_MISSING'
+    }
+    $frameworkOverlay=@(Get-ChildItem -LiteralPath $frameworkOverlayRoot -File -Recurse)
+    if ($frameworkOverlay.Count -lt 1) { throw 'R6_FRAMEWORK_PREVIEW_EMPTY' }
+    foreach($file in $frameworkOverlay) {
+      if ($file.Extension -ne '.reds' -or
+          ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_FRAMEWORK_PREVIEW_UNSAFE_SOURCE'
+      }
+    }
+  }
   # Owner-owned G-REDruntime files are compiled in a separate isolated
   # workspace, never inserted into original private source or previews.
   $frameworkFiles=@()
@@ -372,18 +401,43 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
+    $nativeBridgeAdded=0
     if ($scenario -eq 'optimized-callback-preview' -or $scenario -eq 'framework-all-generics-preview') {
-      foreach($file in $callbackOverlay) {
-        $relative=[System.IO.Path]::GetRelativePath($callbackOverlayRoot,$file.FullName)
+      $selected=if ($scenario -eq 'framework-all-generics-preview' -and
+                    $frameworkOverlay.Count -gt 0) { $frameworkOverlay } else { $callbackOverlay }
+      $selectedRoot=if ($scenario -eq 'framework-all-generics-preview' -and
+                        $frameworkOverlay.Count -gt 0) { $frameworkOverlayRoot } else { $callbackOverlayRoot }
+      foreach($file in $selected) {
+        $relative=[System.IO.Path]::GetRelativePath($selectedRoot,$file.FullName)
         if ([System.IO.Path]::IsPathRooted($relative) -or
             $relative.StartsWith('..') -or $relative.Contains(':')) {
           throw 'R6_CALLBACK_PREVIEW_PATH_ESCAPE'
         }
         $target=Join-Path $scripts $relative
         if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
-          throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          # The one generated RTTI bridge is NEW by design. Every other
+          # optimized REDscript file must replace a real installed author.
+          if ($scenario -ne 'framework-all-generics-preview' -or
+              $relative.Replace('\\','/') -cne 'G-RedRuntime/Native/GCOSharedNativeBridge.reds' -or
+              $nativeBridgeAdded -ne 0) {
+            throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          }
+          $bridgeText=Get-Content -LiteralPath $file.FullName -Raw
+          foreach($capability in @('GCOSharedNativeBridge','GCETStaticReady',
+                  'GCETStaticOwnerCount','GCETStaticOwnerAnchor',
+                  'GCETPlayerVector4Live','GCETPlayerVector4Valid')) {
+            if (!$bridgeText.Contains($capability,[StringComparison]::Ordinal)) {
+              throw 'R6_SHARED_NATIVE_BRIDGE_CAPABILITY_DRIFT'
+            }
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          $nativeBridgeAdded++
         }
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+      }
+      if ($scenario -eq 'framework-all-generics-preview' -and
+          $frameworkOverlay.Count -gt 0 -and $nativeBridgeAdded -ne 1) {
+        throw 'R6_SHARED_NATIVE_BRIDGE_NOT_UNIQUE'
       }
     }
     $addedFrameworkFiles=0
@@ -408,7 +462,7 @@ try {
       }
     }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne ($liveCount+$addedFrameworkFiles)) {
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$nativeBridgeAdded)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
@@ -472,6 +526,7 @@ try {
       ' untouchedCacheBytes=' + $outputs[0].Bytes +
       ' optimizedCacheBytes=' + $outputs[1].Bytes +
       ' callbackPreviewFiles=' + $callbackOverlay.Count +
+       ' frameworkPreviewFiles=' + $frameworkOverlay.Count +
       ' ownerFrameworkSourceFiles=' + $frameworkFiles.Count +
       ' frameworkCompilationOnly=true' +
       ' compiledOutputsDistinct=true originalSourcesUntouched=true ' +
