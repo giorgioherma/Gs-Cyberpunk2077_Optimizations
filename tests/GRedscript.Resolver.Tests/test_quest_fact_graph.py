@@ -116,6 +116,99 @@ class QuestFactGraphTests(unittest.TestCase):
         self.assertFalse(j["sourceWrites"])
         self.assertEqual((self.a.read_bytes(), self.b.read_bytes()), old)
 
+    def test_bidirectional_cohort_separates_shared_fact_from_other_state(self):
+        # Both methods read the same exact fact. Update also has a dynamic
+        # fact and instance state; Refresh has widget/member state. The common
+        # subscriber input is only the fact, NEVER the whole method.
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.out.read_text(encoding="utf8"))
+        self.assertTrue(j["partialObservationCohortsAreResearchOnly"])
+        self.assertTrue(j["cannotInferOriginalGetterCanBeSkipped"])
+        self.assertFalse(j["anySubscriptionOrPartialRewriteAuthorized"])
+        self.assertGreaterEqual(j["observedLiteralFactReadSites"], 3)
+        cohort = next(x for x in j["questSubscriberCohorts"]
+                      if x["fact"] == "test_shared_fact")
+        self.assertEqual(cohort["distinctReaderMethods"], 2)
+        self.assertEqual(cohort["distinctReaderOwners"], 2)
+        self.assertEqual(cohort["refreshMethods"], 2)
+        self.assertEqual(cohort["methodsWithOtherDependencyHints"], 2)
+        self.assertTrue(cohort["sharesNameAcrossOwners"])
+        self.assertFalse(cohort["sharedSubscriptionAuthorized"])
+        self.assertFalse(cohort["originalGetterReplacementAuthorized"])
+        self.assertFalse(cohort["originalMethodSkipAuthorized"])
+        reads = [x for x in j["questSubscriberReads"]
+                 if x["fact"] == "test_shared_fact"]
+        self.assertEqual(len(reads), 2)
+        self.assertTrue(all(x["mixedDependencies"] for x in reads))
+        self.assertTrue(all(not x["canSkipOriginalMethod"]
+                            and not x["canReplaceOriginalGetter"]
+                            and not x["generationAuthorized"] for x in reads))
+        update = next(x for x in reads if x["source"]["method"] == "Update")
+        self.assertTrue(update["otherFactReadsMayBeDynamic"])
+        self.assertIn("m_quests", update["instanceFields"])
+
+    def test_same_owner_read_helper_is_visible_but_not_admitted(self):
+        wrapper = '''    private const func GetFact(name: CName) -> Int32 {
+        let quests: ref<QuestsSystem> = this.GetQuests();
+        return IsDefined(quests) ? quests.GetFact(name) : 0;
+    }
+'''
+        modified = SOURCE_A.replace(
+            '    protected cb func OnChanged(value: Int32) -> Bool {',
+            wrapper + '    protected cb func OnChanged(value: Int32) -> Bool {'
+        ).replace(
+            '        let unknown = this.m_quests.GetFact(this.DynamicName());',
+            '        let unknown = this.m_quests.GetFact(this.DynamicName());\n'
+            '        let wrappedValue = this.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(modified, encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.out.read_text(encoding="utf8"))
+        self.assertGreaterEqual(j["identifiedSameOwnerQuestWrapperReads"], 1)
+        cohort = next(x for x in j["questSubscriberCohorts"]
+                      if x["fact"] == "test_shared_fact")
+        self.assertTrue(cohort["sharesNameAcrossDirectAndWrapperReads"])
+        self.assertEqual(cohort["sameOwnerWrapperReadSites"], 1)
+        helper = next(x for x in j["questSubscriberReads"]
+                      if x["fact"] == "test_shared_fact" and
+                      x["readShape"] == "SAME_OWNER_QUEST_WRAPPER_SHAPE")
+        self.assertIn("Main.reds:", helper["sourceShapeWitness"])
+        # Exact source shape is only evidence for further callgraph proof.
+        self.assertFalse(helper["isolatedExpressionProven"])
+        self.assertFalse(helper["allWriterAndAliasPathsProven"])
+        self.assertFalse(helper["originalExecutionPreserved"])
+        self.assertFalse(helper["canReplaceOriginalGetter"])
+        self.assertFalse(helper["generationAuthorized"])
+
+    def test_helper_without_exact_owner_and_source_is_not_trusted(self):
+        modified = SOURCE_A.replace(
+            '        let unknown = this.m_quests.GetFact(this.DynamicName());',
+            '        let unknown = this.m_quests.GetFact(this.DynamicName());\n'
+            '        let wrappedValue = this.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(modified, encoding="utf8")
+        # The helper exists only in another owner, never in this exact class.
+        self.b.write_text(SOURCE_B.replace(
+            '    public func RegisterWidgetCallback() -> Void {',
+            '    private const func GetFact(name: CName) -> Int32 {\n'
+            '        let qs: ref<QuestsSystem> = GameInstance.GetQuestsSystem(this.GetGame());\n'
+            '        return qs.GetFact(name);\n'
+            '    }\n'
+            '    public func RegisterWidgetCallback() -> Void {'
+        ), encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.out.read_text(encoding="utf8"))
+        self.assertGreaterEqual(j["unresolvedSameOwnerHelperReads"], 1)
+        helper = next(x for x in j["questSubscriberReads"]
+                      if x["fact"] == "test_shared_fact" and
+                      x["source"]["owner"] == "SomeFactReader" and
+                      x["readShape"] == "UNRESOLVED_SAME_OWNER_HELPER")
+        self.assertFalse(helper["canReplaceOriginalGetter"])
+        self.assertFalse(helper["generationAuthorized"])
+
     def test_receiver_type_must_belong_to_method_owner(self):
         # A same-named QuestsSystem member in another class, and an
         # unrelated local typed inside a different method, cannot authorize
