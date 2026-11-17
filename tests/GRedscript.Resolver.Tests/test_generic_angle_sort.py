@@ -137,7 +137,6 @@ class GeometryGenericContracts(unittest.TestCase):
         damaged = generated.read_text().replace(
             "angleI = angleJ;", "angleI = angleJ + 0.0;")
         self.source.write_text(damaged, encoding="utf8")
-        self.scan.unlink()
         r = self.cli("scan-angle-sort", "--game", self.game,
                      "--out", self.scan)
         self.assertNotEqual(r.returncode, 0)
