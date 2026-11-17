@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## CET shared-state precedent for REDscript generics — verified 2026-11-17
+
+**Before building or extending G-REDruntime generics, read** [exact CET-to-REDscript source mechanisms](docs/integration/R5-CET-SHARED-SERVICES-TRANSFER.md). That review verifies CET's source-owned shared reads, event-driven StateSignals, blackboard definition reuse, common native static location host, pausable listeners, and physical-job-vs-guard boundaries against actual CET Lua/C# source. Use this to design one producer/many consumers and source-first adapters in GCO, **without inventing broad semantic dormancy or copying CET's Lua service ABI into REDscript**. No installed mod is excluded from generic coverage.
+
 ## G-REDruntime generic research and NO EXCLUSIONS — 2026-11-17
 
 **New framework-integration entrypoint:** [G-REDruntime generic candidates with runtime evidence and precise refusals](docs/integration/R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md). **ALL installed REDscript owners**, including the previously reviewed seven, remain eligible for any source-proven generic pass. The seven are deferred **only for their mod-specific semantic remainder**, never excluded from generic discovery. Candidates: exact finite-action InputHub interest, versioned DirtyFlags refresh, and scope-proven StateCache handles. Do not perform generic framework migration solely to increase generated-file count.

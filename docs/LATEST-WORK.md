@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-17 — CET original-source transfer verified for REDscript generics
+
+- **New mandatory handoff:** [R5-CET-SHARED-SERVICES-TRANSFER.md](integration/R5-CET-SHARED-SERVICES-TRANSFER.md); based on actual CET branch `dev/resolver-profiler-handoff` C#/Lua shared-state/source transforms and actual G-REDruntime `main` REDscript code. Read before modifying G-REDruntime runtime services or GCO generic passes.
+- **CET mechanics proved from source:** native read/provider adapters with original fallback; existing 0-Engine transition events and value/version/generation (no new poll); player blackboard *definition* lookup reuse (~95% reduction in isolated user-measured allocation metric, **not** game CPU); one optional native static NEAR/FAR coordinator with fail-open UNKNOWN; separate physically pausable adopted frame listeners vs onDraw early guard. The current REDscript framework has weak handles, lazy 50ms combat/vehicle refresh and versioned dirty flags, but no equivalent event-sourced all-state generation or typed source-proven NEAR/FAR host.
+- **Plan:** source-wide generic provider first, shared state event signals where evidence supports, immutable definition/table reuse, UI/ink rebuild elimination, then coarse optional near/far and shared observer registration. All mods eligible, seven deferred only for targeted remainder; no added capture unless needed. Research/docs only, no implemented pass or CI claim.
+
 ## 2026-11-17 — G-REDruntime multi-mod generic opportunities measured
 
 - New handoff [R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md](integration/R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md): no exclusions from generic coverage, including the seven previously reviewed mod owners. Candidate generic rules: `G_INPUTHUB_INTEREST_V1`, `G_DIRTY_VIEW_GENERATION_V1`, `G_LIFETIME_SYSTEM_HANDLE_V1`; all are **proposals**, not new source transforms.

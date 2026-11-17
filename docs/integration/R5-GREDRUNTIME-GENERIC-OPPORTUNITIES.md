@@ -4,6 +4,10 @@
 **Code owner:** GCO `dev/redscript/resolver_handoff` — managed Resolver, source proof, tests and generated overlays.  
 **Runtime owner:** `giorgioherma/G-REDruntime_Framework` `main` (currently `3cf3740`, manifest `0.6.0-pass6`). Profiler evidence remains GRSP `dev/native-instrumentation`. **Do not duplicate framework source into GCO**.
 
+## Verified CET shared-service predecessor (2026-11-17)
+
+Before coding broad framework passes, read [R5-CET-SHARED-SERVICES-TRANSFER.md](R5-CET-SHARED-SERVICES-TRANSFER.md), which directly inspects CET's current `SharedProviderCatalog`, `NativeReadReuseSource`, `GCETStateSignals`, `GCETNativeLocationHost`, `GCETFrameListeners`, `GenericUiVisibilityTransform`, `GenericHardDormantGuardTransform`, and actual G-REDruntime source. **CET established shared event producers with value+version+generation, original getter fallback, immutable metadata rather than changing-value caching, and physical owner-job pause only when source-proven.** REDscript must replicate those correct contracts via G-REDruntime owner APIs, not assume its existing 50-ms ContextService is event-exact or that Lua native positions have a REDscript ABI.
+
 ## Critical generic-first scope clarification
 
 **NO MOD IS EXCLUDED from generic discovery, admission, tests or future generation.** This explicitly **includes all seven previously reviewed mod owners**, and all others found in the current user's installation. “Seven at the end” means defer only **mod-specific semantic cleanup** to R7, after broadly reusable R5/R6 rules. If a generic pass matches ReinforcementsSystem, Dark Future, FlushingEtiquette, Custom Quickslots, Much Better Contracts, DVCore Footsteps or Crowd Voice Unlocked, evaluate it with exactly the same source-structure gates as every other mod. Crowd Voice's *mod-specific* experiment remains MAYBE/not approved. No whitelist, blacklist, mod-path allowlist, hardcoded source hashes or author-specific synthetic support.

@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — exact CET implementation crosswalk for shared REDscript services
+
+- **Mandatory source-verified plan:** [R5-CET-SHARED-SERVICES-TRANSFER.md](R5-CET-SHARED-SERVICES-TRANSFER.md). Read original CET `SharedProviderCatalog`, `NativeReadReuseSource`, `GCETStateSignals.lua`, `GCETNativeLocationHost.lua`, `GCETFrameListeners.lua`, generic UI guard source and mandatory Phase 3 boundaries. Compare with current ten-file `G-REDruntime` runtime implementation, not only feature names.
+- **Actual CET mechanisms:** exact source-first shared native getter adapters (original fallback, shadow/source drift refuse); 0-Engine event-driven vehicle/combat/menu/district `StateSignals` with version/generation and no new frame poll; user-verified ~95% **specific allocation measurement** improvement from caching 12 immutable PlayerStateMachine blackboard definitions (changing values still read); one native static-location host with 0.10s event drain, per-owner FAR/NEAR and fail-open UNKNOWN; opt-in pausable owner frame callbacks distinct from onDraw early-return guards, no blanket native observer removal.
+- **G-REDruntime gap:** existing `StateCache` weak system handles, `ContextService` 50ms lazy combat/vehicle values, `DirtyFlags` versions, `InputHub`, `Scheduler`, `EventBus`; no proven exact transition-value+UNKNOWN+generation producer across all common state keys or REDscript-compatible native NEAR/FAR subscription. Keep owner-native API changes in G-REDruntime repo, GCO generic adapters in GCO.
+- **Generic-only next order:** first scan source and real F11 for shared handle/metadata read pressure; then measured source-safe event-backed shared state; then pure UI/ink rebuild suppression, optional coarse NEAR/FAR prefilter and shared observer interest. Allow **every installed mod** (including reserved seven) to receive generic passes. Avoid copying CET Lua per-mod semantics, arbitrary scheduling, stale vector/table values, duplicate event observers or new capture without a specific direct blocker.
+- **Evidence and changes:** documentation/research only. No C#, Rust, native, framework source, game install, optimization ZIP or additional CI result. Preserve prior canonical GCO #569 full SUCCESS baseline.
+
 ## 2026-11-17 — source/capture-backed G-REDruntime generic candidates (no mod exclusions)
 
 - **New mandatory candidate document:** [R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md](R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md). All 2,319 currently sourced `.reds` files are in scope; even the seven already reviewed owners **must be considered for every generic transform**. Only **targeted semantic leftovers** are reserved for R7.
