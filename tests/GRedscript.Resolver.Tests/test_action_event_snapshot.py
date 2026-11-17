@@ -20,10 +20,9 @@ public class SampleInput extends IScriptable {
     private let enabled: Bool;
     protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
         if !this.enabled { return false; }
-        if Equals(ListenerAction.GetName(action), n"Jump") {
-            if Equals(ListenerAction.GetType(action), gameinputActionType.BUTTON_PRESSED) {
-                ListenerActionConsumer.Consume(consumer);
-            }
+        if Equals(ListenerAction.GetName(action), n"Jump") &&
+           Equals(ListenerAction.GetType(action), gameinputActionType.BUTTON_PRESSED) {
+            ListenerActionConsumer.Consume(consumer);
         }
         if Equals(ListenerAction.GetName(action), n"Cancel") &&
            Equals(ListenerAction.GetType(action), gameinputActionType.BUTTON_RELEASED) {
