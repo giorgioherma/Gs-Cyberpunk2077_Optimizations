@@ -296,6 +296,37 @@ try {
         $scan.eligibleUnmeasured + ' rejected=' + $scan.rejectedUnproven +
         ' sourceOnlyEquivalent=true generated=0 liveSourcesUntouched=true')
 
+    # CET's generic-first classification equivalent for REDscript must run
+    # across the ENTIRE current stack, not only the 5 literal-array cases.
+    # This additionally joins verified callsite evidence by source and method
+    # without converting outgoing edges into callback entries or savings.
+    $semanticReport = Join-Path $work 'gco-callback-semantics.json'
+    $semanticLog = Join-Path $work 'gco-callback-semantics.log'
+    & dotnet $dll resolve-callbacks --game $game --analysis $result --out $semanticReport *> $semanticLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $semanticReport -PathType Leaf)) {
+        throw 'GCO_FULL_CALLBACK_SEMANTIC_REPLAY_FAILED'
+    }
+    $semantic = Get-Content -LiteralPath $semanticReport -Raw | ConvertFrom-Json -Depth 75
+    if ($semantic.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
+        $semantic.sourceStackSha256 -ne $expectedSourceHash -or
+        $semantic.sourceFiles -ne $sourceAudit.sourceFiles -or
+        [int]$semantic.classifiedCallbacks -le 45 -or
+        [int]$semantic.playerPuppetOnActionWrappers -lt 1 -or
+        [int]$semantic.callbacksWithForwardedHelpers -lt 1 -or
+        [int]$semantic.sourceMatchedMeasuredCallbacks -lt 1 -or
+        $semantic.callbackEntryCountsKnown -ne $false -or
+        $semantic.actionSelectorCompletenessProven -ne $false -or
+        $semantic.generationAuthorized -ne $false -or
+        $semantic.sourceWrites -ne $false) {
+        throw 'GCO_FULL_CALLBACK_SEMANTIC_REPLAY_CONTRACT_FAILED'
+    }
+    Write-Host ('PASS GCO full REDscript callback/effect analysis: callbacks=' +
+        $semantic.classifiedCallbacks + ' input=' + $semantic.onActionMethods +
+        ' PlayerPuppetWraps=' + $semantic.playerPuppetOnActionWrappers +
+        ' sourceMatchedMeasured=' + $semantic.sourceMatchedMeasuredCallbacks +
+        ' helperForwarders=' + $semantic.callbacksWithForwardedHelpers +
+        ' noUnprovenRouting=true noGeneratedFiles=true')
+
     # GCO-local CET-inspired callback generic: scan every private source,
     # stage only the exact proven fixed CName index shape, then reuse the SAME
     # official isolated SCC runner used by the established membership pass.
