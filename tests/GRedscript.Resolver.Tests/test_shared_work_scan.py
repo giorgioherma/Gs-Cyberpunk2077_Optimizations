@@ -127,6 +127,12 @@ class SharedWorkClassificationTests(unittest.TestCase):
         self.assertEqual(j["unmeasured"], 2)
         self.assertEqual(j["sourceMatchedOutgoingEdges"], 251)
         self.assertEqual(j["sourceMatchedDirectInstrumentedMs"], 11.5)
+        self.assertEqual(sum(j["measuredPrimaryTriggerCounts"].values()), 1)
+        self.assertEqual(sum(j["unmeasuredPrimaryTriggerCounts"].values()), 2)
+        for key, total in j["directDependencyCategoryCounts"].items():
+            self.assertEqual(
+                j["measuredDependencyCategoryCounts"].get(key, 0) +
+                j["unmeasuredDependencyCategoryCounts"].get(key, 0), total)
         chosen = j["candidates"][0]
         self.assertEqual(chosen["source"]["method"], "Refresh")
         self.assertEqual(chosen["measuredOutgoingEdges"], 251)
@@ -169,6 +175,10 @@ class SharedWorkClassificationTests(unittest.TestCase):
         self.assertEqual(j["directDependencyCategoryCounts"]["CALLBACK_ARGUMENTS"], 1)
         self.assertEqual(j["directDependencyCategoryCounts"]["UI_WIDGET"], 2)
         self.assertEqual(sum(j["primaryCandidateSharedTriggerCounts"].values()), 3)
+        self.assertEqual(sum(j["unmeasuredPrimaryTriggerCounts"].values()), 3)
+        self.assertEqual(sum(j["measuredPrimaryTriggerCounts"].values()), 0)
+        self.assertEqual(j["unmeasuredDependencyCategoryCounts"],
+                         j["directDependencyCategoryCounts"])
         rows = {x["source"]["method"]: x for x in j["candidates"]}
         update = rows["Update"]["directDependencies"]
         self.assertEqual(update["usedCallbackParameters"], ["timeLeft"])
