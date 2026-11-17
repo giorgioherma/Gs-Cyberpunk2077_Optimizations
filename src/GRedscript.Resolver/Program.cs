@@ -23,6 +23,8 @@ internal static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-shared-work")
                 return RunSharedWorkScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-ui-outputs")
+                return RunUiOutputScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-quest-facts")
                 return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
@@ -397,6 +399,27 @@ internal static class Program
             " measured=" + summary.SourceMatchedMeasured +
             " unmeasured=" + summary.Unmeasured +
             " sourceWrites=0 deployable=false savingsClaimed=false");
+        return 0;
+    }
+
+    // R5 generic UI output dependency audit: source-only structural evidence,
+    // verified optional F11 method join, never a permission to throttle.
+    private static int RunUiOutputScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "UI output scan accepts --game, --out and optional --analysis only");
+        var result = CallbackSemanticResolver.ScanUiOutputSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? evidence)
+                ? Path.GetFullPath(evidence) : null);
+        Console.WriteLine("GCO generic UI output slices: sourceFiles=" +
+            result.SourceFiles + " SetDataSites=" + result.SetDataSites +
+            " mixedStructuralAndTime=" + result.MixedTimerSites +
+            " sourceMatchedMethodSites=" + result.SourceMatchedMethodSites +
+            " sourceTypedReceiverSites=" + result.SourceTypedReceivers +
+            " generationAuthorized=false sourceWrites=0");
         return 0;
     }
 

@@ -491,6 +491,59 @@ try {
         ' unmeasured=' + $shared.unmeasured +
         ' sourceOnly=false generationAuthorized=false allReasonsAccounted=true')
 
+    # Generic UI output-slice classifier: inspect the actual caller source,
+    # separate live timer/stack inputs from status/record identity, and
+    # REFUSE any count-only or Nth-frame setter/refresh suppression.
+    $uiOutput = Join-Path $work 'gco-ui-output-slices.json'
+    $uiLog = Join-Path $work 'gco-ui-output-slices.log'
+    & dotnet $dll scan-ui-outputs --game $game --analysis $result --out $uiOutput *> $uiLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $uiOutput -PathType Leaf)) {
+        throw 'GCO_UI_OUTPUT_REAL_SOURCE_SCAN_FAILED'
+    }
+    $ui = Get-Content -LiteralPath $uiOutput -Raw | ConvertFrom-Json -Depth 70
+    $uiRows = @($ui.outputs)
+    $mixedUi = @($uiRows | Where-Object { $_.mixedStructuralAndTimeInputs -eq $true })
+    $measuredUi = @($uiRows | Where-Object { $_.sourceMatchedMeasuredMethod -eq $true })
+    $typedUi = @($uiRows | Where-Object { $null -ne $_.receiverSourceDeclaredType })
+    if ($ui.schemaVersion -ne 'gco.redscript.ui-output.slices.v1' -or
+        $ui.parser -ne 'CALLBACK_SEMANTIC_RESOLVER_AUTHORITATIVE' -or
+        $ui.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $ui.sourceStackSha256 -ne $expectedSourceHash -or
+        $ui.evidenceKind -ne 'SEALED_F11_METHOD_EDGES_NOT_SETTER_ENTRIES' -or
+        [int]$ui.setDataSites -ne $uiRows.Count -or
+        [int]$ui.mixedStructuralTimeSites -ne $mixedUi.Count -or
+        [int]$ui.sourceMatchedMethodSites -ne $measuredUi.Count -or
+        [int]$ui.sourceTypedReceiverSites -ne $typedUi.Count -or
+        $uiRows.Count -lt 1 -or $mixedUi.Count -lt 1 -or
+        $ui.sourceProofOverridesProfilerRanking -ne $true -or
+        $ui.lexicalTimeHintsAreNotActualTimerChangeRates -ne $true -or
+        $ui.noCountOnlyOrNthFrameThrottlingAllowed -ne $true -or
+        $ui.allSetterEffectsAndUiLifecyclesProven -ne $false -or
+        $ui.generationAuthorized -ne $false -or
+        $ui.sourceWrites -ne $false -or [int]$ui.generatedFiles -ne 0) {
+        throw 'GCO_UI_OUTPUT_SOURCE_OR_SAFETY_CONTRACT_FAILED'
+    }
+    foreach ($outputRow in $uiRows) {
+        if ($outputRow.uiSetterImplementationSourceProven -ne $false -or
+            $outputRow.fullValueTupleEqualityProven -ne $false -or
+            $outputRow.widgetGenerationAndLifecycleProven -ne $false -or
+            $outputRow.timerAndAnimationSemanticsProven -ne $false -or
+            $outputRow.sourceChangePublisherComplete -ne $false -or
+            $outputRow.sameSourceOriginalEffectsPreserved -ne $false -or
+            $outputRow.suppressWholeRefreshAuthorized -ne $false -or
+            $outputRow.suppressSetterAuthorized -ne $false -or
+            $outputRow.methodTimeIsNotSetterTimeOrSavings -ne $true -or
+            $outputRow.generationAuthorized -ne $false -or
+            [int]$outputRow.argumentCount -ne @($outputRow.arguments).Count) {
+            throw 'GCO_UI_OUTPUT_UNPROVEN_SETTER_OR_REFRESH_SKIPPED'
+        }
+    }
+    Write-Host ('PASS GCO generic UI output slice source proof: setters=' +
+        $uiRows.Count + ' mixedStructuralTimeSites=' + $mixedUi.Count +
+        ' sourceMatchedMethodSites=' + $measuredUi.Count +
+        ' sourceTypedReceiverSites=' + $typedUi.Count +
+        ' fullSetterEffectProof=0 throttling=0 rewrites=0')
+
     # R5 quest-fact producer/readers/registrations, across ALL current mod
     # methods (not just those named Update). This is an external private
     # evidence graph. Unknown/dynamic receivers MUST remain refused.
