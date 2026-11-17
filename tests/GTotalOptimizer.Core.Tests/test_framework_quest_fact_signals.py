@@ -83,12 +83,16 @@ def verify(runtime, signals):
         ("if watch.interestCount == 0", "FACT_SIGNAL_EARLY_UNREGISTER"),
         ("qs.UnregisterListener(watch.fact, watch.engineListenerID)",
          "FACT_SIGNAL_ENGINE_CLEANUP_MISSING"),
-        ("watch.hasObservedValue = false", "FACT_SIGNAL_STALE_VALUE_ON_RELEASE")
+        ("watch.hasObservedValue = false", "FACT_SIGNAL_STALE_VALUE_ON_RELEASE"),
+        ("ArrayErase(this.m_interests, k)", "FACT_SIGNAL_RELEASE_RETAINS_INACTIVE_TOKENS"),
+        ("ArrayErase(this.m_watches, i)", "FACT_SIGNAL_RELEASE_RETAINS_UNUSED_WATCHES")
     ):
         need(release, fragment, reason)
     need(shutdown, "qs.UnregisterListener(watch.fact, watch.engineListenerID)",
          "FACT_SIGNAL_SHUTDOWN_LEAK")
     need(shutdown, "watch.bridge = null", "FACT_SIGNAL_SHUTDOWN_BRIDGE_LEAK")
+    need(shutdown, "ArrayClear(this.m_interests)", "FACT_SIGNAL_SHUTDOWN_LEAKS_TOKENS")
+    need(shutdown, "ArrayClear(this.m_watches)", "FACT_SIGNAL_SHUTDOWN_LEAKS_WATCHES")
     need(bridge_callback, "this.m_owner.OnFactChanged(this.m_fact, value)",
          "FACT_SIGNAL_VALUE_FORWARD_MISSING")
     need(bridge_callback, "return false", "FACT_SIGNAL_OBSERVER_RETURN_NOT_SAFE")
