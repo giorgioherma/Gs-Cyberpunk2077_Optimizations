@@ -243,6 +243,76 @@ protected cb func OnAction(action: ListenerAction,
         self.assertFalse(helper["canReplaceOriginalGetter"])
         self.assertFalse(helper["generationAuthorized"])
 
+    def test_partial_value_inputs_include_mixed_methods_and_local_uses(self):
+        # A literal fact read can feed one component even while its owner
+        # method must keep independent effects and changing inputs.
+        modified = SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        let active = this.m_quests.GetFact(n"test_shared_fact");\n'
+            '        if active > 0 {\n'
+            '            this.UpdateHudState();\n'
+            '        }\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(modified, encoding="utf8")
+        self.b.write_text(SOURCE_B + '''
+@wrapMethod(PlayerPuppet)
+protected cb func OnAction(action: ListenerAction,
+                           consumer: ListenerActionConsumer) -> Bool {
+    let quest = GameInstance.GetQuestsSystem(this.GetGame());
+    if quest.GetFact(n"test_shared_fact") == 0 {
+        return wrappedMethod(action, consumer);
+    }
+    return wrappedMethod(action, consumer);
+}
+''', encoding="utf8")
+        before = (self.a.read_bytes(), self.b.read_bytes())
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        report = json.loads(self.out.read_text())
+        inputs = report["questPartialValueInputs"]
+        self.assertEqual(len(inputs), report["observedLiteralFactReadSites"])
+        self.assertEqual(len(inputs), report["partialSubscriberInputSites"])
+        self.assertTrue(report["partialInputsDoNotRequireWholeMethodEligibility"])
+        self.assertFalse(report["anyPartialInputOriginalGetterReplacementAuthorized"])
+        active = next(x for x in inputs if x["localName"] == "active")
+        self.assertEqual(active["valueUseShape"], "LOCAL_DIRECT_FACT_VALUE")
+        self.assertIn("DOWNSTREAM_CONDITION",
+                      active["downstreamLocalUseKinds"])
+        self.assertTrue(active["factReachesCondition"])
+        self.assertTrue(active["methodContainsUnrelatedInputs"])
+        action = next(x for x in inputs
+                      if x["source"]["method"] == "OnAction")
+        self.assertEqual(action["valueUseShape"], "INLINE_CONDITIONAL_INPUT")
+        self.assertTrue(action["factReachesCondition"])
+        self.assertEqual(action["source"]["owner"], "PlayerPuppet")
+        self.assertTrue(all(x["candidateForSharedFactInputResearch"]
+                            and not x["generationAuthorized"]
+                            and not x["originalGetterReplacementAuthorized"]
+                            and not x["subscriberLifecycleProven"]
+                            for x in inputs))
+        self.assertEqual(before, (self.a.read_bytes(), self.b.read_bytes()))
+
+    def test_partial_input_local_shadow_and_other_work_do_not_authorize_skip(self):
+        self.a.write_text(SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        let active = this.m_quests.GetFact(n"test_shared_fact");\n'
+            '        active = this.DynamicName();\n'
+            '        this.RenderUsing(active);\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        ), encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        report = json.loads(self.out.read_text())
+        active = next(x for x in report["questPartialValueInputs"]
+                      if x["localName"] == "active")
+        self.assertTrue(active["localMutationOrShadowingDetected"])
+        self.assertIn("REASSIGNED_OR_SHADOWED",
+                      active["downstreamLocalUseKinds"])
+        self.assertFalse(active["pureDerivedValueProven"])
+        self.assertFalse(active["originalNonfactWorkPreserved"])
+        self.assertFalse(active["generationAuthorized"])
+
     def test_receiver_type_must_belong_to_method_owner(self):
         # A same-named QuestsSystem member in another class, and an
         # unrelated local typed inside a different method, cannot authorize

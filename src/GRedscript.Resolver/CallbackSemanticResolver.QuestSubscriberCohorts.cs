@@ -13,7 +13,7 @@ internal static partial class CallbackSemanticResolver
 {
     private sealed record QuestSubscriberRead(
         string Path, string Owner, string Method, int Line, string FactName,
-        string ReadShape, string WrapperEvidence, bool RefreshFamily,
+        int ReadTokenIndex, int ReadLine, string ReadShape, string WrapperEvidence, bool RefreshFamily,
         bool SourceMatchedMeasured, long? MethodOutgoingEdges,
         double? MethodExclusiveMs,
         string[] NonFactDependencyHints, string[] InstanceFields,
@@ -117,7 +117,8 @@ internal static partial class CallbackSemanticResolver
                 measured.TryGetValue(method.Identity, out var hit);
                 reads.Add(new QuestSubscriberRead(
                     method.File.Relative, method.Owner, method.Name,
-                    method.Line, fact, kind, witness,
+                    method.Line, fact, method.Open + 1 + i, tok.Line,
+                    kind, witness,
                     SharedWorkFamily(method.Name) is not null,
                     hit is not null, hit?.OutgoingEdges,
                     hit?.InstrumentedExclusiveMs,

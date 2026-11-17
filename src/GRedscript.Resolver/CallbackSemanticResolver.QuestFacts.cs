@@ -180,6 +180,7 @@ internal static partial class CallbackSemanticResolver
             .ThenBy(x => x.methodLine).ToArray();
 
         var subscriberEvidence = InspectQuestSubscribers(methods, measured);
+        var partialInputs = InspectQuestPartialValueInputs(methods, subscriberEvidence);
         var report = new
         {
             schemaVersion = "gco.redscript.quest-fact.graph.v1",
@@ -207,6 +208,17 @@ internal static partial class CallbackSemanticResolver
             // additional owner/helper/argument dependencies. All findings
             // preserve the original call and original mod callbacks.
             observedLiteralFactReadSites = subscriberEvidence.Readers.Length,
+            partialSubscriberInputSites = partialInputs.Length,
+            partialInputSitesInMixedMethods =
+                partialInputs.Count(x => x.MethodHasUnrelatedInputs),
+            partialInputSitesWithSourceMatchedF11 =
+                partialInputs.Count(x => x.SourceMatchedMeasured),
+            partialInputLocalValueSites =
+                partialInputs.Count(x => x.LocalName is not null),
+            partialInputWithDownstreamCondition =
+                partialInputs.Count(x => x.FactUsedInsideCondition),
+            partialInputsDoNotRequireWholeMethodEligibility = true,
+            anyPartialInputOriginalGetterReplacementAuthorized = false,
             observedLiteralFactReadCohorts = subscriberEvidence.Cohorts.Length,
             directAndWrapperSharedCohorts = subscriberEvidence.WrapperCohorts,
             mixedAndLexicallySimpleCohorts = subscriberEvidence.MixedCohorts,
@@ -261,7 +273,7 @@ internal static partial class CallbackSemanticResolver
             questSubscriberReads = subscriberEvidence.Readers.Select(r => new
             {
                 source = new { path = r.Path, owner = r.Owner,
-                    method = r.Method, line = r.Line },
+                    method = r.Method, line = r.Line, readLine = r.ReadLine },
                 fact = r.FactName,
                 readShape = r.ReadShape,
                 sourceShapeWitness = r.WrapperEvidence,
@@ -282,6 +294,34 @@ internal static partial class CallbackSemanticResolver
                 canReplaceOriginalGetter = r.CanReplaceOriginalGetter,
                 canSkipOriginalMethod = r.CanSkipOriginalMethod,
                 generationAuthorized = r.SourceMutationAuthorized
+            }),
+            questPartialValueInputs = partialInputs.Select(x => new
+            {
+                source = new { path = x.Path, owner = x.Owner, method = x.Method,
+                    methodLine = x.MethodLine, readLine = x.ReadLine },
+                fact = x.FactName, readShape = x.ReadShape,
+                receiverWitness = x.ReceiverWitness,
+                valueUseShape = x.ValueUseShape, localName = x.LocalName,
+                downstreamLocalUseKinds = x.LocalUseKinds,
+                downstreamLocalReads = x.LocalReadsAfterAssignment,
+                localMutationOrShadowingDetected = x.LocalMutationOrShadowingDetected,
+                factReachesCondition = x.FactUsedInsideCondition,
+                methodContainsUnrelatedInputs = x.MethodHasUnrelatedInputs,
+                unrelatedMethodDependencies = x.OtherMethodDependencyHints,
+                methodInstanceFields = x.InstanceFields,
+                methodInstanceHelpers = x.InstanceHelpers,
+                methodUsedParameters = x.UsedParameters,
+                sourceMeasuredMethod = x.SourceMatchedMeasured,
+                measuredMethodOutgoingEdges = x.MeasuredMethodOutgoingEdges,
+                measuredMethodDirectExclusiveMs = x.MeasuredMethodExclusiveMs,
+                measuredMethodTimeIsNotFactSliceSavings = true,
+                candidateForSharedFactInputResearch = x.PartialInputCanBeObservedInPrinciple,
+                pureDerivedValueProven = x.PureDerivedValueProven,
+                everyFactProducerWriterObserved = x.AllProducerWritesObserved,
+                subscriberLifecycleProven = x.ConsumerLifecycleProven,
+                originalNonfactWorkPreserved = x.OriginalNonfactWorkPreserved,
+                originalGetterReplacementAuthorized = x.OriginalGetterReplacementAuthorized,
+                generationAuthorized = x.PartialSourceRewriteAuthorized
             }),
             directRefreshReaders = refreshReaders,
             callsites = sites.OrderBy(s => s.Path, StringComparer.OrdinalIgnoreCase)

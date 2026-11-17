@@ -634,6 +634,43 @@ try {
         ' unresolvedHelperReads=' + $unresolvedHelpers.Count +
         ' fullSkipAuthorized=0 partialGetterReplaceAuthorized=0 originalPathsPreserved=true')
 
+    # A mixed owner method can be a valid *partial input* research target:
+    # account every existing exact-name read, including same-owner wrappers,
+    # assignments and locals. Do not require whole-method side-effect purity.
+    $partialInputs = @($qFacts.questPartialValueInputs)
+    $partialMixed = @($partialInputs | Where-Object { $_.methodContainsUnrelatedInputs -eq $true })
+    $partialMeasured = @($partialInputs | Where-Object { $_.sourceMeasuredMethod -eq $true })
+    $partialLocals = @($partialInputs | Where-Object { $null -ne $_.localName })
+    $partialConditions = @($partialInputs | Where-Object { $_.factReachesCondition -eq $true })
+    if ([int]$qFacts.partialSubscriberInputSites -ne $subscriberReads.Count -or
+        $partialInputs.Count -ne $subscriberReads.Count -or
+        [int]$qFacts.partialInputSitesInMixedMethods -ne $partialMixed.Count -or
+        [int]$qFacts.partialInputSitesWithSourceMatchedF11 -ne $partialMeasured.Count -or
+        [int]$qFacts.partialInputLocalValueSites -ne $partialLocals.Count -or
+        [int]$qFacts.partialInputWithDownstreamCondition -ne $partialConditions.Count -or
+        $qFacts.partialInputsDoNotRequireWholeMethodEligibility -ne $true -or
+        $qFacts.anyPartialInputOriginalGetterReplacementAuthorized -ne $false) {
+        throw 'GCO_FACT_PARTIAL_VALUE_INPUT_ACCOUNTING_FAILED'
+    }
+    foreach ($input in $partialInputs) {
+        if ($input.candidateForSharedFactInputResearch -ne $true -or
+            $input.pureDerivedValueProven -ne $false -or
+            $input.everyFactProducerWriterObserved -ne $false -or
+            $input.subscriberLifecycleProven -ne $false -or
+            $input.originalNonfactWorkPreserved -ne $false -or
+            $input.originalGetterReplacementAuthorized -ne $false -or
+            $input.generationAuthorized -ne $false -or
+            $input.measuredMethodTimeIsNotFactSliceSavings -ne $true) {
+            throw 'GCO_FACT_PARTIAL_VALUE_SOURCE_REWRITE_UNSAFE'
+        }
+    }
+    Write-Host ('PASS GCO partial fact input subscriber evidence: exactReads=' +
+        $partialInputs.Count + ' mixedMethodInputs=' + $partialMixed.Count +
+        ' sourceMeasuredInputs=' + $partialMeasured.Count +
+        ' localValueInputs=' + $partialLocals.Count +
+        ' downstreamConditionalInputs=' + $partialConditions.Count +
+        ' partialInputFoundWithoutWholeMethodEligibility=true rewrites=0')
+
     Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
         $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
         ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +
