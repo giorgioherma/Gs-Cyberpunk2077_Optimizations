@@ -1,5 +1,10 @@
 # GCO-local REDscript Resolver handoff — approved 2026-11-16
 
+## Active R5/R6 execution reference — 2026-11-17
+
+**Single canonical generic implementation plan:** [R5-WORK-ELIMINATION-OPPORTUNITIES.md](R5-WORK-ELIMINATION-OPPORTUNITIES.md). Apply operation-level source proof and actual generated overlay before proposing more read-only classifications. GCO's own `CallbackSemanticResolver.PureConstantSlices.cs` introduces a source-wide pure Bool final-static V1 candidate with no mod allowlist; see CI status in the progress ledger. The seven approved mod-specific semantic remainders stay R7.
+
+
 ## 2026-11-17 — CI #639 closes the partial-subscriber callback contract
 
 [GCO CI #639 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44111739033), code `adff7c560c768e54eedb2acb7547bc6e6813a393`: **106/106** managed .NET10 Resolver tests (including preserving `wrappedMethod` for shared-fact OnAction), **7/7** player and **8/8** quest observer source contracts; private 2,319-file real-source replay, 1,465 literal fact reads / 753 cohorts / 28 cross-owner facts / 145 narrow same-owner helper reads, official SCC 0.5.31 full-stack with 11 authoritative framework files and existing generic previews, **323/323** GCO package contracts, combined CET+GRSP+PresentMon report PASS. Portable GCO **app** artifact `run639-a1` ID `14340384025` is not a game-relative optimization ZIP. **No authorized source substitution, gameplay test or measured improvement.**

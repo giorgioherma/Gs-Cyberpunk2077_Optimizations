@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-17 — Canonical R5/R6 generic work-elimination plan and first source generator
+
+[Canonical partial-work plan](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) supersedes scattered next-step proposals. Active GCO development branch `dev/redscript/resolver_handoff` now contains source-owned `PURE_FINAL_STATIC_BOOL_V1` actual `.reds` preview generation (commit [`2b9e4f1`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/2b9e4f1744bbbe9040716aeb21fe9d6b8ccd1742)), strict source/override/module/whole-stack sealing and original behavior preservation. This does not migrate CET/GRSP owners, authorize producer subscriptions without full evidence, or implement R7 mod-specific semantics. CI #653 pending at this handoff; no performance outcome is asserted.
+
+
 ## 2026-11-17 — CET immutable blackboard definitions now generate broader REDscript source
 
 **Generic owner:** the existing `src/GRedscript.Resolver/GenericBlackboardDefinitionPass.cs` on `dev/redscript/resolver_handoff`. New additive **`BLACKBOARD_DEFINITION_SEQUENCE_V1`** extends the existing statement-local pass; no duplicate parser/generator/framework service. Code commits [`efc9108`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/efc91088c1e08d1bdb53a68f0b14a9a1f8d8c4c2) and [`260c415`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/260c4159a35f56532cb62c92fa499d9eff528c56). Recognizes 2+ immediately consecutive REDscript setters in the same source method, with identical receiver/definition group and verified CODE token offsets. Emits one method-local `let __gcoBbSeqL... = GetAllBlackboardDefs().<Group>` and preserves every `SetBool/SetInt/SetVariant/...` call, order, individual `.<Key>` lookup, live blackboard getter, callback cadence, error fallback and original source. **Does NOT cache key handles across callbacks/frames**; CET's distinct 12-key PSM init-time cache remains a separate, not yet generic REDscript lifetime proof.

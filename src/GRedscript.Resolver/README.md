@@ -1,5 +1,10 @@
 # GCO-local REDscript Resolver
 
+## Active R5/R6 plan — generic source generation
+
+Use [the single work-elimination implementation plan](../../docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) for priorities, source proof, actual `.reds` output, GRSP/SCC acceptance and remaining framework services. G-PureConstantSlice V1 is implemented in the existing `CallbackSemanticResolver` and has an isolated preview; no new parser or framework duplicate.
+
+
 ## 2026-11-17 — CI #639 closes the partial-subscriber callback contract
 
 [GCO CI #639 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44111739033), code `adff7c560c768e54eedb2acb7547bc6e6813a393`: **106/106** managed .NET10 Resolver tests (including preserving `wrappedMethod` for shared-fact OnAction), **7/7** player and **8/8** quest observer source contracts; private 2,319-file real-source replay, 1,465 literal fact reads / 753 cohorts / 28 cross-owner facts / 145 narrow same-owner helper reads, official SCC 0.5.31 full-stack with 11 authoritative framework files and existing generic previews, **323/323** GCO package contracts, combined CET+GRSP+PresentMon report PASS. Portable GCO **app** artifact `run639-a1` ID `14340384025` is not a game-relative optimization ZIP. **No authorized source substitution, gameplay test or measured improvement.**
