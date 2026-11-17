@@ -187,7 +187,7 @@ class ActionSnapshotContracts(unittest.TestCase):
         status, scan = self.scan(output=self.root / "nested.json")
         self.assertEqual(status.returncode, 0, status.stderr)
         # First name read is inside a conditional branch: never hoist it.
-        self.assertEqual(scan["eligible"], 1)  # type remains root-level twice
+        self.assertEqual(scan["eligible"], 0)  # neither first read is at root level
 
     def test_do_not_modify_external_game_or_existing_output(self):
         self.seal()
