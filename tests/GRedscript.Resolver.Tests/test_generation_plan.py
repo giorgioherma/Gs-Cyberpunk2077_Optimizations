@@ -76,17 +76,18 @@ public class IndependentAuthor extends IScriptable {
         self.assertEqual(doc["schemaVersion"],
                          "gco.redscript.generation-plan.v1")
         self.assertEqual(doc["sourceFiles"], 2)
-        self.assertEqual(doc["implementedRuleCount"], 7)
+        self.assertEqual(doc["implementedRuleCount"], 8)
         self.assertEqual(doc["captureGatedExistingRules"], 1)
         self.assertEqual(doc["deferredExperimentalSystems"], 5)
         self.assertFalse(doc["productionZipAuthorized"])
         self.assertFalse(doc["gameplayValidated"])
-        active = doc["rules"][:6]
+        active = doc["rules"][:7]
         self.assertEqual([r["order"] for r in active], list(range(1, 7)))
         self.assertEqual([r["id"] for r in active], [
             "fixed-cname-index", "literal-action-filter",
             "angle-sort", "late-system-read",
-            "blackboard-definitions", "pure-constant-slices"
+            "blackboard-definitions", "pure-constant-slices",
+            "immutable-action-event-snapshot"
         ])
         self.assertEqual(doc["readyRuleCount"], sum(
             r["status"] == "READY_FOR_GENERATOR" for r in active))
@@ -94,18 +95,18 @@ public class IndependentAuthor extends IScriptable {
             r["eligible"] for r in active))
         self.assertEqual(doc["rules"][5]["eligible"], 2)
         self.assertEqual(doc["rules"][5]["sourceFolders"], ["Consumer"])
-        capture_gated = doc["rules"][6]
+        capture_gated = doc["rules"][7]
         self.assertEqual(capture_gated["id"], "measured-cname-membership")
         self.assertEqual(capture_gated["status"], "CAPTURE_GATED_EXISTING_GENERATOR")
         self.assertEqual(capture_gated["generator"], "preview-generic")
         self.assertIsNone(capture_gated["order"])
         self.assertIsNone(capture_gated["eligible"])
-        for rule in doc["rules"][7:]:
+        for rule in doc["rules"][8:]:
             self.assertEqual(rule["status"], "NO_GENERATOR_YET")
             self.assertIsNone(rule["order"])
             self.assertIsNone(rule["generator"])
             self.assertIsNone(rule["eligible"])
-        self.assertEqual([r["system"] for r in doc["rules"][7:]],
+        self.assertEqual([r["system"] for r in doc["rules"][8:]],
                          ["A", "B", "C", "D", "E"])
         self.assertEqual(len(list(self.game.rglob("*.reds"))), 2)
 
