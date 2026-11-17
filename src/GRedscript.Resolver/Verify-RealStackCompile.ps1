@@ -328,6 +328,9 @@ try {
   $scenarios=@('untouched','optimized-preview')
   if ($callbackOverlay.Count -gt 0) { $scenarios+=@('optimized-callback-preview') }
   if ($frameworkFiles.Count -gt 0) { $scenarios+=@('framework-untouched') }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
+    $scenarios+=@('framework-all-generics-preview')
+  }
   foreach($scenario in $scenarios) {
     $root=Join-Path $work $scenario
     $scripts=Join-Path $root 'r6/scripts'
@@ -355,7 +358,7 @@ try {
     if ((Get-FileHash -LiteralPath $cache -Algorithm SHA256).Hash -ne $effectiveSha) {
       throw 'R6 source compilation input cache differs from user supplied effective cache.'
     }
-    if ($scenario -eq 'optimized-preview') {
+    if ($scenario -eq 'optimized-preview' -or $scenario -eq 'framework-all-generics-preview') {
       foreach($file in $overlay) {
         $relative=[System.IO.Path]::GetRelativePath($overlayRoot,$file.FullName)
         if ([System.IO.Path]::IsPathRooted($relative) -or
@@ -369,7 +372,7 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
-    if ($scenario -eq 'optimized-callback-preview') {
+    if ($scenario -eq 'optimized-callback-preview' -or $scenario -eq 'framework-all-generics-preview') {
       foreach($file in $callbackOverlay) {
         $relative=[System.IO.Path]::GetRelativePath($callbackOverlayRoot,$file.FullName)
         if ([System.IO.Path]::IsPathRooted($relative) -or
@@ -384,7 +387,7 @@ try {
       }
     }
     $addedFrameworkFiles=0
-    if ($scenario -eq 'framework-untouched') {
+    if ($scenario -eq 'framework-untouched' -or $scenario -eq 'framework-all-generics-preview') {
       foreach($file in $frameworkFiles) {
         $relative=[IO.Path]::GetRelativePath($frameworkScripts,$file.FullName)
         $target=Join-Path (Join-Path $scripts 'G-RedRuntime') $relative
@@ -428,6 +431,7 @@ try {
   }
   $expectedScenarios=if($callbackOverlay.Count -gt 0){3}else{2}
   if ($frameworkFiles.Count -gt 0) { $expectedScenarios++ }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) { $expectedScenarios++ }
   if ($outputs.Count -ne $expectedScenarios -or
       $outputs[0].Sha256 -eq $outputs[1].Sha256) {
     throw 'R6 compiled baseline and optimized-preview caches are indistinguishable.'
@@ -439,6 +443,19 @@ try {
   if ($frameworkFiles.Count -gt 0 -and
       $outputs[0].Sha256 -eq $outputs[$outputs.Count-1].Sha256) {
     throw 'R6_FRAMEWORK_COMPILE_OUTPUT_INDISTINGUISHABLE_FROM_BASE'
+  }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
+    # The fifth scenario combines ALL currently staged generic passes with
+    # authoritative framework source. Refuse empty/no-op integration output.
+    if ($outputs[$outputs.Count-1].Scenario -ne 'framework-all-generics-preview') {
+      throw 'R6_FRAMEWORK_COMBINED_SCENARIO_MISSING'
+    }
+    $combinedHash=$outputs[$outputs.Count-1].Sha256
+    foreach($earlier in $outputs[0..($outputs.Count-2)]) {
+      if ($combinedHash -eq $earlier.Sha256) {
+        throw 'R6_FRAMEWORK_COMBINED_GENERIC_OUTPUT_INDISTINGUISHABLE'
+      }
+    }
   }
   $audit=Join-Path $work 'verify-source.json'
   $auditLog=Join-Path $work 'verify-source.log'
