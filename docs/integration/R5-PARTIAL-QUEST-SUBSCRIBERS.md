@@ -50,7 +50,7 @@ The source owner list above provides **counterexamples**, not a hardcoded mod ca
 | GCO installation/package contracts | **323 pass** |
 | In-game callback parity / speedup | **Not tested / not claimed** |
 
-The subsequent GCO #639 adds a targeted regression requiring an `OnAction` wrapper and UI refreshes to share the fact-name input while preserving `wrappedMethod`; its final CI result must be checked before promotion.
+**[GCO CI #639 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44111739033), code `adff7c560c768e54eedb2acb7547bc6e6813a393`: **106/106** managed .NET10 Resolver tests (including preserving `wrappedMethod` for shared-fact OnAction), **7/7** player and **8/8** quest observer source contracts; private 2,319-file real-source replay, 1,465 literal fact reads / 753 cohorts / 28 cross-owner facts / 145 narrow same-owner helper reads, official SCC 0.5.31 full-stack with 11 authoritative framework files and existing generic previews, **323/323** GCO package contracts, combined CET+GRSP+PresentMon report PASS. Portable GCO **app** artifact `run639-a1` ID `14340384025` is not a game-relative optimization ZIP. **No authorized source substitution, gameplay test or measured improvement.****
 
 ## Exact remaining authorization gate
 
