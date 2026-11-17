@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## Mandatory 2026-11-17 REDscript R5 work-elimination roadmap
+
+**Start here for future high-impact generic optimization research:** [R5 work-elimination opportunities](docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md). It ranks spatial broadphase, callback/event admission, dirty-state UI dormancy, debug-off elimination, transition-only work, resource-interest filtering and safe local reuse using the actual November 16 F11 capture. **Prioritize eliminating whole costly call trees and observed bursts; no new rule is approved by this document.** Continue in GCO `dev/redscript/resolver_handoff`, with GRSP owner-native measurement and G-REDruntime owner services. Do not jump to targeted mod-specific fixes before generic R5/R6 coverage and R7 gap ledger.
+
 ## REDscript Resolver routing — authoritative, checked 2026-11-16
 
 **For ALL managed REDscript Resolver/Generator work, use THIS repository on `dev/redscript/resolver_handoff`.** This includes R0–R10 research, generic source passes, evidence interpretation, source proof, SCC compilation, output/idempotence tests, combined optimization ZIP and integration. Do not route these tasks back to `GRSP dev/resolver-profiler-handoff` because that branch name is historical and its managed Resolver files were removed.

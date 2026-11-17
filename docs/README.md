@@ -10,6 +10,7 @@
 | Verified-from-source standalone CLI and capture APIs | [Component contracts](technical/COMPONENT-CONTRACTS.md) |
 | Shared runtime and CapFrameX compatibility | [One private .NET 10 Desktop runtime — validation contract](technical/SHARED-NET-RUNTIME.md) |
 | Active GRSP-owned REDscript implementation blueprint (R0–R10) | [Full REDscript blueprint](integration/GRSP_REDscript_Resolver_Blueprint.md) |
+| **Current REDscript generic work-elimination priorities and new-capture plan (2026-11-17)** | [R5 measured work-elimination opportunities](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) |
 | REDscript decisions, stage/CI/compile/gameplay ledger | [REDscript progress ledger](integration/REDSCRIPT-RESOLVER-PROGRESS.md) |
 | Completed genuine PresentMon consolidated report contract | [GCO three-profiler reporting](integration/GCO-PRESENTMON-PROFILER-REPORTING.md) |
 | Development execution order | [Roadmap](ROADMAP.md) |

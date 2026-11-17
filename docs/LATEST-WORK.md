@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-17 — R5 high-value generic work elimination documented
+
+- **Start here for next agent:** [R5 measured work-elimination roadmap](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) (linked from `AGENTS.md`, REDscript local handoff, documentation index and the integration progress ledger). This document ranks source/measurement-backed **whole-work removal** opportunities before any specific mod fixes. Input is the supplied November 16 genuine GRSP F11 capture, refreshed source tree, existing source/CI proofs and source-owned G-REDruntime contracts; no new code or perf claim.
+- **Key exact observations:** GRSP 280.756851 instrumented ms/s / 146,839,501 outgoing calls over 384.517s; Reinforcements geometry 216,006 repeated quad sorts in 260 frames; Custom Quickslots bridge 273,887 calls/2,623.4 ms; Dark Future UI setter 38,318/3,394.6 ms; repeated resource path 436,737/471.6 ms. Existing `RSP_CallbackReuse` per-frame exporter truncated 41 of 81 targets in the supplied capture; GRSP owner CI #26 **SUCCESS** on later source fix, still needs actual new game F11 output proof.
+- **Strategy:** rank spatial broadphase, callback interest admission, idle/dirty UI work and debug-off paths ahead of low-gain small operator/cache rewrites. Document precise refusal and A/B capture requirements; do not change author restrictions, RNG sequence, callback order, state, lifecycle, fallback or owner responsibilities. 90→300 historical observation not a proven matched metric change. [GCO #569](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44006145184) **SUCCESS** on pre-research code baseline; new documentation CI status must be checked separately.
+
 ## 2026-11-17 — current-source CI, owner framework and measured-hot angle-sort generic
 
 - **Correct ownership:** GCO managed Resolver development stays on `dev/redscript/resolver_handoff`; GCO `main` is unchanged. G-REDruntime remains owned by `giorgioherma/G-REDruntime_Framework/main`, which canonical GCO Windows CI checks out by source. No duplicated runtime source, GRSP native change, CET change or installed game-file write.
