@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-17 — first safe generic system-read code + native reference inspection
+
+- **Code staged in GCO managed dev**: \`GenericLateSystemReadPass.cs\`, CLI scan/preview, source-drift/idempotence tests and official real-stack SCC overlay merge; pending CI outcome. It moves the exact source-proven \`BUTTON_RELEASED\` early-return before a needless quest-system resolution without altering \`wrappedMethod\`, the original gameplay body or input registration. No permanent hardcoded mod list and no production ZIP integration. Measured 274k+ outgoing lookups alone do **not** prove avoidable subset or FPS gain.
+- **Read the native archive the user linked:** [\`tests/G-CETtoNATIVEplayer_state_machine\`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/tree/main/tests/G-CETtoNATIVEplayer_state_machine) contains \`GCETStaticLocations.dll\` and \`G-CET.locations\` binary anchors; the native DLL exposes typed player position/epoch and location stream API, **not** a PlayerStateMachine blackboard snapshot service. The CET PSM optimization lives in \`BlackboardPsmDefinitionCacheSource.cs\` and reuses 12 immutable *definitions*, not live values. Detailed ABI and correctness boundaries recorded in [R5 CET crosswalk](integration/R5-CET-SHARED-SERVICES-TRANSFER.md).
+- **No games changed, no runtime ABI adopted.** Before extending G-REDruntime, prove native RTTI compatibility and exact player session/position freshness; preserve owner boundaries and source fallback. GCO CI result and gameplay proof pending.
+
 ## 2026-11-17 — CET original-source transfer verified for REDscript generics
 
 - **New mandatory handoff:** [R5-CET-SHARED-SERVICES-TRANSFER.md](integration/R5-CET-SHARED-SERVICES-TRANSFER.md); based on actual CET branch `dev/resolver-profiler-handoff` C#/Lua shared-state/source transforms and actual G-REDruntime `main` REDscript code. Read before modifying G-REDruntime runtime services or GCO generic passes.
