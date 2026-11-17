@@ -26,12 +26,36 @@ internal static class GenericSharedPlayerSignalPass
     private sealed record Candidate(int Start, int End, int Line, string Argument);
     internal sealed record Summary(int SourceFiles, int Eligible,
         int EligibleFiles, int AlreadyComplete);
-    private static readonly Regex ModuleHeader = new(
-        @"(?m)^[ \t]*module[ \t]+[A-Za-z_][A-Za-z0-9_.]*[ \t]*$",
-        RegexOptions.CultureInvariant);
-    private static readonly Regex RuntimeImport = new(
-        @"(?m)^[ \t]*import[ \t]+GRedRuntime\.\*[ \t]*;?[ \t]*$",
-        RegexOptions.CultureInvariant);
+    // Inspect the actual REDscript module declaration line. This avoids
+    // regex multiline/effective-stage ambiguity and handles CRLF/BOM and
+    // dotted module names without changing the authoritative source lexer.
+    private static int ModuleInsertionOffset(string text)
+    {
+        for (int start = 0; start < text.Length;)
+        {
+            int e = text.IndexOf('\n', start);
+            if (e < 0) e = text.Length;
+            string line = text[start..e].Trim().TrimStart('\uFEFF');
+            if (line.StartsWith("module ", StringComparison.Ordinal))
+            {
+                string name = line["module ".Length..].Trim();
+                if (name.Length > 0 &&
+                    name.All(c => char.IsLetterOrDigit(c) ||
+                        c == '_' || c == '.'))
+                    return e < text.Length ? e + 1 : e;
+            }
+            if (e == text.Length) break;
+            start = e + 1;
+        }
+        return -1;
+    }
+
+    private static bool HasRuntimeImport(string text) =>
+        text.Split('\n').Any(line =>
+        {
+            string value = line.Trim();
+            return value is "import GRedRuntime.*" or "import GRedRuntime.*;";
+        });
 
     private sealed record Script(string Relative, string Text,
         List<Candidate> Candidates, int Complete);
@@ -58,7 +82,7 @@ internal static class GenericSharedPlayerSignalPass
             var text = File.ReadAllText(file, Encoding.UTF8);
             var candidates = Find(text);
             int complete = Regex.Matches(text, Regex.Escape(Marker)).Count;
-            if (candidates.Count > 0 || complete > 0)
+            if ((candidates.Count > 0 && ModuleInsertionOffset(text) >= 0) || complete > 0)
                 yield return new(relative, text, candidates, complete);
         }
     }
@@ -184,15 +208,18 @@ internal static class GenericSharedPlayerSignalPass
                 effective = effective[..match.Start] + Marker + " " +
                     ReplacementClass + "(" + match.Argument + ")" +
                     effective[match.End..];
-            if (!RuntimeImport.IsMatch(effective))
+            if (!HasRuntimeImport(effective))
             {
-                var header = ModuleHeader.Match(effective);
-                if (!header.Success)
+                int insert = ModuleInsertionOffset(effective);
+                if (insert < 0)
                     throw new InvalidDataException("SHARED_PLAYER_MODULE_HEADER_MISSING");
                 string nl = effective.Contains("\r\n", StringComparison.Ordinal)
                     ? "\r\n" : "\n";
-                effective = effective.Insert(header.Index + header.Length,
-                    nl + "import GRedRuntime.*");
+                string directive = "import GRedRuntime.*" + nl;
+                if (insert == effective.Length && !effective.EndsWith(nl,
+                    StringComparison.Ordinal))
+                    directive = nl + directive;
+                effective = effective.Insert(insert, directive);
             }
             if (Find(effective).Count != 0 ||
                 Regex.Matches(effective, Regex.Escape(Marker)).Count <
