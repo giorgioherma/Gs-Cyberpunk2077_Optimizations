@@ -590,10 +590,10 @@ try {
     $bbCount = [int]$bbScan.eligible
     $bbFolder = Join-Path $work 'gco-blackboard-definition-preview'
     $bbStageCount = 0
-    $bbConflictCount = 0
+    $bbComposedCount = 0
     if ($bbCount -gt 0) {
         $bbLog = Join-Path $work 'gco-blackboard-definition-preview.log'
-        & dotnet $dll preview-blackboard-defs --game $game --analysis $result --out $bbFolder *> $bbLog
+        & dotnet $dll preview-blackboard-defs --game $game --analysis $result --out $bbFolder --base-preview $callbackFolder *> $bbLog
         if ($LASTEXITCODE -ne 0) {
             throw 'GCO_BLACKBOARD_DEFINITION_REAL_SOURCE_PREVIEW_FAILED'
         }
@@ -621,22 +621,39 @@ try {
                 throw 'GCO_BLACKBOARD_DEFINITION_OUTPUT_INVALID'
             }
             if (Test-Path -LiteralPath $target -PathType Leaf) {
-                # Both passes own the same game-relative source. Do not
-                # overwrite one with the other or claim composition.
-                $bbConflictCount++
+                # The owner blackboard matcher has already verified the exact
+                # unmodified source statement inside the current effective
+                # preview. Its output contains BOTH rewrites. Verify that no
+                # existing generic marker disappeared before replacing only
+                # this disposable CI stage file.
+                $prior = Get-Content -LiteralPath $target -Raw
+                $merged = Get-Content -LiteralPath $file.FullName -Raw
+                $priorMarkers = @([regex]::Matches($prior,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                if ($priorMarkers.Count -lt 1) {
+                    throw 'GCO_BLACKBOARD_COMPOSITION_UNVERIFIED_PRIOR_OWNER'
+                }
+                foreach ($marker in $priorMarkers) {
+                    if (!$merged.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_BLACKBOARD_COMPOSITION_DROPPED_PREVIOUS_RULE'
+                    }
+                }
+                Copy-Item -LiteralPath $file.FullName -Destination $target -Force -ErrorAction Stop
+                $bbComposedCount++
                 continue
             }
             New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
             Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
             $bbStageCount++
         }
-        if ($bbStageCount + $bbConflictCount -ne $bbFiles.Count) {
+        if ($bbStageCount + $bbComposedCount -ne $bbFiles.Count) {
             throw 'GCO_BLACKBOARD_DEFINITION_MERGE_ACCOUNTING_FAILED'
         }
         Write-Host ('PASS GCO blackboard immutable-definition source preview: eligible=' +
             $bbCount + ' files=' + $bbFiles.Count + ' stagedDisjoint=' +
-            $bbStageCount + ' deferredFileCollisions=' + $bbConflictCount +
-            ' originalSourceUntouched=true deployable=false')
+            $bbStageCount + ' composedSameFile=' + $bbComposedCount +
+            ' deferredFileCollisions=0 originalSourceUntouched=true deployable=false')
     }
     else {
         Write-Host 'GCO blackboard definitions: no matching source shape; no files staged.'
