@@ -216,6 +216,83 @@ protected cb func OnAction(action: ListenerAction,
         self.assertFalse(original_callback["generationAuthorized"])
         self.assertEqual(self.b.read_bytes(), before)
 
+    def test_fact_guard_slice_preserves_independent_tail_and_action_wrapper(self):
+        # An early-return fact predicate can isolate its own condition while
+        # the rest of Update still has UI work. A different OnAction retains
+        # its original wrappedMethod, even for the SAME exact watched fact.
+        modified = SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        if (this.m_quests.GetFact(n"test_shared_fact") == 0) {\n'
+            '            return;\n'
+            '        }\n'
+            '        this.UpdateHudState();\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(modified, encoding="utf8")
+        action = '''
+@wrapMethod(PlayerPuppet)
+protected cb func OnAction(action: ListenerAction,
+                           consumer: ListenerActionConsumer) -> Bool {
+    let qs: ref<QuestsSystem> = GameInstance.GetQuestsSystem(this.GetGame());
+    if (!IsDefined(qs) || qs.GetFact(n"test_shared_fact") == 0) {
+        return wrappedMethod(action, consumer);
+    }
+    return wrappedMethod(action, consumer);
+}
+'''
+        self.b.write_text(SOURCE_B + action, encoding="utf8")
+        originals = (self.a.read_bytes(), self.b.read_bytes())
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        report = json.loads(self.out.read_text())
+        slices = report["questFactGuardSlices"]
+        self.assertEqual(report["factGuardSliceCandidates"], len(slices))
+        self.assertGreaterEqual(len(slices), 2)
+        self.assertTrue(report["factGuardSlicesAreResearchOnly"])
+        self.assertFalse(report["anyFactGuardSliceRewriteAuthorized"])
+        update = next(x for x in slices if x["source"]["method"] == "Update")
+        action_guard = next(x for x in slices
+                            if x["source"]["method"] == "OnAction")
+        self.assertEqual(update["exactLiteralFactNames"],
+                         ["test_shared_fact"])
+        self.assertTrue(update["branchIsReturnOnly"])
+        self.assertGreater(update["followingCallsiteShapes"], 0)
+        self.assertTrue(action_guard["originalWrappedMethodInBranch"])
+        self.assertIn("IsDefined", action_guard["otherPredicateCalls"])
+        self.assertFalse(action_guard["branchIsReturnOnly"])
+        self.assertIn("ORIGINAL_WRAPPEDMETHOD_MUST_RUN",
+                      action_guard["additionalBlockers"])
+        for item in slices:
+            self.assertEqual(item["firstUnresolvedGate"],
+                             "FACT_ENGINE_NOTIFICATIONS_AND_ALL_WRITERS_UNPROVEN")
+            self.assertFalse(item["allFactMutationsObserved"])
+            self.assertFalse(item["completePredicateEffectsProven"])
+            self.assertFalse(item["originalMethodSemanticsPreserved"])
+            self.assertFalse(item["generationAuthorized"])
+            self.assertTrue(item["measuredMethodCostIsNotFactGuardCostOrSavings"])
+        self.assertEqual((self.a.read_bytes(), self.b.read_bytes()), originals)
+
+    def test_fact_guard_partial_dynamic_input_is_explicitly_unproven(self):
+        modified = SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        if (this.m_quests.GetFact(n"test_shared_fact") == 0 &&\n'
+            '            this.m_quests.GetFact(this.DynamicName()) == 1) {\n'
+            '            return;\n'
+            '        }\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(modified, encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        report = json.loads(self.out.read_text())
+        hit = next(x for x in report["questFactGuardSlices"]
+                   if x["source"]["method"] == "Update")
+        self.assertEqual(hit["dynamicReads"], 1)
+        self.assertEqual(hit["literalReads"], 1)
+        self.assertIn("DYNAMIC_FACT_IN_SAME_PREDICATE",
+                      hit["additionalBlockers"])
+        self.assertFalse(hit["generationAuthorized"])
+
     def test_helper_without_exact_owner_and_source_is_not_trusted(self):
         modified = SOURCE_A.replace(
             '        let unknown = this.m_quests.GetFact(this.DynamicName());',

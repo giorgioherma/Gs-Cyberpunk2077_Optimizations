@@ -634,6 +634,39 @@ try {
         ' unresolvedHelperReads=' + $unresolvedHelpers.Count +
         ' fullSkipAuthorized=0 partialGetterReplaceAuthorized=0 originalPathsPreserved=true')
 
+    # Partial consumer research: exact fact guard slices may coexist with
+    # changing method arguments, wrapper effects and independent UI work.
+    # Rank by measured METHOD work only; never claim avoidable guard cost.
+    $factGuards = @($qFacts.questFactGuardSlices)
+    $factGuardMeasured = @($factGuards | Where-Object { $_.sourceMeasuredMethod -eq $true })
+    $factGuardReturns = @($factGuards | Where-Object { $_.branchIsReturnOnly -eq $true })
+    $factGuardWrapped = @($factGuards | Where-Object { $_.originalWrappedMethodInBranch -eq $true })
+    if ([int]$qFacts.factGuardSliceCandidates -ne $factGuards.Count -or
+        [int]$qFacts.factGuardSliceSourceMeasured -ne $factGuardMeasured.Count -or
+        [int]$qFacts.factGuardSliceEarlyReturnShapes -ne $factGuardReturns.Count -or
+        [int]$qFacts.factGuardSliceOriginalWrappedMethodBranches -ne $factGuardWrapped.Count -or
+        $qFacts.factGuardSlicesAreResearchOnly -ne $true -or
+        $qFacts.anyFactGuardSliceRewriteAuthorized -ne $false -or
+        $factGuards.Count -lt 1) {
+        throw 'GCO_FACT_GUARD_SLICE_ACCOUNTING_OR_PROVENANCE_FAILED'
+    }
+    foreach ($guard in $factGuards) {
+        if ($guard.firstUnresolvedGate -ne 'FACT_ENGINE_NOTIFICATIONS_AND_ALL_WRITERS_UNPROVEN' -or
+            $guard.completePredicateEffectsProven -ne $false -or
+            $guard.allFactMutationsObserved -ne $false -or
+            $guard.originalMethodSemanticsPreserved -ne $false -or
+            $guard.generationAuthorized -ne $false -or
+            $guard.measuredMethodCostIsNotFactGuardCostOrSavings -ne $true -or
+            [int]$guard.literalReads -lt 1) {
+            throw 'GCO_FACT_GUARD_SLICE_UNSAFE_ADMISSION'
+        }
+    }
+    Write-Host ('PASS GCO partial fact guard slices: sourceGuardCandidates=' +
+        $factGuards.Count + ' sourceMeasuredMethodCandidates=' +
+        $factGuardMeasured.Count + ' lexicalReturnOnly=' +
+        $factGuardReturns.Count + ' wrapperMustRun=' +
+        $factGuardWrapped.Count + ' generationAuthorized=0 predictedSavings=0')
+
     Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
         $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
         ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +

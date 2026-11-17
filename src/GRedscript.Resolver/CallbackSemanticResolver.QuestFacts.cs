@@ -180,6 +180,7 @@ internal static partial class CallbackSemanticResolver
             .ThenBy(x => x.methodLine).ToArray();
 
         var subscriberEvidence = InspectQuestSubscribers(methods, measured);
+        var guardSlices = InspectQuestFactGuardSlices(methods, measured);
         var report = new
         {
             schemaVersion = "gco.redscript.quest-fact.graph.v1",
@@ -215,6 +216,13 @@ internal static partial class CallbackSemanticResolver
                 r => r.ReadShape == "SAME_OWNER_QUEST_WRAPPER_SHAPE"),
             unresolvedSameOwnerHelperReads = subscriberEvidence.Readers.Count(
                 r => r.ReadShape == "UNRESOLVED_SAME_OWNER_HELPER"),
+            factGuardSliceCandidates = guardSlices.Length,
+            factGuardSliceSourceMeasured = guardSlices.Count(x => x.SourceMatchedMeasured),
+            factGuardSliceEarlyReturnShapes = guardSlices.Count(x => x.EarlyReturnOnly),
+            factGuardSliceOriginalWrappedMethodBranches =
+                guardSlices.Count(x => x.OriginalWrappedMethodInBranch),
+            factGuardSlicesAreResearchOnly = true,
+            anyFactGuardSliceRewriteAuthorized = false,
             partialObservationCohortsAreResearchOnly = true,
             cannotInferOriginalGetterCanBeSkipped = true,
             anySubscriptionOrPartialRewriteAuthorized = false,
@@ -282,6 +290,34 @@ internal static partial class CallbackSemanticResolver
                 canReplaceOriginalGetter = r.CanReplaceOriginalGetter,
                 canSkipOriginalMethod = r.CanSkipOriginalMethod,
                 generationAuthorized = r.SourceMutationAuthorized
+            }),
+            questFactGuardSlices = guardSlices.Select(g => new
+            {
+                source = new { path = g.Path, owner = g.Owner, method = g.Method,
+                    methodLine = g.MethodLine },
+                guardLine = g.GuardLine,
+                exactLiteralFactNames = g.FactNames,
+                literalReads = g.LiteralReads,
+                dynamicReads = g.DynamicReads,
+                otherPredicateCalls = g.OtherPredicateCalls,
+                methodOtherDependencyHints = g.MethodDependencyCategories,
+                methodInstanceFields = g.MethodInstanceFields,
+                methodInstanceCalls = g.MethodInstanceCalls,
+                methodUsedParameters = g.MethodUsedParameters,
+                branchIsReturnOnly = g.EarlyReturnOnly,
+                originalWrappedMethodInBranch = g.OriginalWrappedMethodInBranch,
+                branchCallNames = g.BranchCallNames,
+                followingCallsiteShapes = g.FallthroughCallsites,
+                sourceMeasuredMethod = g.SourceMatchedMeasured,
+                measuredMethodOutgoingEdges = g.MeasuredMethodOutgoingEdges,
+                measuredMethodDirectExclusiveMs = g.MeasuredMethodExclusiveMs,
+                measuredMethodCostIsNotFactGuardCostOrSavings = true,
+                firstUnresolvedGate = g.FirstUnresolvedGate,
+                additionalBlockers = g.AdditionalBlockers,
+                completePredicateEffectsProven = g.CompletePredicateEffectsProven,
+                allFactMutationsObserved = g.AllFactMutationsObserved,
+                originalMethodSemanticsPreserved = g.OriginalMethodSemanticsPreserved,
+                generationAuthorized = g.PartialRewriteAuthorized
             }),
             directRefreshReaders = refreshReaders,
             callsites = sites.OrderBy(s => s.Path, StringComparer.OrdinalIgnoreCase)

@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace GRedscript.Resolver;
 
 /// <summary>
@@ -84,10 +82,14 @@ internal static partial class CallbackSemanticResolver
                         if (t[j].Value == "}") break;
                     }
                 }
+                bool braced = branchStart < method.Close &&
+                    t[branchStart].Value == "{";
+                int firstBranchToken = branchStart + (braced ? 1 : 0);
+                int branchEndExclusive = branchEnd + (braced ? 0 : 1);
                 var branch = branchEnd >= branchStart
-                    ? t.Skip(branchStart + (t[branchStart].Value == "{" ? 1 : 0))
-                        .Take(Math.Max(0, branchEnd - branchStart -
-                            (t[branchStart].Value == "{" ? 1 : 0))).ToArray()
+                    ? t.Skip(firstBranchToken)
+                        .Take(Math.Max(0, branchEndExclusive - firstBranchToken))
+                        .ToArray()
                     : Array.Empty<SourceAdmission.Token>();
                 var branchCalls = new SortedSet<string>(StringComparer.Ordinal);
                 for (int j = 0; j + 1 < branch.Length; j++)
