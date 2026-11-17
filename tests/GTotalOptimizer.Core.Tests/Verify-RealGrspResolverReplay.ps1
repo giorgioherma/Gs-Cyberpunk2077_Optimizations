@@ -7,7 +7,8 @@ param(
     [Parameter(Mandatory=$true)][string]$CompilerArchive,
     [Parameter(Mandatory=$true)][string]$CleanBaselineArchive,
     [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
-    [Parameter(Mandatory=$true)][string]$PluginsArchive
+    [Parameter(Mandatory=$true)][string]$PluginsArchive,
+    [string]$FrameworkRoot = ''
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -452,6 +453,9 @@ try {
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
     $extra = @{}
+    if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+        $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+    }
     if ($callbackCount -gt 0 -or $actionCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }

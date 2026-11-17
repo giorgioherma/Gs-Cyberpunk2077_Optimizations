@@ -7,7 +7,8 @@ param(
   [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
   [Parameter(Mandatory=$true)][string]$PluginsArchive,
   [Parameter(Mandatory=$true)][string]$ResolverDll,
-  [string]$CallbackPreviewRoot = ''
+  [string]$CallbackPreviewRoot = '',
+  [string]$FrameworkRoot = ''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -297,9 +298,36 @@ try {
       }
     }
   }
+  # Owner-owned G-REDruntime files are compiled in a separate isolated
+  # workspace, never inserted into original private source or previews.
+  $frameworkFiles=@()
+  $frameworkScripts=''
+  if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+    $frameworkGame=(Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+    if ($frameworkGame.Equals($game,[StringComparison]::OrdinalIgnoreCase) -or
+        $frameworkGame.StartsWith($game+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
+      throw 'R6_FRAMEWORK_SOURCE_MUST_BE_EXTERNAL_TO_GAME'
+    }
+    $frameworkScripts=Join-Path $frameworkGame 'r6/scripts/G-RedRuntime'
+    if (!(Test-Path -LiteralPath $frameworkScripts -PathType Container)) {
+      throw 'R6_OWNER_FRAMEWORK_SOURCE_MISSING'
+    }
+    $frameworkFiles=@(Get-ChildItem -LiteralPath $frameworkScripts -Recurse -File -Filter '*.reds')
+    if ($frameworkFiles.Count -lt 1) { throw 'R6_OWNER_FRAMEWORK_REDS_MISSING' }
+    foreach ($file in $frameworkFiles) {
+      $relative=[IO.Path]::GetRelativePath($frameworkScripts,$file.FullName)
+      if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
+          $relative.Contains(':') -or
+          ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_OWNER_FRAMEWORK_SOURCE_UNSAFE'
+      }
+    }
+    Write-Host ('R6 authoritative framework compiler input: files='+$frameworkFiles.Count)
+  }
   $outputs=@()
   $scenarios=@('untouched','optimized-preview')
   if ($callbackOverlay.Count -gt 0) { $scenarios+=@('optimized-callback-preview') }
+  if ($frameworkFiles.Count -gt 0) { $scenarios+=@('framework-untouched') }
   foreach($scenario in $scenarios) {
     $root=Join-Path $work $scenario
     $scripts=Join-Path $root 'r6/scripts'
@@ -355,8 +383,29 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
+    $addedFrameworkFiles=0
+    if ($scenario -eq 'framework-untouched') {
+      foreach($file in $frameworkFiles) {
+        $relative=[IO.Path]::GetRelativePath($frameworkScripts,$file.FullName)
+        $target=Join-Path (Join-Path $scripts 'G-RedRuntime') $relative
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+          if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+            throw 'R6_FRAMEWORK_SOURCE_COLLIDES_WITH_INSTALLED_GAME'
+          }
+          continue
+        }
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+          throw 'R6_FRAMEWORK_SOURCE_COPY_CORRUPTED'
+        }
+        $addedFrameworkFiles++
+      }
+    }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne $liveCount) {
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
@@ -378,6 +427,7 @@ try {
     $outputs+=@([pscustomobject]@{ Scenario=$scenario; Bytes=$result.Length; Sha256=$sha })
   }
   $expectedScenarios=if($callbackOverlay.Count -gt 0){3}else{2}
+  if ($frameworkFiles.Count -gt 0) { $expectedScenarios++ }
   if ($outputs.Count -ne $expectedScenarios -or
       $outputs[0].Sha256 -eq $outputs[1].Sha256) {
     throw 'R6 compiled baseline and optimized-preview caches are indistinguishable.'
@@ -385,6 +435,10 @@ try {
   if ($callbackOverlay.Count -gt 0 -and
       $outputs[0].Sha256 -eq $outputs[2].Sha256) {
     throw 'R6 compiled baseline and callback-preview caches are indistinguishable.'
+  }
+  if ($frameworkFiles.Count -gt 0 -and
+      $outputs[0].Sha256 -eq $outputs[$outputs.Count-1].Sha256) {
+    throw 'R6_FRAMEWORK_COMPILE_OUTPUT_INDISTINGUISHABLE_FROM_BASE'
   }
   $audit=Join-Path $work 'verify-source.json'
   $auditLog=Join-Path $work 'verify-source.log'
@@ -398,6 +452,8 @@ try {
       ' untouchedCacheBytes=' + $outputs[0].Bytes +
       ' optimizedCacheBytes=' + $outputs[1].Bytes +
       ' callbackPreviewFiles=' + $callbackOverlay.Count +
+      ' ownerFrameworkSourceFiles=' + $frameworkFiles.Count +
+      ' frameworkCompilationOnly=true' +
       ' compiledOutputsDistinct=true originalSourcesUntouched=true ' +
       'inputCache=USER_EFFECTIVE_CANDIDATE_NOT_VANILLA ' +
       'gameplayValidated=false deployable=false')
