@@ -80,7 +80,11 @@ public static class RedscriptGenerationPlan
         ("immutable-action-event-snapshot", "A", "ACTION_EVENT_SNAPSHOT_V1",
             "scan-action-snapshot", "preview-action-snapshot",
             "eligible", "alreadyComplete", "candidates",
-            "Native ListenerAction getter semantics or excess snapshot reads")
+            "Native ListenerAction getter semantics or excess snapshot reads"),
+        ("shared-player-signal", "C", "SHARED_PLAYER_SIGNAL_V1",
+            "scan-shared-player", "preview-shared-player",
+            "eligible", "alreadyComplete", "candidates",
+            "Player attach generation or cached handle may differ from live getter")
     ];
 
     // This generator already exists but depends on capture-matched per-loop
@@ -143,6 +147,8 @@ public static class RedscriptGenerationPlan
                         CallbackSemanticResolver.ScanPureConstantSlices(game, report); break;
                     case "immutable-action-event-snapshot":
                         CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
+                    case "shared-player-signal":
+                        GenericSharedPlayerSignalPass.Scan(game, report); break;
                     default: throw new InvalidOperationException(
                         "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
                 }
@@ -327,6 +333,9 @@ public static class RedscriptGenerationPlan
                 "immutable-action-event-snapshot" =>
                     CallbackSemanticResolver.PreviewActionEventSnapshots(game,
                         analysis, next, basePreview),
+                "shared-player-signal" =>
+                    GenericSharedPlayerSignalPass.Preview(game,
+                        analysis, next, basePreview),
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
@@ -353,7 +362,8 @@ public static class RedscriptGenerationPlan
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
                     item.Id is not ("blackboard-definitions" or
-                        "pure-constant-slices" or "immutable-action-event-snapshot"))
+                        "pure-constant-slices" or "immutable-action-event-snapshot" or
+                        "shared-player-signal"))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_UNCOMPOSABLE_SOURCE_COLLISION: " +
                         item.Id + " " + rel);
