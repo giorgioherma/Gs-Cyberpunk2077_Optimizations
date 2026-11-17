@@ -49,6 +49,8 @@ class NativeSharedAssetContracts(unittest.TestCase):
         self.root = Path(td.name)
         self.cet = self.root / "cet-package"
         self.output = self.root / "shared-overlay"
+        self.game = self.root / "game"
+        self.game.mkdir()
         dll = self.cet / "runtime/native/GCETStaticLocations.dll"
         dll.parent.mkdir(parents=True)
         dll.write_bytes(b"MZ" + b"\\0" * 2048 + b"\\0".join(REQUIRED))
@@ -57,6 +59,7 @@ class NativeSharedAssetContracts(unittest.TestCase):
         return subprocess.run(
             ["dotnet", str(DLL), "stage-shared-native",
              "--cet-runtime", str(self.cet),
+             "--game", str(self.game),
              "--out", str(self.output), *map(str, args)],
             text=True, capture_output=True, timeout=120)
 
@@ -116,6 +119,14 @@ class NativeSharedAssetContracts(unittest.TestCase):
                       r.stdout + r.stderr)
         self.assertEqual(target.read_bytes(), original)
         self.assertFalse((self.output / NATIVE).exists())
+
+    def test_refuses_to_write_into_real_game(self):
+        self.output = self.game
+        run = self.run_stage()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("SHARED_NATIVE_GAME_OUTPUT_FORBIDDEN",
+                      run.stdout + run.stderr)
+        self.assertFalse((self.game / NATIVE).exists())
 
     def test_invalid_manifest_and_missing_native_fail_without_output(self):
         invalid = self.root / "invalid"
