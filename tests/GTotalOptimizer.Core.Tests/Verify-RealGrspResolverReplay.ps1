@@ -18,6 +18,16 @@ $game = (Resolve-Path -LiteralPath $PrivateSourceRoot -ErrorAction Stop).Path
 $dll = (Resolve-Path -LiteralPath $ResolverDll -ErrorAction Stop).Path
 $auditFile = (Resolve-Path -LiteralPath $SourceAuditJson -ErrorAction Stop).Path
 $sourceAudit = Get-Content -LiteralPath $auditFile -Raw | ConvertFrom-Json
+# Validate the actual framework OWNER source before compiling it with the
+# private game stack. These negative contracts guard detach/reattach ordering,
+# generation and original pre-attach fallback, not just a feature-name marker.
+if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+    $ownerFramework = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+    & python (Join-Path $PSScriptRoot 'test_framework_player_signal.py') --framework $ownerFramework
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GREDRUNTIME_OWNER_PLAYER_LIFETIME_CONTRACT_FAILED'
+    }
+}
 $expectedSourceHash = [string]$sourceAudit.sourceStackSha256
 if ($expectedSourceHash -notmatch '^[A-Fa-f0-9]{64}$' -or
     [int]$sourceAudit.sourceFiles -le 0 -or
