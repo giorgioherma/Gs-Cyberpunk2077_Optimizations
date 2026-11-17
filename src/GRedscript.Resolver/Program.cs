@@ -23,6 +23,10 @@ internal static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-blackboard-defs")
+                return RunBlackboardDefinitionScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-blackboard-defs")
+                return RunBlackboardDefinitionPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-late-system-read")
                 return RunLateSystemScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-late-system-read")
@@ -427,6 +431,32 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript action filter preview: transformed=" +
             rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunBlackboardDefinitionScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Blackboard definition scan accepts --game, --out only");
+        var summary = GenericBlackboardDefinitionPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO blackboard definition scan: files=" + summary.Files +
+            " eligible=" + summary.Eligible + " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunBlackboardDefinitionPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Blackboard definition preview accepts --game, --analysis, --out only");
+        int count = GenericBlackboardDefinitionPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO blackboard definition preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
     }
 
