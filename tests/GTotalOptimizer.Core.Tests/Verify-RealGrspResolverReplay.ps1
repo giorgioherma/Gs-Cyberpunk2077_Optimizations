@@ -1222,6 +1222,83 @@ try {
         Write-Host 'GCO pure final-static Bool: no source-proven callsites in current stack.'
     }
 
+    # G-InputEventReuse V1: shared source-wide callback-local immutable
+    # ListenerAction decode. Do not change engine listeners, input consumers,
+    # return values or wrapped-method dispatch. Original source is untouched.
+    $snapshotScanPath = Join-Path $work 'gco-action-snapshot-scan.json'
+    $snapshotScanLog = Join-Path $work 'gco-action-snapshot-scan.log'
+    & dotnet $dll scan-action-snapshot --game $game --out $snapshotScanPath *> $snapshotScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $snapshotScanPath -PathType Leaf)) {
+        throw 'GCO_ACTION_SNAPSHOT_REAL_SOURCE_SCAN_FAILED'
+    }
+    $snapshotScan = Get-Content -LiteralPath $snapshotScanPath -Raw | ConvertFrom-Json
+    if ($snapshotScan.schemaVersion -ne 'gco.redscript.action-snapshot.scan.v1' -or
+        $snapshotScan.rule -ne 'ACTION_EVENT_SNAPSHOT_V1' -or
+        $snapshotScan.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$snapshotScan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        $snapshotScan.noModAllowlist -ne $true -or
+        $snapshotScan.rawInputConsumerAndListenerUnchanged -ne $true -or
+        $snapshotScan.productionZipAuthorized -ne $false -or
+        $snapshotScan.sourceWrites -ne $false) {
+        throw 'GCO_ACTION_SNAPSHOT_REAL_SOURCE_CONTRACT_FAILED'
+    }
+    $snapshotCount = [int]$snapshotScan.eligible
+    $snapshotMerged = 0
+    if ($snapshotCount -gt 0) {
+        $snapshotFolder = Join-Path $work 'gco-action-snapshot-preview'
+        $snapshotLog = Join-Path $work 'gco-action-snapshot-preview.log'
+        & dotnet $dll preview-action-snapshot --game $game --analysis $result --out $snapshotFolder --base-preview $callbackFolder *> $snapshotLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_ACTION_SNAPSHOT_SOURCE_PREVIEW_FAILED'
+        }
+        $snapshotScripts = Join-Path $snapshotFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $snapshotScripts -PathType Container)) {
+            throw 'GCO_ACTION_SNAPSHOT_NO_GENERATED_SOURCES'
+        }
+        $snapshotFiles = @(Get-ChildItem -LiteralPath $snapshotScripts -Recurse -Filter *.reds -File)
+        if ($snapshotFiles.Count -lt 1 -or $snapshotFiles.Count -gt $snapshotCount) {
+            throw 'GCO_ACTION_SNAPSHOT_OUTPUT_COUNT_INVALID'
+        }
+        $manualScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $snapshotFiles) {
+            $rel = [IO.Path]::GetRelativePath($snapshotScripts, $file.FullName)
+            $original = Join-Path (Join-Path $game 'r6/scripts') $rel
+            $destination = Join-Path $manualScripts $rel
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..') -or
+                $rel.Contains(':') -or !(Test-Path -LiteralPath $original -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+                (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:ACTION_EVENT_SNAPSHOT_V1') {
+                throw 'GCO_ACTION_SNAPSHOT_GENERATED_SOURCE_INVALID'
+            }
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $prior = Get-Content -LiteralPath $destination -Raw
+                $after = Get-Content -LiteralPath $file.FullName -Raw
+                $priorMarkers = @([regex]::Matches($prior,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                foreach ($marker in $priorMarkers) {
+                    if (!$after.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_ACTION_SNAPSHOT_LOST_PREVIOUS_RULE'
+                    }
+                }
+                Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+                Copy-Item -LiteralPath $file.FullName -Destination $destination -ErrorAction Stop
+            }
+            $snapshotMerged++
+        }
+        Write-Host ('PASS action-event snapshot source: avoidedGetterSites=' +
+            $snapshotCount + ' files=' + $snapshotFiles.Count +
+            ' engineRegistrationsUnchanged=true deployable=false')
+    }
+    else {
+        Write-Host 'GCO action-event snapshot: no applicable repeated input getters.'
+    }
+
     # GCO Resolver owns one ordered source plan; existing generators
     # consume it. Require identical current-source output to the legacy
     # CI orchestration before considering app generation integration.
@@ -1235,7 +1312,7 @@ try {
     if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
-        [int]$orderedPlan.implementedRuleCount -ne 7 -or
+        [int]$orderedPlan.implementedRuleCount -ne 8 -or
         [int]$orderedPlan.captureGatedExistingRules -ne 1 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
@@ -1247,14 +1324,14 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 6 -or $deferred.Count -ne 5 -or
+    if ($scheduled.Count -ne 7 -or $deferred.Count -ne 5 -or
         $gated.Count -ne 1 -or $gated[0].id -ne 'measured-cname-membership') {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
     $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
-            $lateCount + $bbCount + $pureCount)) {
+            $lateCount + $bbCount + $pureCount + $snapshotCount)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
     }
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
@@ -1305,7 +1382,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
