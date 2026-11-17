@@ -1452,7 +1452,7 @@ try {
     # Compile the REDscript native RTTI declarations from the REAL CET
     # test DLL, separate from all source-only generic passes. The owner
     # compiler then catches bad @addMethod native signatures/syntax.
-    $nativeZip = Join-Path $PSScriptRoot '../G-CETtoNATIVEplayer_state_machine/G-CET_TO_C++_PLAYER_STATE_MACHINE.zip'
+    $nativeZip = Join-Path (Get-Location) '.gco-ci-native-fixture/tests/G-CETtoNATIVEplayer_state_machine/G-CET_TO_C++_PLAYER_STATE_MACHINE.zip'
     if (!(Test-Path -LiteralPath $nativeZip -PathType Leaf)) {
         throw 'GCO_SHARED_NATIVE_REAL_DLL_FIXTURE_MISSING'
     }
