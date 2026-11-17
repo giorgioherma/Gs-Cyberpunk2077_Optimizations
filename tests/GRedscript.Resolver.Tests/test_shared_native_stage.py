@@ -76,6 +76,40 @@ class NativeSharedAssetContracts(unittest.TestCase):
         self.assertNotIn("GetWorldPosition", source)
         self.assertFalse(list(self.root.rglob("*.zip")))
 
+    def test_live_redscript_quads_compile_inert_xy_native_anchors(self):
+        target = self.game / "r6/scripts/IndependentAuthor/Areas.reds"
+        target.parent.mkdir(parents=True)
+        target.write_text("""
+module IndependentAuthor
+public class Areas {
+    public func Find() -> Bool {
+        let sites = [
+          SquareArea( // source comment safely skipped
+            new Vector2(-2.0, 3.0),
+            new Vector2( 2.0, 3.0),
+            new Vector2( 2.0, 7.0),
+            new Vector2(-2.0, 7.0)
+          )
+        ];
+        return true;
+    }
+}
+""")
+        result = self.run_stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        entries = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(entries), 1)
+        id, x, y, z, radius, xy, owner = entries[0]
+        self.assertEqual(id, 1)
+        self.assertAlmostEqual(x, 0.0)
+        self.assertAlmostEqual(y, 5.0)
+        self.assertEqual(z, 0)
+        self.assertEqual(xy, 1)
+        self.assertGreater(radius, 18)
+        self.assertGreater(owner, 100000000)
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual(decode((self.output / LOCATIONS).read_bytes()), entries)
+
     def test_cet_first_then_red_owner_merge_and_repeat_idempotent(self):
         target = self.output / LOCATIONS
         target.parent.mkdir(parents=True)
