@@ -18,7 +18,8 @@ internal static partial class CallbackSemanticResolver
 
     private sealed record FactSite(
         string Path, string Owner, string Method, int Line, string Operation,
-        string? FactName, string Resolution, long? MeasuredOutgoingEdges);
+        string? FactName, string Resolution, long? MeasuredOutgoingEdges,
+        bool QuestReceiverSourceTyped);
 
     internal static QuestFactSummary ScanQuestFactDependencies(
         string gameRoot, string outputPath, string? analysisPath)
@@ -67,11 +68,13 @@ internal static partial class CallbackSemanticResolver
                 if (fact is null) dynamic++; else literal++;
                 operations[op] = operations.GetValueOrDefault(op) + 1;
                 measured.TryGetValue(m.Identity, out var evidence);
+                bool typedReceiver = SourceDeclaresQuestReceiver(m, i);
                 sites.Add(new FactSite(m.File.Relative, m.Owner, m.Name,
                     tokens[i].Line, op, fact, fact is null ?
                     "DYNAMIC_OR_NON_CNAME_LITERAL_UNPROVEN" :
+                    typedReceiver ? "EXACT_LITERAL_DECLARED_QUEST_SYSTEM_RECEIVER" :
                     "EXACT_LITERAL_NAME_RECEIVER_UNVERIFIED",
-                    evidence?.OutgoingEdges));
+                    evidence?.OutgoingEdges, typedReceiver));
             }
         }
 
@@ -79,23 +82,28 @@ internal static partial class CallbackSemanticResolver
                 admission.FingerprintCurrentSources(), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("QUEST_FACT_SOURCE_CHANGED_DURING_SCAN");
 
-        var literalSites = sites.Where(x => x.FactName is not null).ToArray();
+        // RegisterListener also belongs to UI, resources and other systems:
+        // only source-declared QuestsSystem receivers count as fact watchers.
+        // Unknown receiver calls are visible as rejected callsite evidence.
+        var literalSites = sites.Where(x => x.FactName is not null &&
+            (x.Operation is not ("RegisterListener" or "UnregisterListener") ||
+             x.QuestReceiverSourceTyped)).ToArray();
         var factGraph = literalSites.GroupBy(x => x.FactName!,
                 StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal)
             .Select(g =>
             {
                 var listenerOwners = g.Where(x => x.Operation == "RegisterListener")
-                    .Select(x => x.Path.Split('/')[2])
+                    .Select(x => ScriptOwner(x.Path))
                     .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)
                     .ToArray();
                 return new
                 {
                     fact = g.Key,
                     sourceReaderOwners = g.Where(x => x.Operation.StartsWith("Get", StringComparison.Ordinal))
-                        .Select(x => x.Path.Split('/')[2]).Distinct(StringComparer.Ordinal)
+                        .Select(x => ScriptOwner(x.Path)).Distinct(StringComparer.Ordinal)
                         .OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                     sourceWriterOwners = g.Where(x => x.Operation.StartsWith("Set", StringComparison.Ordinal))
-                        .Select(x => x.Path.Split('/')[2]).Distinct(StringComparer.Ordinal)
+                        .Select(x => ScriptOwner(x.Path)).Distinct(StringComparer.Ordinal)
                         .OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                     literalListenerOwners = listenerOwners,
                     crossOwnerRegistered = listenerOwners.Length > 1,
@@ -123,6 +131,13 @@ internal static partial class CallbackSemanticResolver
             literalCallsites = literal,
             dynamicOrUnresolvedCallsites = dynamic,
             distinctLiteralFactNames = factGraph.Length,
+            lexicalListenerCallsitesReceiverUnverified =
+                sites.Count(x => x.Operation is "RegisterListener" or "UnregisterListener" &&
+                    !x.QuestReceiverSourceTyped),
+            literalQuestListenerCallsitesSourceTyped =
+                sites.Count(x => x.QuestReceiverSourceTyped &&
+                    x.FactName is not null &&
+                    x.Operation is "RegisterListener" or "UnregisterListener"),
             factsWithCrossOwnerLiteralRegistrations =
                 factGraph.Count(g => g.crossOwnerRegistered),
             operations,
@@ -139,6 +154,7 @@ internal static partial class CallbackSemanticResolver
                 .ThenBy(s => s.Line).Select(s => new {
                     s.Path, s.Owner, s.Method, s.Line, s.Operation, s.FactName,
                     s.Resolution, s.MeasuredOutgoingEdges,
+                    questReceiverSourceTyped = s.QuestReceiverSourceTyped,
                     engineReceiverProven = false,
                     stateChangeCallbackGuaranteed = false,
                     originalCallbackBehaviorPreserved = false,
@@ -153,4 +169,26 @@ internal static partial class CallbackSemanticResolver
             literal, dynamic, factGraph.Length,
             factGraph.Count(g => g.crossOwnerRegistered));
     }
+    private static string ScriptOwner(string path)
+    {
+        var segments = path.Split('/');
+        return segments.Length > 4 ? segments[2] : "ROOT_LEVEL";
+    }
+
+    private static bool SourceDeclaresQuestReceiver(MethodSource method, int opIndex)
+    {
+        var t = method.File.Tokens;
+        if (opIndex < 2 || t[opIndex - 1].Value != ".") return false;
+        var receiver = t[opIndex - 2].Value;
+        if (!Ident(receiver)) return false;
+        // Only explicit ref<QuestsSystem> or wref<QuestsSystem> declarations
+        // qualify. An arbitrary qs/questsSys name is never sufficient.
+        for (int i = 0; i + 4 < t.Count; i++)
+            if (t[i].Value == receiver && t[i + 1].Value == ":" &&
+                t[i + 2].Value is "ref" or "wref" &&
+                t[i + 3].Value == "<" && t[i + 4].Value == "QuestsSystem")
+                return true;
+        return false;
+    }
+
 }
