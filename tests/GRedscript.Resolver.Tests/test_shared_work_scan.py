@@ -158,6 +158,67 @@ class SharedWorkClassificationTests(unittest.TestCase):
         self.assertTrue(all(c["directInstrumentedMs"] is None
                             for c in j["candidates"]))
 
+    def test_all_methods_get_overlap_counts_and_unproven_triggers(self):
+        r = self.scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.report.read_text(encoding="utf8"))
+        self.assertTrue(j["sourceDependencyCategoriesAreLexicalObservations"])
+        self.assertTrue(j["sharedTriggersAreHypothesesNotPublishers"])
+        self.assertTrue(j["directInstanceFieldsAreNotCompleteWriterGraph"])
+        self.assertEqual(j["directDependencyCategoryCounts"]["INSTANCE_FIELDS"], 3)
+        self.assertEqual(j["directDependencyCategoryCounts"]["CALLBACK_ARGUMENTS"], 1)
+        self.assertEqual(j["directDependencyCategoryCounts"]["UI_WIDGET"], 2)
+        self.assertEqual(sum(j["primaryCandidateSharedTriggerCounts"].values()), 3)
+        rows = {x["source"]["method"]: x for x in j["candidates"]}
+        update = rows["Update"]["directDependencies"]
+        self.assertEqual(update["usedCallbackParameters"], ["timeLeft"])
+        self.assertEqual(update["instanceFields"], ["m_lastProgress", "m_widget"])
+        self.assertIn("CALLBACK_ARGUMENT_FRESHNESS", update["possibleSharedTriggers"])
+        self.assertIn("TIMER_ANIMATION_FRAME", update["possibleSharedTriggers"])
+        self.assertFalse(update["completeWriterGraphProven"])
+        self.assertFalse(update["sharedTriggerProven"])
+        self.assertFalse(rows["Tick"]["safeToSkipBody"])
+
+    def test_instance_method_call_is_not_misreported_as_field_read(self):
+        self.original.write_text(SOURCE.replace(
+            'this.m_widget.SetText("unchanged?");',
+            'this.RunDiagnostics();\n        this.m_widget.SetText("unchanged?");'
+        ), encoding="utf8")
+        r = self.scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.report.read_text(encoding="utf8"))
+        row = next(x for x in j["candidates"] if x["source"]["method"] == "Refresh")
+        deps = row["directDependencies"]
+        self.assertIn("RunDiagnostics", deps["instanceMethodCalls"])
+        self.assertNotIn("RunDiagnostics", deps["instanceFields"])
+        self.assertIn("m_widget", deps["instanceFields"])
+        self.assertIn("TRANSITIVE_METHOD_EFFECTS_NOT_RESOLVED",
+                      deps["possibleSharedTriggers"])
+        self.assertFalse(row["safeToSkipBody"])
+
+    def test_player_identity_does_not_authorize_spatial_or_event_skip(self):
+        self.original.write_text(SOURCE.replace(
+            'this.m_widget.SetText("unchanged?");',
+            'let player = GameInstance.GetPlayer(this.GetGame());\n'
+            '        let pos = player.GetWorldPosition();\n'
+            '        this.QueueEvent(new SomeEvent());\n'
+            '        this.m_widget.SetText("unchanged?");'
+        ), encoding="utf8")
+        r = self.scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.report.read_text(encoding="utf8"))
+        row = next(x for x in j["candidates"] if x["source"]["method"] == "Refresh")
+        hints = row["directDependencies"]
+        for expected in ("PLAYER_IDENTITY", "WORLD_SPATIAL", "EVENT_LIFECYCLE",
+                         "UI_WIDGET", "INSTANCE_METHOD_CALLS"):
+            self.assertIn(expected, hints["observedCategoryHints"])
+        self.assertIn("PLAYER_ATTACH_DETACH_IDENTITY_ONLY",
+                      hints["possibleSharedTriggers"])
+        self.assertIn("POSITION_NEARFAR_NEEDS_EXACT_PROOF",
+                      hints["possibleSharedTriggers"])
+        self.assertFalse(hints["sharedTriggerProven"])
+        self.assertFalse(row["generationAuthorized"])
+
     def test_output_isolation_and_no_overwrites(self):
         r = self.scan(out=self.game / "r6/scripts/injected.json")
         self.assertNotEqual(r.returncode, 0)
