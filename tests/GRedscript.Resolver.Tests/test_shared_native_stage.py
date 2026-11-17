@@ -12,7 +12,7 @@ DLL = ROOT / "src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dl
 PROJECT = ROOT / "src/GRedscript.Resolver/GRSP.Resolver.csproj"
 NATIVE = "red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll"
 LOCATIONS = "red4ext/plugins/G-CET-StaticLocations/G-CET.locations"
-BRIDGE = "r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds"
+BRIDGE = "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds"
 REQUIRED = (
     b"ScriptGameInstance", b"GCETStaticReady",
     b"GCETStaticCoordinatorState", b"GCETStaticOwnerCount",
@@ -51,6 +51,15 @@ class NativeSharedAssetContracts(unittest.TestCase):
         self.output = self.root / "shared-overlay"
         self.game = self.root / "game"
         self.game.mkdir()
+        self.framework = self.root / "G-REDruntime"
+        self.bridge_source = (self.framework /
+            "optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds")
+        self.bridge_source.parent.mkdir(parents=True)
+        self.bridge_source.write_text("""module GRedRuntime
+@addMethod(GameInstance)
+public static native func GCETStaticSubscribe(consumer: Int32, owner: Int32) -> Bool
+public class GCETNativeLocationBackend extends NativeLocationBackend {}
+""", encoding="utf-8")
         dll = self.cet / "runtime/native/GCETStaticLocations.dll"
         dll.parent.mkdir(parents=True)
         dll.write_bytes(b"MZ" + b"\\0" * 2048 + b"\\0".join(REQUIRED))
@@ -60,6 +69,7 @@ class NativeSharedAssetContracts(unittest.TestCase):
             ["dotnet", str(DLL), "stage-shared-native",
              "--cet-runtime", str(self.cet),
              "--game", str(self.game),
+             "--framework", str(self.framework),
              "--out", str(self.output), *map(str, args)],
             text=True, capture_output=True, timeout=120)
 
@@ -70,8 +80,9 @@ class NativeSharedAssetContracts(unittest.TestCase):
         self.assertEqual(decode((self.output / LOCATIONS).read_bytes()), [])
         source = (self.output / BRIDGE).read_text()
         self.assertIn("@addMethod(GameInstance)", source)
-        self.assertIn("public static native func GCETPlayerVector4Live()", source)
-        self.assertIn("return -1;", source)
+        self.assertIn("public static native func GCETStaticSubscribe(", source)
+        self.assertIn("extends NativeLocationBackend", source)
+        self.assertEqual(source, self.bridge_source.read_text())
         self.assertNotIn("Schedule.Every", source)
         self.assertNotIn("GetWorldPosition", source)
         self.assertFalse(list(self.root.rglob("*.zip")))
@@ -161,6 +172,14 @@ public class Areas {
         self.assertIn("SHARED_NATIVE_GAME_OUTPUT_FORBIDDEN",
                       run.stdout + run.stderr)
         self.assertFalse((self.game / NATIVE).exists())
+
+    def test_missing_authoritative_framework_backend_is_not_generated(self):
+        self.bridge_source.unlink()
+        run = self.run_stage()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_MISSING",
+                      run.stdout + run.stderr)
+        self.assertFalse((self.output / BRIDGE).exists())
 
     def test_invalid_manifest_and_missing_native_fail_without_output(self):
         invalid = self.root / "invalid"
