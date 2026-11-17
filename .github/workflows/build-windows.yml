@@ -165,6 +165,7 @@ jobs:
           path: unified/.gco-ci-private-redscript
           sparse-checkout: |
             GCO-Capture-15112026_021913/r6/scripts
+            r6/scripts
             Compiler
           sparse-checkout-cone-mode: true
       - name: Audit private REDscript stack with GCO-local REDscript CLI
@@ -247,6 +248,791 @@ jobs:
                       " native=" + $audit.nativeExternalDeclarations +
                       " declarationOnly=" + $audit.declarationOnlySignatures +
                       " expression=" + $audit.expressionBodiedFunctions)
+      # This is the current repository snapshot, NOT the historical source
+      # that generated the sealed GRSP fixture. Replay/SCC below deliberately
+      # retains the archived game-root source and its capture-matched SHA.
+      - name: Audit newer REDscript source independently of sealed capture replay
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = Join-Path (Get-Location) '.gco-ci-private-redscript'
+          $scripts = Join-Path $game 'r6/scripts'
+          $historical = Join-Path $game 'GCO-Capture-15112026_021913/r6/scripts'
+          if (!(Test-Path -LiteralPath $scripts -PathType Container) -or
+              !(Test-Path -LiteralPath $historical -PathType Container)) {
+            throw 'GCO_FRESH_AND_HISTORICAL_SOURCE_ROOTS_REQUIRED'
+          }
+          $files = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
+          if ($files.Count -lt 100) { throw 'GCO_FRESH_SOURCE_INVENTORY_INCOMPLETE' }
+          $before = @{}
+          foreach ($file in $files) {
+            if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'GCO_FRESH_SOURCE_REPARSE_POINT_REFUSED'
+            }
+            $relative = [IO.Path]::GetRelativePath($scripts, $file.FullName)
+            if ($before.ContainsKey($relative)) { throw 'GCO_FRESH_SOURCE_DUPLICATE_PATH' }
+            $before[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $auditPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-redscript-audit.json'
+          $auditLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-redscript-audit.log'
+          & dotnet $dll source-audit --game $game --out $auditPath *> $auditLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $auditPath -PathType Leaf)) {
+            throw 'GCO_FRESH_SOURCE_AUDIT_FAILED'
+          }
+          $audit = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
+          if ($audit.schemaVersion -ne 'grsp.source.audit.v1' -or
+              $audit.sourceFiles -ne $files.Count -or
+              $audit.sourceStackSha256 -notmatch '^[A-Fa-f0-9]{64}
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit=Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.json'
+          $privateLog=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.log'
+          & dotnet $dll scan-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_PRIVATE_CALLBACK_SCAN_FAILED'
+          }
+          $scan=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.callback.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.callbackMethods -lt 1 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceWrites -ne $false) {
+            throw 'GCO_CALLBACK_SCAN_CONTRACT_FAILED'
+          }
+          # No private paths, source lines or raw scan JSON leave the runner.
+          Write-Host ('PASS GCO generic callback inventory: files=' + $scan.sourceFiles +
+            ' callbacks=' + $scan.callbackMethods +
+            ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
+            ' already=' + $scan.fixedCnameIndexAlreadyComplete +
+            ' generated=0 originalSourcesUntouched=true')
+      - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $report = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.log'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          & dotnet $dll resolve-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+              throw 'GCO_CALLBACK_SEMANTICS_SOURCE_CLASSIFICATION_FAILED'
+          }
+          $analysis = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json -Depth 70
+          if ($analysis.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
+              $analysis.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $analysis.sourceFiles -ne $audit.sourceFiles -or
+              [int]$analysis.classifiedCallbacks -le 45 -or
+              [int]$analysis.onActionMethods -lt 45 -or
+              [int]$analysis.playerPuppetOnActionWrappers -lt 1 -or
+              [int]$analysis.callbacksWithForwardedHelpers -lt 1 -or
+              [int]$analysis.recipeCandidateCounts.G_INPUT_ROUTE -lt 45 -or
+              $analysis.generationAuthorized -ne $false -or
+              $analysis.actionSelectorCompletenessProven -ne $false -or
+              $analysis.callbackEntryCountsKnown -ne $false -or
+              $analysis.sourceWrites -ne $false) {
+              throw 'GCO_CALLBACK_SEMANTICS_WHOLE_STACK_CONTRACT_FAILED'
+          }
+          Write-Host ('PASS full-stack CET-style REDscript callback classification:' +
+              ' callbacks=' + $analysis.classifiedCallbacks +
+              ' OnAction=' + $analysis.onActionMethods +
+              ' PlayerPuppetWraps=' + $analysis.playerPuppetOnActionWrappers +
+              ' helperForwarders=' + $analysis.callbacksWithForwardedHelpers +
+              ' recipeFamilies=' + $analysis.recipeCandidateCounts.Count +
+              ' rewritten=0')
+          # The private catalog contains third-party source paths and must
+          # never become a GCO public artifact or be printed in detail.
+      - name: Scan private REDscript OnAction literal membership candidates
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.log'
+          & dotnet $dll scan-action-filter --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_FAILED'
+          }
+          $scan = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.action-filter.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.onActionMethods -le 0 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceModified -ne $false) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_CONTRACT_FAILED'
+          }
+          # No private file paths, names or candidate JSON leave the runner.
+          Write-Host ('PASS GCO generic fixed-action filter scanner: callbacks=' +
+            $scan.onActionMethods + ' sourceProven=' + $scan.eligible +
+            ' already=' + $scan.alreadyComplete + ' unproven=' + $scan.refused +
+            ' sourceWrites=0 deployable=false')
+      # Real R3 milestone: capture lives on a separate GCO commit. Check out
+      # ONLY that immutable fixture; never merge unrelated branch changes.
+      - name: Checkout exact real GRSP 15:51 capture fixture
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
+          ref: a8d355462dcc1ac5bc42ee7f41f549368676638a
+          path: unified/.gco-ci-real-grsp-capture
+          persist-credentials: false
+          sparse-checkout: |
+            tests/fixtures/real-captures
+          sparse-checkout-cone-mode: true
+      - name: Replay real sealed GRSP capture with private REDscript source
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        timeout-minutes: 12
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = '.gco-ci-real-grsp-capture/tests/fixtures/real-captures/GCO-Capture-15112026_155121.zip'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $resolver = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $sourceAudit = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
+          $ownerCompiler = 'src/GRedscript.Resolver/Verify-RealStackCompile.ps1'
+          $compilerArchive = '.gco-ci-private-redscript/Compiler/ssc.zip'
+          $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
+          $effectiveCache = '.gco-ci-private-redscript/Compiler/modded/final.zip'
+          $pluginsArchive = '.gco-ci-private-redscript/Compiler/plugins.zip'
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive
+          if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
+      - name: Remove exact real GRSP fixture checkout
+        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          if (Test-Path -LiteralPath '.gco-ci-real-grsp-capture') {
+            Remove-Item -LiteralPath '.gco-ci-real-grsp-capture' -Recurse -Force -ErrorAction Stop
+          }
+      - name: Remove private REDscript source checkout
+        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          foreach ($directory in @('.gco-ci-private-redscript')) {
+            if (Test-Path -LiteralPath $directory) {
+              Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction Stop
+            }
+          }
+      # High-value physical compiler contract: validate the exact supported
+      # upstream release archive, then exercise GCO's real path/hash detector.
+      - name: Verify official redscript 0.5.31 reference binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $zip=Join-Path $env:RUNNER_TEMP 'redscript-0.5.31-official.zip'
+          $folder=Join-Path $env:RUNNER_TEMP 'redscript-0.5.31-reference'
+          Invoke-WebRequest -Uri 'https://github.com/jac3km4/redscript/releases/download/v0.5.31/redscript-v0.5.31-windows.zip' -OutFile $zip
+          $digest=(Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash
+          if ($digest -ne '799BBD88863F6728616F8D723C941EA15DFF71ED5BBFD50C525F0D39EA0BF46B') {
+            throw "Official redscript release archive digest mismatch: $digest"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $folder -Force
+          $required=@{
+            'scc.exe'='DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD'
+            'scc_lib.dll'='49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100'
+          }
+          foreach($file in @('scc.exe','scc_lib.dll')) {
+            $matches=@(Get-ChildItem -LiteralPath $folder -Recurse -File -Filter $file)
+            if($matches.Count -ne 1) { throw "Missing or ambiguous upstream $file count=$($matches.Count)" }
+            $hash=(Get-FileHash -LiteralPath $matches[0].FullName -Algorithm SHA256).Hash
+            if ($hash -ne $required[$file]) { throw "Supported v0.5.31 $file SHA256 mismatch: $hash" }
+            Write-Host "PASS official redscript 0.5.31 $file fingerprint: $hash"
+          }
+          "GCO_REDSCRIPT_REFERENCE_GAME_ROOT=$folder" >> $env:GITHUB_ENV
+      - name: Download exact latest successful CET developer profiler artifact
+        shell: pwsh
+        working-directory: unified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
+          Write-Host 'CET dev artifact download succeeded.'
+          # Same exact CET source/run as the profiler. This reference is NOT
+          # copied wholesale into GCO (it is .NET8 self-contained); only its
+          # source-owned native service is imported, and the old binary is
+          # exercised as a behavior oracle for the rebuilt .NET10 CLI.
+          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
+          Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
+      - name: Import independently verified GRSP native instrumentation
+        shell: pwsh
+        working-directory: unified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GRSP_OWNER_RUN: ${{ steps.grsp_native_source.outputs.run_id }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $runText=[string]$env:GRSP_OWNER_RUN
+          $expected='${{ steps.grsp_native_source.outputs.sha }}'
+          if ($runText -notmatch '^[1-9][0-9]{5,18}$' -or
+              $expected -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'Missing GRSP independently verified producer identity'
+          }
+          $result=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/$runText") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $result.conclusion -ne 'success' -or
+              $result.head_sha -ne $expected -or
+              $result.head_branch -ne 'dev/native-instrumentation' -or
+              $result.event -notin @('push','workflow_dispatch')) {
+            throw 'GRSP instrumentation producer CI identity changed or is unverified'
+          }
+          $owner=(& gh api "repos/giorgioherma/GRSP-G-REDscript-Profiler/actions/workflows/$($result.workflow_id)") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $owner.path -ne '.github/workflows/native-instrumentation.yml') {
+            throw 'GRSP source-owned instrumentation workflow mismatch'
+          }
+          & gh run download $runText --repo giorgioherma/GRSP-G-REDscript-Profiler --name "GRSP-native-callback-instrumentation-$expected" --dir downloaded-grsp-native
+          if ($LASTEXITCODE -ne 0) { throw 'GRSP owner native DLL artifact download failed' }
+          $root='downloaded-grsp-native'
+          $proof=Get-Content (Join-Path $root 'provenance.json') -Raw | ConvertFrom-Json
+          if ($proof.schema -ne 1 -or
+              $proof.producer -ne 'GRSP_NATIVE_CALLBACK_INSTRUMENTATION' -or
+              $proof.sourceCommit -ne $expected -or
+              $proof.nativeVariant -ne 'gco_explicit_f11' -or
+              $proof.strictF11StopOnly -ne $true -or
+              $proof.dllSha256 -notmatch '^[0-9a-fA-F]{64}$') {
+            throw 'GRSP owner native provenance failed strict F11 and source checks'
+          }
+          $dll=Join-Path $root 'G-REDscript-Profiler.dll'
+          $hash=(Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $proof.dllSha256.ToLowerInvariant()) { throw 'GRSP owner DLL SHA256 mismatch' }
+          $sidecar=(Get-Content (Join-Path $root 'SHA256.txt') -Raw).Trim()
+          if (!$sidecar.StartsWith($hash+'  ')) { throw 'GRSP checksum sidecar mismatch' }
+          if (!(Test-Path (Join-Path $root 'Cargo.lock') -PathType Leaf)) {
+            throw 'GRSP Cargo.lock provenance missing'
+          }
+          $bytes=[IO.File]::ReadAllBytes((Resolve-Path $dll))
+          $ascii=[Text.Encoding]::ASCII.GetString($bytes)
+          foreach ($name in @('GCO-F11-Complete.flag','RSP_CallbackPressure.csv','RSP_CallbackTargets.csv','RSP_CallbackReuse.csv','RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv')) {
+            if (!$ascii.Contains($name)) { throw "GRSP native DLL missing contract $name" }
+          }
+          Write-Host "PASS source-owned GRSP native DLL: SHA256=$hash, run=$runText"
+      - name: Assemble integrated two-page GUI and profilers (one shared runtime)
+        shell: pwsh
+        working-directory: unified
+        env:
+          GCO_GRSP_NATIVE_ARTIFACT_ROOT: downloaded-grsp-native
+          GCO_GRSP_NATIVE_OWNER_RUN_ID: ${{ steps.grsp_native_source.outputs.run_id }}
+        run: |
+          & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
+      - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          $env:DOTNET_ROOT_X64=Join-Path $root 'runtime'
+          $env:DOTNET_ROOT=$env:DOTNET_ROOT_X64
+          $env:DOTNET_MULTILEVEL_LOOKUP='0'
+          $env:DOTNET_HOST_TRACE='1'
+          $env:DOTNET_HOST_TRACEFILE=Join-Path $env:RUNNER_TEMP 'Triple-Net10-Host.txt'
+          function ExecVerified([string]$executable,[string]$arguments) {
+            $info=New-Object System.Diagnostics.ProcessStartInfo
+            $info.FileName=$executable
+            $info.Arguments=$arguments
+            $info.WorkingDirectory=Split-Path $executable
+            $info.UseShellExecute=$false
+            $info.CreateNoWindow=$true
+            $info.RedirectStandardOutput=$true
+            $info.RedirectStandardError=$true
+            $process=New-Object System.Diagnostics.Process
+            $process.StartInfo=$info
+            if (!$process.Start()) { throw "Could not start $executable" }
+            $out=$process.StandardOutput.ReadToEndAsync()
+            $err=$process.StandardError.ReadToEndAsync()
+            if (!$process.WaitForExit(90000)) { $process.Kill(); throw "Process timed out: $executable" }
+            $exit=$process.ExitCode
+            $stdout=$out.GetAwaiter().GetResult()
+            $stderr=$err.GetAwaiter().GetResult()
+            $process.Dispose()
+            if ($exit -ne 0) { throw "CLI $executable $arguments exit=$exit stderr=$stderr stdout=$stdout" }
+            return $stdout
+          }
+          $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw 'Unable to resolve GCO version from MSBuild' }
+          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) { throw 'Integrated package version mismatch' }
+          $cet=Join-Path $root 'components/cet/G-CET-Runtime-Profiler.exe'
+          $grsp=Join-Path $root 'components/grsp/G-REDscript-Profiler.exe'
+          $cetHelp=ExecVerified $cet '--help'
+          if ($cetHelp -notmatch '--install') { throw "CET CLI stdout is missing: $cetHelp" }
+          $grHelp=ExecVerified $grsp '--help'
+          if ($grHelp -notmatch '--install') { throw "GRSP CLI stdout is missing: $grHelp" }
+          $fixture=Join-Path $env:RUNNER_TEMP 'Triple-RED4ext-Fixture'
+          New-Item -ItemType Directory -Force (Join-Path $fixture 'bin/x64'),(Join-Path $fixture 'bin/x64/plugins'),(Join-Path $fixture 'red4ext/plugins') | Out-Null
+          New-Item -ItemType File -Force (Join-Path $fixture 'bin/x64/Cyberpunk2077.exe') | Out-Null
+          # Regression: CET ProfilerStatus.CetState is serialized as JSON field 'cet'.
+          # Exercise the actual source-owned CET headless CLI, not a mock object.
+          $cetPre=(ExecVerified $cet ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (-not $cetPre.ok -or ($cetPre.PSObject.Properties.Name -notcontains 'cet') -or
+              $cetPre.cet -ne 'MISSING' -or $cetPre.managed -or $cetPre.captureReadyForCollection) {
+            throw "Unexpected CET status JSON schema/state: $($cetPre | ConvertTo-Json -Compress -Depth 4)"
+          }
+          Write-Host 'PASS actual CET CLI status JSON wire schema (cet/managed/captureReadyForCollection).'
+          $pre=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (!$pre.ok -or $pre.result.State -ne 'NOT_INSTALLED') { throw "GRSP preflight failed: $($pre.result.State)" }
+          try {
+            $installed=(ExecVerified $grsp ('--install --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if (!$installed.ok) { throw 'GRSP fixture installer failed' }
+            $mid=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if (!$mid.ok -or $mid.result.State -ne 'INSTALLED_CURRENT') { throw 'GRSP installed state not confirmed' }
+            $live=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler/RESULTS'
+            $ownerDll=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler.dll'
+            $ownership=Join-Path $fixture 'red4ext/plugins/G-REDscript-Profiler/.manager_state.json'
+            $installedHash=(Get-FileHash $ownerDll -Algorithm SHA256).Hash
+            $cap=Join-Path $live 'Capture_0001_CI_1000'
+            New-Item -ItemType Directory -Force $cap | Out-Null
+            'capture,rows' | Set-Content (Join-Path $cap 'GRSP_Summary.csv')
+            'COMPLETE' | Set-Content (Join-Path $cap 'GRSP_Status.txt')
+            $crashed=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if ($crashed.result.CompletedCaptureCount -ne 0) {
+              throw 'GCO GRSP accepted shutdown/crash CSVs without explicit F11 completion proof'
+            }
+            'F11_STOP' | Set-Content (Join-Path $cap 'GCO-F11-Complete.flag')
+            $complete=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if ($complete.result.CompletedCaptureCount -ne 1) {
+              throw 'GCO GRSP did not recognize verified F11-stop marker'
+            }
+            $discard=(ExecVerified $grsp ('--discard-live --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            $clean=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if (!$discard.ok -or $discard.result.discarded -lt 1 -or
+                $clean.result.CompletedCaptureCount -ne 0 -or
+                $clean.result.State -ne 'INSTALLED_CURRENT' -or
+                !(Test-Path $ownership) -or
+                (Get-FileHash $ownerDll -Algorithm SHA256).Hash -ne $installedHash -or
+                (Get-ChildItem $live -Force).Count -ne 0) {
+              throw 'GRSP discard failed to reset live data while retaining installed profiler'
+            }
+            New-Item -ItemType Directory -Force $cap | Out-Null
+            'capture,rows' | Set-Content (Join-Path $cap 'GRSP_Summary.csv')
+            'COMPLETE' | Set-Content (Join-Path $cap 'GRSP_Status.txt')
+            'F11_STOP' | Set-Content (Join-Path $cap 'GCO-F11-Complete.flag')
+            $standaloneArchives=Join-Path $root 'components/grsp/RESULTS'
+            $before=@(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count
+            Write-Host 'PASS bundled GRSP: implicit/crash export refused; F11 completion accepted; discard is source owned'
+          }
+          finally {
+            $restored=(ExecVerified $grsp ('--restore --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+            if (!$restored.ok) { throw 'GRSP fixture restore failed' }
+            $after=@(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count
+            if ($after -ne $before) {
+              throw 'GCO GRSP Restore incorrectly archived uncollected live output'
+            }
+          }
+          $post=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if ($post.result.State -ne 'NOT_INSTALLED') { throw 'GRSP fixture state remains after restore' }
+          # The same RESTORE must recover a managed GRSP install when ownership
+          # JSON is unreadable, without making a duplicate archive.
+          $again=(ExecVerified $grsp ('--install --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (!$again.ok -or !(Test-Path $ownership) -or !(Test-Path $ownerDll)) {
+            throw 'GRSP recovery fixture could not reinstall managed profiler'
+          }
+          New-Item -ItemType Directory -Force $live | Out-Null
+          'uncollected' | Set-Content (Join-Path $live 'partial.txt')
+          '{invalid-owner-json' | Set-Content $ownership
+          $damaged=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if ($damaged.result.State -ne 'INVALID_MANAGED_STATE' -or !$damaged.result.ManagedStatePresent) {
+            throw 'Damaged GRSP owner state was not recognized as managed recovery'
+          }
+          $recovered=(ExecVerified $grsp ('--restore --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          $afterRecovery=(ExecVerified $grsp ('--status --game "{0}" --json' -f $fixture)) | ConvertFrom-Json
+          if (!$recovered.ok -or $afterRecovery.result.State -ne 'NOT_INSTALLED' -or
+              (Test-Path $ownership) -or (Test-Path $ownerDll) -or
+              @(Get-ChildItem $live -Force -ErrorAction SilentlyContinue).Count -ne 0 -or
+              @(Get-ChildItem $standaloneArchives -Directory -ErrorAction SilentlyContinue).Count -ne $before) {
+            throw 'RESTORE did not recover corrupt GRSP ownership marker without archiving'
+          }
+          Write-Host 'PASS bundled GRSP restore after damaged ownership JSON; no uncollected archive.'
+          if (!(Test-Path $env:DOTNET_HOST_TRACEFILE)) { throw 'Private .NET10 host trace missing' }
+          Write-Host 'PASS CET+GRSP private .NET10 headless CLI launches and GRSP owned install/restore.'
+      - name: Test source contracts and verify the final downloadable package
+        id: verify_package
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid GCO package version from MSBuild' }
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
+          if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          # Stage 1: execute both the exact CET owner-built Resolver and our
+          # source-retargeted .NET10 Resolver against the same disposable
+          # measured-callback evidence. Do not edit sealed user captures.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-CetResolverPackage.ps1 -PackageRoot $root -OwnerArtifactRoot 'downloaded-cet-resolver'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged CET Resolver owner-equivalence contract failed' }
+          # Replay the owner's uploaded REAL sealed GCO capture (CET, GRSP,
+          # official PresentMon CSV). A disposable extraction checks every
+          # collection.json file hash and the retained Cyberpunk frame rows.
+          # This input is strictly a test fixture, never a release payload.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCaptureFixture.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'Real collected GCO CET/GRSP/PresentMon fixture contract failed' }
+          # The consolidated GCO report runs actual CET + GRSP reporter
+          # commands against the public, hash-sealed triple capture and real
+          # PresentMon QPC evidence. It does NOT require private mod sources
+          # or the expensive milestone-only CET generation replay.
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-GcoPresentMonProfilerReport.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'PresentMon-backed consolidated CET/GRSP GCO report regression failed' }
+          # Regression: transient startup PID exit must not trigger duplicate
+          # automatic ETW stop from WPF. Native observer owns that decision.
+          $wpfCapture=Get-Content 'src/GTotalOptimizer.App/MainWindow.xaml.cs' -Raw
+          if ($wpfCapture -match 'StopPresentMonAfterGameExitAsync|pendingGameExitSessionId') {
+            throw 'Duplicate WPF game-exit PresentMon stop path reintroduced'
+          }
+          $pmController=Get-Content 'src/GTotalOptimizer.App/PresentMonCaptureController.cs' -Raw
+          if ($wpfCapture -notmatch 'private void GameExited\(int pid\)' -or
+              $wpfCapture -notmatch 'pendingGameExitRefresh = true;' -or
+              $wpfCapture -notmatch 'PresentMonCaptureController.StopTrackedAsync' -or
+              $pmController -notmatch 'public static async Task.*StopTrackedAsync' -or
+              $pmController -notmatch 'await WaitForAutoStopAsync\(root, tracked\)') {
+            throw 'WPF game-exit refresh or single PresentMon controller cleanup path disappeared'
+          }
+          Write-Host 'PASS game-exit auto-stop native-only; WPF refresh and one shared controller cleanup retained'
+          foreach ($exe in @(
+            (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'),
+            (Join-Path $root 'app/G-Total-Optimizer.App.exe')
+          )) {
+            if ((Get-Item $exe).VersionInfo.FileVersion -ne "$version.0") {
+              throw "GCO executable version mismatch: $exe"
+            }
+          }
+          if ((Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim() -ne $version) {
+            throw 'VERSION.txt mismatch'
+          }
+          # Prove the source/run identity is packaged, not merely shown by CI.
+          $buildInfo=Get-Content (Join-Path $root 'BUILD-INFO.json') -Raw | ConvertFrom-Json
+          if ($buildInfo.version -ne $version -or
+              $buildInfo.sourceCommit -ne $env:GITHUB_SHA -or
+              $buildInfo.githubRunId -ne $env:GITHUB_RUN_ID -or
+              $buildInfo.githubRunAttempt -ne $env:GITHUB_RUN_ATTEMPT) {
+            throw 'Packaged build metadata disagrees with GitHub source/run/attempt'
+          }
+          $guide=Get-Content (Join-Path (Split-Path $root -Parent) 'START-HERE.txt') -Raw
+          if ($guide -notmatch [regex]::Escape("Optimizer v$version")) {
+            throw 'Visible guide version disagrees with package version'
+          }
+          Write-Host "PASS versioned guide and source/run/attempt build provenance"
+          if ((Get-ChildItem $root -Filter coreclr.dll -File -Recurse).Count -ne 1) {
+            throw 'Integrated package must bundle exactly one CLR'
+          }
+          # Prove the actual GCO Windows apphost, not just test code, resolves its
+          # shipped manifest from its own EXE location when CWD is unrelated.
+          $env:DOTNET_ROOT_X64=Join-Path $root 'runtime'
+          $env:DOTNET_ROOT=$env:DOTNET_ROOT_X64
+          $info=New-Object System.Diagnostics.ProcessStartInfo
+          $info.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
+          $info.ArgumentList.Add('--verify-package')
+          $info.WorkingDirectory=$env:RUNNER_TEMP
+          $info.UseShellExecute=$false
+          $info.CreateNoWindow=$true
+          $info.RedirectStandardOutput=$true
+          $info.RedirectStandardError=$true
+          $proc=New-Object System.Diagnostics.Process
+          $proc.StartInfo=$info
+          if (!$proc.Start()) { throw 'Could not launch the shipped GCO apphost for package check' }
+          $stdoutTask=$proc.StandardOutput.ReadToEndAsync()
+          $stderrTask=$proc.StandardError.ReadToEndAsync()
+          if (!$proc.WaitForExit(30000)) { $proc.Kill(); throw 'Shipped GCO package check timed out' }
+          $out=$stdoutTask.GetAwaiter().GetResult()
+          $err=$stderrTask.GetAwaiter().GetResult()
+          if ($proc.ExitCode -ne 0) { throw "Shipped GCO package check failed: $err $out" }
+          $check=$out | ConvertFrom-Json
+          if ($check.ok -ne $true -or $check.root -ne $root -or
+              $check.manifest -ne (Join-Path $root 'components/manifest.json')) {
+            throw "GCO process resolved the wrong package root: $out"
+          }
+          Write-Host 'PASS actual shipped GUI host detects verified component manifest from unrelated CWD'
+
+          # Offscreen WPF rendering regression: image presence in the ZIP is
+          # insufficient. The actual UI must paint bright border pixels.
+          $visual=New-Object System.Diagnostics.ProcessStartInfo
+          $visual.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
+          $visual.ArgumentList.Add('--verify-border-ui')
+          $visual.WorkingDirectory=$env:RUNNER_TEMP
+          $visual.UseShellExecute=$false
+          $visual.CreateNoWindow=$true
+          $visual.RedirectStandardOutput=$true
+          $visual.RedirectStandardError=$true
+          $wpfCheck=New-Object System.Diagnostics.Process
+          $wpfCheck.StartInfo=$visual
+          if (!$wpfCheck.Start()) { throw 'Could not run WPF outer-border regression' }
+          $wpfOutTask=$wpfCheck.StandardOutput.ReadToEndAsync()
+          $wpfErrTask=$wpfCheck.StandardError.ReadToEndAsync()
+          if (!$wpfCheck.WaitForExit(60000)) {
+            $wpfCheck.Kill()
+            throw 'WPF outer-border visual regression timed out'
+          }
+          $wpfOut=$wpfOutTask.GetAwaiter().GetResult()
+          $wpfErr=$wpfErrTask.GetAwaiter().GetResult()
+          if ($wpfCheck.ExitCode -ne 0) {
+            throw "WPF border pixels not verified: $wpfErr $wpfOut"
+          }
+          Write-Host $wpfOut
+
+          # Actual Windows process-notification contract: attach to a real
+          # short-lived child process and observe its exit, plus WMI start
+          # notification when the runner's WMI service permits it.
+          $eventInfo=New-Object System.Diagnostics.ProcessStartInfo
+          $eventInfo.FileName=Join-Path $root 'app/G-Total-Optimizer.App.exe'
+          $eventInfo.ArgumentList.Add('--verify-game-process-events')
+          $eventInfo.WorkingDirectory=$env:RUNNER_TEMP
+          $eventInfo.UseShellExecute=$false
+          $eventInfo.CreateNoWindow=$true
+          $eventInfo.RedirectStandardOutput=$true
+          $eventInfo.RedirectStandardError=$true
+          $eventCheck=New-Object System.Diagnostics.Process
+          $eventCheck.StartInfo=$eventInfo
+          if (!$eventCheck.Start()) { throw 'Cannot start Windows game-process event test' }
+          $eventOutTask=$eventCheck.StandardOutput.ReadToEndAsync()
+          $eventErrTask=$eventCheck.StandardError.ReadToEndAsync()
+          if (!$eventCheck.WaitForExit(45000)) {
+            $eventCheck.Kill()
+            throw 'Windows game-process event test timed out'
+          }
+          $eventOut=$eventOutTask.GetAwaiter().GetResult()
+          $eventErr=$eventErrTask.GetAwaiter().GetResult()
+          if ($eventCheck.ExitCode -ne 0) {
+            throw "Windows game-process events failed: $eventErr $eventOut"
+          }
+          Write-Host $eventOut
+
+          # The native launcher now forwards headless control arguments and
+          # provides the bundled private .NET10 runtime, including under UAC.
+          # This headless path does not request elevation or modify the game.
+          $native=New-Object System.Diagnostics.ProcessStartInfo
+          $native.FileName=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+          $native.ArgumentList.Add('--verify-package')
+          $native.WorkingDirectory=$env:RUNNER_TEMP
+          $native.UseShellExecute=$false
+          $native.CreateNoWindow=$true
+          $launcherCheck=New-Object System.Diagnostics.Process
+          $launcherCheck.StartInfo=$native
+          if (!$launcherCheck.Start()) { throw 'Native GCO launcher did not start' }
+          if (!$launcherCheck.WaitForExit(45000)) {
+            $launcherCheck.Kill()
+            throw 'Native launcher did not forward headless verifier and exit'
+          }
+          if ($launcherCheck.ExitCode -ne 0) {
+            throw "Native launcher/private runtime verifier failed with exit $($launcherCheck.ExitCode)"
+          }
+          Write-Host 'PASS native GCO launcher forwards args and starts verified private runtime'
+
+          # Real native lifecycle: absent WPF can be reopened from the tray,
+          # but the window X must exit both the GUI and the native host.
+          $launcherPath=Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe'
+          $tray=$null
+          $opened=$null
+          $reopened=$null
+          $autoReopened=$null
+          function FindGcoUi([int]$exclude) {
+            foreach ($p in @(Get-Process -Name 'G-Total-Optimizer.App' -ErrorAction SilentlyContinue)) {
+              try {
+                if ($p.Id -ne $exclude -and
+                    [IO.Path]::GetFullPath($p.Path) -eq (Join-Path $root 'app/G-Total-Optimizer.App.exe')) {
+                  return $p
+                }
+              } finally {
+                if ($p.Id -eq $exclude) { $p.Dispose() }
+              }
+            }
+            return $null
+          }
+          try {
+            $tray=Start-Process -FilePath $launcherPath -WorkingDirectory $root -PassThru
+            $deadline=[Diagnostics.Stopwatch]::StartNew()
+            while ($deadline.Elapsed.TotalSeconds -lt 25) {
+              if ($tray.HasExited) { throw 'Native tray terminated before managed UI launch' }
+              $opened=FindGcoUi 0
+              if ($opened -and $opened.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              if ($opened) { $opened.Dispose(); $opened=$null }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$opened) { throw 'Native tray did not launch a visible WPF process' }
+            $firstPid=$opened.Id
+            # Simulate the unloaded child; native tray must remain reopenable.
+            $opened.Kill()
+            if (!$opened.WaitForExit(15000)) { throw 'WPF child did not exit' }
+            if ($tray.HasExited) { throw 'Native tray lost after WPF child unload' }
+            # Full native lifecycle contract, no mock: without Cyberpunk or
+            # PresentMon the tray must independently reopen WPF after the
+            # ten-second game startup/relaunch protection expires.
+            $watch=Start-Process -FilePath $launcherPath -ArgumentList @('--watch-game','0123456789abcdef0123456789abcdef') -WorkingDirectory $root -PassThru -Wait
+            try {
+              if ($watch.ExitCode -ne 0) {
+                throw "Native game watcher rejected the session: exit=$($watch.ExitCode)"
+              }
+            } finally { $watch.Dispose() }
+            $deadline.Restart()
+            while ($deadline.Elapsed.TotalSeconds -lt 24) {
+              if ($tray.HasExited) { throw 'Native tray exited before game watcher completed' }
+              $autoReopened=FindGcoUi $firstPid
+              if ($autoReopened -and $autoReopened.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              if ($autoReopened) { $autoReopened.Dispose(); $autoReopened=$null }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$autoReopened) {
+              throw 'Game completion did not reopen WPF with PresentMon absent'
+            }
+            $autoReopened.Kill()
+            if (!$autoReopened.WaitForExit(15000)) {
+              throw 'Auto-reopened WPF did not exit for manual reopen regression'
+            }
+            Write-Host 'PASS native watcher returns automatically after 10 s; PresentMon absent'
+            $secondLauncher=Start-Process -FilePath $launcherPath -WorkingDirectory $root -PassThru
+            try {
+              if (!$secondLauncher.WaitForExit(10000)) {
+                throw 'Second invocation did not find the native single-instance tray'
+              }
+            } finally { $secondLauncher.Dispose() }
+            $deadline.Restart()
+            while ($deadline.Elapsed.TotalSeconds -lt 25) {
+              if ($tray.HasExited) { throw 'Native tray exited before UI could reopen' }
+              $reopened=FindGcoUi $firstPid
+              if ($reopened -and $reopened.MainWindowHandle -ne [IntPtr]::Zero) { break }
+              if ($reopened) { $reopened.Dispose(); $reopened=$null }
+              Start-Sleep -Milliseconds 250
+            }
+            if (!$reopened) { throw 'Native tray did not reopen WPF' }
+            if (!$reopened.CloseMainWindow() -or !$reopened.WaitForExit(15000)) {
+              throw 'X did not close the managed WPF GUI'
+            }
+            if (!$tray.WaitForExit(10000)) {
+              throw 'X closed WPF but left the native tray running'
+            }
+            Write-Host 'PASS native tray survives WPF unload/reopen; X fully exits WPF and tray'
+          }
+          finally {
+            if ($autoReopened) {
+              if (!$autoReopened.HasExited) { $autoReopened.Kill() }
+              $autoReopened.Dispose()
+            }
+            if ($reopened) {
+              if (!$reopened.HasExited) { $reopened.Kill() }
+              $reopened.Dispose()
+            }
+            if ($opened) {
+              if (!$opened.HasExited) { $opened.Kill() }
+              $opened.Dispose()
+            }
+            if ($tray) {
+              if (!$tray.HasExited) { $tray.Kill() }
+              $tray.Dispose()
+            }
+          }
+
+          # Artifact is a sibling guide plus one portable application folder.
+          $release=Split-Path -Parent $root
+          if ((Split-Path $root -Leaf) -ne "G's Cyberpunk 2077 Optimization") {
+            throw 'Portable app folder name differs from the public contract'
+          }
+          $guide=Join-Path $release 'START-HERE.txt'
+          if (!(Test-Path $guide -PathType Leaf)) { throw 'Missing adjacent quick-start document' }
+          if (!(Test-Path (Join-Path $root 'Gs-Cyberpunk2077_Optimizer.exe') -PathType Leaf)) {
+            throw 'Public Gs-Cyberpunk2077_Optimizer.exe is missing'
+          }
+          if (Test-Path (Join-Path $root 'START-HERE.txt')) {
+            throw 'Quick-start guide belongs beside the app folder, not inside it'
+          }
+          Write-Host 'PASS delivery: sibling START-HERE.txt + Gs-Cyberpunk2077_Optimizer.exe'
+          Write-Host "PASS finished GCO v$version package and complete owner payload manifest verification"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Replay real CET capture against updated private live-source snapshot
+        # Full 5,459-file / 14,573-frame fixture, untouched/partial/complete
+        # CET pass and 2nd-pass idempotence stay intact; run at milestones.
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealCetSourceReplay.ps1 -FixtureZip 'tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip' -PrivateSourceRoot '.gco-ci-private-cet/GCO-Capture-15112026_021913' -PackageRoot $root
+          if ($LASTEXITCODE -ne 0) { throw 'GCO real CET capture + private live-source replay failed' }
+      - name: Remove private CET source checkout
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.full_source_replay }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          if (Test-Path -LiteralPath '.gco-ci-private-cet') {
+            Remove-Item -LiteralPath '.gco-ci-private-cet' -Recurse -Force -ErrorAction Stop
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
+          # Run/attempt distinguishes rebuilt archives without bumping GCO.
+          name: Gs-Cyberpunk2077_Optimizer-v${{ steps.verify_package.outputs.version }}-run${{ github.run_number }}-a${{ github.run_attempt }}
+          path: unified/publish/release/
+          if-no-files-found: error
+ -or
+              $audit.sourceState -ne 'UNSAFE_OR_UNPROVEN' -or
+              $audit.codeRewritten -ne $false -or $audit.generatedFiles -ne 0 -or
+              $audit.compilerValidated -ne $false) {
+            throw 'GCO_FRESH_SOURCE_ADMISSION_UNPROVEN'
+          }
+          $semanticPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-callback-semantics.json'
+          $semanticLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-callback-semantics.log'
+          & dotnet $dll resolve-callbacks --game $game --out $semanticPath *> $semanticLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $semanticPath -PathType Leaf)) {
+            throw 'GCO_FRESH_CALLBACK_CLASSIFICATION_FAILED'
+          }
+          $semantic = Get-Content -LiteralPath $semanticPath -Raw | ConvertFrom-Json -Depth 70
+          if ($semantic.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
+              $semantic.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $semantic.sourceFiles -ne $audit.sourceFiles -or
+              [int]$semantic.classifiedCallbacks -le 45 -or
+              [int]$semantic.playerPuppetOnActionWrappers -lt 1 -or
+              $semantic.generationAuthorized -ne $false -or
+              $semantic.callbackEntryCountsKnown -ne $false -or
+              $semantic.sourceWrites -ne $false) {
+            throw 'GCO_FRESH_CALLBACK_CLASSIFICATION_CONTRACT_FAILED'
+          }
+          $after = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
+          if ($after.Count -ne $files.Count) { throw 'GCO_FRESH_SOURCE_INVENTORY_MUTATED' }
+          foreach ($file in $after) {
+            $relative = [IO.Path]::GetRelativePath($scripts, $file.FullName)
+            if (!$before.ContainsKey($relative) -or
+                $before[$relative] -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+              throw 'GCO_FRESH_SOURCE_BYTES_MUTATED'
+            }
+          }
+          # The old sealed capture is validated only against the old source.
+          # Report drift counts, not private filenames or source text.
+          $historicalHashes = @{}
+          foreach ($file in @(Get-ChildItem -LiteralPath $historical -File -Recurse -Filter '*.reds')) {
+            $relative = [IO.Path]::GetRelativePath($historical, $file.FullName)
+            $historicalHashes[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $modified = 0; $added = 0; $removed = 0
+          foreach ($relative in $before.Keys) {
+            if (!$historicalHashes.ContainsKey($relative)) { $added++ }
+            elseif ($historicalHashes[$relative] -ne $before[$relative]) { $modified++ }
+          }
+          foreach ($relative in $historicalHashes.Keys) {
+            if (!$before.ContainsKey($relative)) { $removed++ }
+          }
+          Write-Host ('PASS newer REDscript source read-only audit: files=' + $audit.sourceFiles +
+            ' callbacks=' + $semantic.classifiedCallbacks +
+            ' olderFixtureModified=' + $modified + ' added=' + $added + ' removed=' + $removed +
+            ' generationAuthorized=false captureIdentityNotAssumed=true')
       - name: Discover generic callback shapes in private effective REDscript stack
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
