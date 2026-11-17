@@ -570,6 +570,70 @@ try {
         $refreshMeasured.Count + ' dynamicReaders=' + $refreshDynamic.Count +
         ' completeWriterGraph=0 fullyCovered=0 generatedFiles=0')
 
+    # Compare BOTH sides of named-fact consumer compatibility: exact-name
+    # read shapes with additional state, and simple lexical read shapes.
+    # Neither cohort is allowed to delete its original getter/method, since
+    # quest engine/native writers and callbacks are not source-complete.
+    $subscriberReads = @($qFacts.questSubscriberReads)
+    $subscriberCohorts = @($qFacts.questSubscriberCohorts)
+    $wrapperReads = @($subscriberReads | Where-Object {
+        $_.readShape -eq 'SAME_OWNER_QUEST_WRAPPER_SHAPE'
+    })
+    $unresolvedHelpers = @($subscriberReads | Where-Object {
+        $_.readShape -eq 'UNRESOLVED_SAME_OWNER_HELPER'
+    })
+    $observedCount = 0
+    $crossOwner = 0
+    $mixedAndSimple = 0
+    $directAndWrapper = 0
+    foreach ($c in $subscriberCohorts) {
+        $observedCount += [int]$c.literalReadSites
+        if ($c.sharesNameAcrossOwners -eq $true) { $crossOwner++ }
+        if ($c.sharesNameAcrossMixedAndSimpleMethods -eq $true) { $mixedAndSimple++ }
+        if ($c.sharesNameAcrossDirectAndWrapperReads -eq $true) { $directAndWrapper++ }
+        if ($c.completeWriterGraphProven -ne $false -or
+            $c.callbackCoversAllMutations -ne $false -or
+            $c.lifecycleProven -ne $false -or
+            $c.sharedSubscriptionAuthorized -ne $false -or
+            $c.originalGetterReplacementAuthorized -ne $false -or
+            $c.originalMethodSkipAuthorized -ne $false) {
+            throw 'GCO_FACT_SUBSCRIBER_COHORT_UNSAFE_ADMISSION'
+        }
+    }
+    if ($qFacts.partialObservationCohortsAreResearchOnly -ne $true -or
+        $qFacts.cannotInferOriginalGetterCanBeSkipped -ne $true -or
+        $qFacts.anySubscriptionOrPartialRewriteAuthorized -ne $false -or
+        [int]$qFacts.observedLiteralFactReadSites -ne $subscriberReads.Count -or
+        [int]$qFacts.observedLiteralFactReadCohorts -ne $subscriberCohorts.Count -or
+        [int]$qFacts.identifiedSameOwnerQuestWrapperReads -ne $wrapperReads.Count -or
+        [int]$qFacts.unresolvedSameOwnerHelperReads -ne $unresolvedHelpers.Count -or
+        [int]$qFacts.crossOwnerReadCohorts -ne $crossOwner -or
+        [int]$qFacts.mixedAndLexicallySimpleCohorts -ne $mixedAndSimple -or
+        [int]$qFacts.directAndWrapperSharedCohorts -ne $directAndWrapper -or
+        $observedCount -ne $subscriberReads.Count -or
+        $subscriberReads.Count -lt 1) {
+        throw 'GCO_FACT_SUBSCRIBER_COHORT_ACCOUNTING_FAILED'
+    }
+    foreach ($read in $subscriberReads) {
+        if ($read.allWriterAndAliasPathsProven -ne $false -or
+            $read.isolatedExpressionProven -ne $false -or
+            $read.runtimeNotificationEquivalent -ne $false -or
+            $read.originalExecutionPreserved -ne $false -or
+            $read.canReplaceOriginalGetter -ne $false -or
+            $read.canSkipOriginalMethod -ne $false -or
+            $read.generationAuthorized -ne $false) {
+            throw 'GCO_FACT_SUBSCRIBER_PARTIAL_GETTER_UNSAFE_ADMISSION'
+        }
+    }
+    Write-Host ('PASS GCO bidirectional fact subscriber evidence: literalReadSites=' +
+        $subscriberReads.Count + ' exactFactCohorts=' + $subscriberCohorts.Count +
+        ' crossOwner=' + $crossOwner +
+        ' mixedAndSimple=' + $mixedAndSimple +
+        ' directPlusWrapper=' + $directAndWrapper +
+        ' sameOwnerWrapperReads=' + $wrapperReads.Count +
+        ' unresolvedHelperReads=' + $unresolvedHelpers.Count +
+        ' fullSkipAuthorized=0 partialGetterReplaceAuthorized=0 originalPathsPreserved=true')
+
     Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
         $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
         ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +
