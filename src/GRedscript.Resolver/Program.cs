@@ -21,6 +21,8 @@ internal static class Program
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "resolve-callbacks")
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-shared-work")
+                return RunSharedWorkScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-blackboard-defs")
@@ -372,6 +374,27 @@ internal static class Program
             " measuredSourceMatched=" + result.MeasuredCallbacks +
             " routeProofBlocked=" + result.UnprovenRoutes +
             " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    // R5 high-value work elimination: read-only source-wide evidence with
+    // explicit first failed prerequisite. Uses the existing callback owner
+    // parser and verified F11 callsite join; NEVER authorizes a UI skip.
+    private static int RunSharedWorkScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Shared-work scan accepts --game, --out and optional --analysis only");
+        var summary = CallbackSemanticResolver.ScanSharedWork(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? analysis)
+                ? Path.GetFullPath(analysis) : null);
+        Console.WriteLine("GCO REDscript shared work: files=" + summary.SourceFiles +
+            " methods=" + summary.ExaminedMethods +
+            " measured=" + summary.SourceMatchedMeasured +
+            " unmeasured=" + summary.Unmeasured +
+            " sourceWrites=0 deployable=false savingsClaimed=false");
         return 0;
     }
 
