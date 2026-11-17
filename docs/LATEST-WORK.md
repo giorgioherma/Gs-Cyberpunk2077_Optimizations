@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-17 — actual cross-mod loops audited, new capture not needed
+
+- The [R5 work-elimination evidence ledger](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) now separates the seven deferred mod-specific candidates from first-priority **multi-author** source transforms, using actual 2,319-file scripts and the historical F11 callsite CSV. Measured keyed collection-search patterns recur in RedWindows, GigCore, Crowd Variety Restored and illegal_mechanic; source mutability and first-match semantics currently block any automatic indexed-lookup rewrite.
+- Windowed analysis shows one 30-second Reinforcements-heavy burst contributes **39.25%** of captured instrumented work; outside 240–270s the other 354.5s average **185.006 ms/s** rather than 280.757 whole-capture. No baseline regression is established. No new captures requested unless one specific measurable fact will directly enable a valuable generic pass.
+- **Research only**, no generated mods, native changes, compiler claims or CI results added. Next agent: prioritize safe elimination of repeatedly traversed collections only if full source mutation/invalidation semantics are proved, or seek a different cross-mod family rather than faking a pass count.
+
 ## 2026-11-17 — R5 high-value generic work elimination documented
 
 - **Start here for next agent:** [R5 measured work-elimination roadmap](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) (linked from `AGENTS.md`, REDscript local handoff, documentation index and the integration progress ledger). This document ranks source/measurement-backed **whole-work removal** opportunities before any specific mod fixes. Input is the supplied November 16 genuine GRSP F11 capture, refreshed source tree, existing source/CI proofs and source-owned G-REDruntime contracts; no new code or perf claim.

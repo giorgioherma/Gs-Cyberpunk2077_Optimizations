@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — cross-author runtime/source loop audit; defer captures
+
+- **Priority correction from user:** the seven previously agreed mod-specific fixes remain R7 **at the end**; focus now only on a generic transform with demonstrated cross-author workload. Avoid speculative generic dormancy and don't ask for default idle/stress captures. Existing full F11 evidence can be subdivided into windows.
+- **Document:** [R5-WORK-ELIMINATION-OPPORTUNITIES.md](R5-WORK-ELIMINATION-OPPORTUNITIES.md) now has an explicit **G-KeyedCollectionIndex** cross-author candidate, measured non-shortlist source matches and clear mutation/duplicate-key/invalidation blockers. No code was authorized.
+- **Important time-window bias:** 240–270 s contributes **39.25%** of all captured instrumented REDscript time. Excluding that interval yields **185.006 instrumented ms/s** vs **280.757 ms/s** whole-run. Do not infer a real 90→300 regression from unmatched captures.
+- **Broad source evidence:** 868 approximate `for` headers over 85 mod folders, 1,398 `while < ArraySize` over 95; 69 measured direct-size loop comparisons from 29 non-shortlist folders represent only **161.0 ms** recorded comparison work in 384.5 s. Large-keyed-scan examples occur across independent owners such as RedWindows, GigCore, Crowd Variety Restored and illegal_mechanic; direct proof of mutable collection invalidation still missing. No `ArraySize` micro-pass is justified by current cost evidence.
+- **Scope:** read-only analysis and documentation, no new CI assertion, no source rewrite, no GRSP hook, no game installation, no capture requested. Preserve GCO `main`, one UI/ZIP and repository ownership.
+
 ## 2026-11-17 — new measured R5 research priority: eliminate whole work
 
 - **Authoritative new-agent entrypoint:** [R5-WORK-ELIMINATION-OPPORTUNITIES.md](R5-WORK-ELIMINATION-OPPORTUNITIES.md). Read actual 2026-11-16 F11 `GCO-Capture-16112026_132224.zip` JSON and CSV in addition to the refreshed live `original_cet_source/main/r6/scripts`, current G-REDruntime API, agreed backlog and existing R5 evidence plan.
