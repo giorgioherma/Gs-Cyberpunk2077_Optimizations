@@ -220,8 +220,6 @@ public static class SharedNativeRuntimeStage
         @addMethod(GameInstance)
         public static native func GCETPlayerVector4Valid() -> Bool
 
-        module GRedRuntime
-
         public abstract class GCOSharedNativeBridge {
             public static func IsReady() -> Bool {
                 return GameInstance.GCETStaticReady() &&
