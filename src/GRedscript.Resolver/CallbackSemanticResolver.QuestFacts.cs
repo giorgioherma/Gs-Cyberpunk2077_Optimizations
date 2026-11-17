@@ -181,6 +181,7 @@ internal static partial class CallbackSemanticResolver
 
         var subscriberEvidence = InspectQuestSubscribers(methods, measured);
         var partialInputs = InspectQuestPartialValueInputs(methods, subscriberEvidence);
+        var partialByFact = partialInputs.ToLookup(x => x.FactName, StringComparer.Ordinal);
         var report = new
         {
             schemaVersion = "gco.redscript.quest-fact.graph.v1",
@@ -219,6 +220,15 @@ internal static partial class CallbackSemanticResolver
                 partialInputs.Count(x => x.FactUsedInsideCondition),
             partialInputsDoNotRequireWholeMethodEligibility = true,
             anyPartialInputOriginalGetterReplacementAuthorized = false,
+            partialFactCohortsWithDifferentValueUses =
+                subscriberEvidence.Cohorts.Count(c => partialByFact[c.FactName]
+                    .Select(x => x.ValueUseShape)
+                    .Distinct(StringComparer.Ordinal).Count() > 1),
+            partialFactCohortsWithConditionalAndNonconditionalInputs =
+                subscriberEvidence.Cohorts.Count(c =>
+                    partialByFact[c.FactName].Any(x => x.FactUsedInsideCondition) &&
+                    partialByFact[c.FactName].Any(x => !x.FactUsedInsideCondition)),
+            partialCohortsAreReadOnlyResearch = true,
             observedLiteralFactReadCohorts = subscriberEvidence.Cohorts.Length,
             directAndWrapperSharedCohorts = subscriberEvidence.WrapperCohorts,
             mixedAndLexicallySimpleCohorts = subscriberEvidence.MixedCohorts,
@@ -268,6 +278,27 @@ internal static partial class CallbackSemanticResolver
                 lifecycleProven = c.ConsumerLifecycleProven,
                 sharedSubscriptionAuthorized = c.SharedSubscriptionAuthorized,
                 originalGetterReplacementAuthorized = c.AnyOriginalGetterReplacementAuthorized,
+                partialValueInputSites = partialByFact[c.FactName].Count(),
+                partialValueInputsInMixedMethods = partialByFact[c.FactName]
+                    .Count(x => x.MethodHasUnrelatedInputs),
+                partialValueInputsWithConditions = partialByFact[c.FactName]
+                    .Count(x => x.FactUsedInsideCondition),
+                partialValueInputsAssignedToLocals = partialByFact[c.FactName]
+                    .Count(x => x.LocalName is not null),
+                partialValueInputsSourceMeasured = partialByFact[c.FactName]
+                    .Count(x => x.SourceMatchedMeasured),
+                partialValueUseShapes = partialByFact[c.FactName]
+                    .Select(x => x.ValueUseShape)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(x => x, StringComparer.Ordinal).ToArray(),
+                containsConditionalAndOtherValueUses =
+                    partialByFact[c.FactName].Any(x => x.FactUsedInsideCondition) &&
+                    partialByFact[c.FactName].Any(x => !x.FactUsedInsideCondition),
+                containsLocalAndInlineConditionalUses =
+                    partialByFact[c.FactName].Any(x => x.LocalName is not null) &&
+                    partialByFact[c.FactName].Any(x =>
+                        x.ValueUseShape == "INLINE_CONDITIONAL_INPUT"),
+                partialInputRelationIsSourceOnly = true,
                 originalMethodSkipAuthorized = c.AnyOriginalMethodSkipAuthorized
             }),
             questSubscriberReads = subscriberEvidence.Readers.Select(r => new

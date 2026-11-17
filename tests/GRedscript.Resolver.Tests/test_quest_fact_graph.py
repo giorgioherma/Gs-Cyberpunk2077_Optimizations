@@ -313,6 +313,48 @@ protected cb func OnAction(action: ListenerAction,
         self.assertFalse(active["originalNonfactWorkPreserved"])
         self.assertFalse(active["generationAuthorized"])
 
+    def test_partial_fact_cohorts_compare_mixed_and_compatible_value_uses(self):
+        # Same exact input can feed locals, refresh and OnAction even if
+        # those methods cannot share their entire execution cycle.
+        self.a.write_text(SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        let flag = this.m_quests.GetFact(n"test_shared_fact");\n'
+            '        if flag > 0 { this.UpdateHudState(); }\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        ), encoding="utf8")
+        self.b.write_text(SOURCE_B + '''
+@wrapMethod(PlayerPuppet)
+protected cb func OnAction(action: ListenerAction,
+                           consumer: ListenerActionConsumer) -> Bool {
+    let qs: ref<QuestsSystem> = GameInstance.GetQuestsSystem(this.GetGame());
+    if qs.GetFact(n"test_shared_fact") == 0 {
+        return wrappedMethod(action, consumer);
+    }
+    return wrappedMethod(action, consumer);
+}
+''', encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        report = json.loads(self.out.read_text())
+        all_inputs = report["questPartialValueInputs"]
+        cohorts = report["questSubscriberCohorts"]
+        self.assertTrue(report["partialCohortsAreReadOnlyResearch"])
+        self.assertGreaterEqual(report["partialFactCohortsWithDifferentValueUses"], 1)
+        self.assertGreaterEqual(
+            report["partialFactCohortsWithConditionalAndNonconditionalInputs"], 1)
+        self.assertEqual(sum(c["partialValueInputSites"] for c in cohorts),
+                         len(all_inputs))
+        c = next(c for c in cohorts if c["fact"] == "test_shared_fact")
+        same = [x for x in all_inputs if x["fact"] == "test_shared_fact"]
+        self.assertEqual(c["partialValueInputSites"], len(same))
+        self.assertEqual(c["partialValueInputsWithConditions"],
+                         sum(x["factReachesCondition"] for x in same))
+        self.assertTrue(c["containsConditionalAndOtherValueUses"])
+        self.assertTrue(c["containsLocalAndInlineConditionalUses"])
+        self.assertTrue(c["partialInputRelationIsSourceOnly"])
+        self.assertFalse(c["originalGetterReplacementAuthorized"])
+        self.assertFalse(c["originalMethodSkipAuthorized"])
+
     def test_receiver_type_must_belong_to_method_owner(self):
         # A same-named QuestsSystem member in another class, and an
         # unrelated local typed inside a different method, cannot authorize

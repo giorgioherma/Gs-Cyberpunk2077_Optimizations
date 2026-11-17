@@ -671,6 +671,47 @@ try {
         ' downstreamConditionalInputs=' + $partialConditions.Count +
         ' partialInputFoundWithoutWholeMethodEligibility=true rewrites=0')
 
+    # Cohort-level two-sided analysis: a shared exact fact input may feed
+    # local values and direct predicates in DIFFERENT methods with independent
+    # clocks, fields, actions, widgets or helper effects. Never substitute
+    # the whole method, and never treat a shared name as verified event parity.
+    $partialCohorts = @($qFacts.questSubscriberCohorts)
+    $cohortInputSites = 0
+    $cohortConditionMixed = 0
+    $cohortUseShapesMixed = 0
+    foreach ($cohort in $partialCohorts) {
+        $sameFactInputs = @($partialInputs | Where-Object { $_.fact -ceq $cohort.fact })
+        $cohortInputSites += [int]$cohort.partialValueInputSites
+        $hasCond = @($sameFactInputs | Where-Object { $_.factReachesCondition -eq $true }).Count -gt 0
+        $hasNonCond = @($sameFactInputs | Where-Object { $_.factReachesCondition -ne $true }).Count -gt 0
+        if ($hasCond -and $hasNonCond) { $cohortConditionMixed++ }
+        if (@($cohort.partialValueUseShapes).Count -gt 1) { $cohortUseShapesMixed++ }
+        if ([int]$cohort.partialValueInputSites -ne $sameFactInputs.Count -or
+            [int]$cohort.partialValueInputsInMixedMethods -ne
+                @($sameFactInputs | Where-Object { $_.methodContainsUnrelatedInputs -eq $true }).Count -or
+            [int]$cohort.partialValueInputsWithConditions -ne
+                @($sameFactInputs | Where-Object { $_.factReachesCondition -eq $true }).Count -or
+            [int]$cohort.partialValueInputsAssignedToLocals -ne
+                @($sameFactInputs | Where-Object { $null -ne $_.localName }).Count -or
+            [int]$cohort.partialValueInputsSourceMeasured -ne
+                @($sameFactInputs | Where-Object { $_.sourceMeasuredMethod -eq $true }).Count -or
+            $cohort.containsConditionalAndOtherValueUses -ne ($hasCond -and $hasNonCond) -or
+            $cohort.partialInputRelationIsSourceOnly -ne $true) {
+            throw 'GCO_FACT_PARTIAL_BIDIRECTIONAL_COHORT_ACCOUNTING_FAILED'
+        }
+    }
+    if ($cohortInputSites -ne $partialInputs.Count -or
+        [int]$qFacts.partialFactCohortsWithDifferentValueUses -ne $cohortUseShapesMixed -or
+        [int]$qFacts.partialFactCohortsWithConditionalAndNonconditionalInputs -ne $cohortConditionMixed -or
+        $qFacts.partialCohortsAreReadOnlyResearch -ne $true) {
+        throw 'GCO_FACT_PARTIAL_BIDIRECTIONAL_COHORT_INCONSISTENT'
+    }
+    Write-Host ('PASS GCO bidirectional partial-value fact cohorts: factNames=' +
+        $partialCohorts.Count + ' sourceInputSites=' + $cohortInputSites +
+        ' differentValueUseCohorts=' + $cohortUseShapesMixed +
+        ' conditionalAndNonconditionalCohorts=' + $cohortConditionMixed +
+        ' partialOnly=true noOriginalMethodSkip=true')
+
     Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
         $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
         ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +
