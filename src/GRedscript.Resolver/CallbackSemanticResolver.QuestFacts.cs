@@ -179,6 +179,7 @@ internal static partial class CallbackSemanticResolver
             .OrderBy(x => x.path, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.methodLine).ToArray();
 
+        var subscriberEvidence = InspectQuestSubscribers(methods, measured);
         var report = new
         {
             schemaVersion = "gco.redscript.quest-fact.graph.v1",
@@ -202,6 +203,22 @@ internal static partial class CallbackSemanticResolver
             factsWithCrossOwnerLiteralRegistrations =
                 factGraph.Count(g => g.crossOwnerRegistered),
             operations,
+            // Bidirectional: exact fact-name inputs with and without
+            // additional owner/helper/argument dependencies. All findings
+            // preserve the original call and original mod callbacks.
+            observedLiteralFactReadSites = subscriberEvidence.Readers.Length,
+            observedLiteralFactReadCohorts = subscriberEvidence.Cohorts.Length,
+            directAndWrapperSharedCohorts = subscriberEvidence.WrapperCohorts,
+            mixedAndLexicallySimpleCohorts = subscriberEvidence.MixedCohorts,
+            crossOwnerReadCohorts = subscriberEvidence.CrossOwnerCohorts,
+            identifiedSameOwnerQuestWrapperReads = subscriberEvidence.Readers.Count(
+                r => r.ReadShape == "SAME_OWNER_QUEST_WRAPPER_SHAPE"),
+            unresolvedSameOwnerHelperReads = subscriberEvidence.Readers.Count(
+                r => r.ReadShape == "UNRESOLVED_SAME_OWNER_HELPER"),
+            partialObservationCohortsAreResearchOnly = true,
+            cannotInferOriginalGetterCanBeSkipped = true,
+            anySubscriptionOrPartialRewriteAuthorized = false,
+            operations,
             directRefreshFactReaderMethods = refreshReaders.Length,
             sourceMatchedDirectRefreshFactReaderMethods =
                 refreshReaders.Count(x => x.hasSourceMatchedOutgoingEdgeEvidence),
@@ -217,6 +234,56 @@ internal static partial class CallbackSemanticResolver
             sourceWrites = false,
             generatedFiles = 0,
             facts = factGraph,
+            questSubscriberCohorts = subscriberEvidence.Cohorts.Select(c => new
+            {
+                fact = c.FactName,
+                literalReadSites = c.SourceReaders,
+                distinctReaderMethods = c.DistinctReaderMethods,
+                distinctReaderOwners = c.DistinctReaderOwners,
+                refreshMethods = c.RefreshReaders,
+                otherMethods = c.OtherReaders,
+                sourceMeasuredMethods = c.SourceMatchedMeasuredReaders,
+                sameOwnerWrapperReadSites = c.SameOwnerWrapperReaders,
+                directGetterShapeReadSites = c.DirectReadShapeReaders,
+                unresolvedSameOwnerHelperReadSites = c.UnresolvedReadShapeReaders,
+                methodsWithOtherDependencyHints = c.MixedDependencyReaders,
+                lexicallySimpleMethods = c.SimpleLexicalReaders,
+                distinctNonfactDependencyProfiles = c.DistinctDependencyProfiles,
+                sharesNameAcrossMixedAndSimpleMethods = c.ContainsMixedAndSimpleReaders,
+                sharesNameAcrossDirectAndWrapperReads = c.ContainsWrapperAndDirectReaders,
+                sharesNameAcrossOwners = c.SharedAcrossOwners,
+                completeWriterGraphProven = c.AllWritersProven,
+                callbackCoversAllMutations = c.ProducerCoversAllMutations,
+                lifecycleProven = c.ConsumerLifecycleProven,
+                sharedSubscriptionAuthorized = c.SharedSubscriptionAuthorized,
+                originalGetterReplacementAuthorized = c.AnyOriginalGetterReplacementAuthorized,
+                originalMethodSkipAuthorized = c.AnyOriginalMethodSkipAuthorized
+            }),
+            questSubscriberReads = subscriberEvidence.Readers.Select(r => new
+            {
+                source = new { path = r.Path, owner = r.Owner,
+                    method = r.Method, line = r.Line },
+                fact = r.FactName,
+                readShape = r.ReadShape,
+                sourceShapeWitness = r.WrapperEvidence,
+                refreshFamily = r.RefreshFamily,
+                sourceMeasuredMethod = r.SourceMatchedMeasured,
+                measuredOutgoingMethodEdges = r.MethodOutgoingEdges,
+                measuredMethodDirectExclusiveMs = r.MethodExclusiveMs,
+                nonfactDependencyHints = r.NonFactDependencyHints,
+                instanceFields = r.InstanceFields,
+                instanceHelperCalls = r.InstanceHelperCalls,
+                usedParameters = r.UsedParameters,
+                otherFactReadsMayBeDynamic = r.OtherFactReadsMayBeDynamic,
+                mixedDependencies = r.MixedDependencies,
+                isolatedExpressionProven = r.IsolatedExpressionProven,
+                allWriterAndAliasPathsProven = r.AllWritersProven,
+                runtimeNotificationEquivalent = r.RuntimeNotificationEquivalent,
+                originalExecutionPreserved = r.OriginalExecutionPreserved,
+                canReplaceOriginalGetter = r.CanReplaceOriginalGetter,
+                canSkipOriginalMethod = r.CanSkipOriginalMethod,
+                generationAuthorized = r.SourceMutationAuthorized
+            }),
             directRefreshReaders = refreshReaders,
             callsites = sites.OrderBy(s => s.Path, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(s => s.Line).Select(s => new {
