@@ -1,5 +1,28 @@
 # GCO-local REDscript Resolver
 
+## Generic pass 3: ANGLE_SORT_INVARIANT_V1 (2026-11-17)
+
+The new `scan-angle-sort --game <current-root> --out <external-json>`
+and source-matched `preview-angle-sort --game <current-root> --analysis
+<verified-sealed-capture.json> --out <empty-external-directory>` are
+independent, nondeployable generic geometry optimizations. Admission requires
+the exact pure four-vertex `Vector2` angle-sort loop structure, unchanged
+comparison/swap order and source fingerprint. Reuse the computed `angleI`
+within the inner loop and refresh it from already-computed `angleJ` on swap,
+reducing `AtanF` evaluations from 12 to 9 per invocation of that pattern,
+not promising a measured FPS/CPU improvement. The rule is not keyed to a
+mod name and refuses missing/drifted capture proof, partial generated state,
+unsupported variants and writes into the game folder. The original
+2,319-file historical source stack has a measured-hot candidate in
+ReinforcementsSystem's angle-sort helper; whole-stack official SCC
+replay passed in GCO CI #567. Gameplay validation is still required.
+
+GCO's canonical Windows CI additionally checks out the independent
+`G-REDruntime_Framework/main` source and SCC-compiles it in an isolated
+fourth scenario (CI #562 SUCCESS), then tests combined runtime + all
+generic overlays in a fifth isolated scenario (commit `ec87f3d`,
+outcome pending). The framework source stays in its owner repository.
+
 Relocated **unchanged in behavior** from GRSP development branch commit `1da43d9a7197ad4fd1c2debc004a2f3ee31b9dab`
 into this independent internal .NET 10 component, following the 2026-11-16
 owner decision. The original GRSP version and 41 contract tests were accepted

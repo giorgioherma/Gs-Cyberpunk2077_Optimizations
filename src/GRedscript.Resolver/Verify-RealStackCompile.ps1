@@ -440,9 +440,12 @@ try {
       $outputs[0].Sha256 -eq $outputs[2].Sha256) {
     throw 'R6 compiled baseline and callback-preview caches are indistinguishable.'
   }
-  if ($frameworkFiles.Count -gt 0 -and
-      $outputs[0].Sha256 -eq $outputs[$outputs.Count-1].Sha256) {
-    throw 'R6_FRAMEWORK_COMPILE_OUTPUT_INDISTINGUISHABLE_FROM_BASE'
+  if ($frameworkFiles.Count -gt 0) {
+    $frameworkOnly=@($outputs | Where-Object { $_.Scenario -eq 'framework-untouched' })
+    if ($frameworkOnly.Count -ne 1 -or
+        $outputs[0].Sha256 -eq $frameworkOnly[0].Sha256) {
+      throw 'R6_FRAMEWORK_COMPILE_OUTPUT_INDISTINGUISHABLE_FROM_BASE'
+    }
   }
   if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
     # The fifth scenario combines ALL currently staged generic passes with
