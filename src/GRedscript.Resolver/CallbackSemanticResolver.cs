@@ -11,7 +11,7 @@ namespace GRedscript.Resolver;
 /// individual rewrite recipes. It does not mutate scripts, register callbacks,
 /// claim Lua-equivalent action routing, or infer entry counts from VM call edges.
 /// </summary>
-internal static class CallbackSemanticResolver
+internal static partial class CallbackSemanticResolver
 {
     private sealed record FileSource(string Path, string Relative, string Module,
         string Text, IReadOnlyList<SourceAdmission.Token> Tokens);
@@ -44,23 +44,7 @@ internal static class CallbackSemanticResolver
 
         var source = new SourceAdmission(root);
         _ = source.AuditAll();
-        var files = new List<FileSource>();
-        var methods = new List<MethodSource>();
-        string scripts = Path.Combine(root, "r6", "scripts");
-        foreach (var path in Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
-                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-        {
-            if (!source.IsFileIndexed(path)) continue;
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("CALLBACK_SEMANTICS_REPARSE_SOURCE_REFUSED");
-            string raw = File.ReadAllText(path, Encoding.UTF8);
-            var t = SourceAdmission.ReadTokens(raw);
-            var file = new FileSource(path, "r6/scripts/" +
-                Path.GetRelativePath(scripts, path).Replace('\\', '/'),
-                Module(t), raw, t);
-            files.Add(file);
-            methods.AddRange(ParseMethods(file));
-        }
+        var (files, methods) = ReadAllMethodSources(root, source);
 
         var methodIndex = methods.GroupBy(m => m.File.Module + "\0" + m.Owner + "\0" + m.Name)
             .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
@@ -228,6 +212,33 @@ internal static class CallbackSemanticResolver
             new UTF8Encoding(false));
         return new(files.Count, callbackRows.Count, actionCount, wrapCount,
             forwarding, other, measured, unproven);
+    }
+
+
+    // This is the single authoritative source/method discovery shared by
+    // callback semantics and generic shared-work evidence. Do not create a
+    // second method parser or a parallel token implementation.
+    private static (List<FileSource> Files, List<MethodSource> Methods)
+        ReadAllMethodSources(string root, SourceAdmission source)
+    {
+        var files = new List<FileSource>();
+        var methods = new List<MethodSource>();
+        string scripts = Path.Combine(root, "r6", "scripts");
+        foreach (var path in Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
+                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!source.IsFileIndexed(path)) continue;
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("CALLBACK_SEMANTICS_REPARSE_SOURCE_REFUSED");
+            string raw = File.ReadAllText(path, Encoding.UTF8);
+            var t = SourceAdmission.ReadTokens(raw);
+            var file = new FileSource(path, "r6/scripts/" +
+                Path.GetRelativePath(scripts, path).Replace('\\', '/'),
+                Module(t), raw, t);
+            files.Add(file);
+            methods.AddRange(ParseMethods(file));
+        }
+        return (files, methods);
     }
 
     private static string Family(MethodSource m) =>
