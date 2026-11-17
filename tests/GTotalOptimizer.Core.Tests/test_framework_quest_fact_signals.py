@@ -57,7 +57,8 @@ def verify(runtime, signals):
         need(body, "this.m_factSignals.InvalidateSession()",
              "FACT_SIGNAL_SESSION_INVALIDATION_MISSING")
     for body in (attach, initialize):
-        if "RegisterListener(" in body or "GetFact(" in body:
+        if ("RegisterListener(" in body or "GetFact(" in body or
+            ".AcquireFact(" in body):
             raise AssertionError("DORMANT_FACT_SERVICE_REGISTERS_WITHOUT_CONSUMERS")
 
     for fragment, reason in (
