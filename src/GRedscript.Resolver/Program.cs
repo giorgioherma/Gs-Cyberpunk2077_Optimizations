@@ -31,6 +31,8 @@ internal static class Program
                 return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-redscript-plan")
                 return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "stage-shared-native")
+                return RunSharedNativeStage(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-pure-constants")
@@ -698,6 +700,21 @@ internal static class Program
         return 0;
     }
 
+    private static int RunSharedNativeStage(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not (
+            "--cet-runtime" or "--out" or "--red-locations")))
+            throw new ArgumentException(
+                "Shared native stage accepts --cet-runtime, --out, --red-locations");
+        var result = SharedNativeRuntimeStage.Stage(
+            Required(options, "--cet-runtime"),
+            Required(options, "--out"),
+            options.GetValueOrDefault("--red-locations"));
+        Console.WriteLine(JsonSerializer.Serialize(result));
+        return 0;
+    }
+
     private static Dictionary<string, string> ParseArguments(string[] args)
     {
         if (args.Length % 2 != 0)
@@ -706,7 +723,7 @@ internal static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan" or "--cet-runtime" or "--red-locations"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);
