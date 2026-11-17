@@ -66,7 +66,8 @@ public class Owner {
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         edited = (self.preview / "r6/scripts/OtherAuthor/Example.reds").read_text()
         self.assertIn("GCO-GENERIC:SHARED_PLAYER_SIGNAL_V1", edited)
-        self.assertIn("GRedRuntime.SharedProviders.Player(gi)", edited)
+        self.assertIn("import GRedRuntime.*", edited)
+        self.assertIn("SharedProviders.Player(gi)", edited)
         self.assertIn(
             "GameInstance.GetPlayerSystem(gi).GetLocalPlayerMainGameObject();",
             edited)
