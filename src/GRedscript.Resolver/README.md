@@ -45,6 +45,14 @@ by GRSP CI #61, and the 2,319-file external compiler baseline by GCO #482.
 
 See `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md`.
 
+## Composable blackboard definition preview (2026-11-17)
+
+The existing `preview-blackboard-defs --game <root> --analysis <verified.json> --out <isolated-preview>` accepts optional `--base-preview <earlier-generic-preview-root>`. It applies **the same authoritative statement-local source matcher** against the earlier source-owned staged effective REDscript text, only when the original admitted candidate statements and group identity are unchanged. Missing/changed target statements, unverified capture/source, preview directory reuse or game-root staging fail closed. Preview writes only the new external overlay containing both sets of edits; it does not patch the installed source or issue deployment approval.
+
+[CI #587](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44068339695) validated 89 safety tests and compiled the real 2,319-file stack with 22 eligible definition statements, 16 files (14 independent + 2 composed; zero deferred) and 10 owner G-REDruntime files via SCC 0.5.31. This covers the two observed same-file collisions; automatic six-pass production generation, game behavior and performance gains remain unverified.
+
+
+
 ## R5 native proxy evidence interpretation
 
 The existing `analyze --capture ... --game ... --out ...` command now consumes
