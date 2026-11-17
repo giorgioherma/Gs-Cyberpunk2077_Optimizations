@@ -39,7 +39,8 @@ def verify(runtime, signals):
     acquire = method(signals, "AcquireFact")
     interest = method(signals, "AddInterest")
     release = method(signals, "ReleaseFact")
-    callback = method(signals, "OnFactChanged")
+    signal_class = signals[signals.index("public class QuestFactSignals"):]
+    callback = method(signal_class, "OnFactChanged")
     bridge_callback = signals[signals.index("public class QuestFactBridge"):
                               signals.index("public class QuestFactSignals")]
     bridge_callback = method(bridge_callback, "OnFactChanged")
