@@ -37,9 +37,6 @@ internal static class GenericAngleSortPass
         }
         """;
     private const string QuadGuard = """
-        // Run the cheap outside rejection first. Nearby/inside points proceed
-        // straight to the original path; only far candidates pay the finite
-        // and non-degenerate geometry checks.
         let outside =
             (p.X < sq.a.X - 16.0 && p.X < sq.b.X - 16.0 &&
              p.X < sq.c.X - 16.0 && p.X < sq.d.X - 16.0) ||
@@ -338,7 +335,7 @@ internal static class GenericAngleSortPass
                 }
                 else if (Match(t, i, 0, QuadOptimizedTokens))
                 {
-                    int first = i + Array.IndexOf(QuadOptimizedTokens, "if");
+                    int first = i + Array.IndexOf(QuadOptimizedTokens, "let");
                     int pos = t[first].Start;
                     int marker = text.LastIndexOf(QuadMarker, pos,
                         StringComparison.Ordinal);
