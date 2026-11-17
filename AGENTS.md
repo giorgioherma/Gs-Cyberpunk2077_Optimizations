@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## G-REDruntime generic research and NO EXCLUSIONS — 2026-11-17
+
+**New framework-integration entrypoint:** [G-REDruntime generic candidates with runtime evidence and precise refusals](docs/integration/R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md). **ALL installed REDscript owners**, including the previously reviewed seven, remain eligible for any source-proven generic pass. The seven are deferred **only for their mod-specific semantic remainder**, never excluded from generic discovery. Candidates: exact finite-action InputHub interest, versioned DirtyFlags refresh, and scope-proven StateCache handles. Do not perform generic framework migration solely to increase generated-file count.
+
 ## Mandatory 2026-11-17 REDscript R5 work-elimination roadmap
 
 **Start here for future high-impact generic optimization research:** [R5 work-elimination opportunities](docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md). It ranks spatial broadphase, callback/event admission, dirty-state UI dormancy, debug-off elimination, transition-only work, resource-interest filtering and safe local reuse using the actual November 16 F11 capture. **Prioritize eliminating whole costly call trees and observed bursts; no new rule is approved by this document.** Continue in GCO `dev/redscript/resolver_handoff`, with GRSP owner-native measurement and G-REDruntime owner services. Do not jump to targeted mod-specific fixes before generic R5/R6 coverage and R7 gap ledger.

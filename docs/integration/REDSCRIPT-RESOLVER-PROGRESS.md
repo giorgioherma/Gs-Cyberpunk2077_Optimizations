@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — source/capture-backed G-REDruntime generic candidates (no mod exclusions)
+
+- **New mandatory candidate document:** [R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md](R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md). All 2,319 currently sourced `.reds` files are in scope; even the seven already reviewed owners **must be considered for every generic transform**. Only **targeted semantic leftovers** are reserved for R7.
+- **Source + runtime audit:** 90 direct input registrations across 20 folders (13 apparent wildcard registrations across 9), 32 GRSP input-family owners/21,113,624 outgoing edges/5,377.8 ms exclusive, 75 refresh-family owners/11,510,248 outgoing edges/12,448.7 ms exclusive. Historical hand-edited G-REDruntime partial ZIP: 24 runtime-integrated source files across 14 owners (10 InputHub, 5 Scheduler, 9 StateCache, 2 ContextService; owner counts overlap). **These figures are workload and shape evidence, not expected saved work or completed generic source passes.**
+- **Priority generic contracts:** `G_INPUTHUB_INTEREST_V1` (closed, same-semantics action routes), `G_DIRTY_VIEW_GENERATION_V1` (source-proven mutator/consumer invalidation), `G_LIFETIME_SYSTEM_HANDLE_V1` (stable system handles, lower cost). InputHub lacks raw ListenerAction and original consumer in its event, so unrestricted rewrites are **unsafe**. Timer-only migration unsupported by cost: 160,768 DelaySystem-associated calls but just 167.0 ms direct exclusive in the 384.517-s capture. EventBus/HookBus migration without removal proof is not authorized.
+- **Validation:** research/docs only, no implementation, compiler claim, new source-owned native DLL, gameplay proof or new capture request. Preserve canonical GCO managed dev branch, external G-REDruntime ownership, full-stack SCC, source-state/rollback and one ZIP.
+
 ## 2026-11-17 — cross-author runtime/source loop audit; defer captures
 
 - **Priority correction from user:** the seven previously agreed mod-specific fixes remain R7 **at the end**; focus now only on a generic transform with demonstrated cross-author workload. Avoid speculative generic dormancy and don't ask for default idle/stress captures. Existing full F11 evidence can be subdivided into windows.

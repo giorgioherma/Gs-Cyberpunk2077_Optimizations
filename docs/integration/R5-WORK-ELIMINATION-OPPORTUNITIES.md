@@ -4,6 +4,10 @@
 **Created:** 2026-11-17. **Active owner:** GCO managed REDscript Resolver on `dev/redscript/resolver_handoff`. **Framework owner:** `giorgioherma/G-REDruntime_Framework/main`. **Profiler owner:** GRSP `dev/native-instrumentation`.  
 **READ FIRST FOR NEXT AGENT:** GCO `AGENTS.md` → `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md` → **THIS DOCUMENT** → `REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md` → `REDSCRIPT-RESOLVER-PROGRESS.md` → `docs/LATEST-WORK.md`. The agreed seven-mod review is **not** an implementation queue; generic-first work precedes R7 targeted remainder.
 
+## 2026-11-17 — framework-backed cross-mod candidate contracts
+
+**Read next:** [R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md](R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md). All mods **including the earlier seven** are in generic discovery; “end” applies only to mod-specific remainder. Actual F11 exposure: 32 input-family owners/21.11M outgoing edges/5,377.8 ms exclusive; 75 refresh-family owners/11.51M edges/12,448.7 ms exclusive. The framework's InputHub already routes finite actions, DirtyFlags supports independently versioned invalidation, and StateCache provides scoped weak system handles. First inspect full receiver/consumer/lifecycle and mutator effects, then make source-proven previews; do not presume all these recorded calls are removable. The older 61-file manually optimized reference has 24 runtime-integrated .reds files across 14 owners, usable as design evidence only.
+
 ## 2026-11-17 — cross-author generic evidence audit; no forced pass and no new capture
 
 **User decision superseding any request for multiple new captures:** continue mining the already supplied F11 capture and current 2,319 `.reds` files. The seven previously reviewed mod-specific directions, including Reinforcements early guards and Dark Future UI, are **R7 endgame** after useful generic rules are exhausted. A new F11 capture is justified **only** when a specific nearly-proven, high-value cross-author rule has one measurable missing fact and that capture would directly unlock its admission. No default idle/world/combat capture matrix.

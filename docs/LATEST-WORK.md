@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-17 — G-REDruntime multi-mod generic opportunities measured
+
+- New handoff [R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md](integration/R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md): no exclusions from generic coverage, including the seven previously reviewed mod owners. Candidate generic rules: `G_INPUTHUB_INTEREST_V1`, `G_DIRTY_VIEW_GENERATION_V1`, `G_LIFETIME_SYSTEM_HANDLE_V1`; all are **proposals**, not new source transforms.
+- Actual capture callback family aggregates: 32 input owners, 21.11M outgoing edges, 5,377.8 ms exclusive; 75 update/refresh owners, 11.51M outgoing edges, 12,448.7 ms exclusive; none proves callback entries or avoidable fractions. User-provided manual partial optimization illustrates 24 framework integrations across 14 source owners but is not a generic-rule test or accepted output.
+- Framework caution: InputHub event does not contain original ListenerAction/consumer, DirtyFlags requires complete producer invalidation and per-consumer versions, ContextService has lazy 50-ms caching and Scheduler has min 50ms/no missed-tick backlog. Prevent a broad mechanical refactor that changes input, animations or timer behavior. System-handle getters show relatively low direct exclusive cost. Only actual proven work elimination merits implementation. **No repo code, game, capture, SCC, A/B or CI success new to this documentation commit.**
+
 ## 2026-11-17 — actual cross-mod loops audited, new capture not needed
 
 - The [R5 work-elimination evidence ledger](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) now separates the seven deferred mod-specific candidates from first-priority **multi-author** source transforms, using actual 2,319-file scripts and the historical F11 callsite CSV. Measured keyed collection-search patterns recur in RedWindows, GigCore, Crowd Variety Restored and illegal_mechanic; source mutability and first-match semantics currently block any automatic indexed-lookup rewrite.
