@@ -234,7 +234,7 @@ protected cb func OnAction(action: ListenerAction,
 protected cb func OnAction(action: ListenerAction,
                            consumer: ListenerActionConsumer) -> Bool {
     let qs: ref<QuestsSystem> = GameInstance.GetQuestsSystem(this.GetGame());
-    if (!IsDefined(qs) || qs.GetFact(n"test_shared_fact") == 0) {
+    if !IsDefined(qs) || qs.GetFact(n"test_shared_fact") == 0 {
         return wrappedMethod(action, consumer);
     }
     return wrappedMethod(action, consumer);
@@ -271,6 +271,28 @@ protected cb func OnAction(action: ListenerAction,
             self.assertFalse(item["generationAuthorized"])
             self.assertTrue(item["measuredMethodCostIsNotFactGuardCostOrSavings"])
         self.assertEqual((self.a.read_bytes(), self.b.read_bytes()), originals)
+
+    def test_optional_if_parentheses_preserves_unbraced_return_and_fact_source(self):
+        # REDscript does not require parentheses following 'if'. A scanner
+        # that only recognizes if (...) silently misses real mod guards.
+        changed = SOURCE_A.replace(
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");',
+            '        if this.m_quests.GetFact(n"test_shared_fact") == 0 {\n'
+            '            return;\n'
+            '        }\n'
+            '        let x = this.m_quests.GetFact(n"test_shared_fact");'
+        )
+        self.a.write_text(changed, encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        report = json.loads(self.out.read_text())
+        slices = [x for x in report["questFactGuardSlices"]
+                  if x["source"]["method"] == "Update"]
+        self.assertEqual(len(slices), 1)
+        self.assertEqual(slices[0]["exactLiteralFactNames"],
+                         ["test_shared_fact"])
+        self.assertTrue(slices[0]["branchIsReturnOnly"])
+        self.assertFalse(slices[0]["generationAuthorized"])
 
     def test_fact_guard_partial_dynamic_input_is_explicitly_unproven(self):
         modified = SOURCE_A.replace(

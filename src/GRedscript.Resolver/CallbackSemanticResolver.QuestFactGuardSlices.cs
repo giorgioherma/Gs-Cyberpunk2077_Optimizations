@@ -33,23 +33,23 @@ internal static partial class CallbackSemanticResolver
                 .Take(method.Close - method.Open - 1).ToArray();
             for (int i = method.Open + 1; i + 2 < method.Close; i++)
             {
-                if (t[i].Value != "if" || t[i + 1].Value != "(")
-                    continue;
-                int close = MatchFactGuard(t, i + 1, method.Close, "(", ")");
-                if (close <= i + 2) continue;
+                if (t[i].Value != "if") continue;
+                var (conditionEnd, branchStart) =
+                    LocateFactGuard(t, i, method.Close);
+                if (conditionEnd <= i + 1 || branchStart < 0) continue;
                 var facts = new SortedSet<string>(StringComparer.Ordinal);
                 var otherCalls = new SortedSet<string>(StringComparer.Ordinal);
                 int literals = 0, dynamic = 0;
-                for (int j = i + 2; j < close; j++)
+                for (int j = i + 2; j < conditionEnd; j++)
                 {
-                    if (j + 1 >= close || t[j + 1].Value != "(" ||
+                    if (j + 1 >= conditionEnd || t[j + 1].Value != "(" ||
                         !Ident(t[j].Value)) continue;
                     if (t[j].Value is not ("GetFact" or "GetFactStr"))
                     {
                         otherCalls.Add(t[j].Value);
                         continue;
                     }
-                    if (j + 3 < close && t[j + 2].Value == "n" &&
+                    if (j + 3 < conditionEnd && t[j + 2].Value == "n" &&
                         t[j + 3].Value == "<literal>")
                     {
                         var literal = t[j + 3];
@@ -66,7 +66,6 @@ internal static partial class CallbackSemanticResolver
                 }
                 if (literals == 0) continue;
 
-                int branchStart = close + 1;
                 int branchEnd = -1;
                 if (branchStart < method.Close && t[branchStart].Value == "{")
                     branchEnd = MatchFactGuard(t, branchStart, method.Close, "{", "}");
@@ -142,6 +141,41 @@ internal static partial class CallbackSemanticResolver
             .ThenByDescending(x => x.MeasuredMethodExclusiveMs ?? 0)
             .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.GuardLine).ToArray();
+    }
+
+    // REDscript accepts BOTH "if (condition) { ... }" and
+    // "if condition { ... }". Parentheses are not a mandatory if token.
+    // Recognize only a closed condition followed by an unambiguous branch
+    // boundary; never consume through a following statement or method.
+    private static (int ConditionEnd, int BranchStart) LocateFactGuard(
+        IReadOnlyList<SourceAdmission.Token> t, int ifIndex, int limit)
+    {
+        int start = ifIndex + 1;
+        if (start >= limit) return (-1, -1);
+        if (t[start].Value == "(")
+        {
+            int closing = MatchFactGuard(t, start, limit, "(", ")");
+            return closing >= 0 && closing + 1 < limit
+                ? (closing, closing + 1) : (-1, -1);
+        }
+
+        int roundDepth = 0, squareDepth = 0;
+        for (int i = start; i < limit; i++)
+        {
+            string v = t[i].Value;
+            if (v == "(") roundDepth++;
+            else if (v == ")") roundDepth--;
+            else if (v == "[") squareDepth++;
+            else if (v == "]") squareDepth--;
+            if (roundDepth < 0 || squareDepth < 0) return (-1, -1);
+            if (roundDepth == 0 && squareDepth == 0)
+            {
+                if (v is "{" or "return" or "break" or "continue")
+                    return (i, i);
+                if (v is ";" or "}" or "else") break;
+            }
+        }
+        return (-1, -1);
     }
 
     private static int MatchFactGuard(
