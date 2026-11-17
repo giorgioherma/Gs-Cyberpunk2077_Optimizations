@@ -418,7 +418,7 @@ try {
           # The one generated RTTI bridge is NEW by design. Every other
           # optimized REDscript file must replace a real installed author.
           if ($scenario -ne 'framework-all-generics-preview' -or
-              $relative.Replace('\\','/') -cne 'G-RedRuntime/Native/GCOSharedNativeBridge.reds' -or
+              $relative.Replace('\','/') -cne 'G-RedRuntime/Native/GCOSharedNativeBridge.reds' -or
               $nativeBridgeAdded -ne 0) {
             throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
           }
