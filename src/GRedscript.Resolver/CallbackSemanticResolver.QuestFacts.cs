@@ -132,12 +132,12 @@ internal static partial class CallbackSemanticResolver
             dynamicOrUnresolvedCallsites = dynamic,
             distinctLiteralFactNames = factGraph.Length,
             lexicalListenerCallsitesReceiverUnverified =
-                sites.Count(x => x.Operation is "RegisterListener" or "UnregisterListener" &&
+                sites.Count(x => (x.Operation is "RegisterListener" or "UnregisterListener") &&
                     !x.QuestReceiverSourceTyped),
             literalQuestListenerCallsitesSourceTyped =
                 sites.Count(x => x.QuestReceiverSourceTyped &&
                     x.FactName is not null &&
-                    x.Operation is "RegisterListener" or "UnregisterListener"),
+                    (x.Operation is "RegisterListener" or "UnregisterListener")),
             factsWithCrossOwnerLiteralRegistrations =
                 factGraph.Count(g => g.crossOwnerRegistered),
             operations,
@@ -172,7 +172,7 @@ internal static partial class CallbackSemanticResolver
     private static string ScriptOwner(string path)
     {
         var segments = path.Split('/');
-        return segments.Length > 4 ? segments[2] : "ROOT_LEVEL";
+        return segments.Length >= 4 ? segments[2] : "ROOT_LEVEL";
     }
 
     private static bool SourceDeclaresQuestReceiver(MethodSource method, int opIndex)
@@ -185,7 +185,7 @@ internal static partial class CallbackSemanticResolver
         // qualify. An arbitrary qs/questsSys name is never sufficient.
         for (int i = 0; i + 4 < t.Count; i++)
             if (t[i].Value == receiver && t[i + 1].Value == ":" &&
-                t[i + 2].Value is "ref" or "wref" &&
+                (t[i + 2].Value is "ref" or "wref") &&
                 t[i + 3].Value == "<" && t[i + 4].Value == "QuestsSystem")
                 return true;
         return false;
