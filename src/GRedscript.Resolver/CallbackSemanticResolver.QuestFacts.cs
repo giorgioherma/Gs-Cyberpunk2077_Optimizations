@@ -218,7 +218,6 @@ internal static partial class CallbackSemanticResolver
             partialObservationCohortsAreResearchOnly = true,
             cannotInferOriginalGetterCanBeSkipped = true,
             anySubscriptionOrPartialRewriteAuthorized = false,
-            operations,
             directRefreshFactReaderMethods = refreshReaders.Length,
             sourceMatchedDirectRefreshFactReaderMethods =
                 refreshReaders.Count(x => x.hasSourceMatchedOutgoingEdgeEvidence),
