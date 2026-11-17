@@ -1,5 +1,10 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-17 — Nov 16 F11 measured partial-work ranking (read-only)
+
+[Measured partial-work/source-proof handoff](R5-NOV16-MEASURED-PARTIAL-WORK.md): user-uploaded 384.517s complete GRSP WORLD capture identifies **216,006** restricted-area quad/sort callsite edges in **260** active frames; `SortSquare` function measured **11,630.6389ms** instrumented exclusive and 2,592,072 angle-callsite edges. Initial 37 quads are source-valid but mutable public collection aliases/native changes remain UNKNOWN; naive AABB skip is unsafe on degenerate triangles under original point-in-triangle semantics. Other measured work: Dark Future SetData **38,318/3,394.6ms**, custom_quickslots SetLastUsedKBM **273,887/2,623.4ms**, MBC TraceEnabled **2,911.8ms** function exclusive. Generic-first source-only ranking, no ZIP/gameplay claims, no new generator or captured outcome rates. Existing [CI #647](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44125762276) validated **quest subscriber** analysis, not a spatial rewrite.
+
+
 **Status:** source/capture-grounded research and prioritized measurement queue; **NO new generator authorization, profiler hooks, source rewrite, game install, reported FPS gain, or user-approved targeted pass**.  
 **Created:** 2026-11-17. **Active owner:** GCO managed REDscript Resolver on `dev/redscript/resolver_handoff`. **Framework owner:** `giorgioherma/G-REDruntime_Framework/main`. **Profiler owner:** GRSP `dev/native-instrumentation`.  
 **READ FIRST FOR NEXT AGENT:** GCO `AGENTS.md` → `docs/integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md` → **THIS DOCUMENT** → `REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md` → `REDSCRIPT-RESOLVER-PROGRESS.md` → `docs/LATEST-WORK.md`. The agreed seven-mod review is **not** an implementation queue; generic-first work precedes R7 targeted remainder.
