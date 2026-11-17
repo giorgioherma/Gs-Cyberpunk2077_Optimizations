@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-17 — Real A/E generic generation milestone (source and SCC, no game ZIP)
+
+GCO dev branch now has source-owned ACTION_EVENT_SNAPSHOT_V1 on the existing .NET 10 REDscript Resolver and ordered generator. It reuses repeated ListenerAction.GetName/GetType inside one admitted callback without changing the consumer, registration, wrapper or output. **GCO CI #671 SUCCESS**: https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44178965800 — 138 managed tests, 33 avoided getter sites across 5 live .reds files; the complete plan found 107 eligible expressions across 7 ordered families and staged 48 .reds files, compiled by official SCC 0.5.31 against the current 2,319-source installation plus 11 framework files; 323 GCO packaging contracts passed. No measured frame-time improvement claimed.
+
+High-value experimental QUAD_SAFE_AABB_BROADPHASE_V1 extends the EXISTING GenericAngleSortPass: for exact original SquareArea/Sign/PointInTriangle/SortSquare source shape, a >16-unit outside point can skip the angle sort only with all input coordinates finite-bounded and all 4 possible vertex triples nondegenerate. Nearby/uncertain/degenerate inputs keep the original sort and point test; the cheap outside predicate runs first. Nov 16 F11 recorded 216,006 IsPointInQuad->SortSquare callsites and 11,630.6389ms instrumented exclusive SortSquare work (total observed exposure, **not savings**). Structural tests and current-source compiler validation are tracked under https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44181331312 (#677; pending at authoring). Earlier #674 revealed marker-accounting bug; fixed at generator source. No gameplay validation or REDscript optimization ZIP.
+
+**Unification decision:** These are reusable structural rules across live owners, NOT yet pooled InputHub/QuestFactSignals consumer migrations. Broad A–E systems still require actual shared subscribers, mutation-closed partial inputs and output invalidations. Continue on dev/redscript/resolver_handoff, keep one bundled .NET 10 runtime, one canonical Resolver plan, existing G-REDruntime owner services and combined CET/REDscript user workflow. No duplicate runtime/profiler/generator.
+
 ## 2026-11-17 — GCO bundled .NET10 Resolver-to-generator plan VERIFIED (#657)
 
 **User decision:** No REDscript ZIP yet. Resolver must decide the **ordered source pass plan**, while the existing generators consume it. Work inside the current GCO two-page full app with **one bundled .NET 10 runtime**, not a second developer executable/runtime. The approved A–E aggressive experimental mechanisms remain development priorities and are **not yet broadly implemented**.
