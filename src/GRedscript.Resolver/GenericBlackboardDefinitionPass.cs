@@ -344,7 +344,13 @@ internal static class GenericBlackboardDefinitionPass
                 !line.Contains("&&", StringComparison.Ordinal) &&
                 !line.Contains("||", StringComparison.Ordinal) &&
                 Regex.Matches(line, @"\bGetAllBlackboardDefs\s*\(").Count == 1 &&
-                line.Count(c => c == ';') == 1;
+                line.Count(c => c == ';') == 1 &&
+                // Regex recognizes the statement's shape. SourceAdmission's
+                // authoritative lexer must independently prove the getter is
+                // CODE at this exact byte/character offset, not a multiline
+                // comment or embedded string that happens to look like code.
+                view.Tokens.Any(t => t.Value == "GetAllBlackboardDefs" &&
+                    t.Start == charOffset + m.Groups["definition"].Index);
             if (!safe)
                 Flush();
             else

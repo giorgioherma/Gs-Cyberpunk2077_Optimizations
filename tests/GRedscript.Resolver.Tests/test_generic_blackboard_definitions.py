@@ -312,6 +312,27 @@ public class AnyMod extends ScriptableSystem {
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.preview.exists())
 
+    def test_sequence_never_matches_multiline_comment_or_inline_string(self):
+        self.source.write_text("""module IndependentAuthor
+public class AnyMod extends ScriptableSystem {
+    public func UpdateUI(board: ref<IBlackboard>) -> Void {
+        /*
+        board.SetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active, true, true);
+        board.SetFloat(GetAllBlackboardDefs().UI_HUDProgressBar.Progress, 0.42);
+        */
+        let explanation = "board.SetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active, true, true);";
+        let output = board.GetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active);
+    }
+}
+""", encoding="utf8")
+        scan = self.run_scan()
+        self.assertEqual(scan["eligible"], 0)
+        self.seal()
+        outcome = self.run_preview()
+        self.assertEqual(outcome.returncode, 0, outcome.stderr + outcome.stdout)
+        self.assertIn("transformed=0", outcome.stdout)
+        self.assertFalse(self.preview.exists())
+
     def test_sequence_partial_source_drifts_fail_closed(self):
         self.source.write_text("""module IndependentAuthor
 public class AnyMod extends ScriptableSystem {
