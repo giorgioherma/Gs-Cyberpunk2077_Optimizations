@@ -1302,6 +1302,77 @@ try {
         Write-Host 'GCO action-event snapshot: no applicable repeated input getters.'
     }
 
+    # First cross-author shared player producer adoption: use existing
+    # G-REDruntime StateCache attach generation, with the original getter
+    # fallback for UNKNOWN. This composes AFTER the A/E source transforms.
+    $sharedPlayerScanPath = Join-Path $work 'gco-shared-player-scan.json'
+    $sharedPlayerScanLog = Join-Path $work 'gco-shared-player-scan.log'
+    & dotnet $dll scan-shared-player --game $game --out $sharedPlayerScanPath *> $sharedPlayerScanLog
+    if ($LASTEXITCODE -ne 0 -or
+        !(Test-Path -LiteralPath $sharedPlayerScanPath -PathType Leaf)) {
+        throw 'GCO_SHARED_PLAYER_SOURCE_SCAN_FAILED'
+    }
+    $sharedPlayerScan = Get-Content -LiteralPath $sharedPlayerScanPath -Raw | ConvertFrom-Json
+    if ($sharedPlayerScan.schemaVersion -ne 'gco.redscript.shared-player.scan.v1' -or
+        $sharedPlayerScan.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$sharedPlayerScan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        $sharedPlayerScan.productionZipAuthorized -ne $false) {
+        throw 'GCO_SHARED_PLAYER_SCAN_CONTRACT_FAILED'
+    }
+    $sharedPlayerCount = [int]$sharedPlayerScan.eligible
+    $sharedPlayerMerged = 0
+    if ($sharedPlayerCount -gt 0) {
+        $sharedPlayerFolder = Join-Path $work 'gco-shared-player-preview'
+        $sharedPlayerLog = Join-Path $work 'gco-shared-player-preview.log'
+        & dotnet $dll preview-shared-player --game $game --analysis $result --out $sharedPlayerFolder --base-preview $callbackFolder *> $sharedPlayerLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_SHARED_PLAYER_SOURCE_PREVIEW_FAILED'
+        }
+        $sharedPlayerScripts = Join-Path $sharedPlayerFolder 'r6/scripts'
+        $sharedFiles = @(Get-ChildItem -LiteralPath $sharedPlayerScripts -Filter *.reds -File -Recurse)
+        if ($sharedFiles.Count -lt 1 -or $sharedFiles.Count -gt $sharedPlayerCount) {
+            throw 'GCO_SHARED_PLAYER_GENERATED_FILE_COUNT_INVALID'
+        }
+        $manualScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $sharedFiles) {
+            $rel = [IO.Path]::GetRelativePath($sharedPlayerScripts, $file.FullName)
+            $original = Join-Path (Join-Path $game 'r6/scripts') $rel
+            $destination = Join-Path $manualScripts $rel
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..') -or
+                $rel.Contains(':') -or !(Test-Path -LiteralPath $original -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+                (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:SHARED_PLAYER_SIGNAL_V1') {
+                throw 'GCO_SHARED_PLAYER_OUTPUT_INVALID'
+            }
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $prior = Get-Content -LiteralPath $destination -Raw
+                $after = Get-Content -LiteralPath $file.FullName -Raw
+                $priorMarkers = @([regex]::Matches($prior,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                foreach ($marker in $priorMarkers) {
+                    if (!$after.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_SHARED_PLAYER_LOST_PREVIOUS_RULE'
+                    }
+                }
+                Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+                Copy-Item -LiteralPath $file.FullName -Destination $destination -ErrorAction Stop
+            }
+            $sharedPlayerMerged++
+        }
+        Write-Host ('PASS GCO shared player provider source: callsites=' +
+            $sharedPlayerCount + ' files=' + $sharedFiles.Count +
+            ' originalGetterFallback=true noNewObserver=true deployable=false')
+    }
+    else {
+        Write-Host 'GCO shared player provider: no exact typed producer consumers.'
+    }
+
     # GCO Resolver owns one ordered source plan; existing generators
     # consume it. Require identical current-source output to the legacy
     # CI orchestration before considering app generation integration.
@@ -1315,7 +1386,7 @@ try {
     if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
-        [int]$orderedPlan.implementedRuleCount -ne 8 -or
+        [int]$orderedPlan.implementedRuleCount -ne 9 -or
         [int]$orderedPlan.captureGatedExistingRules -ne 1 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
@@ -1327,14 +1398,14 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 7 -or $deferred.Count -ne 5 -or
+    if ($scheduled.Count -ne 8 -or $deferred.Count -ne 5 -or
         $gated.Count -ne 1 -or $gated[0].id -ne 'measured-cname-membership') {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
     $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
-            $lateCount + $bbCount + $pureCount + $snapshotCount)) {
+            $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
     }
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
@@ -1385,7 +1456,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
