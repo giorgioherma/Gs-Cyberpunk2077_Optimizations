@@ -1302,6 +1302,19 @@ try {
         Write-Host 'GCO action-event snapshot: no applicable repeated input getters.'
     }
 
+    # Preserve the full pre-framework generic overlay as its own SCC lane.
+    # New shared-player source imports G-REDruntime and belongs only in the
+    # separate framework-composed compilation scenario.
+    $legacyCallbackFolder = Join-Path $work 'gco-pre-framework-generic-preview'
+    $legacyScripts = Join-Path $legacyCallbackFolder 'r6/scripts'
+    New-Item -ItemType Directory -Force -Path $legacyScripts | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $callbackFolder 'r6/scripts') -Force |
+        Copy-Item -Destination $legacyScripts -Recurse -Force -ErrorAction Stop
+    if (@(Get-ChildItem -LiteralPath $legacyScripts -Recurse -Filter *.reds -File).Count -ne
+        @(Get-ChildItem -LiteralPath (Join-Path $callbackFolder 'r6/scripts') -Recurse -Filter *.reds -File).Count) {
+        throw 'GCO_LEGACY_GENERIC_CHECKPOINT_SNAPSHOT_INCOMPLETE'
+    }
+
     # First cross-author shared player producer adoption: use existing
     # G-REDruntime StateCache attach generation, with the original getter
     # fallback for UNKNOWN. This composes AFTER the A/E source transforms.
@@ -1489,7 +1502,8 @@ try {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
     if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
-        $extra.CallbackPreviewRoot = $callbackFolder
+        $extra.CallbackPreviewRoot = $legacyCallbackFolder
+        $extra.FrameworkPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
     if ($LASTEXITCODE -ne 0) {
