@@ -349,6 +349,24 @@ jobs:
               $late.measuredSavingsClaimed -ne $false) {
             throw 'GCO_FRESH_LATE_SYSTEM_READ_SCAN_CONTRACT_FAILED'
           }
+          $bbScanPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-blackboard-definitions.json'
+          $bbScanLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-blackboard-definitions.log'
+          & dotnet $dll scan-blackboard-defs --game $game --out $bbScanPath *> $bbScanLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $bbScanPath -PathType Leaf)) {
+            throw 'GCO_FRESH_BLACKBOARD_DEFINITIONS_SCAN_FAILED'
+          }
+          $bbReport = Get-Content -LiteralPath $bbScanPath -Raw | ConvertFrom-Json
+          if ($bbReport.schemaVersion -ne 'gco.redscript.bbdefs.scan.v1' -or
+              $bbReport.sourceFiles -ne $audit.sourceFiles -or
+              $bbReport.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $bbReport.generationAuthorized -ne $false -or
+              $bbReport.sourceWrites -ne $false -or
+              $bbReport.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_BLACKBOARD_DEFINITIONS_CONTRACT_FAILED'
+          }
+          Write-Host ('PASS current REDscript immutable-definition candidate scan: eligible=' +
+              [int]$bbReport.eligible + ' already=' + [int]$bbReport.alreadyComplete +
+              ' sourcesUntouched=true previewOnly=true')
           $after = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
           if ($after.Count -ne $files.Count) { throw 'GCO_FRESH_SOURCE_INVENTORY_MUTATED' }
           foreach ($file in $after) {
