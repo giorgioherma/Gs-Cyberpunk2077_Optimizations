@@ -171,9 +171,11 @@ public static class SharedNativeRuntimeStage
         var existing = File.Exists(destinationLocations)
             ? ReadLocations(File.ReadAllBytes(destinationLocations))
             : new List<Anchor>();
+        // REDscript can generate its own inert, source-derived static
+        // sites without waiting for CET to generate an overlay.
         var incoming = redLocationsFile is not null
             ? ReadLocations(File.ReadAllBytes(Path.GetFullPath(redLocationsFile)))
-            : new List<Anchor>();
+            : ReadLocations(RedscriptNativeLocations.Compile(game));
         var combined = Merge(existing, incoming);
         if (combined.Count > 100000)
             throw new InvalidDataException("SHARED_NATIVE_LOCATIONS_LIMIT");
