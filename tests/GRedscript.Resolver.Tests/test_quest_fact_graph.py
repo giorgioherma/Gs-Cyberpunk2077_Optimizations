@@ -182,6 +182,40 @@ class QuestFactGraphTests(unittest.TestCase):
         self.assertFalse(helper["canReplaceOriginalGetter"])
         self.assertFalse(helper["generationAuthorized"])
 
+    def test_same_fact_input_across_refresh_and_input_wrapper_keeps_callback(self):
+        # The same literal fact feeds two refreshes and an independent
+        # PlayerPuppet OnAction wrapper. Only the fact input MAY eventually
+        # share an observer; the wrapper must still dispatch original actions.
+        input_wrapper = '''
+@wrapMethod(PlayerPuppet)
+protected cb func OnAction(action: ListenerAction,
+                           consumer: ListenerActionConsumer) -> Bool {
+    let quests = GameInstance.GetQuestsSystem(this.GetGame());
+    if !IsDefined(quests) || quests.GetFact(n"test_shared_fact") == 0 {
+        return wrappedMethod(action, consumer);
+    }
+    return wrappedMethod(action, consumer);
+}
+'''
+        self.b.write_text(SOURCE_B + input_wrapper, encoding="utf8")
+        before = self.b.read_bytes()
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.out.read_text(encoding="utf8"))
+        cohort = next(x for x in j["questSubscriberCohorts"]
+                      if x["fact"] == "test_shared_fact")
+        self.assertEqual(cohort["refreshMethods"], 2)
+        self.assertEqual(cohort["otherMethods"], 1)
+        original_callback = next(x for x in j["questSubscriberReads"]
+            if x["fact"] == "test_shared_fact"
+            and x["source"]["method"] == "OnAction")
+        self.assertFalse(original_callback["refreshFamily"])
+        self.assertFalse(original_callback["canReplaceOriginalGetter"])
+        self.assertFalse(original_callback["canSkipOriginalMethod"])
+        self.assertFalse(original_callback["originalExecutionPreserved"])
+        self.assertFalse(original_callback["generationAuthorized"])
+        self.assertEqual(self.b.read_bytes(), before)
+
     def test_helper_without_exact_owner_and_source_is_not_trusted(self):
         modified = SOURCE_A.replace(
             '        let unknown = this.m_quests.GetFact(this.DynamicName());',
