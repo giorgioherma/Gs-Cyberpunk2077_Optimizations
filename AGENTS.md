@@ -1,5 +1,10 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## 2026-11-17 — REDscript pass-plan integration (verified)
+
+Read the **canonical** [R5/R6 work-elimination plan](docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) for implementation and CI #657. GCO `dev/redscript/resolver_handoff` now bundles the GCO-owned REDscript Resolver in the **same self-contained .NET 10 app**, outputs a source-ranked ordered `REDscript_GenerationPlan.json` on ANALYZE, and lets the existing generators stage source from that manifest. **7 existing source generator families (6 source-scheduled + 1 capture-gated), 5 larger approved A–E systems not yet implemented.** On current CI source: **74 eligible edits / 44 staged `.reds` files / 131/131 tests / SCC 0.5.31 PASS**, no REDscript game ZIP or gameplay claim. See [CI #657](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44170790239) and [commit `92f453d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/92f453d345bb40294381951dd4e26579f3b68771).
+
+
 ## Active R5/R6 generic source-generation plan (2026-11-17)
 
 Read [the canonical G-PartialWork execution plan](docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) **before proposing another REDscript scanner or runtime service**. One existing GCO Resolver owns source admission, generic generation and full-stack SCC. G-REDruntime owns optional shared observers; R7's seven mod-specific semantic remainders remain deferred. G-PureConstantSlice V1 code is on `dev/redscript/resolver_handoff`, CI validation is recorded in the canonical plan and latest work.
