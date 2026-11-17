@@ -37,6 +37,9 @@ internal static partial class CallbackSemanticResolver
         var findings = new List<SharedWorkFinding>();
         var blockers = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var families = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var dependencyCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var triggerCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var primaryTriggerCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         long matchedEdges = 0;
         double measuredMs = 0;
         int measured = 0, unmeasured = 0;
@@ -48,6 +51,15 @@ internal static partial class CallbackSemanticResolver
                 .Take(method.Close - method.Open - 1).ToArray();
             string family = SharedWorkFamily(method.Name)!;
             families[family] = families.GetValueOrDefault(family) + 1;
+            DirectDependencyProfile dependencies = InspectDirectDependencies(method, body);
+            foreach (string category in dependencies.Categories)
+                dependencyCounts[category] =
+                    dependencyCounts.GetValueOrDefault(category) + 1;
+            foreach (string trigger in dependencies.CandidateTriggers)
+                triggerCounts[trigger] = triggerCounts.GetValueOrDefault(trigger) + 1;
+            string primary = dependencies.PrimaryCandidateTrigger;
+            primaryTriggerCounts[primary] =
+                primaryTriggerCounts.GetValueOrDefault(primary) + 1;
 
             bool clock = body.Any(x => x.Value is "timeLeft" or "timeRemaining" or
                 "deltaTime" or "dt" or "GetGameTime" or "GetSimTime" or
@@ -121,7 +133,7 @@ internal static partial class CallbackSemanticResolver
                 family, reason, measure?.OutgoingEdges, measure?.InstrumentedExclusiveMs,
                 measure?.MatchedCallsites, clock, widget, eventEffects,
                 arrayMutation, hasMemberRead, player, signal, earlyGuard, loops,
-                wrapped, returnsValue, memberNames.ToArray()));
+                wrapped, returnsValue, memberNames.ToArray(), dependencies));
         }
 
         if (!string.Equals(source.SourceStackSha256,
@@ -151,6 +163,13 @@ internal static partial class CallbackSemanticResolver
             sourceMatchedDirectInstrumentedMs = measuredMs,
             firstFailedPrerequisiteCounts = blockers,
             familyCounts = families,
+            directDependencyCategoryCounts = dependencyCounts,
+            candidateSharedTriggerCounts = triggerCounts,
+            primaryCandidateSharedTriggerCounts = primaryTriggerCounts,
+            sourceDependencyCategoriesAreLexicalObservations = true,
+            sharedTriggersAreHypothesesNotPublishers = true,
+            directInstanceFieldsAreNotCompleteWriterGraph = true,
+            helperCallsHaveUnresolvedTransitiveEffects = true,
             parser = "CALLBACK_SEMANTIC_RESOLVER_AUTHORITATIVE",
             captureRowsAreOutgoingEdgesNotMethodEntries = true,
             directInstrumentedMsNotPredictedSavingsOrTotalCpu = true,
@@ -172,6 +191,18 @@ internal static partial class CallbackSemanticResolver
                 sourceMatchedCallsiteRows = x.CallsiteRows,
                 callbackEntries = (long?)null,
                 expectedSavingsMs = (double?)null,
+                directDependencies = new
+                {
+                    instanceFields = x.Dependencies.InstanceFields,
+                    instanceMethodCalls = x.Dependencies.InstanceMethodCalls,
+                    usedCallbackParameters = x.Dependencies.UsedCallbackParameters,
+                    observedCategoryHints = x.Dependencies.Categories,
+                    possibleSharedTriggers = x.Dependencies.CandidateTriggers,
+                    primaryCandidateSharedTrigger = x.Dependencies.PrimaryCandidateTrigger,
+                    completeCallGraphProven = false,
+                    completeWriterGraphProven = false,
+                    sharedTriggerProven = false
+                },
                 sourceHints = new
                 {
                     timeOrAnimation = x.Clock,
@@ -205,7 +236,8 @@ internal static partial class CallbackSemanticResolver
         long? OutgoingEdges, double? DirectMs, int? CallsiteRows,
         bool Clock, bool Widget, bool EventEffects, bool ArrayMutation,
         bool MemberRead, bool Player, bool Signal, bool EarlyGuard,
-        bool Loops, bool Wrapped, bool ReturnsValue, string[] Members);
+        bool Loops, bool Wrapped, bool ReturnsValue, string[] Members,
+        DirectDependencyProfile Dependencies);
 
     // Broad lexical family only; all real sources are examined and rejected
     // with diagnostics rather than relying on a fixed mod or method allowlist.
