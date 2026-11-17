@@ -40,6 +40,10 @@ internal static partial class CallbackSemanticResolver
         var dependencyCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var triggerCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var primaryTriggerCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var measuredDependencyCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var unmeasuredDependencyCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var measuredPrimaryCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var unmeasuredPrimaryCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         long matchedEdges = 0;
         double measuredMs = 0;
         int measured = 0, unmeasured = 0;
@@ -109,6 +113,11 @@ internal static partial class CallbackSemanticResolver
             // generator admission. No lexical observation is accepted as a
             // complete write-side invalidation or purity proof.
             evidence.TryGetValue(method.Identity, out Evidence? measure);
+            var sourceBucket = measure is null ? unmeasuredDependencyCounts : measuredDependencyCounts;
+            foreach (string category in dependencies.Categories)
+                sourceBucket[category] = sourceBucket.GetValueOrDefault(category) + 1;
+            var primaryBucket = measure is null ? unmeasuredPrimaryCounts : measuredPrimaryCounts;
+            primaryBucket[primary] = primaryBucket.GetValueOrDefault(primary) + 1;
             string reason = measure is null ? "SOURCE_MATCHED_MEASUREMENT_MISSING" :
                 wrapped ? "WRAPPER_SIDE_EFFECT_OR_ORDER_UNPROVEN" :
                 clock ? "TIME_OR_ANIMATION_DEPENDENCY" :
@@ -166,6 +175,10 @@ internal static partial class CallbackSemanticResolver
             directDependencyCategoryCounts = dependencyCounts,
             candidateSharedTriggerCounts = triggerCounts,
             primaryCandidateSharedTriggerCounts = primaryTriggerCounts,
+            measuredDependencyCategoryCounts = measuredDependencyCounts,
+            unmeasuredDependencyCategoryCounts = unmeasuredDependencyCounts,
+            measuredPrimaryTriggerCounts = measuredPrimaryCounts,
+            unmeasuredPrimaryTriggerCounts = unmeasuredPrimaryCounts,
             sourceDependencyCategoriesAreLexicalObservations = true,
             sharedTriggersAreHypothesesNotPublishers = true,
             directInstanceFieldsAreNotCompleteWriterGraph = true,
