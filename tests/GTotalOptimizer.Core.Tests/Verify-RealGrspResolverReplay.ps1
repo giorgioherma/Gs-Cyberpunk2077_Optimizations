@@ -338,6 +338,63 @@ try {
         ' helperForwarders=' + $semantic.callbacksWithForwardedHelpers +
         ' noUnprovenRouting=true noGeneratedFiles=true')
 
+    # R5: full-source read-only recurring refresh/maintenance work triage.
+    # Reuses the existing callback owner parser and same source-verified
+    # outgoing callsite join. Never mistakes summed edges for callback
+    # entries or a deployable dirty-flag transformation.
+    $sharedWorkOutput = Join-Path $work 'gco-shared-work-evidence.json'
+    $sharedWorkLog = Join-Path $work 'gco-shared-work-evidence.log'
+    & dotnet $dll scan-shared-work --game $game --analysis $result --out $sharedWorkOutput *> $sharedWorkLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $sharedWorkOutput -PathType Leaf)) {
+        throw 'GCO_SHARED_WORK_REAL_SOURCE_SCAN_FAILED'
+    }
+    $shared = Get-Content -LiteralPath $sharedWorkOutput -Raw | ConvertFrom-Json -Depth 80
+    $sharedCandidates = @($shared.candidates)
+    $measuredShared = @($sharedCandidates | Where-Object {
+        $null -ne $_.directInstrumentedMs
+    })
+    if ($shared.schemaVersion -ne 'gco.redscript.shared-work.scan.v1' -or
+        $shared.parser -ne 'CALLBACK_SEMANTIC_RESOLVER_AUTHORITATIVE' -or
+        $shared.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $shared.sourceStackSha256 -ne $expectedSourceHash -or
+        $shared.evidenceKind -ne 'SOURCE_ALIGNED_OUTGOING_VM_CALLSITES_ONLY' -or
+        [int]$shared.candidateMethods -ne $sharedCandidates.Count -or
+        [int]$shared.sourceMatchedMeasured -ne $measuredShared.Count -or
+        [int]$shared.candidateMethods -ne
+            ([int]$shared.sourceMatchedMeasured + [int]$shared.unmeasured) -or
+        [int]$shared.sourceMatchedMeasured -lt 1 -or
+        [double]$shared.sourceMatchedDirectInstrumentedMs -le 0 -or
+        $shared.mutatorAndObserverProofIncomplete -ne $true -or
+        $shared.captureRowsAreOutgoingEdgesNotMethodEntries -ne $true -or
+        $shared.directInstrumentedMsNotPredictedSavingsOrTotalCpu -ne $true -or
+        $shared.generationAuthorized -ne $false -or
+        $shared.compilerValidated -ne $false -or
+        $shared.sourceWrites -ne $false -or
+        [int]$shared.generatedFiles -ne 0) {
+        throw 'GCO_SHARED_WORK_SOURCE_EVIDENCE_CONTRACT_FAILED'
+    }
+    $reasonCount = 0
+    foreach ($reason in $shared.firstFailedPrerequisiteCounts.PSObject.Properties) {
+        $reasonCount += [int]$reason.Value
+    }
+    if ($reasonCount -ne $sharedCandidates.Count) {
+        throw 'GCO_SHARED_WORK_BLOCKER_ACCOUNTING_FAILED'
+    }
+    foreach ($candidate in $sharedCandidates) {
+        if ($candidate.generationAuthorized -ne $false -or
+            $candidate.safeToSkipBody -ne $false -or
+            $candidate.completeWriterSetProven -ne $false -or
+            $null -ne $candidate.expectedSavingsMs -or
+            $null -ne $candidate.callbackEntries -or
+            [string]::IsNullOrWhiteSpace([string]$candidate.firstFailedPrerequisite)) {
+            throw 'GCO_SHARED_WORK_UNPROVEN_OPTIMIZATION_ADMITTED'
+        }
+    }
+    Write-Host ('PASS GCO generic shared-work evidence: methods=' +
+        $shared.candidateMethods + ' sourceMatched=' + $shared.sourceMatchedMeasured +
+        ' unmeasured=' + $shared.unmeasured +
+        ' sourceOnly=false generationAuthorized=false allReasonsAccounted=true')
+
     # GCO-local CET-inspired callback generic: scan every private source,
     # stage only the exact proven fixed CName index shape, then reuse the SAME
     # official isolated SCC runner used by the established membership pass.
