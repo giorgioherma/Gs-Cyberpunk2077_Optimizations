@@ -118,6 +118,67 @@ internal static partial class CallbackSemanticResolver
                 };
             }).ToArray();
 
+        // Direct refresh/tick consumer feasibility: exhaustively inspect each
+        // of the existing 1,200 name-family methods, including unmeasured
+        // methods, without duplicating the authoritative owner parser.
+        // Other inputs and transitive callees prevent fully-covered claims.
+        var refreshReaders = methods
+            .Where(m => SharedWorkFamily(m.Name) is not null)
+            .Select(m =>
+            {
+                var body = m.File.Tokens.Skip(m.Open + 1)
+                    .Take(m.Close - m.Open - 1).ToArray();
+                var literalNames = new SortedSet<string>(StringComparer.Ordinal);
+                int directReads = 0, dynamicReads = 0;
+                for (int i = 0; i + 1 < body.Length; i++)
+                {
+                    if (body[i].Value is not ("GetFact" or "GetFactStr") ||
+                        body[i + 1].Value != "(") continue;
+                    directReads++;
+                    bool recognized = false;
+                    if (i + 3 < body.Length && body[i + 2].Value == "n" &&
+                        body[i + 3].Value == "<literal>")
+                    {
+                        var token = body[i + 3];
+                        string raw = m.File.Text[token.Start..token.End];
+                        if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"' &&
+                            !raw.Contains('\\'))
+                        {
+                            literalNames.Add(raw[1..^1]);
+                            recognized = true;
+                        }
+                    }
+                    if (!recognized) dynamicReads++;
+                }
+                var deps = directReads == 0 ? null :
+                    InspectDirectDependencies(m, body);
+                bool sourceMeasured = measured.ContainsKey(m.Identity);
+                return new
+                {
+                    path = m.File.Relative,
+                    owner = m.Owner,
+                    method = m.Name,
+                    methodLine = m.Line,
+                    directFactReads = directReads,
+                    dynamicFactReads = dynamicReads,
+                    exactLiteralFactNameHints = literalNames.ToArray(),
+                    hasSourceMatchedOutgoingEdgeEvidence = sourceMeasured,
+                    directOtherCategoryHints = deps?.Categories ?? [],
+                    directInstanceFields = deps?.InstanceFields ?? [],
+                    unresolvedInstanceMethodCalls = deps?.InstanceMethodCalls ?? [],
+                    usedCallbackParameters = deps?.UsedCallbackParameters ?? [],
+                    completeFactWriterCoverage = false,
+                    completeTransitiveDependencyClosure = false,
+                    originalEntryAndSideEffectSemanticsProven = false,
+                    sharedChangeNotificationEquivalent = false,
+                    safeToReplaceGetterOrSkipMethod = false,
+                    generationAuthorized = false
+                };
+            })
+            .Where(x => x.directFactReads > 0)
+            .OrderBy(x => x.path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.methodLine).ToArray();
+
         var report = new
         {
             schemaVersion = "gco.redscript.quest-fact.graph.v1",
@@ -141,6 +202,12 @@ internal static partial class CallbackSemanticResolver
             factsWithCrossOwnerLiteralRegistrations =
                 factGraph.Count(g => g.crossOwnerRegistered),
             operations,
+            directRefreshFactReaderMethods = refreshReaders.Length,
+            sourceMatchedDirectRefreshFactReaderMethods =
+                refreshReaders.Count(x => x.hasSourceMatchedOutgoingEdgeEvidence),
+            dynamicDirectRefreshFactReaderMethods =
+                refreshReaders.Count(x => x.dynamicFactReads > 0),
+            anyRefreshFullDependencyClosureProven = false,
             allDynamicFactNamesRemainUnproven = true,
             capturedEdgesAreNotFactAccessCountsOrPredictedSavings = true,
             sourcePathsRemainInPrivateOutputOnly = true,
@@ -150,6 +217,7 @@ internal static partial class CallbackSemanticResolver
             sourceWrites = false,
             generatedFiles = 0,
             facts = factGraph,
+            directRefreshReaders = refreshReaders,
             callsites = sites.OrderBy(s => s.Path, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(s => s.Line).Select(s => new {
                     s.Path, s.Owner, s.Method, s.Line, s.Operation, s.FactName,
