@@ -1,11 +1,11 @@
 # Latest work / evidence status
 
 
-## 2026-11-17 — REDscript same-file generic composition (source and test stage, CI pending)
+## 2026-11-17 — REDscript blackboard same-file composition: CI #587 SUCCESS
 
-- GCO `dev/redscript/resolver_handoff`: `GenericBlackboardDefinitionPass` now accepts an isolated prior generic effective-preview tree, proves every blackboard candidate statement remains byte-identical to its original source and reuses its own exact lexer/matcher on the effective source. Changed/missing statements fail closed. Earlier generated rules remain in the same staged file; no overwrite of original game files, capture or framework.
-- Canonical private-source replay composes the two blackboard same-file collisions instead of deferring them; regression tests cover preservation, overlap/drift and output isolation. Commits `357716e`, `c3395d5`, `07287d3`, `38c19dc`. **CI #581–#584 running / results unverified**; previous #580 full SUCCESS is still baseline. Source-only preview, not automatic Generate/gameplay/A-B proof.
-- Detailed handoff: [blackboard shared-state status](integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md). Full six-rule production composition and one final optimization ZIP remain separate readiness gates.
+- [GCO #587](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44068339695) **completed SUCCESS** for `dev/redscript/resolver_handoff` code SHA `73a0cd3215036d09d264e0290421e523056800b7`. Authoritative `GenericBlackboardDefinitionPass` now accepts a source-verified isolated `--base-preview`; it reuses original REDscript target-statement proof on the staged effective source, rejects changed statements, and retains preceding generic edits.
+- Exact real private-source replay: **89/89** .NET10 REDscript tests, 2,319 files original/unchanged, 22 blackboard candidate statements in 16 source files, **14 separate + 2 composed in their existing generic-owned files**, **0 deferred collisions**. Official SCC 0.5.31 `framework-all-generics-preview` passed with 22 callback/generic preview files and 10 owner G-REDruntime source files; 323 GCO install/CLI/package contracts passed. Portable app artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run587-a1` (ID 14321887110) built.
+- Early CI #584–#586 failed legitimately on parser/preview-root isolation and malformed prior-stage fixture; all repaired at source before #587. Documentation: [blackboard implementation status](integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md). No installed game mutation. **Still preview-only; gameplay/A-B, general production multi-pass generation and final single optimized ZIP not proven.**
 
 
 ## 2026-11-17 — new REDscript generic blackboard-definition reuse preview
