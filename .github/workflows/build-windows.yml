@@ -334,6 +334,21 @@ jobs:
               $angle.measuredSavingsClaimed -ne $false) {
             throw 'GCO_FRESH_ANGLE_SORT_SCAN_CONTRACT_FAILED'
           }
+          $lateScanPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-late-system-read.json'
+          $lateScanLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-late-system-read.log'
+          & dotnet $dll scan-late-system-read --game $game --out $lateScanPath *> $lateScanLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $lateScanPath -PathType Leaf)) {
+            throw 'GCO_FRESH_LATE_SYSTEM_READ_SCAN_FAILED'
+          }
+          $late = Get-Content -LiteralPath $lateScanPath -Raw | ConvertFrom-Json
+          if ($late.schemaVersion -ne 'gco.redscript.late-system-read.scan.v1' -or
+              $late.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $late.sourceFiles -ne $audit.sourceFiles -or
+              $late.generationAuthorized -ne $false -or
+              $late.sourceWrites -ne $false -or
+              $late.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_LATE_SYSTEM_READ_SCAN_CONTRACT_FAILED'
+          }
           $after = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
           if ($after.Count -ne $files.Count) { throw 'GCO_FRESH_SOURCE_INVENTORY_MUTATED' }
           foreach ($file in $after) {
