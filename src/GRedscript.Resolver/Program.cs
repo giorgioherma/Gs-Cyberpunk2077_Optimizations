@@ -23,6 +23,8 @@ internal static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-shared-work")
                 return RunSharedWorkScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-quest-facts")
+                return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-blackboard-defs")
@@ -395,6 +397,28 @@ internal static class Program
             " measured=" + summary.SourceMatchedMeasured +
             " unmeasured=" + summary.Unmeasured +
             " sourceWrites=0 deployable=false savingsClaimed=false");
+        return 0;
+    }
+
+    // Quest fact exact-name/receiver-refusal evidence: no callback rewrites.
+    private static int RunQuestFactScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Quest fact scan accepts --game, --out and optional --analysis only");
+        var scan = CallbackSemanticResolver.ScanQuestFactDependencies(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? analysis)
+                ? Path.GetFullPath(analysis) : null);
+        Console.WriteLine("GCO quest fact graph: sourceFiles=" + scan.SourceFiles +
+            " sourceMethods=" + scan.SourceMethods +
+            " callsites=" + scan.FactCallsites +
+            " literal=" + scan.LiteralCallsites +
+            " dynamic=" + scan.DynamicCallsites +
+            " names=" + scan.LiteralFactNames +
+            " crossOwnerListenerNames=" + scan.CrossOwnerListenerFactNames +
+            " generationAuthorized=false sourceWrites=0");
         return 0;
     }
 
