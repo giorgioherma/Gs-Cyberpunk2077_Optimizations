@@ -1,5 +1,12 @@
 # GCO-local REDscript Resolver
 
+## 2026-11-17 — Quest fact full-refresh reader proof gate, CI #629 SUCCESS
+
+[GCO CI #629 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44102461164) for code `70ffc33779ebac823237b80a59dd8b2aa4292a9e`: **102/102** managed tests, **7/7** player owner-source contracts and **7/7** quest observer contracts; full private **2,319-file** source scan found **67** direct GetFact/GetFactStr Update/Refresh/Tick family readers (**17** with sealed source-matched outgoing edge evidence, **8** with dynamic reads), **0** proven fully covered, **0** authorized source substitutions. Strict quest graph: **24,276** source methods, **2,799** literal callsites, **1,140** dynamic/unresolved, **961** conservative literal names, **1** source-typed cross-owner listener fact, **228** unresolved receiver callsites. SCC **0.5.31** successfully compiled the 11 owner framework scripts with the earlier 22 combined generic previews; **323/323** GCO installer/package contracts and CET/GRSP/PresentMon reporting passed. The portable GCO **app** artifact `run629-a1` (ID `14337756119`) is **not** an optimization ZIP. No gameplay validation or performance improvement claimed.
+
+**Next:** source-prove the complete writer/callee/alias set for a measured generic derived-data subgraph; confirm exact engine notification delivery, save/reload and lifecycle fallback in game before a source-owned optimizer rewrite. The 67 source-name matches are **not** 67 safe skips.
+
+
 ## Quest-fact source graph / direct refresh-reader gate (2026-11-17)
 
 `scan-quest-facts --game <live-root> --out <new-external-json> [--analysis <sealed-source-matched-analysis.json>]` is read-only and uses **the existing** `CallbackSemanticResolver` owner/method parser and verified F11 callsite join; no second parser, no fixed mod/fact allowlists. Graph schema `gco.redscript.quest-fact.graph.v1` includes named GetFact/SetFact/listener callsite summaries, dynamic-expression refusal and `directRefreshReaders` rows for name-family Update/Refresh/Tick methods. These rows expose literal fact names plus field/helper/argument dependencies, measured-source association and explicit `completeFactWriterCoverage=false`, `completeTransitiveDependencyClosure=false`, `safeToReplaceGetterOrSkipMethod=false`, `generationAuthorized=false`. A `RegisterListener` named method can belong to ink/UI; source-declared QuestsSystem receiver is scoped to **its own class/method**, never an unrelated class.
