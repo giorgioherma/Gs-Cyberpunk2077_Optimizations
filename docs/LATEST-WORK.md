@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+
+## 2026-11-17 — REDscript same-file generic composition (source and test stage, CI pending)
+
+- GCO `dev/redscript/resolver_handoff`: `GenericBlackboardDefinitionPass` now accepts an isolated prior generic effective-preview tree, proves every blackboard candidate statement remains byte-identical to its original source and reuses its own exact lexer/matcher on the effective source. Changed/missing statements fail closed. Earlier generated rules remain in the same staged file; no overwrite of original game files, capture or framework.
+- Canonical private-source replay composes the two blackboard same-file collisions instead of deferring them; regression tests cover preservation, overlap/drift and output isolation. Commits `357716e`, `c3395d5`, `07287d3`, `38c19dc`. **CI #581–#584 running / results unverified**; previous #580 full SUCCESS is still baseline. Source-only preview, not automatic Generate/gameplay/A-B proof.
+- Detailed handoff: [blackboard shared-state status](integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md). Full six-rule production composition and one final optimization ZIP remain separate readiness gates.
+
+
 ## 2026-11-17 — new REDscript generic blackboard-definition reuse preview
 
 - **GCO #580 VERIFIED SUCCESS (2026-11-17):** [canonical Windows CI](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44026362823), **86/86** managed REDscript tests, current source **22 strictly eligible statements in 16 files** (2,319 source files total), **14 disjoint files merged with 2 same-file collisions explicitly deferred**, **22 total callback/generic preview files** SCC-compiled against all current private sources plus **10 G-REDruntime owner source files** with official SCC 0.5.31; `framework-all-generics-preview` exit 0 in 7.3 seconds, **323 GCO install/CLI/package contracts passed**. No original source or current game installed files changed. This is preview/SCC proof, **not** full six-pass composition, gameplay validation, or measured performance gain.
