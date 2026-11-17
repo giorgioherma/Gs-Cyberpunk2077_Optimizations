@@ -27,6 +27,10 @@ internal static class Program
                 return RunUiOutputScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-quest-facts")
                 return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "plan-redscript")
+                return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "stage-redscript-plan")
+                return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-pure-constants")
@@ -450,6 +454,41 @@ internal static class Program
     }
 
     // CET-inspired callback family discovery is deliberately read-only.
+    private static int RunRedscriptPlan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("REDscript plan needs --game and --out");
+        var plan = RedscriptGenerationPlan.Create(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("REDscript Resolver ordered generation plan: " +
+            " implementedRules=" + plan.ImplementedRuleCount +
+            " readyRules=" + plan.ReadyRuleCount +
+            " eligibleSourceEdits=" + plan.EligibleSourceEdits +
+            " deferredExperimentalSystems=" + plan.DeferredExperimentalSystems +
+            " zipCreated=false");
+        return 0;
+    }
+
+    private static int RunRedscriptPlanStage(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--plan" or
+            "--analysis" or "--out")))
+            throw new ArgumentException(
+                "REDscript stage needs --game --plan --analysis --out");
+        var result = RedscriptGenerationPlan.Stage(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--plan")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("REDscript pass generator consumed ordered plan: " +
+            " generatedFiles=" + result.GeneratedFiles +
+            " candidateEdits=" + result.AppliedEdits +
+            " passes=" + result.Completed.Length +
+            " productionZip=false");
+        return 0;
+    }
+
     private static int RunCallbackScan(Dictionary<string, string> options)
     {
         if (options.Keys.Any(key => key is not ("--game" or "--out")))
@@ -631,7 +670,7 @@ internal static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);

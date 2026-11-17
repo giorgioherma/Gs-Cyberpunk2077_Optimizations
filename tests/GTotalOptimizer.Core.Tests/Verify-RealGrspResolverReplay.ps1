@@ -1222,6 +1222,82 @@ try {
         Write-Host 'GCO pure final-static Bool: no source-proven callsites in current stack.'
     }
 
+    # GCO Resolver owns one ordered source plan; existing generators
+    # consume it. Require identical current-source output to the legacy
+    # CI orchestration before considering app generation integration.
+    $orderedPlanFile = Join-Path $work 'gco-redscript-generation-plan.json'
+    $orderedPlanLog = Join-Path $work 'gco-redscript-generation-plan.log'
+    & dotnet $dll plan-redscript --game $game --out $orderedPlanFile *> $orderedPlanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $orderedPlanFile -PathType Leaf)) {
+        throw 'GCO_REDSCRIPT_ORDERED_PLAN_FAILED'
+    }
+    $orderedPlan = Get-Content -LiteralPath $orderedPlanFile -Raw | ConvertFrom-Json
+    if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
+        $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        [int]$orderedPlan.implementedRuleCount -ne 7 -or
+        [int]$orderedPlan.captureGatedExistingRules -ne 1 -or
+        [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
+        $orderedPlan.productionZipAuthorized -ne $false -or
+        [int]$orderedPlan.readyRuleCount -lt 1) {
+        throw 'GCO_REDSCRIPT_ORDERED_PLAN_CONTRACT_INVALID'
+    }
+    $scheduled = @($orderedPlan.rules | Where-Object { $null -ne $_.order })
+    $deferred = @($orderedPlan.rules | Where-Object { $_.status -eq 'NO_GENERATOR_YET' })
+    $gated = @($orderedPlan.rules | Where-Object {
+        $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
+    })
+    if ($scheduled.Count -ne 6 -or $deferred.Count -ne 5 -or
+        $gated.Count -ne 1 -or $gated[0].id -ne 'measured-cname-membership') {
+        throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
+    }
+    $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
+    if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
+        $planEligible -ne ($callbackCount + $actionCount + $angleCount +
+            $lateCount + $bbCount + $pureCount)) {
+        throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
+    }
+    $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
+    $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
+    & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GCO_REDSCRIPT_ORDERED_STAGE_FAILED'
+    }
+    $stageReportPath = Join-Path $orderedStage 'stage-result.json'
+    if (!(Test-Path -LiteralPath $stageReportPath -PathType Leaf)) {
+        throw 'GCO_REDSCRIPT_ORDERED_STAGE_NO_RESULT'
+    }
+    $stageReport = Get-Content -LiteralPath $stageReportPath -Raw | ConvertFrom-Json
+    $stageScripts = Join-Path $orderedStage 'effective-preview/r6/scripts'
+    $manualScripts = Join-Path $callbackFolder 'r6/scripts'
+    if ($stageReport.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+        $stageReport.sourceStackSha256 -ne $expectedSourceHash -or
+        $stageReport.productionZipAuthorized -ne $false -or
+        [int]$stageReport.deferredCollisions -ne 0 -or
+        !(Test-Path -LiteralPath $stageScripts -PathType Container)) {
+        throw 'GCO_REDSCRIPT_ORDERED_STAGE_CONTRACT_INVALID'
+    }
+    $stageFiles = @(Get-ChildItem -LiteralPath $stageScripts -Recurse -Filter *.reds -File)
+    $manualFiles = @(Get-ChildItem -LiteralPath $manualScripts -Recurse -Filter *.reds -File)
+    if ($stageFiles.Count -ne $manualFiles.Count -or
+        $stageFiles.Count -ne [int]$stageReport.generatedFiles) {
+        throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
+    }
+    foreach ($f in $stageFiles) {
+        $rel = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
+        $manual = Join-Path $manualScripts $rel
+        if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
+            throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_SOURCE_DIFF'
+        }
+    }
+    Write-Host ('PASS GCO REDscript Resolver-to-generator order: rules=' +
+        $scheduled.Count + ' ready=' + $orderedPlan.readyRuleCount +
+        ' eligible=' + $planEligible + ' generatedFiles=' +
+        $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
+        ' realSourceOutputMatchesExistingCI=true productionZip=false')
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path

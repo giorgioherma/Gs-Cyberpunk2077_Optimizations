@@ -10,6 +10,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Point = System.Windows.Point;
 using System.Windows.Threading;
 using GTotalOptimizer.Core;
+using GRedscript.Resolver;
 
 namespace GTotalOptimizer.App;
 
@@ -1744,14 +1745,77 @@ public partial class MainWindow : Window
                     ? "QPC F11-aligned (" + report.PresentMonFrames + " intervals)"
                     : "NOT_CAPTURED") + Environment.NewLine +
                 "Source: current installation verified read-only. Historical capture/source identity is unproven.";
-            RedReportText.Text = "REDscript captured: " + report.CapturedRedscriptFiles +
-                " verified files." + Environment.NewLine +
-                "REDscript optimization is not implemented in this stage; no REDscript performance gains claimed.";
+            // REDscript is no longer reported as absent: use the actual
+            // bundled GCO-local Resolver to decide source-specific passes and
+            // their generation order. This is a plan, not an optimization ZIP.
+            // The six existing source-generators and the five still-unbuilt
+            // experimental systems are deliberately counted separately.
+            string redPlanStatus;
+            try
+            {
+                string sourceRoot = completedGameRoot!;
+                string sessionRoot = CollectedCaptureStore.SessionFolder(
+                    packageRoot, saved.SessionId);
+                string planPath = Path.Combine(sessionRoot,
+                    "REDscript_GenerationPlan.json");
+                var planned = await Task.Run(() =>
+                {
+                    cancel.Token.ThrowIfCancellationRequested();
+                    Directory.CreateDirectory(sessionRoot);
+                    string tempPlan = Path.Combine(sessionRoot,
+                        "REDscript_GenerationPlan." +
+                        Guid.NewGuid().ToString("N") + ".tmp");
+                    try
+                    {
+                        var result = RedscriptGenerationPlan.Create(
+                            sourceRoot, tempPlan);
+                        cancel.Token.ThrowIfCancellationRequested();
+                        File.Move(tempPlan, planPath, overwrite: true);
+                        return result;
+                    }
+                    finally
+                    {
+                        if (File.Exists(tempPlan)) File.Delete(tempPlan);
+                    }
+                }, cancel.Token);
+                if (cancel.IsCancellationRequested || !IsLoaded ||
+                    completedSessionId != saved.SessionId) return;
+                var ready = planned.Rules.Where(rule =>
+                    rule.Status == "READY_FOR_GENERATOR").ToArray();
+                var affected = ready.SelectMany(rule => rule.SourceFolders)
+                    .Distinct(StringComparer.Ordinal).Count();
+                string order = ready.Length == 0 ? "No applicable source edits" :
+                    string.Join(" -> ", ready.Select(rule =>
+                        rule.Order + ":" + rule.Id + "(" +
+                        rule.Eligible + ")"));
+                redPlanStatus = "REDscript current source: " +
+                    planned.SourceFiles + " .reds files" +
+                    " | " + planned.EligibleSourceEdits +
+                    " eligible edits in " + affected + " source folders." +
+                    Environment.NewLine +
+                    "Existing REDscript generators: " + planned.ImplementedRuleCount +
+                    " | Source-ready: " + ready.Length +
+                    " | Capture-gated: " + planned.CaptureGatedExistingRules +
+                    " | Experimental systems awaiting generators: " +
+                    planned.DeferredExperimentalSystems + Environment.NewLine +
+                    "Generation order: " + order + Environment.NewLine +
+                    "Resolver plan: RESULTS / " + saved.SessionId +
+                    " / REDscript_GenerationPlan.json" + Environment.NewLine +
+                    "No REDscript ZIP created; gameplay and performance not yet tested.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                redPlanStatus = "REDscript current-source generation plan unavailable: " +
+                    ex.Message + Environment.NewLine +
+                    "Existing generated source rules remain preview-only.";
+                Trace.TraceWarning("REDscript Resolver plan: " + ex);
+            }
+            RedReportText.Text = redPlanStatus;
             if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
                 RedReportText.Text += Environment.NewLine +
                     "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
             AnalyzeButton.Content = "ANALYZED";
-            ResultsStatusText.Text = "CET Resolver ready. Generate a CET-only pass from current mod sources.";
+            ResultsStatusText.Text = "CET generator ready; REDscript source-ordered plan is shown below. GENERATE currently runs CET only.";
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)

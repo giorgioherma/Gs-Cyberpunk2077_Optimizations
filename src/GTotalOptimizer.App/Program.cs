@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using GTotalOptimizer.Core;
+using GRedscript.Resolver;
 
 namespace GTotalOptimizer.App;
 
@@ -16,15 +17,29 @@ internal static class Program
         {
             var root = PortablePackagePaths.CurrentPackageRoot();
             var verification = ComponentBundleVerifier.Inspect(root);
+            // REDscript must use the SAME single GCO self-contained .NET 10
+            // runtime: Resolver's managed assembly sits beside the GUI and
+            // is invoked in-process. Do not ship a second Resolver runtime.
+            string resolverAssembly = typeof(RedscriptGenerationPlan).Assembly.Location;
+            bool resolverInBundledApp = File.Exists(resolverAssembly) &&
+                string.Equals(Path.GetDirectoryName(resolverAssembly),
+                    AppContext.BaseDirectory.TrimEnd(
+                        Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase);
+            bool sharedNet10 = System.Runtime.InteropServices.RuntimeInformation
+                .FrameworkDescription.StartsWith(".NET 10.", StringComparison.Ordinal);
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                ok = verification.Ready,
+                ok = verification.Ready && resolverInBundledApp && sharedNet10,
                 root,
                 manifest = Path.Combine(root, "components", "manifest.json"),
                 process = Environment.ProcessPath,
-                details = verification.Detail
+                details = verification.Detail,
+                redscriptResolverInSameProcess = resolverInBundledApp,
+                sameBundledNet10Runtime = sharedNet10,
+                redscriptResolverAssembly = Path.GetFileName(resolverAssembly)
             }));
-            return verification.Ready ? 0 : 2;
+            return verification.Ready && resolverInBundledApp && sharedNet10 ? 0 : 2;
         }
 
         // Render the packaged UI, not owner-selected aesthetic coordinates.
