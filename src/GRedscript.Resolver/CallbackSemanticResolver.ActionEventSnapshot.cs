@@ -188,7 +188,9 @@ internal static partial class CallbackSemanticResolver
             foreach (string kind in new[] { "GetName", "GetType" })
             {
                 string label = kind == "GetName" ? "Name" : "Type";
-                string variable = "__gcoAction" + label + "L" + m.Line;
+                int ordinal = methods.Count(x => x.Name == "OnAction" &&
+                    x.First <= m.First);
+                string variable = "__gcoAction" + label + "N" + ordinal;
                 var reads = ReadInputAccessors(t, m, kind);
                 string tag = InputSnapshotMarker + " " + kind + "=" + variable;
                 bool tagged = body.Contains(InputSnapshotMarker + " " + kind + "=",
