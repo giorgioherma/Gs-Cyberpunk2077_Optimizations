@@ -76,7 +76,9 @@ internal static class GenericBlackboardDefinitionPass
         if (basePreviewRoot is not null)
         {
             string basePreview = Path.GetFullPath(basePreviewRoot);
-            if (!Directory.Exists(basePreview) || Within(basePreview, game) ||
+            if (!Directory.Exists(basePreview) ||
+                basePreview.Equals(game, StringComparison.OrdinalIgnoreCase) ||
+                Within(basePreview, game) ||
                 basePreview.Equals(output, StringComparison.OrdinalIgnoreCase) ||
                 Within(basePreview, output) || Within(output, basePreview))
                 throw new InvalidDataException("BBDEFS_BASE_PREVIEW_NOT_ISOLATED");
