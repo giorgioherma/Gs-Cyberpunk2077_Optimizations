@@ -178,9 +178,9 @@ class ActionSnapshotContracts(unittest.TestCase):
         self.assertEqual(scan["eligible"], 0)
 
         self.source.write_text(SOURCE.replace(
-            "        if Equals(ListenerAction.GetName(action), n\"Jump\") {",
+            "        if Equals(ListenerAction.GetName(action), n\"Jump\") &&",
             "        if this.enabled {\n"
-            "          if Equals(ListenerAction.GetName(action), n\"Jump\") {").replace(
+            "          if Equals(ListenerAction.GetName(action), n\"Jump\") &&").replace(
             "        if Equals(ListenerAction.GetName(action), n\"Cancel\")",
             "        }\n        if Equals(ListenerAction.GetName(action), n\"Cancel\")"))
         status, scan = self.scan(output=self.root / "nested.json")
