@@ -63,11 +63,27 @@ internal static class GenericBlackboardDefinitionPass
         return new(admission.InspectedFileCount, eligible, complete);
     }
 
-    internal static int Preview(string gameRoot, string analysisPath, string outputRoot)
+    internal static int Preview(string gameRoot, string analysisPath, string outputRoot,
+        string? basePreviewRoot = null)
     {
         string game = Path.GetFullPath(gameRoot),
             analysis = Path.GetFullPath(analysisPath),
             output = Path.GetFullPath(outputRoot);
+        // The preceding generic rules generate a private, source-proven
+        // effective preview. Compose against those bytes, never against live
+        // files, and never stage over an existing output.
+        string? baseScripts = null;
+        if (basePreviewRoot is not null)
+        {
+            string basePreview = Path.GetFullPath(basePreviewRoot);
+            if (!Directory.Exists(basePreview) || Within(basePreview, game) ||
+                basePreview.Equals(output, StringComparison.OrdinalIgnoreCase) ||
+                Within(basePreview, output) || Within(output, basePreview))
+                throw new InvalidDataException("BBDEFS_BASE_PREVIEW_NOT_ISOLATED");
+            baseScripts = Path.Combine(basePreview, "r6", "scripts");
+            if (!Directory.Exists(baseScripts))
+                throw new InvalidDataException("BBDEFS_BASE_PREVIEW_SCRIPTS_MISSING");
+        }
         if (Within(output, game) || File.Exists(output) ||
             (Directory.Exists(output) && Directory.EnumerateFileSystemEntries(output).Any()))
             throw new InvalidDataException("BBDEFS_PREVIEW_OUTPUT_NOT_ISOLATED");
@@ -92,9 +108,39 @@ internal static class GenericBlackboardDefinitionPass
         int edits = 0;
         foreach (var view in Files(game, admission))
         {
-            var state = Examine(view);
-            if (state.Candidates.Count == 0) continue;
-            string updated = view.Content;
+            var originalState = Examine(view);
+            if (originalState.Candidates.Count == 0) continue;
+            string effective = view.Content;
+            State state = originalState;
+            if (baseScripts is not null)
+            {
+                string stagedPath = Path.GetFullPath(Path.Combine(baseScripts,
+                    view.Relative.Replace('/', Path.DirectorySeparatorChar)));
+                if (!Within(stagedPath, baseScripts))
+                    throw new InvalidDataException("BBDEFS_BASE_PREVIEW_PATH_ESCAPE");
+                if (File.Exists(stagedPath))
+                {
+                    effective = File.ReadAllText(stagedPath, Encoding.UTF8);
+                    state = Examine(new FileView(view.Relative, effective,
+                        SourceAdmission.ReadTokens(effective)));
+
+                    // Exact original candidate statement must survive all
+                    // prior source-owned generic transforms. A changed line,
+                    // reordered expression or removed candidate is a real
+                    // conflict, never a reason to overwrite the earlier pass.
+                    string[] before = originalState.Candidates.Select(c =>
+                        c.Group + "\0" + view.Content[c.Begin..c.End])
+                        .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    string[] after = state.Candidates.Select(c =>
+                        c.Group + "\0" + effective[c.Begin..c.End])
+                        .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    if (state.Complete != originalState.Complete ||
+                        !before.SequenceEqual(after, StringComparer.Ordinal))
+                        throw new InvalidDataException(
+                            "BBDEFS_COMPOSITION_STATEMENT_OVERLAP_OR_DRIFT");
+                }
+            }
+            string updated = effective;
             string newline = updated.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
             foreach (var c in state.Candidates.OrderByDescending(x => x.Begin))
             {
