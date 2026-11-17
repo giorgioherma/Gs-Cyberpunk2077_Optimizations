@@ -37,7 +37,20 @@ internal static class GenericAngleSortPass
         }
         """;
     private const string QuadGuard = """
-        if p.X > -100000.0 && p.X < 100000.0 &&
+        // Run the cheap outside rejection first. Nearby/inside points proceed
+        // straight to the original path; only far candidates pay the finite
+        // and non-degenerate geometry checks.
+        let outside =
+            (p.X < sq.a.X - 16.0 && p.X < sq.b.X - 16.0 &&
+             p.X < sq.c.X - 16.0 && p.X < sq.d.X - 16.0) ||
+            (p.X > sq.a.X + 16.0 && p.X > sq.b.X + 16.0 &&
+             p.X > sq.c.X + 16.0 && p.X > sq.d.X + 16.0) ||
+            (p.Y < sq.a.Y - 16.0 && p.Y < sq.b.Y - 16.0 &&
+             p.Y < sq.c.Y - 16.0 && p.Y < sq.d.Y - 16.0) ||
+            (p.Y > sq.a.Y + 16.0 && p.Y > sq.b.Y + 16.0 &&
+             p.Y > sq.c.Y + 16.0 && p.Y > sq.d.Y + 16.0);
+        if outside &&
+           p.X > -100000.0 && p.X < 100000.0 &&
            p.Y > -100000.0 && p.Y < 100000.0 &&
            sq.a.X > -100000.0 && sq.a.X < 100000.0 &&
            sq.a.Y > -100000.0 && sq.a.Y < 100000.0 &&
@@ -46,23 +59,12 @@ internal static class GenericAngleSortPass
            sq.c.X > -100000.0 && sq.c.X < 100000.0 &&
            sq.c.Y > -100000.0 && sq.c.Y < 100000.0 &&
            sq.d.X > -100000.0 && sq.d.X < 100000.0 &&
-           sq.d.Y > -100000.0 && sq.d.Y < 100000.0 {
-            let outside =
-                (p.X < sq.a.X - 16.0 && p.X < sq.b.X - 16.0 &&
-                 p.X < sq.c.X - 16.0 && p.X < sq.d.X - 16.0) ||
-                (p.X > sq.a.X + 16.0 && p.X > sq.b.X + 16.0 &&
-                 p.X > sq.c.X + 16.0 && p.X > sq.d.X + 16.0) ||
-                (p.Y < sq.a.Y - 16.0 && p.Y < sq.b.Y - 16.0 &&
-                 p.Y < sq.c.Y - 16.0 && p.Y < sq.d.Y - 16.0) ||
-                (p.Y > sq.a.Y + 16.0 && p.Y > sq.b.Y + 16.0 &&
-                 p.Y > sq.c.Y + 16.0 && p.Y > sq.d.Y + 16.0);
-            if outside &&
-               AbsF(Sign(sq.a, sq.b, sq.c)) > 1.0 &&
-               AbsF(Sign(sq.a, sq.b, sq.d)) > 1.0 &&
-               AbsF(Sign(sq.a, sq.c, sq.d)) > 1.0 &&
-               AbsF(Sign(sq.b, sq.c, sq.d)) > 1.0 {
-                return false;
-            }
+           sq.d.Y > -100000.0 && sq.d.Y < 100000.0 &&
+           AbsF(Sign(sq.a, sq.b, sq.c)) > 1.0 &&
+           AbsF(Sign(sq.a, sq.b, sq.d)) > 1.0 &&
+           AbsF(Sign(sq.a, sq.c, sq.d)) > 1.0 &&
+           AbsF(Sign(sq.b, sq.c, sq.d)) > 1.0 {
+            return false;
         }
         """;
     private const string SquareDeclaration = """
