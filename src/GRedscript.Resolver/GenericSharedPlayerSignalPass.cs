@@ -27,10 +27,10 @@ internal static class GenericSharedPlayerSignalPass
     internal sealed record Summary(int SourceFiles, int Eligible,
         int EligibleFiles, int AlreadyComplete);
     private static readonly Regex ModuleHeader = new(
-        @"(?m)^[ \\t]*module[ \\t]+[A-Za-z_][A-Za-z0-9_.]*[ \\t]*$",
+        @"(?m)^[ \t]*module[ \t]+[A-Za-z_][A-Za-z0-9_.]*[ \t]*$",
         RegexOptions.CultureInvariant);
     private static readonly Regex RuntimeImport = new(
-        @"(?m)^[ \\t]*import[ \\t]+GRedRuntime\\.\\*[ \\t]*;?[ \\t]*$",
+        @"(?m)^[ \t]*import[ \t]+GRedRuntime\.\*[ \t]*;?[ \t]*$",
         RegexOptions.CultureInvariant);
 
     private sealed record Script(string Relative, string Text,
@@ -190,8 +190,8 @@ internal static class GenericSharedPlayerSignalPass
                 var header = ModuleHeader.Match(effective);
                 if (!header.Success)
                     throw new InvalidDataException("SHARED_PLAYER_MODULE_HEADER_MISSING");
-                string nl = effective.Contains("\\r\\n", StringComparison.Ordinal)
-                    ? "\\r\\n" : "\\n";
+                string nl = effective.Contains("\r\n", StringComparison.Ordinal)
+                    ? "\r\n" : "\n";
                 effective = effective.Insert(header.Index + header.Length,
                     nl + "import GRedRuntime.*");
             }
