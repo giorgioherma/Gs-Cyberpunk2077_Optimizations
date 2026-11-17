@@ -1,12 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
 
-## 2026-11-17 — blackboard multi-pass effective-source composition in development
+## 2026-11-17 — blackboard effective-source composition verified in CI #587
 
-- Current owner GCO `dev/redscript/resolver_handoff`; other repositories and installed sources unchanged.
-- Updated the existing `BLACKBOARD_DEFINITION_STATEMENT_V1` source generator to consume the authoritative prior generic staged source via isolated `--base-preview`, proving the original targeted statements survived unchanged and rerunning the same existing source matcher on the effective input. This is **one authoritative rule with composable input**, not an output repair pass.
-- Real-source CI now stages both changes for previously colliding files in one temporary overlay instead of discarding them. Added same-file preservation/drift/isolation contracts. No broader semantic scope or loose matcher.
-- Commits: `357716e`, `c3395d5`, `07287d3`, `38c19dc`. New CI #581–#584 is running; **do not claim source/SCC success until verified**. Predecessor #580 remains the last verified full-green baseline, with two overlaps deferred. No gameplay or saved CPU/allocations claimed.
+- GCO `dev/redscript/resolver_handoff`, single source-owned blackboard rule: opt-in isolated `--base-preview` consumes previously generated generic effective source; exact source-line/group match required, altered or missing statement fails closed. No corrective pass or second generator.
+- **[CI #587 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44068339695):** 89/89 .NET10 REDscript tests, 2,319-file source audit, 22 eligible statements in 16 files, **14 disjoint and 2 same-file composed; no deferred collisions**. Official SCC 0.5.31 `framework-all-generics-preview` exit 0 with 22 callback/generic preview files plus 10 authoritative G-REDruntime source files; 323 package/installation contracts PASS. Single GCO app artifact 14321887110; no original source/capture mutation.
+- Prior CI #584–#586 caught new-option parser omission, equal-game-root isolation and a malformed synthetic previous-pass fixture. Fixed at the authoritative source/tests, without bypassing real safety checks. Most recent code/test commits `357716e`, `c3395d5`, `07287d3`, `38c19dc`, `65e7d8e`, `8d5ca04`, `73a0cd3`.
+- **Still preview only:** general full-six-pass production composition, live-game behavior and matched CET/GRSP/PresentMon before/after, safety rollback and one final optimization ZIP remain unverified. Continue generic high-value work elimination; no claimed speedup.
 
 
 ## 2026-11-17 — REDscript immutable BLACKBOARD metadata reuse implemented as preview
