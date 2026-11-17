@@ -15,7 +15,7 @@ internal static class GenericSharedPlayerSignalPass
 {
     internal const string Rule = "SHARED_PLAYER_SIGNAL_V1";
     private const string Marker = "/* GCO-GENERIC:" + Rule + " */";
-    private const string ReplacementClass = "GRedRuntime.SharedProviders.Player";
+    private const string ReplacementClass = "SharedProviders.Player";
     private static readonly Regex Identifier = new(
         @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
     private static readonly string[] Prefix = [
@@ -26,6 +26,13 @@ internal static class GenericSharedPlayerSignalPass
     private sealed record Candidate(int Start, int End, int Line, string Argument);
     internal sealed record Summary(int SourceFiles, int Eligible,
         int EligibleFiles, int AlreadyComplete);
+    private static readonly Regex ModuleHeader = new(
+        @"(?m)^[ \\t]*module[ \\t]+[A-Za-z_][A-Za-z0-9_.]*[ \\t]*$",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex RuntimeImport = new(
+        @"(?m)^[ \\t]*import[ \\t]+GRedRuntime\\.\\*[ \\t]*;?[ \\t]*$",
+        RegexOptions.CultureInvariant);
+
     private sealed record Script(string Relative, string Text,
         List<Candidate> Candidates, int Complete);
 
@@ -58,6 +65,7 @@ internal static class GenericSharedPlayerSignalPass
 
     private static List<Candidate> Find(string text)
     {
+        if (!ModuleHeader.IsMatch(text)) return new List<Candidate>();
         var tokens = SourceAdmission.ReadTokens(text);
         var rows = new List<Candidate>();
         for (int i = 0; i + Prefix.Length + 1 + Suffix.Length <= tokens.Count; i++)
@@ -177,6 +185,16 @@ internal static class GenericSharedPlayerSignalPass
                 effective = effective[..match.Start] + Marker + " " +
                     ReplacementClass + "(" + match.Argument + ")" +
                     effective[match.End..];
+            if (!RuntimeImport.IsMatch(effective))
+            {
+                var header = ModuleHeader.Match(effective);
+                if (!header.Success)
+                    throw new InvalidDataException("SHARED_PLAYER_MODULE_HEADER_MISSING");
+                string nl = effective.Contains("\\r\\n", StringComparison.Ordinal)
+                    ? "\\r\\n" : "\\n";
+                effective = effective.Insert(header.Index + header.Length,
+                    nl + "import GRedRuntime.*");
+            }
             if (Find(effective).Count != 0 ||
                 Regex.Matches(effective, Regex.Escape(Marker)).Count <
                 item.Complete + found.Count)
