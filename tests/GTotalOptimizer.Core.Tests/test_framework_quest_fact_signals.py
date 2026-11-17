@@ -93,9 +93,10 @@ def verify(runtime, signals):
     need(shutdown, "watch.bridge = null", "FACT_SIGNAL_SHUTDOWN_BRIDGE_LEAK")
     need(shutdown, "ArrayClear(this.m_interests)", "FACT_SIGNAL_SHUTDOWN_LEAKS_TOKENS")
     need(shutdown, "ArrayClear(this.m_watches)", "FACT_SIGNAL_SHUTDOWN_LEAKS_WATCHES")
-    need(bridge_callback, "this.m_owner.OnFactChanged(this.m_fact, value)",
+    need(bridge_callback, "this.m_owner.OnFactChanged(this.m_fact, value, this)",
          "FACT_SIGNAL_VALUE_FORWARD_MISSING")
     need(bridge_callback, "return false", "FACT_SIGNAL_OBSERVER_RETURN_NOT_SAFE")
+    need(callback, "Equals(watch.bridge, bridge)", "FACT_SIGNAL_STALE_BRIDGE_CALLBACK_ADMITTED")
     need(callback, "watch.version += 1u", "FACT_SIGNAL_CALLBACK_VERSION_MISSING")
     need(callback, "watch.lastObservedValue = value", "FACT_SIGNAL_VALUE_NOT_FORWARDED")
     need(callback, "watch.hasObservedValue = true", "FACT_SIGNAL_OBSERVED_VALUE_UNKNOWN")
@@ -158,6 +159,14 @@ class FactSignalContracts(unittest.TestCase):
         old = method(self.signals, "InvalidateSession")
         bad = self.signals.replace(old, old.replace("watch.hasObservedValue = false", ""))
         with self.assertRaisesRegex(AssertionError, "FACT_SIGNAL_SESSION_EXPOSES_STALE_VALUE"):
+            verify(self.runtime, bad)
+
+    def test_reject_late_callback_from_previously_released_bridge(self):
+        # The old listener can be invoked after final ReleaseFact and a
+        # new interest for the same fact. Name-only checks would let its
+        # stale payload corrupt the newly registered watch.
+        bad = self.signals.replace("Equals(watch.bridge, bridge)", "true")
+        with self.assertRaisesRegex(AssertionError, "FACT_SIGNAL_STALE_BRIDGE_CALLBACK_ADMITTED"):
             verify(self.runtime, bad)
 
     def test_reject_session_change_without_notification(self):
