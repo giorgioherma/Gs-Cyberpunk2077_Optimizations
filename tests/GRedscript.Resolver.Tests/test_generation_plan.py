@@ -82,7 +82,7 @@ public class IndependentAuthor extends IScriptable {
         self.assertFalse(doc["productionZipAuthorized"])
         self.assertFalse(doc["gameplayValidated"])
         active = doc["rules"][:7]
-        self.assertEqual([r["order"] for r in active], list(range(1, 7)))
+        self.assertEqual([r["order"] for r in active], list(range(1, 8)))
         self.assertEqual([r["id"] for r in active], [
             "fixed-cname-index", "literal-action-filter",
             "angle-sort", "late-system-read",
