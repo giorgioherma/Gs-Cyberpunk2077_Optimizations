@@ -1,5 +1,13 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-17 — First shared-work source transforms integrated
+
+Existing GCO Resolver generation plan now lists **8 existing generator families: 7 ordered, 1 capture-gated**. New generic ACTION_EVENT_SNAPSHOT_V1 reuses stable per-callback action name/type reads, not engine registration changes. **CI #671 PASS**: 33 reducible getter reads in five real files, 107 total eligible edits in the ordered plan, 48 staged .reds, full private SCC and GCO bundled-runtime package PASS. https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44178965800
+
+E adds QUAD_SAFE_AABB_BROADPHASE_V1 as a rule *inside existing GenericAngleSortPass*: exact signed-area/triangle/four-corner source proof, outside >16 units, finite bounds and nondegenerate triples before early-false; full original geometry fallback otherwise. Original F11 SortSquare exposure (216,006 edges, 11,630.6389ms exclusive) motivates the rule but does not establish savings or an in-game acceptance result. Latest full-stack run #677 pending at authoring: https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44181331312
+
+This is progress toward a unified work system, not proof the five broader A–E runtime systems are finished. Shared InputHub/QuestFactSignals/StateCache adoption across owners remains next and requires original consumer semantics and timing. Continue existing source-owned generator/plan, no second framework service, no production REDscript ZIP.
+
 ## 2026-11-17 — GCO bundled .NET10 Resolver-to-generator plan VERIFIED (#657)
 
 **User decision:** No REDscript ZIP yet. Resolver must decide the **ordered source pass plan**, while the existing generators consume it. Work inside the current GCO two-page full app with **one bundled .NET 10 runtime**, not a second developer executable/runtime. The approved A–E aggressive experimental mechanisms remain development priorities and are **not yet broadly implemented**.
