@@ -49,6 +49,10 @@ internal static class Program
                 return RunAngleSortScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-angle-sort")
                 return RunAngleSortPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-action-snapshot")
+                return RunActionSnapshotScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-action-snapshot")
+                return RunActionSnapshotPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-action-filter")
                 return RunActionFilterScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-action-filter")
@@ -544,6 +548,38 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript action filter preview: transformed=" +
             rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    // One immutable action event, decoded once per interested input callback.
+    // This does not alter engine registrations, consumption or wrapper order.
+    private static int RunActionSnapshotScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Action snapshot scan accepts --game and --out");
+        var result = CallbackSemanticResolver.ScanActionEventSnapshots(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO shared input event snapshot: files=" +
+            result.SourceFiles + " eligible=" + result.Eligible +
+            " files=" + result.EligibleFiles +
+            " already=" + result.AlreadyComplete + " sourceWrites=0");
+        return 0;
+    }
+
+    private static int RunActionSnapshotPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+                "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException("Action snapshot preview accepts --game, --analysis, --out, --base-preview");
+        int count = CallbackSemanticResolver.PreviewActionEventSnapshots(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var b) ?
+                Path.GetFullPath(b) : null);
+        Console.WriteLine("GCO shared input event generated .reds: transformed=" +
+            count + " gameplayValidated=false deployable=false");
         return 0;
     }
 
