@@ -508,6 +508,19 @@ jobs:
           sparse-checkout: |
             tests/fixtures/real-captures
           sparse-checkout-cone-mode: true
+      # Source test binary lives on stable main, not the REDscript dev branch.
+      # A sparse checkout imports only the exact immutable native test asset.
+      - name: Checkout native CET player/location test fixture
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
+          ref: main
+          path: unified/.gco-ci-native-fixture
+          persist-credentials: false
+          sparse-checkout: |
+            tests/G-CETtoNATIVEplayer_state_machine
+          sparse-checkout-cone-mode: true
       - name: Replay real sealed GRSP capture with private REDscript source
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         timeout-minutes: 12
@@ -533,6 +546,9 @@ jobs:
         run: |
           if (Test-Path -LiteralPath '.gco-ci-real-grsp-capture') {
             Remove-Item -LiteralPath '.gco-ci-real-grsp-capture' -Recurse -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath '.gco-ci-native-fixture') {
+            Remove-Item -LiteralPath '.gco-ci-native-fixture' -Recurse -Force -ErrorAction Stop
           }
       - name: Remove private REDscript source checkout
         if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
