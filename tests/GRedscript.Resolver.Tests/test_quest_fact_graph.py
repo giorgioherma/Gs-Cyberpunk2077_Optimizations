@@ -65,10 +65,11 @@ class QuestFactGraphTests(unittest.TestCase):
         self.b = b
         self.out = self.root / "quest-graph.json"
 
-    def run_scan(self, *extra):
+    def run_scan(self, *extra, out=None):
         return subprocess.run(
             ["dotnet", str(DLL), "scan-quest-facts",
-             "--game", str(self.game), "--out", str(self.out), *map(str, extra)],
+             "--game", str(self.game), "--out", str(out or self.out),
+             *map(str, extra)],
             text=True, capture_output=True, timeout=90)
 
     def test_exact_names_overlap_and_dynamic_require_refusal(self):
@@ -114,7 +115,7 @@ class QuestFactGraphTests(unittest.TestCase):
         for illegal in [self.a.parent / "inject.json", self.out]:
             if illegal == self.out:
                 illegal.write_text("preserve", encoding="utf8")
-            r = self.run_scan("--out", illegal)
+            r = self.run_scan(out=illegal)
             self.assertNotEqual(r.returncode, 0)
             self.assertIn("QUEST_FACT_OUTPUT_NOT_ISOLATED", r.stdout + r.stderr)
         self.assertEqual(self.out.read_text(), "preserve")
