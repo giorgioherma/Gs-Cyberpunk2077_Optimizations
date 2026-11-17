@@ -536,6 +536,40 @@ try {
         $unresolvedReceivers.Count -lt 1) {
         throw 'GCO_QUEST_FACT_LITERAL_RECEIVER_ACCOUNTING_FAILED'
     }
+    $refreshFactReaders = @($qFacts.directRefreshReaders)
+    $refreshMeasured = @($refreshFactReaders | Where-Object {
+        $_.hasSourceMatchedOutgoingEdgeEvidence -eq $true
+    })
+    $refreshDynamic = @($refreshFactReaders | Where-Object {
+        [int]$_.dynamicFactReads -gt 0
+    })
+    if ($qFacts.anyRefreshFullDependencyClosureProven -ne $false -or
+        [int]$qFacts.directRefreshFactReaderMethods -ne $refreshFactReaders.Count -or
+        [int]$qFacts.sourceMatchedDirectRefreshFactReaderMethods -ne
+            $refreshMeasured.Count -or
+        [int]$qFacts.dynamicDirectRefreshFactReaderMethods -ne
+            $refreshDynamic.Count -or
+        $refreshFactReaders.Count -lt 1) {
+        throw 'GCO_QUEST_FACT_REFRESH_DEPENDENCY_ACCOUNTING_FAILED'
+    }
+    foreach ($reader in $refreshFactReaders) {
+        if ([int]$reader.directFactReads -lt 1 -or
+            [int]$reader.dynamicFactReads -lt 0 -or
+            [int]$reader.dynamicFactReads -gt [int]$reader.directFactReads -or
+            $reader.completeFactWriterCoverage -ne $false -or
+            $reader.completeTransitiveDependencyClosure -ne $false -or
+            $reader.originalEntryAndSideEffectSemanticsProven -ne $false -or
+            $reader.sharedChangeNotificationEquivalent -ne $false -or
+            $reader.safeToReplaceGetterOrSkipMethod -ne $false -or
+            $reader.generationAuthorized -ne $false) {
+            throw 'GCO_QUEST_FACT_REFRESH_SKIP_WITHOUT_SOURCE_PROOF'
+        }
+    }
+    Write-Host ('PASS GCO quest fact refresh dependency gate: refreshMethods=' +
+        $refreshFactReaders.Count + ' sourceMeasured=' +
+        $refreshMeasured.Count + ' dynamicReaders=' + $refreshDynamic.Count +
+        ' completeWriterGraph=0 fullyCovered=0 generatedFiles=0')
+
     Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
         $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
         ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +
