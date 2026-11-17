@@ -1,5 +1,13 @@
 # GCO-local REDscript Resolver
 
+## Shared-work and dirty refresh source scan (2026-11-17)
+
+Use `dotnet GRedscript.Resolver.dll scan-shared-work --game <live-game-root> --out <external-private-json> [--analysis <verified-GRSP-Resolver-json>]` for read-only whole-stack discovery. This uses the **same `CallbackSemanticResolver` parser, source index and exact measured F11 callsite join** as the existing `resolve-callbacks` CLI. A method-name match is a discovery hint, **not proof of a callback entry, complete immutable inputs, closed writer set, safe UI skip, or CPU saving**. Original sources, capture and installed game are never written.
+
+JSON schema `gco.redscript.shared-work.scan.v1` records direct measured outgoing edges, optional direct exclusive observations and explicit blocker reasons; `callbackEntries` and `expectedSavingsMs` remain null, `generationAuthorized=false`. Source-only use is permitted but never reported as measured. Output under game, conflicting output or changed source SHA refuse. [GCO #598](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44082314052) verified **94 managed tests**, **1,200** source-family methods/187 measured matches in the actual 2,319-file private stack, full SCC and 323 integration tests. This is still a classifier, not a REDscript optimization pass. See `docs/integration/R5-SHARED-WORK-EVIDENCE-STATUS.md`.
+
+
+
 ## Generic pass 3: ANGLE_SORT_INVARIANT_V1 (2026-11-17)
 
 The new `scan-angle-sort --game <current-root> --out <external-json>`

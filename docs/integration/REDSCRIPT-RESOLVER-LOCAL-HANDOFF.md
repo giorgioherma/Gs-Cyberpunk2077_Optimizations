@@ -1,5 +1,10 @@
 # GCO-local REDscript Resolver handoff — approved 2026-11-16
 
+## 2026-11-17 R5 shared work / dirty refresh scan — verified CI #598
+
+**Start with [R5-SHARED-WORK-EVIDENCE-STATUS.md](R5-SHARED-WORK-EVIDENCE-STATUS.md).** GCO `dev/redscript/resolver_handoff` now shares one existing `CallbackSemanticResolver` source-method parser between `resolve-callbacks` and read-only `scan-shared-work`. Exact sealed F11 callsite/source validation ranks all current `Update/Refresh/Render/Tick` style methods and reports source-dependent time/UI/event/mutation/lifetime/return first refusal. [GCO #598 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44082314052): **94** managed tests, 2,319 source files, **1,200** lexical method-name matches, **187** source-matched measured methods, **1,013** unmeasured, full real-stack SCC with owner framework, **323** package contracts. No broad dirty flag generation or speedup is authorized by name or F11 outgoing edge count. Next prove all mutators, first-init/wake, lifecycle, dynamic time/animations and publisher order for exact high-impact generic work; refuse any uncertainty and preserve original mod functionality.
+
+
 ## 2026-11-17 shared player-state foundation — actual owner and CI gate
 
 **Read [R5-SHARED-PLAYER-SIGNAL-STATUS.md](R5-SHARED-PLAYER-SIGNAL-STATUS.md)** before extending cross-mod state. G-REDruntime `main` owns an additive, source-first, generation-tagged and UNKNOWN-aware `StateCache` player signal sourced from native `PlayerAttachRequest`/`PlayerDetachRequest`. `Runtime` coordinates existing ContextService, DirtyFlags.PLAYER, EventBus, and the opt-in InputHub listener cleanup. The historical `StateCache.GetPlayer()` remains callable and, after detach/unknown, uses an **uncached original PlayerSystem live fallback** instead of incorrectly restoring the shared handle. All consumers must validate `Runtime.IsReady()`, known state and generation and retain original source fallback. No combat/vehicle/position/menu or derived gameplay-state cache added, no CET native ABI assumed.

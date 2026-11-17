@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — R5 measured shared-work evidence scanner, GCO CI #598 SUCCESS
+
+- `scan-shared-work --game <current-root> --out <isolated-json> [--analysis <sealed-capture-analysis>]` now lives in GCO `CallbackSemanticResolver.SharedWork.cs` and uses the single source-method parser and exact GCO source/capture evidence join. Read-only method-family discovery for update, refresh, tick, rebuild and render, **not** source optimization admission or a competing scanner.
+- **[CI #598 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44082314052):** 94 managed REDscript tests, five new negative/provenance scanner tests, real private stack **2,319** files, **1,200** name-family candidate methods, **187** source-matched measured outgoing-callsite rows by source method and **1,013** without matched measurements, all blockers accounted for; official SCC 0.5.31 full effective preview + **10** owner framework sources, **323** GCO package/installer contracts. Output has no generation approval, no modified sources, no modeled savings; portable app artifact `run598-a1` (ID 14328391585) is NOT final optimized ZIP.
+- **Next:** prove actual writer/alias closure, retained events, time/animation freshness and consumer lifecycle before generating the first meaningful DirtyFlags-backed generic skip of pure work. `G-REDruntime` player-signal #593 stays intact; no modifications to its source, GRSP native, CET, stable GCO `main` or private original game. [Exact handoff](R5-SHARED-WORK-EVIDENCE-STATUS.md).
+
+
 ## 2026-11-17 — R5 shared player lifecycle producer: code and real-source SCC verified
 
 - **Ownership:** G-REDruntime `main` implements the state producer in existing `Runtime.reds`, `StateCache.reds`, `InputHub.reds`. GCO `dev/redscript/resolver_handoff` added only owner-checkout source contracts in `tests/GTotalOptimizer.Core.Tests/test_framework_player_signal.py` and integrated them in the existing `Verify-RealGrspResolverReplay.ps1` before original isolated SCC. No separate binary, Rust hook, REDscript optimizer recipe, WPF change, installer operation or stable GCO branch mutation.
