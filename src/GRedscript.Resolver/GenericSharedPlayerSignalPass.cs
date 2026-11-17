@@ -76,7 +76,7 @@ internal static class GenericSharedPlayerSignalPass
             if (!rest) continue;
             // Replacing a native/foreign static class shadow would be unsafe.
             if (Regex.IsMatch(text,
-                @"\\b(?:let|var|const)\\s+GameInstance\\b",
+                @"\b(?:let|var|const)\s+GameInstance\b",
                 RegexOptions.CultureInvariant)) continue;
             int end = argument + Suffix.Length;
             rows.Add(new(tokens[i].Start, tokens[end].End,
