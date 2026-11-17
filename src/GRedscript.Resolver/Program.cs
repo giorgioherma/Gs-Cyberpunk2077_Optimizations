@@ -736,11 +736,12 @@ internal static class Program
         Dictionary<string, string> options)
     {
         if (options.Keys.Any(key => key is not (
-            "--cet-runtime" or "--out" or "--red-locations")))
+            "--cet-runtime" or "--game" or "--out" or "--red-locations")))
             throw new ArgumentException(
-                "Shared native stage accepts --cet-runtime, --out, --red-locations");
+                "Shared native stage accepts --cet-runtime, --game, --out, --red-locations");
         var result = SharedNativeRuntimeStage.Stage(
             Required(options, "--cet-runtime"),
+            Required(options, "--game"),
             Required(options, "--out"),
             options.GetValueOrDefault("--red-locations"));
         Console.WriteLine(JsonSerializer.Serialize(result));
