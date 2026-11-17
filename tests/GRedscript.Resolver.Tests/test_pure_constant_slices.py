@@ -58,20 +58,20 @@ class PureConstantSourceContracts(unittest.TestCase):
         self.analysis = self.root / "analysis.json"
         self.preview = self.root / "preview"
 
-    def run(self, *args):
+    def cli(self, *args):
         return subprocess.run(["dotnet", str(DLL), *map(str, args)],
                               capture_output=True, text=True, timeout=90)
 
     def scan(self, output=None):
         out = output or self.scanfile
-        r = self.run("scan-pure-constants", "--game", self.game,
+        r = self.cli("scan-pure-constants", "--game", self.game,
                      "--out", out)
         return r, (json.loads(out.read_text()) if r.returncode == 0 else None)
 
     def seal(self):
         if self.audit.exists():
             self.audit.unlink()
-        r = self.run("source-audit", "--game", self.game,
+        r = self.cli("source-audit", "--game", self.game,
                      "--out", self.audit)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         h = json.loads(self.audit.read_text())["sourceStackSha256"]
@@ -89,7 +89,7 @@ class PureConstantSourceContracts(unittest.TestCase):
                 "--analysis", self.analysis, "--out", output or self.preview]
         if base is not None:
             args.extend(["--base-preview", base])
-        return self.run(*args)
+        return self.cli(*args)
 
     def test_generates_source_only_for_pure_final_bool(self):
         original = self.consumer.read_bytes()
@@ -223,7 +223,7 @@ public class IndependentAuthor extends IScriptable {
         self.assertFalse(self.preview.exists())
 
         self.seal()
-        r = self.run("scan-pure-constants", "--game", self.game,
+        r = self.cli("scan-pure-constants", "--game", self.game,
                      "--out", self.game / "r6/scripts/unsafe.json")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("PURE_BOOL_SCAN_OUTPUT_NOT_ISOLATED", r.stdout + r.stderr)
