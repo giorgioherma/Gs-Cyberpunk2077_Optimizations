@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-18 — isolated native+shared player compilation checkpoint GCO #706 SUCCESS
+
+[CI #706](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44202502309) **SUCCESS**, source SHA `70d49376d603f24d23c9443eb6feb0a795eb16c9`: seven source-only generator families plus one narrow shared player source family (8 ordered), **39 admitted shared-player getter sites across 15 files**, 147 combined source-level eligible edits in 58 effective-stage files. The first 7 families' independent callback preview remains a separate 48-file compiler lane. Real GCO native dispatcher loaded CET's actual source-owner `GCETStaticLocations.dll` from the main-branch test ZIP and staged a REDscript RTTI adapter. **Official SCC 0.5.31 passed all six headless scenarios**: empty smoke, untouched 2,319-source, generic optimized, callback-only, untouched+12 G-REDruntime source, and complete framework+generic+adapter; compiled outputs distinct, installed source/cache unchanged. **323 GCO installation/CLI/package contracts passed**, one self-contained v1.2.5 app artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run706-a1` (90,279,550 bytes), link via CI #706.
+
+**Later source-owner correction (not part of #706):** G-REDruntime `main` now owns `NativeLocationSignals.reds` and `optional-native/.../GCETNativeLocationBackend.reds`. GCO changed native staging to copy this optional source instead of owning a duplicate declaration template, and its separate framework-composed SCC lane now admits only the named owner backend. This replacement is **pending new successful integrated CI**, so do not describe the current branch as final verified or game-tested. Existing A/E geometry and input-action passes unchanged. No generated game ZIP, live REDscript native observer subscription, input/quest migration or measured savings yet.
+
+
 ## 2026-11-18 — shared CET C++ player/location dispatch and first REDscript provider generation
 
 **User decision:** CET and REDscript Resolvers can independently request the SAME native RED4ext player/location service, much like 0-Engine. The shared output retains one `GCETStaticLocations.dll` and one owner-merged `G-CET.locations`; preexisting asset is reused, missing asset dispatched from the packaged CET owner runtime, overlapping owner definitions that differ refuse. The REDscript resolver should not demand profiler installation to plan its dependency. No game ZIP requested or produced.
