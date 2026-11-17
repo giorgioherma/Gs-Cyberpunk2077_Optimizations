@@ -138,11 +138,18 @@ public static class SharedNativeRuntimeStage
     /// Native DLL staging is first-writer-wins; site inventory is unioned by
     /// owner and identical owner records are idempotent.
     /// </summary>
-    public static Result Stage(string sourceRoot, string outputRoot,
-        string? redLocationsFile = null, bool includeBridge = true)
+    public static Result Stage(string sourceRoot, string gameRoot,
+        string outputRoot, string? redLocationsFile = null,
+        bool includeBridge = true)
     {
         string source = Path.GetFullPath(sourceRoot);
         string output = Path.GetFullPath(outputRoot);
+        string game = Path.GetFullPath(gameRoot);
+        if (!Directory.Exists(game) ||
+            output.Equals(game, StringComparison.OrdinalIgnoreCase) ||
+            output.StartsWith(game.TrimEnd(Path.DirectorySeparatorChar) +
+                Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("SHARED_NATIVE_GAME_OUTPUT_FORBIDDEN");
         if (!Directory.Exists(source) ||
             output.Equals(source, StringComparison.OrdinalIgnoreCase) ||
             output.StartsWith(source.TrimEnd(Path.DirectorySeparatorChar) +
