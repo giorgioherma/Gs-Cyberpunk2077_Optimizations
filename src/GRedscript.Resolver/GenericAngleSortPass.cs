@@ -352,11 +352,13 @@ internal static class GenericAngleSortPass
         if (quadMarkers != quadComplete)
             throw new InvalidDataException(
                 "QUAD_BROADPHASE_PARTIAL_OR_DRIFTED_MARKER");
-        complete += quadComplete;
+        // The two distinct markers are validated against their own
+        // transformation counts. A completed quad guard must not be mistaken
+        // for an extra completed angle-sort body.
         int markers = text.Split(Marker, StringSplitOptions.None).Length - 1;
         if (markers != complete)
             throw new InvalidDataException("ANGLE_SORT_PARTIAL_OR_DRIFTED_GENERATED_MARKER");
-        return new(edits, complete);
+        return new(edits, complete + quadComplete);
     }
 
     private static int CountShape(IReadOnlyList<SourceAdmission.Token> t,
