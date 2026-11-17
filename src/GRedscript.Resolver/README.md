@@ -1,5 +1,13 @@
 # GCO-local REDscript Resolver
 
+## Quest-fact source graph / direct refresh-reader gate (2026-11-17)
+
+`scan-quest-facts --game <live-root> --out <new-external-json> [--analysis <sealed-source-matched-analysis.json>]` is read-only and uses **the existing** `CallbackSemanticResolver` owner/method parser and verified F11 callsite join; no second parser, no fixed mod/fact allowlists. Graph schema `gco.redscript.quest-fact.graph.v1` includes named GetFact/SetFact/listener callsite summaries, dynamic-expression refusal and `directRefreshReaders` rows for name-family Update/Refresh/Tick methods. These rows expose literal fact names plus field/helper/argument dependencies, measured-source association and explicit `completeFactWriterCoverage=false`, `completeTransitiveDependencyClosure=false`, `safeToReplaceGetterOrSkipMethod=false`, `generationAuthorized=false`. A `RegisterListener` named method can belong to ink/UI; source-declared QuestsSystem receiver is scoped to **its own class/method**, never an unrelated class.
+
+G-REDruntime `main` owns opt-in `QuestFactSignals` (11th .reds file); do not copy it into GCO or GRSP. [GCO #622 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44099363200) compiled the full private 2,319-file stack with 11 framework files and earlier generic previews; #626 passed stronger source type gating. **No first consumer is yet safe to generate:** original engine writers, return/event ordering and all nonfact changing dependencies are unresolved. [Full status](../../docs/integration/R5-QUEST-FACT-SIGNAL-STATUS.md).
+
+
+
 ## 2026-11-17 — Quest fact observer final source contract: CI #622 SUCCESS
 
 - [**GCO #622 full Windows CI SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44099363200), source SHA `505c8ea1d8714167797e412f3dc7dba81056077e`: **101 managed REDscript safety tests**, **7 existing player lifecycle + 7 new quest-fact owner source/mutation contracts**, exact 24,276-method private fact graph (**2,799 literal / 1,140 dynamic**, 961 distinct names, three cross-owner source-typed fact-listener matches and 203 unknown listener receivers), official SCC 0.5.31 `framework-all-generics-preview` exit **0** with **2,319 current private .reds files, 22 generic preview files and 11 authoritative G-REDruntime source files**; **323 GCO package/installer tests**, combined CET/GRSP/PresentMon report PASS. App artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run622-a1` ID **14335662786**, not game-relative optimization ZIP.
