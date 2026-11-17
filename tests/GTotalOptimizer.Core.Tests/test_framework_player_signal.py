@@ -1,8 +1,7 @@
-"""Owner G-REDruntime player signal lifecycle: source contract and mutation negatives.
+"""G-REDruntime owner player signal: source/negative contracts before real SCC.
 
-Run against the checkout of the ACTUAL framework owner main, not a copy in GCO:
-python test_framework_player_signal.py --framework .gco-ci-framework
-The official full-source SCC compiler remains a separate mandatory gate.
+Run against the exact owner Git checkout used for GCO's full-stack SCC.
+The game runtime and measured performance still require owner gameplay tests.
 """
 import argparse
 from pathlib import Path
@@ -10,14 +9,13 @@ import re
 import unittest
 
 
-def method_body(source: str, method: str) -> str:
-    pattern = r"\bfunc\s+" + re.escape(method) + r"\s*\("
-    match = re.search(pattern, source)
+def method(source: str, name: str) -> str:
+    match = re.search(r"\bfunc\s+" + re.escape(name) + r"\s*\(", source)
     if not match:
-        raise AssertionError(f"MISSING_LIFECYCLE_METHOD:{method}")
+        raise AssertionError(f"MISSING_OWNER_METHOD:{name}")
     opening = source.find("{", match.end())
     if opening < 0:
-        raise AssertionError(f"MISSING_LIFECYCLE_BODY:{method}")
+        raise AssertionError(f"MISSING_OWNER_METHOD_BODY:{name}")
     depth = 0
     for i in range(opening, len(source)):
         if source[i] == "{":
@@ -26,81 +24,114 @@ def method_body(source: str, method: str) -> str:
             depth -= 1
             if depth == 0:
                 return source[opening + 1:i]
-    raise AssertionError(f"UNBALANCED_LIFECYCLE_BODY:{method}")
+    raise AssertionError(f"UNBALANCED_OWNER_METHOD_BODY:{name}")
 
 
-def must_contain(body: str, fragment: str, label: str) -> None:
-    if fragment not in body:
-        raise AssertionError(label)
+def require(text: str, fragment: str, diagnostic: str):
+    if fragment not in text:
+        raise AssertionError(diagnostic)
 
 
-def verify(runtime: str, state: str) -> None:
-    attach = method_body(runtime, "OnPlayerAttach")
-    detach = method_body(runtime, "OnPlayerDetach")
-    shutdown = method_body(state, "Shutdown")
-    set_player = method_body(state, "SetPlayer")
-    invalidate = method_body(state, "InvalidatePlayer")
-    getter = method_body(state, "GetPlayer")
-    authoritative = method_body(state, "HasAuthoritativePlayer")
-    generation = method_body(state, "GetPlayerSignalGeneration")
+def validate(runtime: str, state: str, hub: str):
+    attach = method(runtime, "OnPlayerAttach")
+    detach = method(runtime, "OnPlayerDetach")
+    shutdown = method(state, "Shutdown")
+    set_player = method(state, "SetPlayer")
+    invalidate = method(state, "InvalidatePlayer")
+    getter = method(state, "GetPlayer")
+    attached_getter = method(state, "GetAttachedPlayer")
+    known = method(state, "HasAuthoritativePlayer")
+    generation = method(state, "GetPlayerSignalGeneration")
+    input_attach = method(hub, "OnPlayerAvailable")
+    input_detach = method(hub, "OnPlayerUnavailable")
+    input_refresh = method(hub, "RefreshRegistration")
+    input_device = method(hub, "PublishDeviceState")
 
-    # Native ScriptableSystem events, not a synthetic timer or per-frame hook.
-    must_contain(runtime, "ref<PlayerDetachRequest>", "MISSING_NATIVE_DETACH_REQUEST")
-    must_contain(detach, "IsDefined(request)", "NULL_DETACH_REQUEST_UNGUARDED")
-    must_contain(detach, "this.m_state.GetAttachedPlayer()", "MISSING_ATTACHED_PLAYER_PROOF")
-    for fragment in ("leaving.GetEntityID()", "attached.GetEntityID()", "NotEquals("):
-        must_contain(detach, fragment, "STALE_PLAYER_DETACH_UNGUARDED")
-    must_contain(attach, "this.m_state.SetPlayer(player)", "ATTACH_STATE_NOT_PUBLISHED")
-    must_contain(attach, "this.m_input.OnPlayerAvailable(player)", "ATTACH_INPUT_NOT_BOUND")
-    must_contain(attach, "this.m_dirty.Mark(n\"PLAYER\")", "ATTACH_VERSION_NOT_INVALIDATED")
-    must_contain(attach, "RuntimeEvent.Create(n\"PLAYER\", n\"ATTACHED\")",
-                 "ATTACH_EVENT_NOT_PUBLISHED")
+    require(runtime, "ref<PlayerDetachRequest>", "NATIVE_DETACH_REQUEST_MISSING")
+    for fragment, diagnostic in (
+        ("this.m_state.SetPlayer(player)", "ATTACH_STATE_NOT_PUBLISHED"),
+        ("this.m_input.OnPlayerAvailable(player)", "ATTACH_INPUT_NOT_BOUND"),
+        ('this.m_dirty.Mark(n"PLAYER")', "ATTACH_VERSION_NOT_INVALIDATED"),
+        ('RuntimeEvent.Create(n"PLAYER", n"ATTACHED")', "ATTACH_EVENT_NOT_PUBLISHED"),
+    ):
+        require(attach, fragment, diagnostic)
 
-    required = (
+    for fragment, diagnostic in (
+        ("IsDefined(request)", "NULL_DETACH_REQUEST_UNGUARDED"),
+        ("this.m_state.GetAttachedPlayer()", "ATTACHED_PLAYER_IDENTITY_NOT_PROVEN"),
+        ("leaving.GetEntityID()", "STALE_PLAYER_DETACH_UNGUARDED"),
+        ("attached.GetEntityID()", "STALE_PLAYER_DETACH_UNGUARDED"),
+        ("NotEquals(", "STALE_PLAYER_DETACH_UNGUARDED"),
         ("this.m_state.InvalidatePlayer()", "DETACH_STATE_NOT_INVALIDATED"),
         ("this.m_context.Invalidate()", "DETACH_CONTEXT_NOT_INVALIDATED"),
-        ("this.m_input.OnPlayerAvailable(null)", "DETACH_INPUT_LISTENERS_NOT_RELEASED"),
-        ("this.m_dirty.Mark(n\"PLAYER\")", "DETACH_VERSION_NOT_INVALIDATED"),
-        ("this.m_events.HasSubscribersFor(n\"PLAYER\")", "DETACH_EVENT_ALLOCATION_UNGUARDED"),
-        ("RuntimeEvent.Create(n\"PLAYER\", n\"DETACHED\")", "DETACH_EVENT_NOT_PUBLISHED"),
-    )
-    for fragment, reason in required:
-        must_contain(detach, fragment, reason)
-    # Every observer sees UNKNOWN/current generation, not a stale player
-    # or still-registered engine input listener.
-    if not (detach.index("GetAttachedPlayer()") <
-            detach.index("leaving.GetEntityID()") <
-            detach.index("this.m_state.InvalidatePlayer()") <
-            detach.index("this.m_input.OnPlayerAvailable(null)") <
-            detach.index("this.m_dirty.Mark(n\"PLAYER\")") <
-            detach.index("RuntimeEvent.Create(n\"PLAYER\", n\"DETACHED\")")):
+        ("this.m_input.OnPlayerUnavailable()", "DETACH_INPUT_NOT_RELEASED"),
+        ('this.m_dirty.Mark(n"PLAYER")', "DETACH_VERSION_NOT_INVALIDATED"),
+        ('this.m_events.HasSubscribersFor(n"PLAYER")', "DETACH_EVENT_ALLOCATION_UNGUARDED"),
+        ('RuntimeEvent.Create(n"PLAYER", n"DETACHED")', "DETACH_EVENT_NOT_PUBLISHED"),
+    ):
+        require(detach, fragment, diagnostic)
+    order = ("GetAttachedPlayer()", "leaving.GetEntityID()",
+             "this.m_state.InvalidatePlayer()",
+             "this.m_input.OnPlayerUnavailable()",
+             'this.m_dirty.Mark(n"PLAYER")',
+             'RuntimeEvent.Create(n"PLAYER", n"DETACHED")')
+    if [detach.index(x) for x in order] != sorted(detach.index(x) for x in order):
         raise AssertionError("DETACH_ORDER_UNSAFE")
 
-    for body, fields, reason in (
+    for source, fragments, diagnostic in (
         (set_player, ("this.m_playerSignalKnown = IsDefined(player)",
                       "this.m_playerDiscoveryBlocked = false",
                       "this.m_playerSignalGeneration += 1u"), "ATTACH_EPOCH_MISSING"),
-        (invalidate, ("this.m_player = null",
-                      "this.m_playerSignalKnown = false",
+        (invalidate, ("this.m_player = null", "this.m_playerSignalKnown = false",
                       "this.m_playerDiscoveryBlocked = true",
                       "this.m_playerSignalGeneration += 1u"), "DETACH_EPOCH_MISSING"),
         (shutdown, ("this.m_playerSignalKnown = false",
-                    "this.m_playerDiscoveryBlocked = true"), "SHUTDOWN_STALE_PLAYER_STATE"),
-        (authoritative, ("this.m_playerSignalKnown", "IsDefined(this.m_player)"),
-         "AUTHORITATIVE_PLAYER_UNPROVEN"),
-        (generation, ("this.m_playerSignalGeneration",), "SIGNAL_GENERATION_UNAVAILABLE"),
+                    "this.m_playerDiscoveryBlocked = true"),
+         "SHUTDOWN_STALE_PLAYER_SIGNAL"),
+        (known, ("this.m_playerSignalKnown", "IsDefined(this.m_player)"),
+         "AUTHORITATIVE_PLAYER_UNKNOWN"),
+        (generation, ("this.m_playerSignalGeneration",),
+         "PLAYER_SIGNAL_GENERATION_UNAVAILABLE"),
+        (attached_getter, ("this.HasAuthoritativePlayer()", "return this.m_player;"),
+         "ATTACHED_PLAYER_GETTER_NOT_PROVEN"),
     ):
-        for field in fields:
-            must_contain(body, field, reason)
-    must_contain(getter, "this.m_playerDiscoveryBlocked",
-                 "PLAYER_GETTER_CAN_REACQUIRE_AFTER_DETACH")
-    if not (getter.index("this.m_playerDiscoveryBlocked") <
-            getter.index("this.GetPlayerSystem()")):
-        raise AssertionError("PLAYER_GETTER_CAN_REACQUIRE_AFTER_DETACH")
-    must_contain(getter, "this.m_playerSignalKnown && !IsDefined(this.m_player)",
-                 "EXPIRED_WEAK_PLAYER_CAN_REACQUIRE")
-    must_contain(getter, "this.GetPlayerSystem()",
-                 "PREFIRST_ATTACH_ORIGINAL_FALLBACK_REMOVED")
+        for fragment in fragments:
+            require(source, fragment, diagnostic)
+    if "GetPlayerSystem(" in attached_getter:
+        raise AssertionError("ATTACHED_PLAYER_GETTER_MUST_NOT_DISCOVER")
+
+    # Existing unoptimized authors require the original live player getter
+    # on UNKNOWN. The returned value may not repopulate the shared cache.
+    require(getter, "this.m_playerDiscoveryBlocked",
+            "SHARED_PLAYER_REDISCOVERY_NOT_BLOCKED")
+    require(getter, "this.m_playerSignalKnown && !IsDefined(this.m_player)",
+            "EXPIRED_PLAYER_WEAK_REF_NOT_GATED")
+    require(getter, "originalPlayerSystem.GetLocalPlayerMainGameObject() as PlayerPuppet",
+            "UNKNOWN_ORIGINAL_PLAYER_FALLBACK_MISSING")
+    require(getter, "this.GetPlayerSystem()",
+            "PRE_FIRST_ATTACH_ORIGINAL_FALLBACK_MISSING")
+    unknown_prefix = getter[:getter.index("if IsDefined(this.m_player)")]
+    if "this.m_player =" in unknown_prefix:
+        raise AssertionError("UNKNOWN_PLAYER_CACHED_AS_AUTHORITATIVE")
+    sites = ("this.m_playerDiscoveryBlocked",
+             "originalPlayerSystem.GetLocalPlayerMainGameObject()",
+             "this.GetPlayerSystem()")
+    if [getter.index(x) for x in sites] != sorted(getter.index(x) for x in sites):
+        raise AssertionError("UNKNOWN_FALLBACK_ORDER_UNPROVEN")
+
+    # Input lifecycle is a separate boundary: it must NOT fall back to a
+    # live PlayerSystem lookup and silently re-register after detach.
+    for fragment in ("this.m_playerDetached = true",
+                     "this.UnregisterAllBridges()", "this.StopDevicePolling()"):
+        require(input_detach, fragment, "INPUT_DETACH_NOT_QUIESCED")
+    require(input_attach, "this.m_playerDetached = false",
+            "INPUT_NEXT_ATTACH_NOT_REARMED")
+    require(input_refresh, "if this.m_playerDetached",
+            "INPUT_REGISTRATIONS_CAN_REAPPEAR_ON_DETACH")
+    require(input_device, "this.m_playerDetached",
+            "INPUT_DEVICE_JOB_CAN_FIRE_AFTER_DETACH")
+
+    # No added polling, cache of changing values or new native observers.
     for body in (attach, detach, set_player, invalidate):
         for forbidden in ("DelayCallback(", "RegisterInputListener(",
                           "GetWorldPosition(", "GetMountedVehicle(", "IsInCombat("):
@@ -108,47 +139,59 @@ def verify(runtime: str, state: str) -> None:
                 raise AssertionError("PLAYER_SIGNAL_ADDED_POLL_OR_NATIVE_OBSERVER")
 
 
-class PlayerSignalContracts(unittest.TestCase):
+class FrameworkPlayerSignalContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        root = Path(ARGS.framework).resolve()
-        cls.runtime = (root / "r6/scripts/G-RedRuntime/Core/Runtime.reds").read_text(
-            encoding="utf-8-sig")
-        cls.state = (root / "r6/scripts/G-RedRuntime/State/StateCache.reds").read_text(
-            encoding="utf-8-sig")
+        root = Path(ARGS.framework).resolve() / "r6/scripts/G-RedRuntime"
+        cls.runtime = (root / "Core/Runtime.reds").read_text(encoding="utf-8-sig")
+        cls.state = (root / "State/StateCache.reds").read_text(encoding="utf-8-sig")
+        cls.hub = (root / "Input/InputHub.reds").read_text(encoding="utf-8-sig")
 
-    def test_real_owner_lifecycle_and_fallback(self):
-        verify(self.runtime, self.state)
+    def test_real_owner_lifecycle(self):
+        validate(self.runtime, self.state, self.hub)
 
-    def test_reject_detach_without_input_cleanup(self):
-        broken = self.runtime.replace("this.m_input.OnPlayerAvailable(null)",
-                                      "this.m_input.HasSubscribers()")
-        with self.assertRaisesRegex(AssertionError,
-                                    "DETACH_INPUT_LISTENERS_NOT_RELEASED"):
-            verify(broken, self.state)
+    def test_reject_missing_detach_input_cleanup(self):
+        bad = self.runtime.replace("this.m_input.OnPlayerUnavailable()",
+                                   "this.m_input.HasSubscribers()")
+        with self.assertRaisesRegex(AssertionError, "DETACH_INPUT_NOT_RELEASED"):
+            validate(bad, self.state, self.hub)
 
-    def test_reject_stale_player_detach_without_identity_gate(self):
-        broken = self.runtime.replace("NotEquals(leaving.GetEntityID(), attached.GetEntityID())",
-                                      "false")
+    def test_reject_stale_player_detach_race(self):
+        bad = self.runtime.replace(
+            "NotEquals(leaving.GetEntityID(), attached.GetEntityID())", "false")
         with self.assertRaisesRegex(AssertionError, "STALE_PLAYER_DETACH_UNGUARDED"):
-            verify(broken, self.state)
+            validate(bad, self.state, self.hub)
 
-    def test_reject_reacquiring_player_between_detach_and_attach(self):
-        broken = self.state.replace("this.m_playerDiscoveryBlocked ||", "false ||")
-        with self.assertRaisesRegex(AssertionError,
-                                    "PLAYER_GETTER_CAN_REACQUIRE_AFTER_DETACH"):
-            verify(self.runtime, broken)
-
-    def test_reject_missing_epoch_invalidation(self):
-        old = method_body(self.state, "InvalidatePlayer")
-        broken = self.state.replace(old, old.replace(
+    def test_reject_missing_generation_invalidation(self):
+        old = method(self.state, "InvalidatePlayer")
+        bad = self.state.replace(old, old.replace(
             "this.m_playerSignalGeneration += 1u;", ""))
         with self.assertRaisesRegex(AssertionError, "DETACH_EPOCH_MISSING"):
-            verify(self.runtime, broken)
+            validate(self.runtime, bad, self.hub)
+
+    def test_reject_unknown_player_rediscovery_into_shared_cache(self):
+        bad = self.state.replace("this.m_playerDiscoveryBlocked ||", "false ||")
+        with self.assertRaisesRegex(AssertionError,
+                                    "SHARED_PLAYER_REDISCOVERY_NOT_BLOCKED"):
+            validate(self.runtime, bad, self.hub)
+
+    def test_reject_missing_original_live_fallback(self):
+        bad = self.state.replace(
+            "return originalPlayerSystem.GetLocalPlayerMainGameObject() as PlayerPuppet;",
+            "return null;")
+        with self.assertRaisesRegex(AssertionError,
+                                    "UNKNOWN_ORIGINAL_PLAYER_FALLBACK_MISSING"):
+            validate(self.runtime, bad, self.hub)
+
+    def test_reject_input_registrations_during_detach(self):
+        bad = self.hub.replace("if this.m_playerDetached {", "if false {")
+        with self.assertRaisesRegex(AssertionError,
+                                    "INPUT_REGISTRATIONS_CAN_REAPPEAR_ON_DETACH"):
+            validate(self.runtime, self.state, bad)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--framework", required=True)
-    ARGS = parser.parse_args()
-    unittest.main(argv=["framework_player_signal"], verbosity=2)
+    p = argparse.ArgumentParser()
+    p.add_argument("--framework", required=True)
+    ARGS = p.parse_args()
+    unittest.main(argv=["owner_shared_player_signal"], verbosity=2)
