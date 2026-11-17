@@ -195,10 +195,10 @@ class ImmutableBlackboardDefinitionContracts(unittest.TestCase):
         prior_file = earlier / "r6/scripts/IndependentAuthor/Example.reds"
         prior_file.parent.mkdir(parents=True)
         prior_file.write_text(SOURCE.replace(
-            "    return true;\\n",
-            "    // GCO-GENERIC:ACTION_LITERAL_MEMBERSHIP_V1\\n"
-            "    let previousState = frame;\\n"
-            "    return true;\\n"
+            "    return true;",
+            """    // GCO-GENERIC:ACTION_LITERAL_MEMBERSHIP_V1
+    let previousState = frame;
+    return true;"""
         ), encoding="utf8")
         r = self.cli("preview-blackboard-defs", "--game", self.game,
                      "--analysis", self.analysis, "--base-preview", earlier,
