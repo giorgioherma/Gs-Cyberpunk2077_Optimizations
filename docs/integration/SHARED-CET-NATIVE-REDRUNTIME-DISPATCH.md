@@ -9,7 +9,7 @@ CET Resolver ----------\
                         +--> GCO shared native staging --> ONE GCETStaticLocations.dll
 REDscript Resolver ----/                            \--> ONE merged G-CET.locations
                 |                                  (owner-separated GCAS v1)
-                +--> GCO REDscript generated RTTI declarations
+                +--> G-REDruntime owner optional native adapter
                 +--> source-matched REDscript consumer adaptations
                       |                  |
                       +--> G-REDruntime StateCache / QuestFactSignals / InputHub
@@ -18,19 +18,19 @@ REDscript Resolver ----/                            \--> ONE merged G-CET.locati
 
 **Dispatch invariant:** Either Resolver can request the native component without waiting for the other. The source DLL is always the CET-owned `runtime/native/GCETStaticLocations.dll` shipped in GCO's CET Resolver component. Existing staged DLL is left intact after minimal API-family checks, never rebuilt or copied from the live game. The GCAS table is merged by owner; byte-identical owner records are skipped, changed/colliding owner records refuse. Missing table starts as canonical GCAS v1. Output must be external to the supplied live game.
 
-`stage-shared-native --game <root> --cet-runtime <bundled CET Resolver root> --out <external shared overlay> [--red-locations <GCAS file>]`
+`stage-shared-native --game <root> --cet-runtime <bundled CET Resolver root> --framework <G-REDruntime source root> --out <external shared overlay> [--red-locations <GCAS file>]`
 
 No ZIP or profiler files are produced. The REDscript Resolver can create its own inert GCAS sites from current installed literal `SquareArea(new Vector2(...), ...)` source: four static vertices, XY centroids plus conservative containing radii, source-path-derived owner IDs, comments excluded. These are **inventory only**, not authorization to suppress polygon checks. Owner/source drift or mutable/dynamic inputs still require consumer-specific admission. No hardcoded mod names, source SHA allowlists or version locks.
 
-## REDscript native interface
+## REDscript native interface — framework-owned backend
 
-Conditional output path: `r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds`.
+**Owner implementation:** `giorgioherma/G-REDruntime_Framework/main`.
 
-- Declares CET's existing native `ScriptGameInstance` functions using `@addMethod(GameInstance)`, not another RED4ext plugin or player observer.
-- `GCOSharedNativeBridge.LocationStatus(owner,index)`: **-1 UNKNOWN, 0 FAR, 1 NEAR**. The native coordinator must report ready with state 2 and a valid compiled owner/anchor index. **Never** treat UNKNOWN as FAR. A consumer must retain exact live author behavior for NEAR and UNKNOWN.
-- `PlayerPositionLive()` + immediately following `PlayerPositionValid()`: strictly live typed Vector4, never assume the CET frame snapshot is fresh enough for arbitrary REDscript callback phases.
-- No implicit timer, event bridge, player poll, dispatcher, subscription, teardown or gameplay callback is registered by this source alone. Native subscribed events will use the existing G-REDruntime scheduler when an actually compatible consumer is admitted, not a new timer per mod.
-- Exact REDscript RTTI signature/return mapping is **not yet accepted by live gameplay**. The declarations and real DLL can be compiled together in headless SCC; this does not prove a runtime bridge call works.
+- **Always-on framework:** `r6/scripts/G-RedRuntime/Location/NativeLocationSignals.reds` provides a dormant, opt-in subscription service with one native stream consumer and shared scheduler job only while subscribers exist. No native references are linked into the non-native framework code.
+- **Native-enabled optional backend:** `optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds` contains source-owned RTTI declarations and the backend implementing `NativeLocationBackend`. GCO copies the authoritative file **only alongside CET's DLL** to `r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds`. GCO must not invent a second declaration template.
+- **Consumer contract:** source-generated mod listeners extend `NativeLocationListener`; `SubscribeLocation(owner,index,expectedCount,listener,backend)` returns a lifecycle-owned subscription token, and `UnsubscribeLocation(token)` releases it. Values remain -1 UNKNOWN, 0 FAR, 1 NEAR. UNKNOWN and failed subscription preserve original mod checks.
+- C++ remains the sole player-position, NEAR/FAR and native ring-buffer producer; G-REDruntime drains its events at 0.10s through a **single opt-in job**. It does not poll the player independently. Native subscribers are still pending source-generated adoption, so no location-based gameplay behavior is changed yet.
+- Headless SCC source compilation is a distinct checkpoint from live RTTI ABI/load-order and gameplay acceptance.
 
 ## First actual G-REDruntime shared-state adoption
 
