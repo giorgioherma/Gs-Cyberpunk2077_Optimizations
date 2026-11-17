@@ -343,7 +343,7 @@ public class AnyMod extends ScriptableSystem {
             "GCO-GENERIC:BLACKBOARD_DEFINITION_SEQUENCE_V1 altered", 1)
         self.source.write_text(bad)
         broken = self.cli("scan-blackboard-defs", "--game", self.game,
-                          "--out", self.root / "scan-broken.json")
+                          "--out", self.game.parent / "scan-broken.json")
         self.assertNotEqual(broken.returncode, 0)
         self.assertIn("BBDEFS_SEQUENCE_PARTIAL_MARKER",
                       broken.stderr + broken.stdout)
