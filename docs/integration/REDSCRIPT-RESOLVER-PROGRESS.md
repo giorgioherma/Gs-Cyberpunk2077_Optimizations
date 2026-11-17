@@ -1,5 +1,14 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+
+## 2026-11-17 — blackboard multi-pass effective-source composition in development
+
+- Current owner GCO `dev/redscript/resolver_handoff`; other repositories and installed sources unchanged.
+- Updated the existing `BLACKBOARD_DEFINITION_STATEMENT_V1` source generator to consume the authoritative prior generic staged source via isolated `--base-preview`, proving the original targeted statements survived unchanged and rerunning the same existing source matcher on the effective input. This is **one authoritative rule with composable input**, not an output repair pass.
+- Real-source CI now stages both changes for previously colliding files in one temporary overlay instead of discarding them. Added same-file preservation/drift/isolation contracts. No broader semantic scope or loose matcher.
+- Commits: `357716e`, `c3395d5`, `07287d3`, `38c19dc`. New CI #581–#584 is running; **do not claim source/SCC success until verified**. Predecessor #580 remains the last verified full-green baseline, with two overlaps deferred. No gameplay or saved CPU/allocations claimed.
+
+
 ## 2026-11-17 — REDscript immutable BLACKBOARD metadata reuse implemented as preview
 
 - **GCO #580 VERIFIED SUCCESS (2026-11-17):** [canonical Windows CI](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44026362823), **86/86** managed REDscript tests, current source **22 strictly eligible statements in 16 files** (2,319 source files total), **14 disjoint files merged with 2 same-file collisions explicitly deferred**, **22 total callback/generic preview files** SCC-compiled against all current private sources plus **10 G-REDruntime owner source files** with official SCC 0.5.31; `framework-all-generics-preview` exit 0 in 7.3 seconds, **323 GCO install/CLI/package contracts passed**. No original source or current game installed files changed. This is preview/SCC proof, **not** full six-pass composition, gameplay validation, or measured performance gain.
