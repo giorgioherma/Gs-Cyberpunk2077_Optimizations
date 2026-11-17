@@ -113,10 +113,11 @@ def validate(runtime: str, state: str, hub: str):
     unknown_prefix = getter[:getter.index("if IsDefined(this.m_player)")]
     if "this.m_player =" in unknown_prefix:
         raise AssertionError("UNKNOWN_PLAYER_CACHED_AS_AUTHORITATIVE")
-    sites = ("this.m_playerDiscoveryBlocked",
-             "originalPlayerSystem.GetLocalPlayerMainGameObject()",
-             "this.GetPlayerSystem()")
-    if [getter.index(x) for x in sites] != sorted(getter.index(x) for x in sites):
+    blocked_at = getter.index("this.m_playerDiscoveryBlocked")
+    system_at = getter.index("this.GetPlayerSystem()", blocked_at)
+    live_at = getter.index("originalPlayerSystem.GetLocalPlayerMainGameObject()",
+                           system_at)
+    if not (blocked_at < system_at < live_at):
         raise AssertionError("UNKNOWN_FALLBACK_ORDER_UNPROVEN")
 
     # Input lifecycle is a separate boundary: it must NOT fall back to a
