@@ -122,6 +122,33 @@ class ActionSnapshotContracts(unittest.TestCase):
         self.assertIn("transformed=0", noop.stdout)
         self.assertFalse((self.root / "no-work").exists())
 
+    def test_two_callbacks_in_one_owner_file_have_stable_independent_snapshots(self):
+        self.source.write_text(SOURCE + """
+public class SecondInput extends IScriptable {
+    protected cb func OnAction(action: ListenerAction, consumer: ListenerActionConsumer) -> Bool {
+        if Equals(ListenerAction.GetName(action), n"Alpha") { return true; }
+        if Equals(ListenerAction.GetName(action), n"Beta") { return true; }
+        if Equals(ListenerAction.GetName(action), n"Gamma") { return true; }
+        return false;
+    }
+}
+""")
+        status, report = self.scan()
+        self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+        self.assertEqual(report["eligible"], 5)
+        self.seal()
+        status = self.stage()
+        self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+        generated = (self.preview / "r6/scripts/Independent/Input.reds").read_text()
+        self.assertEqual(generated.count(MARKER), 3)
+        self.assertIn("__gcoActionNameN1", generated)
+        self.assertIn("__gcoActionNameN2", generated)
+        self.source.write_text(generated)
+        status, report = self.scan(output=self.root / "twice-complete.json")
+        self.assertEqual(status.returncode, 0, status.stderr + status.stdout)
+        self.assertEqual(report["eligible"], 0)
+        self.assertEqual(report["alreadyComplete"], 3)
+
     def test_source_drift_and_corrupted_snapshot_refuse(self):
         self.seal()
         self.source.write_text(SOURCE + "\n// changed after capture\n")
