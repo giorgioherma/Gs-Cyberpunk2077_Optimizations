@@ -19,6 +19,8 @@ internal static class Program
                 return RunGenericPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-generic")
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "resolve-callbacks")
+                return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-action-filter")
@@ -334,6 +336,30 @@ internal static class Program
             " candidates=" + report.Candidates + " measured=" + report.Measured +
             " unmeasured=" + report.Unmeasured + " rejected=" + report.Rejected +
             " generated=0 deployable=false");
+        return 0;
+    }
+
+    // Authoritative CET-style classification stage for all current REDscript
+    // callback sources, including PlayerPuppet @wrapMethod extensions.
+    private static int RunCallbackSemantics(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Callback semantic resolver accepts --game, --out, optional --analysis");
+        var result = CallbackSemanticResolver.Analyze(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? evidence)
+                ? Path.GetFullPath(evidence) : null);
+        Console.WriteLine("GCO REDscript callback semantic catalog: files=" +
+            result.Files + " callbacks=" + result.Callbacks +
+            " OnAction=" + result.OnAction +
+            " PlayerPuppetWraps=" + result.PlayerPuppetWraps +
+            " tracedForwarders=" + result.Forwarders +
+            " otherCallbacks=" + result.OtherCallbacks +
+            " measuredSourceMatched=" + result.MeasuredCallbacks +
+            " routeProofBlocked=" + result.UnprovenRoutes +
+            " sourceWrites=0 deployable=false");
         return 0;
     }
 
