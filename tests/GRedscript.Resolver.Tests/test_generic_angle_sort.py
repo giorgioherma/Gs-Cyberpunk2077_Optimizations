@@ -50,6 +50,34 @@ private func SortGeometry(sq: SquareArea) -> array<Vector2> {
 """
 
 
+QUAD_SOURCE = SOURCE.replace("SortGeometry", "SortSquare") + """
+private func Sign(p1: Vector2, p2: Vector2, p3: Vector2) -> Float {
+    return (p1.X - p3.X) * (p2.Y - p3.Y) - (p2.X - p3.X) * (p1.Y - p3.Y);
+}
+
+private func PointInTriangle(pt: Vector2, v1: Vector2, v2: Vector2, v3: Vector2) -> Bool {
+    let d1 = Sign(pt, v1, v2);
+    let d2 = Sign(pt, v2, v3);
+    let d3 = Sign(pt, v3, v1);
+    let hasNeg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+    let hasPos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+    return !(hasNeg && hasPos);
+}
+
+public func IsPointInQuad(p: Vector2, sq: SquareArea) -> Bool {
+    let pts = SortSquare(sq);
+    if (PointInTriangle(p, pts[0], pts[1], pts[2])) {
+        return true;
+    }
+    if (PointInTriangle(p, pts[0], pts[2], pts[3])) {
+        return true;
+    }
+    return false;
+}
+"""
+
+
+
 class GeometryGenericContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,6 +157,55 @@ class GeometryGenericContracts(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertIn("transformed=0", second.stdout)
         self.assertFalse(self.preview.exists())
+
+    def test_guarded_quad_broadphase_emits_with_existing_sort_generator(self):
+        self.source.write_text(QUAD_SOURCE, encoding="utf8")
+        before = self.source.read_bytes()
+        report = self.scan_source()
+        self.assertEqual(report["eligible"], 2)
+        self.assertEqual({x["rule"] for x in report["candidates"]}, {
+            "ANGLE_SORT_INVARIANT_V1", "QUAD_SAFE_AABB_BROADPHASE_V1"})
+        self.analysis_for_current()
+        outcome = self.run_preview()
+        self.assertEqual(outcome.returncode, 0, outcome.stderr + outcome.stdout)
+        self.assertIn("transformed=2", outcome.stdout)
+        generated = self.preview / "r6/scripts/AnyMod/Geometry.reds"
+        value = generated.read_text(encoding="utf8")
+        self.assertIn("GCO-GENERIC:ANGLE_SORT_INVARIANT_V1", value)
+        self.assertIn("GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1", value)
+        self.assertIn("AbsF(Sign(sq.a, sq.b, sq.c)) > 1.0", value)
+        self.assertIn("p.X < sq.a.X - 16.0", value)
+        self.assertIn("let pts = SortSquare(sq);", value)
+        self.assertEqual(self.source.read_bytes(), before)
+        shutil.copyfile(generated, self.source)
+        self.scan.unlink()
+        report = self.scan_source()
+        self.assertEqual(report["eligible"], 0)
+        self.assertEqual(report["alreadyComplete"], 2)
+
+    def test_quad_guard_refuses_unknown_sign_or_triangle_behavior(self):
+        # Unknown signed-area semantics cannot authorize AABB rejection.
+        self.source.write_text(QUAD_SOURCE.replace(
+            "return !(hasNeg && hasPos);", "return hasNeg != hasPos;"),
+            encoding="utf8")
+        report = self.scan_source()
+        self.assertEqual(report["eligible"], 1)
+        self.assertEqual(report["candidates"][0]["rule"],
+                         "ANGLE_SORT_INVARIANT_V1")
+
+    def test_broadphase_damaged_marker_fails_closed(self):
+        self.source.write_text(QUAD_SOURCE, encoding="utf8")
+        self.analysis_for_current()
+        self.assertEqual(self.run_preview().returncode, 0)
+        generated = self.preview / "r6/scripts/AnyMod/Geometry.reds"
+        changed = generated.read_text(encoding="utf8").replace(
+            "p.X < sq.a.X - 16.0", "p.X < sq.a.X - 0.0")
+        self.source.write_text(changed, encoding="utf8")
+        status = self.cli("scan-angle-sort", "--game", self.game,
+                          "--out", self.scan)
+        self.assertNotEqual(status.returncode, 0)
+        self.assertIn("QUAD_BROADPHASE_PARTIAL_OR_DRIFTED_MARKER",
+                      status.stderr + status.stdout)
 
     def test_altered_generated_marker_fails_closed(self):
         self.analysis_for_current()
