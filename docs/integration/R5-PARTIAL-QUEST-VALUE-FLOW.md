@@ -5,6 +5,10 @@
 **CI:** [#646 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44123182727), source `8af047c`.
 **Status:** read-only source and sealed-F11 evidence. **Zero** game-source rewrites, getter substitutions, installed listeners, runtime A/B claims or generated optimization ZIP.
 
+## 2026-11-17 — Two-sided value-flow comparison within exact fact cohorts (CI #647)
+
+Commit [`3cd1b5f`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/3cd1b5f92282eceffaee6b63d26ede53d4351b4c) extends the EXISTING per-fact cohort output (no second parser/grouping system): per fact name, compare direct conditions, local/derived-value uses, source-matched consumers and independent method inputs, explicitly showing conditional+other-value consumers together. Original methods, wrappers, getter fallback and mod ownership remain untouched. Full private CI [#647](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44125762276) is the authoritative verification result; never infer production readiness from grouped source matches. All rewrite/engine-event/derived-purity authorizations remain false.
+
 ## Why the six-guard experiment was the wrong unit
 
 The original 1,465 exact-named fact reader sites / 753 literal fact cohorts (GCO #638 SUCCESS) are **not** six subscribers. That six-count came from a narrow whole-guard scanner. The narrow guard detour was explicitly reverted at `6d7814e`; do not reintroduce its admission model.
