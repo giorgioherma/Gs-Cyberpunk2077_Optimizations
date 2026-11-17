@@ -16,6 +16,87 @@ internal static class GenericAngleSortPass
     internal const string Rule = "ANGLE_SORT_INVARIANT_V1";
     private const string Marker = "// GCO-GENERIC:" + Rule;
 
+
+    // G-BoundedSpatial V1: reject only *far* outside points with finite
+    // coordinates and every possible triangle non-degenerate. The original
+    // sorter/triangle test remains the exact fallback for all other cases.
+    // This guards the historical Sign() zero-area behavior, where degenerate
+    // triangles can otherwise report true even for outside points.
+    private const string QuadRule = "QUAD_SAFE_AABB_BROADPHASE_V1";
+    private const string QuadMarker = "// GCO-GENERIC:" + QuadRule;
+    private const string QuadOriginal = """
+        public func IsPointInQuad(p: Vector2, sq: SquareArea) -> Bool {
+            let pts = SortSquare(sq);
+            if (PointInTriangle(p, pts[0], pts[1], pts[2])) {
+                return true;
+            }
+            if (PointInTriangle(p, pts[0], pts[2], pts[3])) {
+                return true;
+            }
+            return false;
+        }
+        """;
+    private const string QuadGuard = """
+        if p.X > -100000.0 && p.X < 100000.0 &&
+           p.Y > -100000.0 && p.Y < 100000.0 &&
+           sq.a.X > -100000.0 && sq.a.X < 100000.0 &&
+           sq.a.Y > -100000.0 && sq.a.Y < 100000.0 &&
+           sq.b.X > -100000.0 && sq.b.X < 100000.0 &&
+           sq.b.Y > -100000.0 && sq.b.Y < 100000.0 &&
+           sq.c.X > -100000.0 && sq.c.X < 100000.0 &&
+           sq.c.Y > -100000.0 && sq.c.Y < 100000.0 &&
+           sq.d.X > -100000.0 && sq.d.X < 100000.0 &&
+           sq.d.Y > -100000.0 && sq.d.Y < 100000.0 {
+            let outside =
+                (p.X < sq.a.X - 16.0 && p.X < sq.b.X - 16.0 &&
+                 p.X < sq.c.X - 16.0 && p.X < sq.d.X - 16.0) ||
+                (p.X > sq.a.X + 16.0 && p.X > sq.b.X + 16.0 &&
+                 p.X > sq.c.X + 16.0 && p.X > sq.d.X + 16.0) ||
+                (p.Y < sq.a.Y - 16.0 && p.Y < sq.b.Y - 16.0 &&
+                 p.Y < sq.c.Y - 16.0 && p.Y < sq.d.Y - 16.0) ||
+                (p.Y > sq.a.Y + 16.0 && p.Y > sq.b.Y + 16.0 &&
+                 p.Y > sq.c.Y + 16.0 && p.Y > sq.d.Y + 16.0);
+            if outside &&
+               AbsF(Sign(sq.a, sq.b, sq.c)) > 1.0 &&
+               AbsF(Sign(sq.a, sq.b, sq.d)) > 1.0 &&
+               AbsF(Sign(sq.a, sq.c, sq.d)) > 1.0 &&
+               AbsF(Sign(sq.b, sq.c, sq.d)) > 1.0 {
+                return false;
+            }
+        }
+        """;
+    private const string SquareDeclaration = """
+        public struct SquareArea {
+            public let a: Vector2;
+            public let b: Vector2;
+            public let c: Vector2;
+            public let d: Vector2;
+        }
+        """;
+    private const string SignDefinition = """
+        private func Sign(p1: Vector2, p2: Vector2, p3: Vector2) -> Float {
+            return (p1.X - p3.X) * (p2.Y - p3.Y) - (p2.X - p3.X) * (p1.Y - p3.Y);
+        }
+        """;
+    private const string TriangleDefinition = """
+        private func PointInTriangle(pt: Vector2, v1: Vector2, v2: Vector2, v3: Vector2) -> Bool {
+            let d1 = Sign(pt, v1, v2);
+            let d2 = Sign(pt, v2, v3);
+            let d3 = Sign(pt, v3, v1);
+            let hasNeg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+            let hasPos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+            return !(hasNeg && hasPos);
+        }
+        """;
+    private static readonly string[] QuadOriginalTokens = Values(QuadOriginal);
+    private static readonly string[] QuadOptimizedTokens = Values(
+        QuadOriginal.Replace("let pts = SortSquare(sq);",
+            QuadGuard + "\nlet pts = SortSquare(sq);",
+            StringComparison.Ordinal));
+    private static readonly string[] SquareTokens = Values(SquareDeclaration);
+    private static readonly string[] SignTokens = Values(SignDefinition);
+    private static readonly string[] TriangleTokens = Values(TriangleDefinition);
+
     private const string Prelude = """
         let pts: array<Vector2> = [sq.a, sq.b, sq.c, sq.d];
         let i = 0;
@@ -66,7 +147,7 @@ internal static class GenericAngleSortPass
     private static readonly string[] OptimizedTokens = Values(Optimized);
     private static readonly string[] ReturnTokens = Values("return pts;");
 
-    private sealed record Edit(int Start, int End, int Line);
+    private sealed record Edit(int Start, int End, int Line, string Kind = "SORT");
     internal sealed record Summary(int Files, int Eligible, int AlreadyComplete);
 
     internal static Summary Scan(string gameRoot, string outputFile)
@@ -87,9 +168,12 @@ internal static class GenericAngleSortPass
             foreach (var edit in found.Edits)
                 rows.Add(new {
                     path = "r6/scripts/" + file.Relative, line = edit.Line,
-                    rule = Rule, state = "PRISTINE_APPLICABLE",
+                    rule = edit.Kind == "QUAD" ? QuadRule : Rule,
+                    state = "PRISTINE_APPLICABLE",
                     comparisonOrderPreserved = true,
                     callbackCadenceUnchanged = true,
+                    finiteAndNondegenerateFastRejectOnly = edit.Kind == "QUAD",
+                    originalGeometryFallbackRetained = true,
                     generationAuthorized = false
                 });
         }
@@ -148,8 +232,13 @@ internal static class GenericAngleSortPass
                 string indent = changed[lineStart..edit.Start];
                 if (indent.Any(c => c is not (' ' or '\t')))
                     throw new InvalidDataException("ANGLE_SORT_UNSAFE_INDENT");
-                string replacement = Marker + newline + indent +
-                    Optimized.Replace("\n", newline + indent, StringComparison.Ordinal);
+                string replacement = edit.Kind == "QUAD"
+                    ? QuadMarker + newline + indent +
+                        QuadGuard.Replace("\n", newline + indent,
+                            StringComparison.Ordinal) + newline + indent
+                    : Marker + newline + indent +
+                        Optimized.Replace("\n", newline + indent,
+                            StringComparison.Ordinal);
                 changed = changed[..edit.Start] + replacement + changed[edit.End..];
                 count++;
             }
@@ -219,10 +308,64 @@ internal static class GenericAngleSortPass
                 complete++;
             }
         }
+        // Broader spatial elimination is admitted only when the current file
+        // contains the entire original 4-point struct, signed-area predicate,
+        // triangle policy and the already structurally verified sort. No
+        // geometry is cached across callbacks or owners.
+        int quadComplete = 0;
+        bool provider = (edits.Count > 0 || complete > 0) &&
+            CountShape(t, SquareTokens) == 1 &&
+            CountShape(t, SignTokens) == 1 &&
+            CountShape(t, TriangleTokens) == 1 &&
+            !t.Any(x => x.Value is ("ModuleExists" or "ModuleNotExists"));
+        if (provider)
+        {
+            for (int i = 0; i < t.Count; i++)
+            {
+                if (Match(t, i, 0, QuadOriginalTokens))
+                {
+                    // Insert directly before SortSquare; never rewrite the
+                    // original value, sorting, sign or callback source.
+                    int first = i + Array.IndexOf(QuadOriginalTokens, "let");
+                    if (first <= i || first >= t.Count ||
+                        t[first].Value != "let" || t[first + 1].Value != "pts")
+                        throw new InvalidDataException(
+                            "QUAD_BROADPHASE_UNPROVEN_ORIGINAL");
+                    edits.Add(new(t[first].Start, t[first].Start,
+                        t[first].Line, "QUAD"));
+                }
+                else if (Match(t, i, 0, QuadOptimizedTokens))
+                {
+                    int first = i + Array.IndexOf(QuadOptimizedTokens, "if");
+                    int pos = t[first].Start;
+                    int marker = text.LastIndexOf(QuadMarker, pos,
+                        StringComparison.Ordinal);
+                    if (marker < 0 || !string.IsNullOrWhiteSpace(
+                        text[(marker + QuadMarker.Length)..pos]))
+                        throw new InvalidDataException(
+                            "QUAD_BROADPHASE_UNOWNED_GENERATED_SOURCE");
+                    quadComplete++;
+                }
+            }
+        }
+        int quadMarkers = text.Split(QuadMarker, StringSplitOptions.None).Length - 1;
+        if (quadMarkers != quadComplete)
+            throw new InvalidDataException(
+                "QUAD_BROADPHASE_PARTIAL_OR_DRIFTED_MARKER");
+        complete += quadComplete;
         int markers = text.Split(Marker, StringSplitOptions.None).Length - 1;
         if (markers != complete)
             throw new InvalidDataException("ANGLE_SORT_PARTIAL_OR_DRIFTED_GENERATED_MARKER");
         return new(edits, complete);
+    }
+
+    private static int CountShape(IReadOnlyList<SourceAdmission.Token> t,
+        string[] shape)
+    {
+        int count = 0;
+        for (int i = 0; i < t.Count; i++)
+            if (Match(t, i, 0, shape)) count++;
+        return count;
     }
 
     private static bool Match(IReadOnlyList<SourceAdmission.Token> source,
