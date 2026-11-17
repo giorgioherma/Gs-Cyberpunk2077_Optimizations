@@ -447,6 +447,30 @@ try {
             throw 'GCO_SHARED_WORK_MEASURED_UNMEASURED_CATEGORY_SPLIT_FAILED'
         }
     }
+    # Aggregate-only disclosure: no private original source names, class
+    # names, source contents or captured paths are written into CI logs.
+    foreach ($entry in $primary.PSObject.Properties) {
+        $category = [string]$entry.Name
+        $measure = $shared.measuredPrimaryTriggerCounts.PSObject.Properties[$category]
+        $noMeasure = $shared.unmeasuredPrimaryTriggerCounts.PSObject.Properties[$category]
+        $measuredCount = if ($null -eq $measure) { 0 } else { [int]$measure.Value }
+        $unmeasuredCount = if ($null -eq $noMeasure) { 0 } else { [int]$noMeasure.Value }
+        Write-Host ('GCO_SHARED_TRIGGER_HYPOTHESIS ' + $category +
+            ' total=' + [int]$entry.Value +
+            ' sourceMatchedMeasured=' + $measuredCount +
+            ' sourceUnmeasured=' + $unmeasuredCount)
+    }
+    foreach ($entry in $direct.PSObject.Properties) {
+        $category = [string]$entry.Name
+        $measure = $shared.measuredDependencyCategoryCounts.PSObject.Properties[$category]
+        $noMeasure = $shared.unmeasuredDependencyCategoryCounts.PSObject.Properties[$category]
+        $measuredCount = if ($null -eq $measure) { 0 } else { [int]$measure.Value }
+        $unmeasuredCount = if ($null -eq $noMeasure) { 0 } else { [int]$noMeasure.Value }
+        Write-Host ('GCO_SHARED_DIRECT_DEPENDENCY ' + $category +
+            ' total=' + [int]$entry.Value +
+            ' sourceMatchedMeasured=' + $measuredCount +
+            ' sourceUnmeasured=' + $unmeasuredCount)
+    }
     Write-Host ('PASS GCO source-only dependency coverage: measuredMethods=' +
         $measuredPrimaryCount + ' unmeasuredMethods=' + $unmeasuredPrimaryCount +
         ' writerClosureProven=false noSharedTriggerAuthorized=true')
