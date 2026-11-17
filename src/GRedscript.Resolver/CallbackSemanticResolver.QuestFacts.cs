@@ -179,15 +179,53 @@ internal static partial class CallbackSemanticResolver
     {
         var t = method.File.Tokens;
         if (opIndex < 2 || t[opIndex - 1].Value != ".") return false;
-        var receiver = t[opIndex - 2].Value;
+        string receiver = t[opIndex - 2].Value;
         if (!Ident(receiver)) return false;
-        // Only explicit ref<QuestsSystem> or wref<QuestsSystem> declarations
-        // qualify. An arbitrary qs/questsSys name is never sufficient.
-        for (int i = 0; i + 4 < t.Count; i++)
-            if (t[i].Value == receiver && t[i + 1].Value == ":" &&
-                (t[i + 2].Value is "ref" or "wref") &&
-                t[i + 3].Value == "<" && t[i + 4].Value == "QuestsSystem")
-                return true;
+        // Reject untyped receiver names. More importantly, a typed field of
+        // the same name in ANOTHER class or a variable local to a DIFFERENT
+        // method must never prove this receiver.
+        bool TypedAt(int index) =>
+            index + 4 < t.Count && t[index].Value == receiver &&
+            t[index + 1].Value == ":" &&
+            (t[index + 2].Value is "ref" or "wref") &&
+            t[index + 3].Value == "<" && t[index + 4].Value == "QuestsSystem";
+
+        // Method parameters are inside the method's own signature.
+        for (int i = method.SignatureOpen + 1; i + 4 < method.SignatureClose; i++)
+            if (TypedAt(i)) return true;
+
+        // Explicit local declarations in this method's source, before use.
+        // A lexical match is still not a proof of runtime receiver identity.
+        for (int i = method.Open + 1; i + 4 < opIndex; i++)
+            if (TypedAt(i)) return true;
+
+        // For this.m_quests.RegisterListener, only same-class top-level field
+        // declarations count. Do not borrow fields from other classes or from
+        // local variables inside unrelated methods in the same file.
+        if (opIndex < 4 || t[opIndex - 4].Value != "this" ||
+            t[opIndex - 3].Value != "." || string.IsNullOrEmpty(method.Owner))
+            return false;
+
+        int classOpen = -1;
+        for (int i = 0; i + 2 < method.First; i++)
+        {
+            if (t[i].Value != "class" || t[i + 1].Value != method.Owner)
+                continue;
+            int open = i + 2;
+            while (open < method.First && open < i + 48 &&
+                   t[open].Value is not ("{" or ";")) open++;
+            if (open >= method.First || t[open].Value != "{") continue;
+            int close = Match(t, open, "{", "}");
+            if (close > method.Close && open > classOpen) classOpen = open;
+        }
+        if (classOpen < 0) return false;
+        int nested = 0;
+        for (int i = classOpen + 1; i + 4 < method.First; i++)
+        {
+            if (t[i].Value == "{") { nested++; continue; }
+            if (t[i].Value == "}") { nested--; continue; }
+            if (nested == 0 && TypedAt(i)) return true;
+        }
         return false;
     }
 
