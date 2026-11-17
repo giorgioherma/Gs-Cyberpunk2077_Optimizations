@@ -418,14 +418,14 @@ try {
           # The one generated RTTI bridge is NEW by design. Every other
           # optimized REDscript file must replace a real installed author.
           if ($scenario -ne 'framework-all-generics-preview' -or
-              $relative.Replace('\','/') -cne 'G-RedRuntime/Native/GCOSharedNativeBridge.reds' -or
+              $relative.Replace('\','/') -cne 'G-RedRuntime/Native/GCETNativeLocationBackend.reds' -or
               $nativeBridgeAdded -ne 0) {
             throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
           }
           $bridgeText=Get-Content -LiteralPath $file.FullName -Raw
-          foreach($capability in @('GCOSharedNativeBridge','GCETStaticReady',
-                  'GCETStaticOwnerCount','GCETStaticOwnerAnchor',
-                  'GCETPlayerVector4Live','GCETPlayerVector4Valid')) {
+          foreach($capability in @('GCETNativeLocationBackend','NativeLocationBackend',
+                  'GCETStaticReady','GCETStaticOwnerCount','GCETStaticOwnerAnchor',
+                  'GCETStaticSubscribe','GCETStaticPoll','GCETStaticAckSnapshot')) {
             if (!$bridgeText.Contains($capability,[StringComparison]::Ordinal)) {
               throw 'R6_SHARED_NATIVE_BRIDGE_CAPABILITY_DRIFT'
             }
