@@ -1,5 +1,14 @@
 # R5 BLACKBOARD / shared-state implementation — exact done vs remaining
 
+
+## 2026-11-17 follow-up — same-file effective-source composition, validation pending
+
+- The **authoritative** `GenericBlackboardDefinitionPass.Preview` now accepts an isolated `--base-preview` containing the preceding rules' staged effective source. It uses its original strict source matcher on that effective source rather than applying a corrective patch, requiring all candidate statements to match their pristine-source text and groups. Any change, disappearance or partial marker refuses composition.
+- The canonical real-capture replay feeds its already-generated callback/action/angle/late-read preview to the blackboard rule and requires the resulting file to preserve prior generic markers. Existing same-file preview files are replaced **only in CI's disposable overlay**, with the blackboard and preceding rule both present. Original files, game installation and sealed capture are never written.
+- Added explicit tests for same-file prior generic preservation, altered-statement refusal and external-preview isolation. Commits `357716e`, `c3395d5`, `07287d3`, `38c19dc` on GCO `dev/redscript/resolver_handoff`.
+- **Status at authoring:** Windows CI #581–#584 triggered; full official SCC outcome and exact eligible/merged numbers **NOT YET VERIFIED**. The historical #580 result below (14 disjoint compiled, two deferred) remains the last verified baseline until the new run passes. This is still preview-only, not a deployable final generator or gameplay proof.
+
+
 **Last updated:** 2026-11-17. **READ after** GCO `AGENTS.md`, `REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md`, `REDSCRIPT-RESOLVER-PROGRESS.md`. **Active branch:** GCO `dev/redscript/resolver_handoff`. **Native profiler:** GRSP `dev/native-instrumentation`. **Runtime services:** owner repo `G-REDruntime_Framework/main`. **CET:** owner repo `G-CET_Runtime_Profiler/dev/resolver-profiler-handoff`. No source owner or stable main altered during this implementation.
 
 ## 1. Verified actual CET blackboard optimization — DONE in CET
