@@ -23,6 +23,10 @@ internal static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-angle-sort")
+                return RunAngleSortScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-angle-sort")
+                return RunAngleSortPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-action-filter")
                 return RunActionFilterScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-action-filter")
@@ -419,6 +423,33 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript action filter preview: transformed=" +
             rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunAngleSortScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Angle-sort scanner accepts --game and --out only");
+        var summary = GenericAngleSortPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript generic angle-sort scan: files=" +
+            summary.Files + " eligible=" + summary.Eligible +
+            " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunAngleSortPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Angle-sort preview accepts --game, --analysis, --out only");
+        int count = GenericAngleSortPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript angle-sort preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
     }
 
