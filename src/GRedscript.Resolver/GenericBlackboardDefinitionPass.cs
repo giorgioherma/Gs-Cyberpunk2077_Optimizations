@@ -14,9 +14,13 @@ internal static class GenericBlackboardDefinitionPass
 {
     internal const string Rule = "BLACKBOARD_DEFINITION_STATEMENT_V1";
     private const string Marker = "// GCO-GENERIC:" + Rule;
+    private const string SequenceRule = "BLACKBOARD_DEFINITION_SEQUENCE_V1";
+    private const string SequenceMarker = "// GCO-GENERIC:" + SequenceRule;
     private sealed record Span(int Start, int End);
     private sealed record Candidate(string Relative, int Line, string Group,
         string LocalName, int Begin, int End, Span Left, Span Right);
+    private sealed record SetterSequence(string Relative, int Line, string Group,
+        string Receiver, string LocalName, int Begin, int End, Span[] Definitions);
     private sealed record FileView(string Relative, string Content,
         IReadOnlyList<SourceAdmission.Token> Tokens);
     internal sealed record Summary(int Files, int Eligible, int AlreadyComplete);
@@ -34,7 +38,7 @@ internal static class GenericBlackboardDefinitionPass
         {
             var state = Examine(view);
             complete += state.Complete;
-            eligible += state.Candidates.Count;
+            eligible += state.Candidates.Count + state.Sequences.Count;
             foreach (var c in state.Candidates)
                 found.Add(new {
                     path = "r6/scripts/" + c.Relative,
@@ -43,6 +47,20 @@ internal static class GenericBlackboardDefinitionPass
                     state = "PRISTINE_APPLICABLE",
                     immutableDefinitionsOnly = true,
                     liveBlackboardValuesRetained = true,
+                    generationAuthorized = false
+                });
+            foreach (var seq in state.Sequences)
+                found.Add(new {
+                    path = "r6/scripts/" + seq.Relative,
+                    line = seq.Line, rule = SequenceRule,
+                    group = seq.Group,
+                    consecutiveStatements = seq.Definitions.Length,
+                    repeatedGroupLookupsAvoidable = seq.Definitions.Length - 1,
+                    sourceControlledScope = true,
+                    sameReceiverAndGroup = true,
+                    originalSetterCountAndOrderRetained = true,
+                    originalKeyFieldAndLiveValueAccessRetained = true,
+                    immutableDefinitionsOnly = true,
                     generationAuthorized = false
                 });
         }
@@ -111,7 +129,7 @@ internal static class GenericBlackboardDefinitionPass
         foreach (var view in Files(game, admission))
         {
             var originalState = Examine(view);
-            if (originalState.Candidates.Count == 0) continue;
+            if (originalState.Candidates.Count + originalState.Sequences.Count == 0) continue;
             string effective = view.Content;
             State state = originalState;
             if (baseScripts is not null)
@@ -136,17 +154,28 @@ internal static class GenericBlackboardDefinitionPass
                     string[] after = state.Candidates.Select(c =>
                         c.Group + "\0" + effective[c.Begin..c.End])
                         .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    string[] beforeSequences = originalState.Sequences.Select(s =>
+                        s.Group + "\0" + view.Content[s.Begin..s.End])
+                        .OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    string[] afterSequences = state.Sequences.Select(s =>
+                        s.Group + "\0" + effective[s.Begin..s.End])
+                        .OrderBy(x => x, StringComparer.Ordinal).ToArray();
                     if (state.Complete != originalState.Complete ||
-                        !before.SequenceEqual(after, StringComparer.Ordinal))
+                        !before.SequenceEqual(after, StringComparer.Ordinal) ||
+                        !beforeSequences.SequenceEqual(afterSequences, StringComparer.Ordinal))
                         throw new InvalidDataException(
                             "BBDEFS_COMPOSITION_STATEMENT_OVERLAP_OR_DRIFT");
                 }
             }
             string updated = effective;
             string newline = updated.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-            foreach (var c in state.Candidates.OrderByDescending(x => x.Begin))
+            // Both same-statement and consecutive-statement shapes are owned
+            // by this one canonical generator. Compose edits in descending
+            // source-position order; never repair a broken prior output.
+            var stagedEdits = new List<(int Begin, int End, string Replacement)>();
+            foreach (var c in state.Candidates)
             {
-                string original = updated[c.Begin..c.End];
+                string original = effective[c.Begin..c.End];
                 string rewritten = original;
                 foreach (var reference in new[] { c.Left, c.Right }.OrderByDescending(s => s.Start))
                     rewritten = rewritten[..(reference.Start - c.Begin)] + c.LocalName +
@@ -157,13 +186,32 @@ internal static class GenericBlackboardDefinitionPass
                     " name=" + c.LocalName + newline + indent +
                     "let " + c.LocalName + " = GetAllBlackboardDefs()." + c.Group +
                     ";" + newline;
-                updated = updated[..c.Begin] + declaration + rewritten + updated[c.End..];
+                stagedEdits.Add((c.Begin, c.End, declaration + rewritten));
+            }
+            foreach (var seq in state.Sequences)
+            {
+                string original = effective[seq.Begin..seq.End];
+                string rewritten = original;
+                foreach (var reference in seq.Definitions.OrderByDescending(s => s.Start))
+                    rewritten = rewritten[..(reference.Start - seq.Begin)] +
+                        seq.LocalName + rewritten[(reference.End - seq.Begin)..];
+                string indent = original[..(original.Length - original.TrimStart(' ', '\t').Length)];
+                string declaration = indent + SequenceMarker + " group=" +
+                    seq.Group + " name=" + seq.LocalName + " count=" +
+                    seq.Definitions.Length + newline + indent +
+                    "let " + seq.LocalName + " = GetAllBlackboardDefs()." +
+                    seq.Group + ";" + newline;
+                stagedEdits.Add((seq.Begin, seq.End, declaration + rewritten));
+            }
+            foreach (var edit in stagedEdits.OrderByDescending(x => x.Begin))
+            {
+                updated = updated[..edit.Begin] + edit.Replacement + updated[edit.End..];
                 edits++;
             }
             // Verify the emitted result, not just the input predicate.
             var generated = Examine(new FileView(view.Relative, updated,
                 SourceAdmission.ReadTokens(updated)));
-            if (generated.Complete != state.Complete + state.Candidates.Count)
+            if (generated.Complete != state.Complete + stagedEdits.Count)
                 throw new InvalidDataException("BBDEFS_GENERATED_POSTCONDITION_FAILED");
             staged.Add((view.Relative, updated));
         }
@@ -180,12 +228,14 @@ internal static class GenericBlackboardDefinitionPass
         return edits;
     }
 
-    private sealed record State(List<Candidate> Candidates, int Complete);
+    private sealed record State(
+        List<Candidate> Candidates, List<SetterSequence> Sequences,
+        int Complete);
     private static State Examine(FileView view)
     {
         string source = view.Content;
         var tokens = view.Tokens;
-        int already = VerifyGenerated(source);
+        int already = VerifyGenerated(source) + VerifyGeneratedSequences(source);
         var positions = new List<(int Index, string Group)>();
         for (int i = 0; i + 5 < tokens.Count; i++)
             if (tokens[i].Value == "GetAllBlackboardDefs" &&
@@ -236,7 +286,144 @@ internal static class GenericBlackboardDefinitionPass
                 new(tokens[a].Start, tokens[a + 4].End),
                 new(tokens[b].Start, tokens[b + 4].End)));
         }
-        return new(result, already);
+        return new(result, FindSetterSequences(view), already);
+    }
+
+    // The missing CET transfer: reuse one immutable blackboard definition
+    // group across two or more immediately consecutive setters. This is
+    // deliberately NOT an across-frame value cache or generic key observer.
+    // Every setter still executes, in the original order, on every entry.
+    private static List<SetterSequence> FindSetterSequences(FileView view)
+    {
+        const string getter =
+            @"(?<definition>GetAllBlackboardDefs\s*\(\s*\)\s*\.\s*" +
+            @"(?<group>[A-Za-z_][A-Za-z0-9_]*))";
+        var setter = new Regex(
+            @"^(?<indent>[ \t]*)(?<receiver>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*" +
+            @"Set(?:Bool|Int|Float|Variant|String|Name|Vector4)\s*\(\s*" +
+            getter + @"\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*," +
+            @"[^;\r\n]*\)\s*;\s*$",
+            RegexOptions.CultureInvariant);
+        var lines = view.Content.Split('\n');
+        var result = new List<SetterSequence>();
+        var run = new List<(int Line, int Offset, string Group,
+            string Receiver, string Indent, Span Definition)>();
+        int charOffset = 0;
+
+        void Flush()
+        {
+            if (run.Count >= 2)
+            {
+                var first = run[0];
+                var last = run[^1];
+                string alias = "__gcoBbSeqL" + first.Line;
+                if (!view.Content.Contains(alias, StringComparison.Ordinal) &&
+                    WithinFunction(view.Tokens, first.Definition.Start) &&
+                    WithinFunction(view.Tokens, last.Definition.End - 1))
+                {
+                    int endLine = last.Line - 1;
+                    int end = last.Offset + lines[endLine].TrimEnd('\r').Length;
+                    result.Add(new SetterSequence(
+                        view.Relative, first.Line, first.Group, first.Receiver,
+                        alias, first.Offset, end,
+                        run.Select(x => x.Definition).ToArray()));
+                }
+            }
+            run.Clear();
+        }
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i].TrimEnd('\r');
+            Match m = setter.Match(line);
+            bool safe = m.Success &&
+                !line.Contains("//", StringComparison.Ordinal) &&
+                !line.Contains("/*", StringComparison.Ordinal) &&
+                !line.Contains("*/", StringComparison.Ordinal) &&
+                !line.Contains('?') &&
+                !line.Contains("&&", StringComparison.Ordinal) &&
+                !line.Contains("||", StringComparison.Ordinal) &&
+                Regex.Matches(line, @"\bGetAllBlackboardDefs\s*\(").Count == 1 &&
+                line.Count(c => c == ';') == 1;
+            if (!safe)
+                Flush();
+            else
+            {
+                var group = m.Groups["group"].Value;
+                var receiver = m.Groups["receiver"].Value;
+                var indent = m.Groups["indent"].Value;
+                if (run.Count > 0 && (run[^1].Group != group ||
+                    run[^1].Receiver != receiver || run[^1].Indent != indent))
+                    Flush();
+                var part = m.Groups["definition"];
+                run.Add((i + 1, charOffset, group, receiver, indent,
+                    new Span(charOffset + part.Index,
+                        charOffset + part.Index + part.Length)));
+            }
+            charOffset += lines[i].Length + (i < lines.Length - 1 ? 1 : 0);
+        }
+        Flush();
+        return result;
+    }
+
+    private static int VerifyGeneratedSequences(string source)
+    {
+        int total = source.Split(SequenceMarker, StringSplitOptions.None).Length - 1;
+        if (total == 0) return 0;
+        var lines = source.Split('\n');
+        var pattern = new Regex(
+            "^" + Regex.Escape(SequenceMarker) +
+            @" group=(?<group>[A-Za-z_][A-Za-z0-9_]*)" +
+            @" name=(?<alias>__gcoBbSeqL[0-9]+) count=(?<count>[0-9]+)$",
+            RegexOptions.CultureInvariant);
+        int accepted = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string trimmed = lines[i].Trim();
+            if (!trimmed.Contains(SequenceMarker, StringComparison.Ordinal))
+                continue;
+            var marker = pattern.Match(trimmed);
+            if (!marker.Success || i + 2 >= lines.Length ||
+                !int.TryParse(marker.Groups["count"].Value, out int count) ||
+                count < 2 || count > 256)
+                throw new InvalidDataException("BBDEFS_SEQUENCE_PARTIAL_MARKER");
+            string alias = marker.Groups["alias"].Value;
+            if (!seen.Add(alias))
+                throw new InvalidDataException("BBDEFS_SEQUENCE_DUPLICATE_ALIAS");
+            string group = marker.Groups["group"].Value;
+            string indent = lines[i][..(lines[i].Length -
+                lines[i].TrimStart(' ', '\t').Length)];
+            string declaration = indent + "let " + alias +
+                " = GetAllBlackboardDefs()." + group + ";";
+            if (lines[i + 1].TrimEnd('\r') != declaration ||
+                i + 1 + count >= lines.Length)
+                throw new InvalidDataException("BBDEFS_SEQUENCE_PARTIAL_DECLARATION");
+            // Complete source-shaped postcondition, not just a marker.
+            // Each retained statement begins with the same receiver and
+            // uses the exact generated group alias as its first key prefix.
+            string? receiver = null;
+            for (int j = i + 2; j < i + 2 + count; j++)
+            {
+                string l = lines[j].TrimEnd('\r');
+                var setter = Regex.Match(l,
+                    "^" + Regex.Escape(indent) +
+                    @"(?<receiver>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*" +
+                    @"Set(?:Bool|Int|Float|Variant|String|Name|Vector4)\s*\(\s*" +
+                    Regex.Escape(alias) +
+                    @"\s*\.\s*[A-Za-z_][A-Za-z0-9_]*\s*,[^;\r\n]*\)\s*;\s*$",
+                    RegexOptions.CultureInvariant);
+                if (!setter.Success || (receiver is not null &&
+                    !string.Equals(receiver, setter.Groups["receiver"].Value,
+                        StringComparison.Ordinal)))
+                    throw new InvalidDataException("BBDEFS_SEQUENCE_PARTIAL_BODY");
+                receiver = setter.Groups["receiver"].Value;
+            }
+            accepted++;
+        }
+        if (accepted != total)
+            throw new InvalidDataException("BBDEFS_SEQUENCE_PARTIAL_COUNT");
+        return accepted;
     }
 
     private static int VerifyGenerated(string source)

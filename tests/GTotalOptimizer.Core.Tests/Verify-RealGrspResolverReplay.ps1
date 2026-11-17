@@ -1033,6 +1033,28 @@ try {
         throw 'GCO_BLACKBOARD_DEFINITION_REAL_SOURCE_CONTRACT_FAILED'
     }
     $bbCount = [int]$bbScan.eligible
+    # Both variants are owned by the existing immutable-definition
+    # generator; never duplicate a blackboard pass or infer type by mod name.
+    $bbStatement = @($bbScan.candidates | Where-Object {
+        $_.rule -eq 'BLACKBOARD_DEFINITION_STATEMENT_V1'
+    })
+    $bbSequence = @($bbScan.candidates | Where-Object {
+        $_.rule -eq 'BLACKBOARD_DEFINITION_SEQUENCE_V1'
+    })
+    if ($bbCount -ne ($bbStatement.Count + $bbSequence.Count)) {
+        throw 'GCO_BLACKBOARD_DEFINITION_UNKNOWN_GENERIC_VARIANT'
+    }
+    foreach ($sequence in $bbSequence) {
+        if ($sequence.sourceControlledScope -ne $true -or
+            $sequence.sameReceiverAndGroup -ne $true -or
+            $sequence.originalSetterCountAndOrderRetained -ne $true -or
+            $sequence.originalKeyFieldAndLiveValueAccessRetained -ne $true -or
+            [int]$sequence.consecutiveStatements -lt 2 -or
+            [int]$sequence.repeatedGroupLookupsAvoidable -ne
+                ([int]$sequence.consecutiveStatements - 1)) {
+            throw 'GCO_BLACKBOARD_SEQUENCE_SOURCE_PROOF_INVALID'
+        }
+    }
     $bbFolder = Join-Path $work 'gco-blackboard-definition-preview'
     $bbStageCount = 0
     $bbComposedCount = 0
@@ -1062,7 +1084,7 @@ try {
                 (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
                 (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
                 (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
-                'GCO-GENERIC:BLACKBOARD_DEFINITION_STATEMENT_V1') {
+                'GCO-GENERIC:BLACKBOARD_DEFINITION_(?:STATEMENT|SEQUENCE)_V1') {
                 throw 'GCO_BLACKBOARD_DEFINITION_OUTPUT_INVALID'
             }
             if (Test-Path -LiteralPath $target -PathType Leaf) {
@@ -1096,7 +1118,9 @@ try {
             throw 'GCO_BLACKBOARD_DEFINITION_MERGE_ACCOUNTING_FAILED'
         }
         Write-Host ('PASS GCO blackboard immutable-definition source preview: eligible=' +
-            $bbCount + ' files=' + $bbFiles.Count + ' stagedDisjoint=' +
+            $bbCount + ' statements=' + $bbStatement.Count +
+            ' sequences=' + $bbSequence.Count +
+            ' files=' + $bbFiles.Count + ' stagedDisjoint=' +
             $bbStageCount + ' composedSameFile=' + $bbComposedCount +
             ' deferredFileCollisions=0 originalSourceUntouched=true deployable=false')
     }
@@ -1111,7 +1135,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra

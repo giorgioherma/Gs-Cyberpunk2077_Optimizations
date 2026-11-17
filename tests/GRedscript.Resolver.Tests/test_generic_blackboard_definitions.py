@@ -247,5 +247,108 @@ class ImmutableBlackboardDefinitionContracts(unittest.TestCase):
         self.assertFalse(self.preview.exists())
 
 
+    def test_consecutive_definition_groups_generate_real_overlay_and_keep_live_values(self):
+        self.source.write_text("""module IndependentAuthor
+public class AnyMod extends ScriptableSystem {
+    public func UpdateBar(board: ref<IBlackboard>) -> Void {
+        if !IsDefined(board) { return; }
+        board.SetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active, true, true);
+        board.SetString(GetAllBlackboardDefs().UI_HUDProgressBar.Header, "Sample", true);
+        board.SetFloat(GetAllBlackboardDefs().UI_HUDProgressBar.Progress, 0.42);
+        let live = board.GetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active);
+    }
+}
+""", encoding="utf8")
+        original = self.source.read_bytes()
+        scanned = self.run_scan()
+        self.assertEqual(scanned["eligible"], 1)
+        self.assertEqual(scanned["alreadyComplete"], 0)
+        self.assertEqual(scanned["candidates"][0]["rule"],
+                         "BLACKBOARD_DEFINITION_SEQUENCE_V1")
+        self.assertEqual(scanned["candidates"][0]["consecutiveStatements"], 3)
+        self.assertEqual(scanned["candidates"][0]["repeatedGroupLookupsAvoidable"], 2)
+        self.seal()
+        r = self.run_preview()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        target = self.preview / "r6/scripts/IndependentAuthor/Example.reds"
+        self.assertTrue(target.is_file())
+        rewritten = target.read_text(encoding="utf8")
+        self.assertEqual(rewritten.count(
+            "GCO-GENERIC:BLACKBOARD_DEFINITION_SEQUENCE_V1"), 1)
+        self.assertIn("let __gcoBbSeqL", rewritten)
+        self.assertEqual(rewritten.count("GetAllBlackboardDefs().UI_HUDProgressBar"), 2)
+        self.assertIn("board.GetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active)", rewritten)
+        self.assertEqual(rewritten.count("board.Set"), 3)
+        self.assertEqual(self.source.read_bytes(), original)
+        # The final effective source is recognized structurally as completed.
+        shutil.copyfile(target, self.source)
+        post = self.run_scan()
+        self.assertEqual(post["eligible"], 0)
+        self.assertEqual(post["alreadyComplete"], 1)
+        shutil.rmtree(self.preview)
+        self.seal()
+        r = self.run_preview()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("transformed=0", r.stdout)
+        self.assertFalse(self.preview.exists())
+
+    def test_sequence_refuses_branches_and_does_not_cross_owners(self):
+        self.source.write_text("""module IndependentAuthor
+public class AnyMod extends ScriptableSystem {
+    public func UpdateBar(board: ref<IBlackboard>, enabled: Bool) -> Void {
+        board.SetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active, true, true);
+        if enabled {
+            board.SetFloat(GetAllBlackboardDefs().UI_HUDProgressBar.Progress, 0.12);
+        }
+        board.SetString(GetAllBlackboardDefs().UI_HUDProgressBar.Header, "X", true);
+        let x = board.GetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active);
+    }
+}
+""", encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r["eligible"], 0)
+        self.seal()
+        result = self.run_preview()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.preview.exists())
+
+    def test_sequence_partial_source_drifts_fail_closed(self):
+        self.source.write_text("""module IndependentAuthor
+public class AnyMod extends ScriptableSystem {
+    public func First(board: ref<IBlackboard>) -> Void {
+        board.SetBool(GetAllBlackboardDefs().UI_HUDProgressBar.Active, true, true);
+        board.SetFloat(GetAllBlackboardDefs().UI_HUDProgressBar.Progress, 0.12);
+    }
+    public func Second(board: ref<IBlackboard>) -> Void {
+        board.SetVariant(GetAllBlackboardDefs().UIGameData.Popup_Data, ToVariant(1));
+        board.SetVariant(GetAllBlackboardDefs().UIGameData.Popup_Settings, ToVariant(2));
+    }
+}
+""", encoding="utf8")
+        self.seal()
+        scan = self.run_scan()
+        self.assertEqual(scan["eligible"], 2)
+        self.assertEqual(self.run_preview().returncode, 0)
+        combined = (self.preview /
+                    "r6/scripts/IndependentAuthor/Example.reds").read_text()
+        first = "\n    public func Second("
+        partial = combined.split(first)[0] + first + self.source.read_text().split(first)[1]
+        self.source.write_text(partial)
+        self.seal()
+        r = self.run_scan()
+        self.assertEqual(r["eligible"], 1)
+        self.assertEqual(r["alreadyComplete"], 1)
+        bad = partial.replace(
+            "GCO-GENERIC:BLACKBOARD_DEFINITION_SEQUENCE_V1",
+            "GCO-GENERIC:BLACKBOARD_DEFINITION_SEQUENCE_V1 altered", 1)
+        self.source.write_text(bad)
+        broken = self.cli("scan-blackboard-defs", "--game", self.game,
+                          "--out", self.scan)
+        self.assertNotEqual(broken.returncode, 0)
+        self.assertIn("BBDEFS_SEQUENCE_PARTIAL_MARKER",
+                      broken.stderr + broken.stdout)
+
+
+
 if __name__ == "__main__":
     unittest.main()
