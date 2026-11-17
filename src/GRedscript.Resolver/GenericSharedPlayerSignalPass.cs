@@ -58,7 +58,7 @@ internal static class GenericSharedPlayerSignalPass
             var text = File.ReadAllText(file, Encoding.UTF8);
             var candidates = Find(text);
             int complete = Regex.Matches(text, Regex.Escape(Marker)).Count;
-            if ((candidates.Count > 0 && ModuleHeader.IsMatch(text)) || complete > 0)
+            if (candidates.Count > 0 || complete > 0)
                 yield return new(relative, text, candidates, complete);
         }
     }
