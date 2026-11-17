@@ -1,5 +1,13 @@
 # GCO-local REDscript Resolver
 
+## Direct dependency/trigger inventory (2026-11-17)
+
+The read-only `scan-shared-work` CLI now also emits `directDependencyCategoryCounts`, `candidateSharedTriggerCounts`, `primaryCandidateSharedTriggerCounts` and **separate measured/unmeasured** category totals. Every method has `directDependencies.instanceFields`, `instanceMethodCalls`, `usedCallbackParameters`, overlapping lexical `observedCategoryHints`, `possibleSharedTriggers`, and `primaryCandidateSharedTrigger`. All methods explicitly declare `completeCallGraphProven=false`, `completeWriterGraphProven=false`, `sharedTriggerProven=false` and `generationAuthorized=false`. The same authoritative REDscript token/method parser and sealed F11 source verification are reused without any second parser or postprocessor. No mod inventory is hardcoded.
+
+[GCO CI #607 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44089551952): **97** managed tests, **1,200** source-name methods in 2,319 files, **187 measured + 1,013 without matched capture evidence**, 902 `this.field`, 829 `this.Method()`, 431 used parameters; official SCC 0.5.31 with all 10 owner G-REDruntime sources, 323 GCO installer tests. This is a source-dependency *inventory*, not safe shared-trigger admission or an optimizer output. [R5 full exact accounting](../../docs/integration/R5-SHARED-DEPENDENCY-TRIGGER-STATUS.md).
+
+
+
 ## Shared-work and dirty refresh source scan (2026-11-17)
 
 Use `dotnet GRedscript.Resolver.dll scan-shared-work --game <live-game-root> --out <external-private-json> [--analysis <verified-GRSP-Resolver-json>]` for read-only whole-stack discovery. This uses the **same `CallbackSemanticResolver` parser, source index and exact measured F11 callsite join** as the existing `resolve-callbacks` CLI. A method-name match is a discovery hint, **not proof of a callback entry, complete immutable inputs, closed writer set, safe UI skip, or CPU saving**. Original sources, capture and installed game are never written.

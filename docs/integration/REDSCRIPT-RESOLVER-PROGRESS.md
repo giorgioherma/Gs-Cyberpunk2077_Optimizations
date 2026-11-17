@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — all 1,200 direct dependencies and 1,013 unmeasured source methods, CI #607
+
+- GCO REDscript Resolver owner code `CallbackSemanticResolver.SharedDependencies.cs` extends **the existing** read-only `scan-shared-work` command; same parser/SourceAdmission/capture join. Direct field/member-call/argument references separated, generic quest/blackboard/UI/time/position/event/input/resource hints recorded as **overlapping lexical observations**, then one priority shared-trigger research hypothesis assigned to all 1,200. No recipe/source rewriting, fixed mod-list or new service.
+- **[CI #607 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44089551952):** 97 managed tests, 7 G-REDruntime lifecycle contracts, real 2,319 private sources, 1,200 name hints, **187 source-proven measured, 1,013 unmeasured**, exact per-category/priority split, 902 direct instance-field refs, 829 same-object calls, 431 used args; official SCC 0.5.31 + all owner framework sources and prior generics, 323 GCO package contracts. All original files unchanged; GCO main/CET/GRSP/framework owner code untouched.
+- **Priority:** No player-only blanket dormancy. Among the 1,013 without matched runtime evidence, 268 first depend on local field writers, 171 new args, 168 widget lifecycle, 68 quest facts, 64 helper effects, 48 event delivery, 46 unresolved local, 39 resources, 35 timer/animation, etc.; all remain unproven. A mod can depend on multiple simultaneous inputs. Next source-owner writer graph, alias/method effects, genuine publisher/registration/lifecycle for a measured expensive generic pure subgraph; no preapproved skip or gain. [Full status](R5-SHARED-DEPENDENCY-TRIGGER-STATUS.md).
+
+
 ## 2026-11-17 — R5 measured shared-work evidence scanner, GCO CI #598 SUCCESS
 
 - `scan-shared-work --game <current-root> --out <isolated-json> [--analysis <sealed-capture-analysis>]` now lives in GCO `CallbackSemanticResolver.SharedWork.cs` and uses the single source-method parser and exact GCO source/capture evidence join. Read-only method-family discovery for update, refresh, tick, rebuild and render, **not** source optimization admission or a competing scanner.
