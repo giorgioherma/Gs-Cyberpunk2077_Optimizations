@@ -23,6 +23,10 @@ internal static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-late-system-read")
+                return RunLateSystemScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-late-system-read")
+                return RunLateSystemPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-angle-sort")
                 return RunAngleSortScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-angle-sort")
@@ -423,6 +427,32 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript action filter preview: transformed=" +
             rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunLateSystemScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Late-system scanner accepts --game and --out");
+        var result = GenericLateSystemReadPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO late system-read scan: files=" + result.Sources +
+            " eligible=" + result.Eligible + " already=" + result.Complete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunLateSystemPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Late-system preview accepts --game, --analysis, --out");
+        int count = GenericLateSystemReadPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO late system-read preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
     }
 
