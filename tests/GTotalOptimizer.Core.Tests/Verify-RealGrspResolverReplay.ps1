@@ -1481,15 +1481,16 @@ try {
     Copy-Item -LiteralPath $nativeFixtureDll -Destination (Join-Path $nativeOwnerDir 'GCETStaticLocations.dll')
     $nativeStage = Join-Path $work 'gco-shared-native-stage'
     $nativeStageLog = Join-Path $work 'gco-shared-native-stage.log'
-    & dotnet $dll stage-shared-native --game $game --cet-runtime $nativeOwnerRoot --out $nativeStage *> $nativeStageLog
+    if ([string]::IsNullOrWhiteSpace($FrameworkRoot)) { throw 'GCO_SHARED_NATIVE_FRAMEWORK_OWNER_MISSING' }
+    & dotnet $dll stage-shared-native --game $game --cet-runtime $nativeOwnerRoot --framework $FrameworkRoot --out $nativeStage *> $nativeStageLog
     if ($LASTEXITCODE -ne 0) {
         throw 'GCO_SHARED_NATIVE_REAL_DLL_DISPATCH_FAILED'
     }
-    $nativeBridge = Join-Path $nativeStage 'r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds'
+    $nativeBridge = Join-Path $nativeStage 'r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds'
     if (!(Test-Path -LiteralPath $nativeBridge -PathType Leaf)) {
         throw 'GCO_SHARED_NATIVE_REDSCRIPT_BRIDGE_MISSING'
     }
-    $nativeScriptDestination = Join-Path $callbackFolder 'r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds'
+    $nativeScriptDestination = Join-Path $callbackFolder 'r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds'
     New-Item -ItemType Directory -Force -Path (Split-Path $nativeScriptDestination -Parent) | Out-Null
     Copy-Item -LiteralPath $nativeBridge -Destination $nativeScriptDestination -ErrorAction Stop
     Write-Host 'PASS GCO real CET native DLL first-writer dispatch + REDscript RTTI bridge staged for official SCC'
