@@ -449,12 +449,14 @@ internal static class Program
 
     private static int RunBlackboardDefinitionPreview(Dictionary<string, string> options)
     {
-        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out")))
-            throw new ArgumentException("Blackboard definition preview accepts --game, --analysis, --out only");
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException("Blackboard definition preview accepts --game, --analysis, --out, optional --base-preview only");
         int count = GenericBlackboardDefinitionPass.Preview(
             Path.GetFullPath(Required(options, "--game")),
             Path.GetFullPath(Required(options, "--analysis")),
-            Path.GetFullPath(Required(options, "--out")));
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out string? basePreview)
+                ? Path.GetFullPath(basePreview) : null);
         Console.WriteLine("GCO blackboard definition preview: transformed=" + count +
             " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
