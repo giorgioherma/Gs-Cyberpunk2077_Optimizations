@@ -17,7 +17,7 @@ public static class SharedNativeRuntimeStage
     public const string LocationsPath =
         "red4ext/plugins/G-CET-StaticLocations/G-CET.locations";
     public const string RedscriptBridgePath =
-        "r6/scripts/G-RedRuntime/Native/GCOSharedNativeBridge.reds";
+        "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds";
 
     public sealed record Result(string NativeStatus, string LocationsStatus,
         int TotalAnchors, int TotalOwners, bool RedscriptBridgeStaged,
@@ -139,12 +139,13 @@ public static class SharedNativeRuntimeStage
     /// owner and identical owner records are idempotent.
     /// </summary>
     public static Result Stage(string sourceRoot, string gameRoot,
-        string outputRoot, string? redLocationsFile = null,
-        bool includeBridge = true)
+        string outputRoot, string frameworkRoot,
+        string? redLocationsFile = null, bool includeBridge = true)
     {
         string source = Path.GetFullPath(sourceRoot);
         string output = Path.GetFullPath(outputRoot);
         string game = Path.GetFullPath(gameRoot);
+        string framework = Path.GetFullPath(frameworkRoot);
         if (!Directory.Exists(game) ||
             output.Equals(game, StringComparison.OrdinalIgnoreCase) ||
             output.StartsWith(game.TrimEnd(Path.DirectorySeparatorChar) +
@@ -161,6 +162,11 @@ public static class SharedNativeRuntimeStage
         string destinationDll = ResolveIn(output, NativePath);
         string destinationLocations = ResolveIn(output, LocationsPath);
         string bridgeFile = ResolveIn(output, RedscriptBridgePath);
+        string ownerBridge = ResolveIn(framework,
+            "optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds");
+        if (includeBridge && !File.Exists(ownerBridge))
+            throw new InvalidDataException("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_MISSING");
+        byte[] bridgeBytes = includeBridge ? File.ReadAllBytes(ownerBridge) : [];
         if (!File.Exists(sourceDll))
             throw new InvalidDataException("SHARED_NATIVE_OWNER_RUNTIME_ABSENT");
         byte[] ownerDll = File.ReadAllBytes(sourceDll);
@@ -179,8 +185,14 @@ public static class SharedNativeRuntimeStage
         var combined = Merge(existing, incoming);
         if (combined.Count > 100000)
             throw new InvalidDataException("SHARED_NATIVE_LOCATIONS_LIMIT");
-        if (File.Exists(bridgeFile) &&
-            File.ReadAllText(bridgeFile, Encoding.UTF8) != BridgeSource)
+        if (includeBridge && (!Encoding.UTF8.GetString(bridgeBytes).Contains(
+                "public class GCETNativeLocationBackend extends NativeLocationBackend",
+                StringComparison.Ordinal) ||
+            !Encoding.UTF8.GetString(bridgeBytes).Contains(
+                "native func GCETStaticSubscribe", StringComparison.Ordinal)))
+            throw new InvalidDataException("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_INVALID");
+        if (includeBridge && File.Exists(bridgeFile) &&
+            !File.ReadAllBytes(bridgeFile).AsSpan().SequenceEqual(bridgeBytes))
             throw new InvalidDataException("SHARED_NATIVE_BRIDGE_COLLISION");
         // Finish all validation BEFORE any staging write.
         Directory.CreateDirectory(Path.GetDirectoryName(destinationDll)!);
@@ -194,7 +206,7 @@ public static class SharedNativeRuntimeStage
         if (includeBridge && !File.Exists(bridgeFile))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(bridgeFile)!);
-            File.WriteAllText(bridgeFile, BridgeSource, new UTF8Encoding(false));
+            File.WriteAllBytes(bridgeFile, bridgeBytes);
         }
         return new(alreadyDll is null ? "STAGED" : "ALREADY_PRESENT",
             changed ? "MERGED_OR_CREATED" : "ALREADY_PRESENT",
@@ -202,68 +214,4 @@ public static class SharedNativeRuntimeStage
             includeBridge, false);
     }
 
-    // REDscript extensions of the SAME ScriptGameInstance RTTI methods added
-    // by the existing CET native DLL. No second C++ service is introduced.
-    // Only generate this declaration together with the native DLL.
-    // A state of -1 means UNKNOWN; callers must retain original author logic.
-    public const string BridgeSource = """
-        // GCO shared CET/REDscript native interface — generated only with DLL.
-        @addMethod(GameInstance)
-        public static native func GCETStaticReady() -> Bool
-
-        @addMethod(GameInstance)
-        public static native func GCETStaticCoordinatorState() -> Int32
-
-        @addMethod(GameInstance)
-        public static native func GCETStaticOwnerCount(owner: Int32) -> Int32
-
-        @addMethod(GameInstance)
-        public static native func GCETStaticOwnerAnchor(owner: Int32, index: Int32) -> Int32
-
-        @addMethod(GameInstance)
-        public static native func GCETStaticState(anchor: Int32) -> Int32
-
-        @addMethod(GameInstance)
-        public static native func GCETPlayerVector4Live() -> Vector4
-
-        @addMethod(GameInstance)
-        public static native func GCETPlayerVector4Valid() -> Bool
-
-        public abstract class GCOSharedNativeBridge {
-            public static func IsReady() -> Bool {
-                return GameInstance.GCETStaticReady() &&
-                    GameInstance.GCETStaticCoordinatorState() == 2;
-            }
-
-            // Status only; -1 is UNKNOWN. The author checks NEAR/UNKNOWN live.
-            public static func LocationStatus(owner: Int32, index: Int32) -> Int32 {
-                if !GCOSharedNativeBridge.IsReady() {
-                    return -1;
-                }
-                let count = GameInstance.GCETStaticOwnerCount(owner);
-                if index < 0 || index >= count {
-                    return -1;
-                }
-                let id = GameInstance.GCETStaticOwnerAnchor(owner, index);
-                if id <= 0 {
-                    return -1;
-                }
-                let state = GameInstance.GCETStaticState(id);
-                if state != 0 && state != 1 {
-                    return -1;
-                }
-                return state;
-            }
-
-            // Strict-LIVE only: returned Vector4 remains unusable unless
-            // the following Valid() is true. No frame-cached read here.
-            public static func PlayerPositionValid() -> Bool {
-                return GameInstance.GCETPlayerVector4Valid();
-            }
-
-            public static func PlayerPositionLive() -> Vector4 {
-                return GameInstance.GCETPlayerVector4Live();
-            }
-        }
-        """;
 }
