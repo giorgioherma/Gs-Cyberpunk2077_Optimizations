@@ -58,14 +58,13 @@ internal static class GenericSharedPlayerSignalPass
             var text = File.ReadAllText(file, Encoding.UTF8);
             var candidates = Find(text);
             int complete = Regex.Matches(text, Regex.Escape(Marker)).Count;
-            if (candidates.Count > 0 || complete > 0)
+            if ((candidates.Count > 0 && ModuleHeader.IsMatch(text)) || complete > 0)
                 yield return new(relative, text, candidates, complete);
         }
     }
 
     private static List<Candidate> Find(string text)
     {
-        if (!ModuleHeader.IsMatch(text)) return new List<Candidate>();
         var tokens = SourceAdmission.ReadTokens(text);
         var rows = new List<Candidate>();
         for (int i = 0; i + Prefix.Length + 1 + Suffix.Length <= tokens.Count; i++)
