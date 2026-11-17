@@ -97,10 +97,54 @@ class QuestFactGraphTests(unittest.TestCase):
         self.assertEqual(shared["unregisterCallsites"], 1)
         self.assertFalse(shared["sharedSubscriptionAuthorized"])
         self.assertFalse(shared["everyWriterAndAliasProven"])
+        self.assertEqual(j["directRefreshFactReaderMethods"], 2)
+        self.assertEqual(j["dynamicDirectRefreshFactReaderMethods"], 1)
+        self.assertEqual(j["sourceMatchedDirectRefreshFactReaderMethods"], 0)
+        self.assertFalse(j["anyRefreshFullDependencyClosureProven"])
+        readers = {x["method"]: x for x in j["directRefreshReaders"]}
+        self.assertEqual(set(readers), {"Update", "Refresh"})
+        self.assertEqual(readers["Update"]["directFactReads"], 2)
+        self.assertEqual(readers["Update"]["dynamicFactReads"], 1)
+        self.assertEqual(readers["Update"]["exactLiteralFactNameHints"], ["test_shared_fact"])
+        self.assertIn("m_quests", readers["Update"]["directInstanceFields"])
+        self.assertTrue(all(
+            not x["safeToReplaceGetterOrSkipMethod"] and
+            not x["completeTransitiveDependencyClosure"] and
+            not x["generationAuthorized"] for x in j["directRefreshReaders"]))
         self.assertTrue(all(not x["generationAuthorized"] for x in j["callsites"]))
         self.assertFalse(j["generationAuthorized"])
         self.assertFalse(j["sourceWrites"])
         self.assertEqual((self.a.read_bytes(), self.b.read_bytes()), old)
+
+    def test_receiver_type_must_belong_to_method_owner(self):
+        # A same-named QuestsSystem member in another class, and an
+        # unrelated local typed inside a different method, cannot authorize
+        # a quest-fact listener receiver in this class.
+        foreign = '''
+public class AlienListener extends IScriptable {
+    private let m_quests: ref<inkWidget>;
+    public func Start() -> Void {
+        let token = this.m_quests.RegisterListener(n"test_shared_fact",
+            this, n"OnClick");
+    }
+    public func OtherMethod() -> Void {
+        let m_quests: ref<QuestsSystem>;
+    }
+}
+'''
+        self.b.write_text(SOURCE_B + foreign, encoding="utf8")
+        r = self.run_scan()
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        j = json.loads(self.out.read_text(encoding="utf8"))
+        fact = next(x for x in j["facts"]
+                    if x["fact"] == "test_shared_fact")
+        self.assertEqual(fact["registeredListenerCallsites"], 2)
+        alien = [x for x in j["callsites"]
+                 if x["owner"] == "AlienListener"
+                 and x["operation"] == "RegisterListener"]
+        self.assertEqual(len(alien), 1)
+        self.assertFalse(alien[0]["questReceiverSourceTyped"])
+        self.assertFalse(alien[0]["generationAuthorized"])
 
     def test_stale_capture_or_unsealed_capture_fails_closed(self):
         analysis = self.root / "wrong-capture.json"
