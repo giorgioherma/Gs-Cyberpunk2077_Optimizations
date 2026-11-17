@@ -140,8 +140,8 @@ public class AlienListener extends IScriptable {
                     if x["fact"] == "test_shared_fact")
         self.assertEqual(fact["registeredListenerCallsites"], 2)
         alien = [x for x in j["callsites"]
-                 if x["owner"] == "AlienListener"
-                 and x["operation"] == "RegisterListener"]
+                 if x["Owner"] == "AlienListener"
+                 and x["Operation"] == "RegisterListener"]
         self.assertEqual(len(alien), 1)
         self.assertFalse(alien[0]["questReceiverSourceTyped"])
         self.assertFalse(alien[0]["generationAuthorized"])
