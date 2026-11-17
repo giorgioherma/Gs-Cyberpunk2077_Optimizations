@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-17 — R5 opt-in source-owned quest fact signals, broad graph CI #615/#620
+
+- `scan-quest-facts` is integrated into the existing GCO Resolver and canonical real F11 CI; no second parser, native profiler or mod allowlist. **24,276** methods audited/2,319 files, **2,799 literal + 1,140 dynamic/unresolved fact-like callsites**, 961 literal name candidates, strict source-typed receiver gate (3 cross-owner named overlaps; 203 receiver-unknown listener callsites). False-positive UI listener mutation contract and source-drift refusals added. **GCO CI #615 SUCCESS** real full-stack baseline.
+- Owner `G-REDruntime_Framework/main` now has `QuestFactSignals` on the existing Runtime with per-exact-fact opt-in registration, individual release tokens, latest observed Int32 only after callback, per-fact generation, existing EventBus/DirtyFlags notifications and first-use/unknown fallback. Player attach/detach/session invalidates observations. Zero consumer => zero additional engine registration/polling.
+- **[GCO #620 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44098418784):** 101 managed tests, six source/mutation owner quest contracts, 2,319 private REDscript files, 11 framework source files SCC 0.5.31 against 22 existing generic previews, 323 GCO package tests. Bounded active-interest cleanup and session invalidation event refinements are verified only if later #622 completes. None of the 1,013 unmeasured methods are automatically safe to skip. [Full detail](R5-QUEST-FACT-SHARED-OBSERVATION-STATUS.md).
+
+
 ## 2026-11-17 — all 1,200 direct dependencies and 1,013 unmeasured source methods, CI #607
 
 - GCO REDscript Resolver owner code `CallbackSemanticResolver.SharedDependencies.cs` extends **the existing** read-only `scan-shared-work` command; same parser/SourceAdmission/capture join. Direct field/member-call/argument references separated, generic quest/blackboard/UI/time/position/event/input/resource hints recorded as **overlapping lexical observations**, then one priority shared-trigger research hypothesis assigned to all 1,200. No recipe/source rewriting, fixed mod-list or new service.

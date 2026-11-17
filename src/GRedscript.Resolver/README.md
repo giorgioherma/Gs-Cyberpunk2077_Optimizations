@@ -1,5 +1,13 @@
 # GCO-local REDscript Resolver
 
+## Quest fact read/write/listener graph and optional shared observer (2026-11-17)
+
+`scan-quest-facts --game <live-root> --out <new-external-json> [--analysis <sealed-GRSP-Resolver-analysis>]` is a source-wide read-only operation built on the **existing** `CallbackSemanticResolver` method parser and source hash. Schema `gco.redscript.quest-fact.graph.v1` lists `GetFact/GetFactStr/SetFact/SetFactStr/RegisterListener/UnregisterListener` lexical callsites, exact `n"fact"` names versus dynamic/unknown, source-declared `QuestsSystem` registration receivers versus unknown UI/engine registration receivers, and only source-aligned sealed-F11 outgoing work. Every fact row refuses generation (`sharedSubscriptionAuthorized=false`, `everyWriterAndAliasProven=false`, `receiverTypeProven=false`). No method/capture/source is written or auto-optimized.
+
+[GCO #615 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44096705852): 2,319 private original `.reds`, 24,276 source methods, 2,799 literal + 1,140 dynamic fact-like callsites, 961 candidate literal fact names, 203 source-unproven listener receiver calls. Framework owner `main` now owns a **dormant opt-in** `QuestFactSignals` service backed by original QuestsSystem notifications and existing G-REDruntime EventBus/DirtyFlags, with interest tokens and unknown-state fallback. GCO #620 SCC-compiled 11 owner framework source files against the complete 2,319-file private stack, with no mod integration. [Full R5 status](../../docs/integration/R5-QUEST-FACT-SHARED-OBSERVATION-STATUS.md).
+
+
+
 ## Direct dependency/trigger inventory (2026-11-17)
 
 The read-only `scan-shared-work` CLI now also emits `directDependencyCategoryCounts`, `candidateSharedTriggerCounts`, `primaryCandidateSharedTriggerCounts` and **separate measured/unmeasured** category totals. Every method has `directDependencies.instanceFields`, `instanceMethodCalls`, `usedCallbackParameters`, overlapping lexical `observedCategoryHints`, `possibleSharedTriggers`, and `primaryCandidateSharedTrigger`. All methods explicitly declare `completeCallGraphProven=false`, `completeWriterGraphProven=false`, `sharedTriggerProven=false` and `generationAuthorized=false`. The same authoritative REDscript token/method parser and sealed F11 source verification are reused without any second parser or postprocessor. No mod inventory is hardcoded.
