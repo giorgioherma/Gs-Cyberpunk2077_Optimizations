@@ -278,6 +278,45 @@ jobs:
             ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
             ' already=' + $scan.fixedCnameIndexAlreadyComplete +
             ' generated=0 originalSourcesUntouched=true')
+      - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $report = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.log'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          & dotnet $dll resolve-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+              throw 'GCO_CALLBACK_SEMANTICS_SOURCE_CLASSIFICATION_FAILED'
+          }
+          $analysis = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json -Depth 70
+          if ($analysis.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
+              $analysis.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $analysis.sourceFiles -ne $audit.sourceFiles -or
+              [int]$analysis.classifiedCallbacks -le 45 -or
+              [int]$analysis.onActionMethods -lt 45 -or
+              [int]$analysis.playerPuppetOnActionWrappers -lt 1 -or
+              [int]$analysis.callbacksWithForwardedHelpers -lt 1 -or
+              [int]$analysis.recipeCandidateCounts.G_INPUT_ROUTE -lt 45 -or
+              $analysis.generationAuthorized -ne $false -or
+              $analysis.actionSelectorCompletenessProven -ne $false -or
+              $analysis.callbackEntryCountsKnown -ne $false -or
+              $analysis.sourceWrites -ne $false) {
+              throw 'GCO_CALLBACK_SEMANTICS_WHOLE_STACK_CONTRACT_FAILED'
+          }
+          Write-Host ('PASS full-stack CET-style REDscript callback classification:' +
+              ' callbacks=' + $analysis.classifiedCallbacks +
+              ' OnAction=' + $analysis.onActionMethods +
+              ' PlayerPuppetWraps=' + $analysis.playerPuppetOnActionWrappers +
+              ' helperForwarders=' + $analysis.callbacksWithForwardedHelpers +
+              ' recipeFamilies=' + $analysis.recipeCandidateCounts.Count +
+              ' rewritten=0')
+          # The private catalog contains third-party source paths and must
+          # never become a GCO public artifact or be printed in detail.
       - name: Scan private REDscript OnAction literal membership candidates
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
