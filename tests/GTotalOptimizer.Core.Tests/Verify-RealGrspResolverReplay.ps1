@@ -1128,6 +1128,100 @@ try {
         Write-Host 'GCO blackboard definitions: no matching source shape; no files staged.'
     }
 
+    # G-PureConstantSlice V1: source-proven zero-argument final-static Bool
+    # literal getters only. Reuse the one existing REDscript parser and GCO
+    # effective-stage source, then compile actual generated .reds alongside
+    # all previous generic previews. No mod name/path allowlist and no runtime
+    # observer. Refuse foreign wrappers, invalid imports or altered inputs.
+    $pureScanFile = Join-Path $work 'gco-pure-bool-scan.json'
+    $pureScanLog = Join-Path $work 'gco-pure-bool-scan.log'
+    & dotnet $dll scan-pure-constants --game $game --out $pureScanFile *> $pureScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $pureScanFile -PathType Leaf)) {
+        throw 'GCO_PURE_BOOL_REAL_SOURCE_SCAN_FAILED'
+    }
+    $pureScan = Get-Content -LiteralPath $pureScanFile -Raw | ConvertFrom-Json
+    if ($pureScan.schemaVersion -ne 'gco.redscript.pure-final-bool.scan.v1' -or
+        $pureScan.rule -ne 'PURE_FINAL_STATIC_BOOL_V1' -or
+        $pureScan.sourceStackSha256 -ne $expectedSourceHash -or
+        $pureScan.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $pureScan.noClassOrModNameAllowlist -ne $true -or
+        $pureScan.lexicalShapeAloneDoesNotAuthorizeRewrite -ne $true -or
+        $pureScan.callerExecutionAndLiveStateUnchanged -ne $true -or
+        $pureScan.sourceCallSideEffectsProvenAbsent -ne $true -or
+        $pureScan.generationAuthorized -ne $false -or
+        $pureScan.compilerValidated -ne $false -or
+        $pureScan.performanceSavingsClaimed -ne $false -or
+        $pureScan.sourceWrites -ne $false -or
+        [int]$pureScan.eligibleSites -ne @($pureScan.sites).Count) {
+        throw 'GCO_PURE_BOOL_REAL_SOURCE_CONTRACT_FAILED'
+    }
+    $pureCount = [int]$pureScan.eligibleSites
+    $pureFolder = Join-Path $work 'gco-pure-bool-preview'
+    $pureStaged = 0
+    $pureComposed = 0
+    if ($pureCount -gt 0) {
+        $pureLog = Join-Path $work 'gco-pure-bool-preview.log'
+        & dotnet $dll preview-pure-constants --game $game --analysis $result --out $pureFolder --base-preview $callbackFolder *> $pureLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_PURE_BOOL_SOURCE_PREVIEW_FAILED'
+        }
+        $pureScripts = Join-Path $pureFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $pureScripts -PathType Container)) {
+            throw 'GCO_PURE_BOOL_NO_GENERATED_SOURCES'
+        }
+        $pureFiles = @(Get-ChildItem -LiteralPath $pureScripts -Recurse -File)
+        if ($pureFiles.Count -lt 1 -or $pureFiles.Count -gt $pureCount) {
+            throw 'GCO_PURE_BOOL_OUTPUT_FILE_COUNT_INVALID'
+        }
+        $combinedScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $pureFiles) {
+            $relative = [IO.Path]::GetRelativePath($pureScripts, $file.FullName)
+            $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+            $target = Join-Path $combinedScripts $relative
+            if ($file.Extension -ne '.reds' -or
+                [IO.Path]::IsPathRooted($relative) -or
+                $relative.StartsWith('..') -or $relative.Contains(':') -or
+                !(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+                (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:PURE_FINAL_STATIC_BOOL_V1') {
+                throw 'GCO_PURE_BOOL_GENERATED_SOURCE_INVALID'
+            }
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                $prior = Get-Content -LiteralPath $target -Raw
+                $composed = Get-Content -LiteralPath $file.FullName -Raw
+                $priorMarkers = @([regex]::Matches($prior,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                if ($priorMarkers.Count -lt 1) {
+                    throw 'GCO_PURE_BOOL_UNKNOWN_PRIOR_GENERATION'
+                }
+                foreach ($marker in $priorMarkers) {
+                    if (!$composed.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_PURE_BOOL_COMPOSITION_LOST_PRIOR_GENERATOR'
+                    }
+                }
+                Copy-Item -LiteralPath $file.FullName -Destination $target -Force -ErrorAction Stop
+                $pureComposed++
+            } else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+                Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+                $pureStaged++
+            }
+        }
+        if ($pureStaged + $pureComposed -ne $pureFiles.Count) {
+            throw 'GCO_PURE_BOOL_OUTPUT_ACCOUNTING_FAILED'
+        }
+        Write-Host ('PASS GCO pure final-static Bool source preview: sites=' +
+            $pureCount + ' files=' + $pureFiles.Count +
+            ' new=' + $pureStaged + ' composed=' + $pureComposed +
+            ' generatedSource=true originalsUntouched=true deployable=false')
+    }
+    else {
+        Write-Host 'GCO pure final-static Bool: no source-proven callsites in current stack.'
+    }
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
@@ -1135,7 +1229,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra

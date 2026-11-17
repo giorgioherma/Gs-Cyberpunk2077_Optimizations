@@ -29,6 +29,10 @@ internal static class Program
                 return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-pure-constants")
+                return RunPureConstantScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-pure-constants")
+                return RunPureConstantPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-blackboard-defs")
                 return RunBlackboardDefinitionScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-blackboard-defs")
@@ -501,6 +505,40 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript action filter preview: transformed=" +
             rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    // G-PureConstantSlice: preserve the surrounding author method; substitute
+    // only source-proven pure final-static Bool literal getters, as a staged
+    // REDscript source preview for official SCC and user gameplay tests.
+    private static int RunPureConstantScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Pure constant scan accepts --game and --out only");
+        var result = CallbackSemanticResolver.ScanPureConstantSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO pure constant partial-work scan: files=" +
+            result.SourceFiles + " eligibleSites=" + result.EligibleSites +
+            " eligibleFiles=" + result.EligibleFiles +
+            " already=" + result.AlreadyComplete +
+            " refused=" + result.Refusals + " sourceWrites=0");
+        return 0;
+    }
+
+    private static int RunPureConstantPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "Pure constant preview accepts --game --analysis --out [--base-preview]");
+        int count = CallbackSemanticResolver.PreviewPureConstantSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out string? basePreview)
+                ? Path.GetFullPath(basePreview) : null);
+        Console.WriteLine("GCO pure constant generated .reds preview: transformed=" +
+            count + " originalSourceWrites=0 compilerValidated=false deployable=false");
         return 0;
     }
 
