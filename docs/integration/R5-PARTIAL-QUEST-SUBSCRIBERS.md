@@ -2,6 +2,10 @@
 
 **Owner:** GCO managed REDscript Resolver on `dev/redscript/resolver_handoff`, plus source-owned G-REDruntime quest observer in framework `main`. **Status (2026-11-17):** read-only full-source evidence and listener identity guard, **no automatic game-source rewrite, zero approved partial getter replacements, zero whole-method skips**.
 
+## 2026-11-17 — Source-token partial-value continuation
+
+[New R5 per-value source and F11 evidence handoff](R5-PARTIAL-QUEST-VALUE-FLOW.md), commit `8af047c`. Preserve all existing bidirectional cohorts and identify value-level subscribers even inside mixed methods. The reverted six-guard experiment is **not** the subscriber admission ceiling. No getter or method rewrite authorized. **CI #646 SUCCESS (source `8af047c`):** 108 managed Resolver tests; 7 player + 8 quest framework source contracts; 2,319 live REDscript sources and official SCC 0.5.31 with 11 framework files; 323 GCO installation/package contracts. Bidirectional source rows: **1,465** literal read sites / **753** exact-name groups. New per-value evidence: **1,456** reads inside mixed-dependency methods, **287** source-measured method inputs, **493** local-value assignments, **855** direct or local downstream-condition inputs, including existing **145** same-owner helper reads. These are site counts, not distinct optimized methods; **0** authorized rewrites, **0** gameplay tests or measured savings. [Run #646](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44123182727).
+
 ## The two-sided subscriber rule
 
 An optimization unit is a **specific exact fact dependency or downstream pure computation**, NOT every method that references that fact. A method with other mutable inputs is not disqualified from observing the exact fact; it is disqualified from having its **whole body** suppressed based solely on the fact generation.
