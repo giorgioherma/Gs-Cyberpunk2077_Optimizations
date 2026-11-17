@@ -51,6 +51,10 @@ internal static class Program
                 return RunAngleSortScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-angle-sort")
                 return RunAngleSortPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-shared-player")
+                return RunSharedPlayerScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-shared-player")
+                return RunSharedPlayerPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-action-snapshot")
                 return RunActionSnapshotScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-action-snapshot")
@@ -697,6 +701,34 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GCO REDscript angle-sort preview: transformed=" + count +
             " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunSharedPlayerScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "Shared player scan accepts --game and --out only");
+        var result = GenericSharedPlayerSignalPass.Scan(
+            Required(options, "--game"), Required(options, "--out"));
+        Console.WriteLine("GCO shared player scan: eligible=" + result.Eligible +
+            " files=" + result.EligibleFiles + " complete=" +
+            result.AlreadyComplete);
+        return 0;
+    }
+
+    private static int RunSharedPlayerPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not (
+            "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "Shared player preview accepts --game, --analysis, --out and --base-preview");
+        int edits = GenericSharedPlayerSignalPass.Preview(
+            Required(options, "--game"), Required(options, "--analysis"),
+            Required(options, "--out"),
+            options.GetValueOrDefault("--base-preview"));
+        Console.WriteLine("GCO shared player preview: edits=" + edits +
+            " productionZipAuthorized=false");
         return 0;
     }
 
