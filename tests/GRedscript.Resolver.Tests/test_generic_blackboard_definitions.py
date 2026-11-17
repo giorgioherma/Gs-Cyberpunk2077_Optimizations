@@ -150,8 +150,8 @@ class ImmutableBlackboardDefinitionContracts(unittest.TestCase):
 
     def test_comment_or_string_rejected(self):
         self.source.write_text(SOURCE.replace(
-            ".GetInt(GetAllBlackboardDefs().PlayerStateMachine.SceneTier)",
-            ".GetInt(GetAllBlackboardDefs().PlayerStateMachine.SceneTier) // should not move"
+            "PlayerStateMachine.SceneTier) > 1 {",
+            "PlayerStateMachine.SceneTier) > 1 { // author side effect order"
         ), encoding="utf8")
         self.assertEqual(self.run_scan()["eligible"], 1)
         self.source.write_text(SOURCE.replace(
