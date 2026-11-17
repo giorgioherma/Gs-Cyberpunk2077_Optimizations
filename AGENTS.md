@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## BLACKBOARD definition reuse — implementation and exact remaining work (2026-11-17)
+
+**Mandatory continuation document:** [R5 BLACKBOARD / shared-state implementation status](docs/integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md). Read before expanding the blackboard generator or adding framework state. CET cached **12 immutable PSM definition keys**, not changing state; the new GCO generic `BLACKBOARD_DEFINITION_STATEMENT_V1` only shares two identical definition-group references in one straight-line REDscript statement, keeping all live getters and callback timing. Current work is source-only/preview, pending latest CI; multi-pass same-file composition and owner framework event-backed state service remain separate unimplemented gates. Use actual F11 measured direct cost (45,308 `GetAllBlackboardDefs` outgoing calls/14.9077 ms across 28 owners) rather than transplanting CET's 95%-allocation result. Do not exclude any mod from generic scans.
+
 ## CET shared-state precedent for REDscript generics — verified 2026-11-17
 
 **Before building or extending G-REDruntime generics, read** [exact CET-to-REDscript source mechanisms](docs/integration/R5-CET-SHARED-SERVICES-TRANSFER.md). That review verifies CET's source-owned shared reads, event-driven StateSignals, blackboard definition reuse, common native static location host, pausable listeners, and physical-job-vs-guard boundaries against actual CET Lua/C# source. Use this to design one producer/many consumers and source-first adapters in GCO, **without inventing broad semantic dormancy or copying CET's Lua service ABI into REDscript**. No installed mod is excluded from generic coverage.

@@ -14,6 +14,10 @@
 
 **Approved optimization backlog:** [REDscript Resolver agreed optimization candidates and mandatory generic-first gate](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). The numbered mod review is an investigation record, not permission to implement targeted recipes before R5 generic coverage and the R7 gap ledger.
 
+## 2026-11-17 blackboard implementation checkpoint
+
+**Read [R5-BLACKBOARD-SHARED-STATE-STATUS.md](R5-BLACKBOARD-SHARED-STATE-STATUS.md)** before new agent work. The CET 12-key PlayerStateMachine optimization is confirmed in `BlackboardPsmDefinitionCacheSource.cs` + the uploaded October 19 capture; it does **not** come from the separate native location ZIP. GCO code now contains source-first `GenericBlackboardDefinitionPass.cs`, `scan-blackboard-defs`, `preview-blackboard-defs`, synthetic source state/refusal tests, current private source audit and an isolated official SCC preview with same-file collision deferrals. **No production generator authorization yet; check the latest actual CI results.** Framework global event-backed player state, NEAR/FAR REDscript-native adapter, and multi-generic same-file source composition are still open, and should not be treated as done.
+
 ## Approved component boundaries
 
 - **GCO repository:** develop the REDscript Resolver, source-aware generic Generator, compiler/output validation and their tests as a **separate internal .NET 10 component**. The existing CET Resolver remains CET-owned and invoked as-is, with its fixed generation order preserved.
