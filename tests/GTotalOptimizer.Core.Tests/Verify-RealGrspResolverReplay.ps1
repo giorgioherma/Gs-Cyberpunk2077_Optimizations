@@ -390,6 +390,44 @@ try {
             throw 'GCO_SHARED_WORK_UNPROVEN_OPTIMIZATION_ADMITTED'
         }
     }
+    # Every broadly discovered source method must receive an explicitly
+    # unproven direct-operand profile, not just the 187 measured methods.
+    $direct = $shared.directDependencyCategoryCounts
+    $trigger = $shared.candidateSharedTriggerCounts
+    $primary = $shared.primaryCandidateSharedTriggerCounts
+    $primaryCount = 0
+    foreach ($entry in $primary.PSObject.Properties) {
+        $primaryCount += [int]$entry.Value
+    }
+    if ($shared.sourceDependencyCategoriesAreLexicalObservations -ne $true -or
+        $shared.sharedTriggersAreHypothesesNotPublishers -ne $true -or
+        $shared.directInstanceFieldsAreNotCompleteWriterGraph -ne $true -or
+        $shared.helperCallsHaveUnresolvedTransitiveEffects -ne $true -or
+        [int]$direct.INSTANCE_FIELDS -lt 1 -or
+        [int]$direct.INSTANCE_METHOD_CALLS -lt 1 -or
+        [int]$direct.CALLBACK_ARGUMENTS -lt 1 -or
+        $null -eq $trigger.OWNER_FIELD_WRITERS_NOT_CLOSED -or
+        $primaryCount -ne [int]$shared.candidateMethods) {
+        throw 'GCO_SHARED_WORK_DEPENDENCY_PROVENANCE_OR_ACCOUNTING_FAILED'
+    }
+    foreach ($candidate in $sharedCandidates) {
+        $deps = $candidate.directDependencies
+        if ($null -eq $deps -or
+            $deps.completeCallGraphProven -ne $false -or
+            $deps.completeWriterGraphProven -ne $false -or
+            $deps.sharedTriggerProven -ne $false -or
+            @($deps.possibleSharedTriggers).Count -lt 1 -or
+            [string]::IsNullOrWhiteSpace([string]$deps.primaryCandidateSharedTrigger)) {
+            throw 'GCO_SHARED_WORK_UNPROVEN_TRIGGER_EXPORTED_AS_PROVEN'
+        }
+    }
+    Write-Host ('PASS GCO shared-work direct dependencies: methods=' +
+        $shared.candidateMethods + ' directFieldRead=' +
+        $direct.INSTANCE_FIELDS + ' ownMethodCalls=' + $direct.INSTANCE_METHOD_CALLS +
+        ' callbackArguments=' + $direct.CALLBACK_ARGUMENTS +
+        ' primaryTriggers=' + $primaryCount +
+        ' writerClosureUnproven=true generationAuthorized=false')
+
     Write-Host ('PASS GCO generic shared-work evidence: methods=' +
         $shared.candidateMethods + ' sourceMatched=' + $shared.sourceMatchedMeasured +
         ' unmeasured=' + $shared.unmeasured +
