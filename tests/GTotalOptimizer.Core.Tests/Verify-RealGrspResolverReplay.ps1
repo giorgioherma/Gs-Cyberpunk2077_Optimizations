@@ -506,6 +506,68 @@ try {
         $angleCount + ' mergedFiles=' + $angleFiles.Count +
         ' disjoint=true sourceUntouched=true deployable=false')
 
+    # Generic pass 4: Source-proven action type early return must execute
+    # before a QuestsSystem lookup; wrappedMethod stays first. We stage
+    # only a structurally proven standalone overlay in disposable CI.
+    $lateScanFile = Join-Path $work 'gco-late-system-read-scan.json'
+    $lateScanLog = Join-Path $work 'gco-late-system-read-scan.log'
+    & dotnet $dll scan-late-system-read --game $game --out $lateScanFile *> $lateScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $lateScanFile -PathType Leaf)) {
+        throw 'GCO_LATE_SYSTEM_READ_REAL_SOURCE_SCAN_FAILED'
+    }
+    $lateScan = Get-Content -LiteralPath $lateScanFile -Raw | ConvertFrom-Json
+    if ($lateScan.schemaVersion -ne 'gco.redscript.late-system-read.scan.v1' -or
+        $lateScan.sourceStackSha256 -ne $expectedSourceHash -or
+        $lateScan.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $lateScan.generationAuthorized -ne $false -or
+        $lateScan.compilerValidated -ne $false -or
+        $lateScan.measuredSavingsClaimed -ne $false -or
+        $lateScan.sourceWrites -ne $false) {
+        throw 'GCO_LATE_SYSTEM_READ_REAL_SOURCE_SCAN_CONTRACT_FAILED'
+    }
+    $lateCount = [int]$lateScan.eligible
+    $lateFolder = Join-Path $work 'gco-late-system-read-preview'
+    if ($lateCount -gt 0) {
+        $lateLog = Join-Path $work 'gco-late-system-read-preview.log'
+        & dotnet $dll preview-late-system-read --game $game --analysis $result --out $lateFolder *> $lateLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_LATE_SYSTEM_READ_REAL_SOURCE_PREVIEW_FAILED'
+        }
+        $lateScripts = Join-Path $lateFolder 'r6/scripts'
+        if (!(Test-Path -LiteralPath $lateScripts -PathType Container)) {
+            throw 'GCO_LATE_SYSTEM_READ_PREVIEW_MISSING'
+        }
+        $lateFiles = @(Get-ChildItem -LiteralPath $lateScripts -Recurse -File)
+        if ($lateFiles.Count -lt 1 -or $lateFiles.Count -gt $lateCount) {
+            throw 'GCO_LATE_SYSTEM_READ_PREVIEW_COUNT_UNPROVEN'
+        }
+        $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
+        foreach ($file in $lateFiles) {
+            $relative = [IO.Path]::GetRelativePath($lateScripts, $file.FullName)
+            $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+            $target = Join-Path $callbackScripts $relative
+            if ($file.Extension -ne '.reds' -or
+                [IO.Path]::IsPathRooted($relative) -or
+                $relative.StartsWith('..') -or $relative.Contains(':') -or
+                !(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+                (Test-Path -LiteralPath $target) -or
+                (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+                (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+                'GCO-GENERIC:SYSTEM_READ_AFTER_ACTION_GUARD_V1') {
+                throw 'GCO_LATE_SYSTEM_READ_UNSAFE_SOURCE_OR_OVERLAY_COLLISION'
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        }
+        Write-Host ('PASS GCO generic late-system read real-source preview: candidates=' +
+            $lateCount + ' stagedFiles=' + $lateFiles.Count +
+            ' disjoint=true originalSourceUntouched=true deployable=false')
+    }
+    else {
+        Write-Host 'No source-proven late-system action read in current stack; no generated files.'
+    }
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
@@ -513,7 +575,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
