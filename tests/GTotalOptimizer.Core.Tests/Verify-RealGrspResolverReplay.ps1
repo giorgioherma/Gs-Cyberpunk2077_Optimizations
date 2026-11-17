@@ -925,7 +925,10 @@ try {
     }
     $angleScripts = Join-Path $angleFolder 'r6/scripts'
     $angleFiles = @(Get-ChildItem -LiteralPath $angleScripts -File -Recurse)
-    if ($angleFiles.Count -ne $angleCount) {
+    # The same original geometry file can now contain both the invariant
+    # sorter rewrite and the guarded quad broadphase. Count transformations
+    # separately from distinct owner files, as the canonical plan does.
+    if ($angleFiles.Count -lt 1 -or $angleFiles.Count -gt $angleCount) {
         throw 'GCO_ANGLE_SORT_REAL_SOURCE_PREVIEW_COUNT_UNPROVEN'
     }
     $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
