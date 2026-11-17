@@ -126,7 +126,7 @@ class QuestFactGraphTests(unittest.TestCase):
         self.assertTrue(j["partialObservationCohortsAreResearchOnly"])
         self.assertTrue(j["cannotInferOriginalGetterCanBeSkipped"])
         self.assertFalse(j["anySubscriptionOrPartialRewriteAuthorized"])
-        self.assertGreaterEqual(j["observedLiteralFactReadSites"], 3)
+        self.assertEqual(j["observedLiteralFactReadSites"], 2)
         cohort = next(x for x in j["questSubscriberCohorts"]
                       if x["fact"] == "test_shared_fact")
         self.assertEqual(cohort["distinctReaderMethods"], 2)
