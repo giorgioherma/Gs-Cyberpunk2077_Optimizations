@@ -319,6 +319,21 @@ jobs:
               $semantic.sourceWrites -ne $false) {
             throw 'GCO_FRESH_CALLBACK_CLASSIFICATION_CONTRACT_FAILED'
           }
+          $anglePath = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.json'
+          $angleLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.log'
+          & dotnet $dll scan-angle-sort --game $game --out $anglePath *> $angleLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $anglePath -PathType Leaf)) {
+            throw 'GCO_FRESH_ANGLE_SORT_SCAN_FAILED'
+          }
+          $angle = Get-Content -LiteralPath $anglePath -Raw | ConvertFrom-Json
+          if ($angle.schemaVersion -ne 'gco.redscript.angle-sort.scan.v1' -or
+              $angle.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $angle.sourceFiles -ne $audit.sourceFiles -or
+              $angle.generationAuthorized -ne $false -or
+              $angle.sourceWrites -ne $false -or
+              $angle.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_ANGLE_SORT_SCAN_CONTRACT_FAILED'
+          }
           $after = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
           if ($after.Count -ne $files.Count) { throw 'GCO_FRESH_SOURCE_INVENTORY_MUTATED' }
           foreach ($file in $after) {

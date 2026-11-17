@@ -449,6 +449,63 @@ try {
         Write-Host 'GCO action-filter: no source-proven match in current stack; not rewritten.'
     }
 
+    # Generic mechanical pass 3: four-vertex angle sorting. Only a complete
+    # source-proven comparison/swap shape may hoist the pure AtanF for pts[i],
+    # refreshing the hoisted angle after every swap. Source-path independent.
+    $angleScanFile = Join-Path $work 'gco-angle-sort-scan.json'
+    $angleScanLog = Join-Path $work 'gco-angle-sort-scan.log'
+    & dotnet $dll scan-angle-sort --game $game --out $angleScanFile *> $angleScanLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $angleScanFile -PathType Leaf)) {
+        throw 'GCO_ANGLE_SORT_REAL_SOURCE_SCAN_FAILED'
+    }
+    $angleScan = Get-Content -LiteralPath $angleScanFile -Raw | ConvertFrom-Json
+    if ($angleScan.schemaVersion -ne 'gco.redscript.angle-sort.scan.v1' -or
+        $angleScan.sourceStackSha256 -ne $expectedSourceHash -or
+        $angleScan.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $angleScan.generationAuthorized -ne $false -or
+        $angleScan.compilerValidated -ne $false -or
+        $angleScan.measuredSavingsClaimed -ne $false -or
+        $angleScan.sourceWrites -ne $false) {
+        throw 'GCO_ANGLE_SORT_REAL_SOURCE_SCAN_CONTRACT_FAILED'
+    }
+    $angleCount = [int]$angleScan.eligible
+    if ($angleCount -lt 1) {
+        throw 'GCO_ANGLE_SORT_KNOWN_REAL_SOURCE_FIXTURE_UNEXPECTEDLY_UNMATCHED'
+    }
+    $angleFolder = Join-Path $work 'gco-angle-sort-preview'
+    $angleLog = Join-Path $work 'gco-angle-sort-preview.log'
+    & dotnet $dll preview-angle-sort --game $game --analysis $result --out $angleFolder *> $angleLog
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GCO_ANGLE_SORT_REAL_SOURCE_PREVIEW_FAILED'
+    }
+    $angleScripts = Join-Path $angleFolder 'r6/scripts'
+    $angleFiles = @(Get-ChildItem -LiteralPath $angleScripts -File -Recurse)
+    if ($angleFiles.Count -ne $angleCount) {
+        throw 'GCO_ANGLE_SORT_REAL_SOURCE_PREVIEW_COUNT_UNPROVEN'
+    }
+    $callbackScripts = Join-Path $callbackFolder 'r6/scripts'
+    foreach ($file in $angleFiles) {
+        $relative = [IO.Path]::GetRelativePath($angleScripts, $file.FullName)
+        $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
+        $target = Join-Path $callbackScripts $relative
+        if ($file.Extension -ne '.reds' -or
+            [IO.Path]::IsPathRooted($relative) -or
+            $relative.StartsWith('..') -or $relative.Contains(':') -or
+            !(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
+            (Test-Path -LiteralPath $target) -or
+            (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
+            (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
+            (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
+            'GCO-GENERIC:ANGLE_SORT_INVARIANT_V1') {
+            throw 'GCO_ANGLE_SORT_UNSAFE_SOURCE_OR_OVERLAY_COLLISION'
+        }
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+    }
+    Write-Host ('PASS GCO generic angle-sort real-source preview: matches=' +
+        $angleCount + ' mergedFiles=' + $angleFiles.Count +
+        ' disjoint=true sourceUntouched=true deployable=false')
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
@@ -456,7 +513,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0) {
         $extra.CallbackPreviewRoot = $callbackFolder
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
