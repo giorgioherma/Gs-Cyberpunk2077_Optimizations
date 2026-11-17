@@ -76,7 +76,11 @@ public static class RedscriptGenerationPlan
         ("pure-constant-slices", "B", "PURE_FINAL_STATIC_BOOL_V1",
             "scan-pure-constants", "preview-pure-constants",
             "eligibleSites", "alreadyComplete", "sites",
-            "Dynamic method override or changing configuration")
+            "Dynamic method override or changing configuration"),
+        ("immutable-action-event-snapshot", "A", "ACTION_EVENT_SNAPSHOT_V1",
+            "scan-action-snapshot", "preview-action-snapshot",
+            "eligible", "alreadyComplete", "candidates",
+            "Native ListenerAction getter semantics or excess snapshot reads")
     ];
 
     // This generator already exists but depends on capture-matched per-loop
@@ -137,6 +141,8 @@ public static class RedscriptGenerationPlan
                         GenericBlackboardDefinitionPass.Scan(game, report); break;
                     case "pure-constant-slices":
                         CallbackSemanticResolver.ScanPureConstantSlices(game, report); break;
+                    case "immutable-action-event-snapshot":
+                        CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
                     default: throw new InvalidOperationException(
                         "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
                 }
@@ -318,6 +324,9 @@ public static class RedscriptGenerationPlan
                 "pure-constant-slices" =>
                     CallbackSemanticResolver.PreviewPureConstantSlices(game,
                         analysis, next, basePreview),
+                "immutable-action-event-snapshot" =>
+                    CallbackSemanticResolver.PreviewActionEventSnapshots(game,
+                        analysis, next, basePreview),
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
@@ -344,7 +353,7 @@ public static class RedscriptGenerationPlan
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
                     item.Id is not ("blackboard-definitions" or
-                        "pure-constant-slices"))
+                        "pure-constant-slices" or "immutable-action-event-snapshot"))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_UNCOMPOSABLE_SOURCE_COLLISION: " +
                         item.Id + " " + rel);
