@@ -487,6 +487,59 @@ try {
         ' unmeasured=' + $shared.unmeasured +
         ' sourceOnly=false generationAuthorized=false allReasonsAccounted=true')
 
+    # R5 quest-fact producer/readers/registrations, across ALL current mod
+    # methods (not just those named Update). This is an external private
+    # evidence graph. Unknown/dynamic receivers MUST remain refused.
+    $factsOutput = Join-Path $work 'gco-quest-facts.json'
+    $factsLog = Join-Path $work 'gco-quest-facts.log'
+    & dotnet $dll scan-quest-facts --game $game --analysis $result --out $factsOutput *> $factsLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $factsOutput -PathType Leaf)) {
+        throw 'GCO_QUEST_FACT_REAL_SOURCE_GRAPH_FAILED'
+    }
+    $qFacts = Get-Content -LiteralPath $factsOutput -Raw | ConvertFrom-Json -Depth 70
+    if ($qFacts.schemaVersion -ne 'gco.redscript.quest-fact.graph.v1' -or
+        $qFacts.sourceFiles -ne $sourceAudit.sourceFiles -or
+        $qFacts.sourceStackSha256 -ne $expectedSourceHash -or
+        $qFacts.scope -ne 'ALL_LIVE_REDSCRIPT_METHODS_NOT_JUST_1200_REFRESH_NAMES' -or
+        [int]$qFacts.factCallsites -lt 100 -or
+        [int]$qFacts.literalCallsites -lt 1 -or
+        [int]$qFacts.dynamicOrUnresolvedCallsites -lt 1 -or
+        [int]$qFacts.factCallsites -ne ([int]$qFacts.literalCallsites +
+                                         [int]$qFacts.dynamicOrUnresolvedCallsites) -or
+        [int]$qFacts.distinctLiteralFactNames -ne @($qFacts.facts).Count -or
+        $qFacts.allDynamicFactNamesRemainUnproven -ne $true -or
+        $qFacts.completeProducerAndMutationGraph -ne $false -or
+        $qFacts.engineCallbackSemanticsValidated -ne $false -or
+        $qFacts.generationAuthorized -ne $false -or
+        $qFacts.sourceWrites -ne $false -or
+        [int]$qFacts.generatedFiles -ne 0) {
+        throw 'GCO_QUEST_FACT_GRAPH_PROVENANCE_OR_SAFETY_FAILED'
+    }
+    foreach ($fact in @($qFacts.facts)) {
+        if ($fact.everyWriterAndAliasProven -ne $false -or
+            $fact.receiverTypeProven -ne $false -or
+            $fact.listenerCallbackReturnAndOrderProven -ne $false -or
+            $fact.sharedSubscriptionAuthorized -ne $false) {
+            throw 'GCO_QUEST_FACT_UNPROVEN_SUBSTITUTION_ADMITTED'
+        }
+    }
+    $literal = @($qFacts.callsites | Where-Object { $null -ne $_.factName })
+    $unresolvedReceivers = @($qFacts.callsites | Where-Object {
+        $_.operation -eq 'RegisterListener' -and
+        $_.questReceiverSourceTyped -ne $true
+    })
+    if ($literal.Count -ne [int]$qFacts.literalCallsites -or
+        $unresolvedReceivers.Count -lt 1) {
+        throw 'GCO_QUEST_FACT_LITERAL_RECEIVER_ACCOUNTING_FAILED'
+    }
+    Write-Host ('PASS GCO source-wide quest fact dependency graph: methods=' +
+        $qFacts.sourceMethods + ' literalCallsites=' + $qFacts.literalCallsites +
+        ' dynamicCallsites=' + $qFacts.dynamicOrUnresolvedCallsites +
+        ' factNames=' + $qFacts.distinctLiteralFactNames +
+        ' crossOwnerSourceTypedListeners=' + $qFacts.factsWithCrossOwnerLiteralRegistrations +
+        ' unprovenListenerReceivers=' + $qFacts.lexicalListenerCallsitesReceiverUnverified +
+        ' runtimeSavingsClaimed=false generationAuthorized=false')
+
     # GCO-local CET-inspired callback generic: scan every private source,
     # stage only the exact proven fixed CName index shape, then reuse the SAME
     # official isolated SCC runner used by the established membership pass.
