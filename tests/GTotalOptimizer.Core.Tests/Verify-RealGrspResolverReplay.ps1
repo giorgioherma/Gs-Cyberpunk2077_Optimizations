@@ -27,6 +27,10 @@ if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
     if ($LASTEXITCODE -ne 0) {
         throw 'GREDRUNTIME_OWNER_PLAYER_LIFETIME_CONTRACT_FAILED'
     }
+    & python (Join-Path $PSScriptRoot 'test_framework_quest_fact_signals.py') --framework $ownerFramework
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GREDRUNTIME_OWNER_QUEST_FACT_OBSERVATION_CONTRACT_FAILED'
+    }
 }
 $expectedSourceHash = [string]$sourceAudit.sourceStackSha256
 if ($expectedSourceHash -notmatch '^[A-Fa-f0-9]{64}$' -or
