@@ -352,10 +352,16 @@ internal static class GenericNativeLocationSubscriberPass
             bool adapterComplete = File.Exists(present) &&
                 string.Equals(File.ReadAllText(present, Encoding.UTF8),
                     Generate(c), StringComparison.Ordinal);
-            if (File.Exists(present) && !adapterComplete &&
-                !File.ReadAllText(present, Encoding.UTF8).Contains(Marker,
-                    StringComparison.Ordinal))
-                throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            if (File.Exists(present) && !adapterComplete)
+            {
+                string previous = File.ReadAllText(present, Encoding.UTF8);
+                // An existing observer-only V1 is an admitted upgrade. A
+                // changed V2 implementation is source drift, not partial.
+                if (!previous.Contains(Marker, StringComparison.Ordinal) ||
+                    previous.Contains("GCOMayBeNear_", StringComparison.Ordinal) ||
+                    previous.Contains("MayBeNear(index:", StringComparison.Ordinal))
+                    throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            }
             if (predicateComplete && adapterComplete) complete++;
             else remaining.Add(c); // untouched or partial generated stage
         }
@@ -420,10 +426,14 @@ internal static class GenericNativeLocationSubscriberPass
             bool alreadyAdapter = File.Exists(liveAdapter) &&
                 string.Equals(File.ReadAllText(liveAdapter, Encoding.UTF8),
                     Generate(c), StringComparison.Ordinal);
-            if (File.Exists(liveAdapter) && !alreadyAdapter &&
-                !File.ReadAllText(liveAdapter, Encoding.UTF8).Contains(Marker,
-                    StringComparison.Ordinal))
-                throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            if (File.Exists(liveAdapter) && !alreadyAdapter)
+            {
+                string previous = File.ReadAllText(liveAdapter, Encoding.UTF8);
+                if (!previous.Contains(Marker, StringComparison.Ordinal) ||
+                    previous.Contains("GCOMayBeNear_", StringComparison.Ordinal) ||
+                    previous.Contains("MayBeNear(index:", StringComparison.Ordinal))
+                    throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            }
             if (!alreadyAdapter)
                 generated.Add((destination, Generate(c)));
 
