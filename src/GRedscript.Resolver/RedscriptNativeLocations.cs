@@ -23,6 +23,40 @@ internal static class RedscriptNativeLocations
 
     private sealed record Site(int Owner, float X, float Y, float Z,
         float Radius, bool XY);
+
+    // GCAS native indexes must follow the static prefix returned by an
+    // author's actual source array, not every sphere-like constructor
+    // elsewhere in the file (e.g. conditional helper factory fallbacks).
+    // This is shared by inventory and compilation, never a corrective pass.
+    private static readonly Regex LiteralArray = new(
+        @"\blet\s+(?<array>[A-Za-z_]\w*)\s*=\s*\[",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static IReadOnlyList<Match> StaticSphereMatches(string masked)
+    {
+        var spans = new List<(int Start, int End)>();
+        foreach (Match init in LiteralArray.Matches(masked))
+        {
+            string name = init.Groups["array"].Value;
+            int close = masked.IndexOf("];", init.Index + init.Length,
+                StringComparison.Ordinal);
+            if (close < 0) continue;
+            // Static records must be returned as the same initial array;
+            // other literal helpers and conditionally appended results are
+            // not eligible for positional native substitution.
+            if (!Regex.IsMatch(masked[(close + 2)..],
+                @"\breturn\s+" + Regex.Escape(name) + @"\s*;",
+                RegexOptions.CultureInvariant))
+                continue;
+            spans.Add((init.Index, close));
+        }
+        return Sphere.Matches(masked).Cast<Match>()
+            .Where(m => ValidSphere(m) &&
+                spans.Any(s => m.Index >= s.Start &&
+                    m.Index + m.Length <= s.End))
+            .ToArray();
+    }
+
     // Source-literal player proximity zones. Site admission is structural:
     // constructor(Enum.Value, Vector4(x,y,z,w), radius, Enum.Value).
     // It is NOT inferred from a generic NPC/world-object GetWorldPosition().
@@ -53,8 +87,7 @@ internal static class RedscriptNativeLocations
             if (relative.StartsWith("G-RedRuntime/", StringComparison.OrdinalIgnoreCase))
                 continue;
             string masked = CodeOnly(File.ReadAllText(file, Encoding.UTF8));
-            int sphereCount = Sphere.Matches(masked).Cast<Match>()
-                .Count(m => ValidSphere(m));
+            int sphereCount = StaticSphereMatches(masked).Count;
             int quadCount = Quad.Matches(masked).Count;
             if (sphereCount > 0 || quadCount > 0)
                 result.Add(new(relative, Owner(relative), sphereCount, quadCount));
@@ -122,9 +155,8 @@ internal static class RedscriptNativeLocations
                 string source = File.ReadAllText(file, Encoding.UTF8);
                 var masked = CodeOnly(source);
                 int owner = Owner(rel);
-                foreach (Match m in Sphere.Matches(masked))
+                foreach (Match m in StaticSphereMatches(masked))
                 {
-                    if (!ValidSphere(m)) continue;
                     float x = float.Parse(m.Groups["x"].Value,
                         CultureInfo.InvariantCulture);
                     float y = float.Parse(m.Groups["y"].Value,
