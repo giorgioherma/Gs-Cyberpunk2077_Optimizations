@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-18 — GCO REDscript native proximity **full-stack SCC GREEN, CI #758**
+
+**Verified:** [GCO CI #758](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44227121050) passed at source commit `1ad191a6d6358703f16c2d8f592ac428f52ad4b0`. This is the first accepted full-stack compiler checkpoint after moving native subscription lifecycle into the original source-defined `ScriptableSystem` generated copy and keeping the standalone `GCO_NativeLocation_<owner>.reds` as a pure event listener.
+
+Private real-source replay: **9 ordered rules / 148 eligible edits / 59 ordered preview files**, source parity PASS; one native location subscriber with authoritative FAR short-circuit and original callback cadence unchanged; native first-writer DLL dispatch and REDscript RTTI bridge PASS. Independent SCC 0.5.31 `native-adapter-without-predicate` **PASS** (`ownerFiles=1`, `originalPredicatesRestored=1`) and final `framework-all-generics-preview` **PASS** (exit 0, 5 seconds). `PASS GRSP full actual SCC` reports `sourceFiles=2319`, `callbackPreviewFiles=48`, `frameworkPreviewFiles=60`, `ownerFrameworkSourceFiles=12`; all original sources untouched. The unified GUI packaging job also completed successfully.
+
+**Boundary:** Compiler evidence is NOT in-game correctness and production ZIP is still disabled (`gameplayValidated=false deployable=false`). Next checkpoint is runtime native event validity: fast travel / teleport, attach/detach, NEAR/FAR update latency, first frame before snapshot, failed native backend, and dynamic trailing location. Never claim performance gains without a capture. GCO source owner remains `dev/redscript/resolver_handoff`, framework services remain owned by `G-REDruntime_Framework/main`, CET native remains owned by CET. No mod-specific semantic proximity rewrites.
+
+
 ## 2026-11-18 — Generic native proximity source replacement FULL CI VERIFIED (#758)
 
 **GCO branch** `dev/redscript/resolver_handoff`, source commit `1ad191a6`; [**CI #758 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44227121050). The former wrapper-heavy companion compiled unsuccessfully with REDscript 0.5.31 even when the original distance expression was restored (#752 isolated native adapter-only failure). Repaired the **same source-owned generic generator** rather than adding a second pass or mod-specific recipe: `GenericNativeLocationSubscriberPass.cs` now rewrites the installed mod class's **generated copy** with fields, helper `GCOMayBeNear`, `Start` registration and `Stop` cleanup, while generating a separate **listener-only** `GCO_NativeLocation_<owner>.reds`. No `@wrapMethod` of another author's script-defined `ScriptableSystem`. `G-REDruntime` still owns the shared native event service; CET owns the C++ DLL.
