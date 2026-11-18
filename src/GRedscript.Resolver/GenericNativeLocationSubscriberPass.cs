@@ -16,6 +16,8 @@ internal static class GenericNativeLocationSubscriberPass
 {
     internal const string Rule = "NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1";
     private const string Marker = "// GCO-GENERIC:" + Rule;
+    private const string PredicateRule = "NATIVE_PLAYER_LOCATION_PREDICATE_V1";
+    private const string PredicateMarker = "/* GCO-GENERIC:" + PredicateRule + " */";
     private static readonly Regex Module = new(
         @"(?m)^[ \t]*module[ \t]+(?<module>[A-Za-z_][\w.]*)[ \t]*\r?$",
         RegexOptions.CultureInvariant);
@@ -96,8 +98,6 @@ internal static class GenericNativeLocationSubscriberPass
                         RegexOptions.CultureInvariant) ||
                     !Regex.IsMatch(body, @"\bpublic\s+func\s+Stop\s*\(\s*\)",
                         RegexOptions.CultureInvariant) ||
-                    !Regex.IsMatch(body, @"\b(?:public|private)\s+func\s+OnProximityCheck\s*\(\s*\)",
-                        RegexOptions.CultureInvariant) ||
                     !body.Contains("Vector4.Distance(", StringComparison.Ordinal))
                     continue;
                 // Only the actual player source is valid for the CET native
@@ -122,12 +122,9 @@ internal static class GenericNativeLocationSubscriberPass
                 {
                     string factoryName = loop.Groups["factory"].Value;
                     string item = loop.Groups["item"].Value;
-                    if (!Regex.IsMatch(body,
-                            @"\b" + Regex.Escape(item) +
-                            @"\.location\b", RegexOptions.CultureInvariant) ||
-                        !Regex.IsMatch(body,
-                            @"\b" + Regex.Escape(item) +
-                            @"\.proximityRadius\b", RegexOptions.CultureInvariant))
+                    // Generic field names: location and radius are discovered
+                    // from the typed, positive Vector4.Distance source shape.
+                    if (!HasPositiveDistancePredicate(body, item))
                         continue;
                     var matches = factories.Where(f =>
                         f.Module == module.Groups["module"].Value &&
@@ -153,6 +150,163 @@ internal static class GenericNativeLocationSubscriberPass
             .Where(x => x.Count() == 1).Select(x => x.Single())
             .OrderBy(x => x.AdapterPath, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static string CodeOnly(string source)
+    {
+        var chars = source.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+            if (chars[i] != '\n' && chars[i] != '\r') chars[i] = ' ';
+        foreach (var token in SourceAdmission.ReadTokens(source))
+        {
+            if (token.Value == "<literal>") continue;
+            for (int i = token.Start; i < token.End; i++)
+                chars[i] = source[i];
+        }
+        return new string(chars);
+    }
+
+    private static Regex Predicate(string item) => new(
+        @"\bif\s+(?<expr>Vector4\s*\.\s*Distance\s*\(\s*(?<pos>[A-Za-z_]\w*)\s*,\s*" +
+        Regex.Escape(item) + @"\s*\.\s*(?<location>[A-Za-z_]\w*)\s*\)\s*<=\s*" +
+        Regex.Escape(item) + @"\s*\.\s*(?<radius>[A-Za-z_]\w*))\s*\{",
+        RegexOptions.CultureInvariant);
+
+    private static bool HasPositiveDistancePredicate(string body, string item) =>
+        Predicate(item).Matches(CodeOnly(body)).Count == 1;
+
+    // Demand a literal prefix in the returned array. Conditional ArrayPush
+    // records are allowed only AFTER the static prefix and therefore use
+    // indexes >= native SiteCount, which are handled by the original check.
+    private static bool HasStableStaticPrefix(string source, string factory,
+        int expected, string location, string radius)
+    {
+        string masked = CodeOnly(source);
+        var named = Regex.Matches(masked,
+            @"\bpublic\s+func\s+" + Regex.Escape(factory) +
+            @"\s*\(\s*\)\s*->\s*array\s*<[^>]+>\s*\{",
+            RegexOptions.CultureInvariant);
+        if (named.Count != 1) return false;
+        var body = ExtractBody(source, named[0]);
+        if (body.Length == 0) return false;
+        string code = CodeOnly(body);
+        var arr = Regex.Matches(code,
+            @"\blet\s+(?<array>[A-Za-z_]\w*)\s*=\s*\[",
+            RegexOptions.CultureInvariant);
+        if (arr.Count != 1) return false;
+        string list = arr[0].Groups["array"].Value;
+        int close = code.IndexOf("];", arr[0].Index + arr[0].Length,
+            StringComparison.Ordinal);
+        if (close <= arr[0].Index) return false;
+        // Count literal Vector4 sphere records in the initialization slice.
+        // No native mapping if a factory injects, shuffles or reorders sites.
+        string literal = code.Substring(arr[0].Index,
+            close + 2 - arr[0].Index);
+        if (Regex.Matches(literal,
+            @"\bVector4\s*\(", RegexOptions.CultureInvariant).Count != expected ||
+            Regex.Matches(code, @"\bVector4\s*\(",
+                RegexOptions.CultureInvariant).Count != expected ||
+            !Regex.IsMatch(code, @"\breturn\s+" +
+                Regex.Escape(list) + @"\s*;", RegexOptions.CultureInvariant))
+            return false;
+        string tail = code[(close + 2)..];
+        if (Regex.IsMatch(tail,
+            @"\b(?:ArrayInsert|ArrayErase|ArrayClear|ArraySort|ArrayPop|ArrayRemove|Sort)\s*\(\s*" +
+            Regex.Escape(list) + @"\b", RegexOptions.CultureInvariant) ||
+            Regex.IsMatch(tail,
+            @"\b" + Regex.Escape(list) + @"\s*(?:=|\[)",
+            RegexOptions.CultureInvariant))
+            return false;
+        // Validate the factory's return element declares the exact typed
+        // accessors used by the predicate. Structural, not author-specific.
+        string type = Regex.Match(source,
+            @"\bpublic\s+func\s+" + Regex.Escape(factory) +
+            @"\s*\(\s*\)\s*->\s*array\s*<(?<type>[A-Za-z_]\w*)>",
+            RegexOptions.CultureInvariant).Groups["type"].Value;
+        var declaration = Regex.Match(source,
+            @"\b(?:public\s+)?struct\s+" + Regex.Escape(type) +
+            @"\s*\{(?<body>[\s\S]*?)\}",
+            RegexOptions.CultureInvariant);
+        if (!declaration.Success) return false;
+        string fields = CodeOnly(declaration.Groups["body"].Value);
+        return Regex.IsMatch(fields, @"\blet\s+" +
+                   Regex.Escape(location) + @"\s*:\s*Vector4\s*;",
+                   RegexOptions.CultureInvariant) &&
+               Regex.IsMatch(fields, @"\blet\s+" +
+                   Regex.Escape(radius) + @"\s*:\s*Float\s*;",
+                   RegexOptions.CultureInvariant);
+    }
+
+    // The overlay rewrites the ORIGINAL source path, just like
+    // SHARED_PLAYER_SIGNAL_V1. The separately generated adapter only owns
+    // the listener lifecycle and cheap per-site shared-state lookup.
+    private static string? RewriteSource(string source, string sitesSource,
+        Candidate candidate)
+    {
+        string index = "__gcoSiteIndex_" + candidate.Owner;
+        string method = "GCOMayBeNear_" + candidate.Owner;
+        if (source.Contains(PredicateMarker, StringComparison.Ordinal))
+            return null; // already optimized; a partial stage is handled above
+        if (source.Contains(index, StringComparison.Ordinal) ||
+            source.Contains(method, StringComparison.Ordinal))
+            throw new InvalidDataException("NATIVE_PREDICATE_SYMBOL_COLLISION");
+        string code = CodeOnly(source);
+        var loops = Regex.Matches(code,
+            @"\bfor\s+(?<item>[A-Za-z_]\w*)\s+in\s+" +
+            Regex.Escape(candidate.FactoryName) + @"\s*\(\s*\)\s*\{",
+            RegexOptions.CultureInvariant).Cast<Match>().ToArray();
+        if (loops.Length != 1)
+            return null;
+        var loop = loops[0];
+        string itemName = loop.Groups["item"].Value;
+        int end = FindBlockEnd(code, loop.Index + loop.Length - 1);
+        if (end <= loop.Index) return null;
+        string body = code.Substring(loop.Index, end - loop.Index);
+        var matches = Predicate(itemName).Matches(body).Cast<Match>().ToArray();
+        if (matches.Length != 1) return null;
+        var predicate = matches[0];
+        string posName = predicate.Groups["pos"].Value;
+        string location = predicate.Groups["location"].Value;
+        string radius = predicate.Groups["radius"].Value;
+        // The vector must be sourced from GetWorldPosition() of the
+        // source-identified PLAYER receiver, not an arbitrary NPC or object.
+        if (!Regex.IsMatch(code[..loop.Index],
+                @"\blet\s+" + Regex.Escape(posName) +
+                @"\s*(?::\s*Vector4)?\s*=\s*this\.(?<receiver>[A-Za-z_]\w*)\s*\.\s*GetWorldPosition\s*\(\s*\)",
+                RegexOptions.CultureInvariant))
+            return null;
+        if (!HasStableStaticPrefix(sitesSource, candidate.FactoryName,
+                candidate.SiteCount, location, radius))
+            return null;
+        int predicateStart = loop.Index + predicate.Groups["expr"].Index;
+        int lineStart = source.LastIndexOf('\n', loop.Index);
+        lineStart = lineStart < 0 ? 0 : lineStart + 1;
+        string indent = source[lineStart..loop.Index];
+        if (indent.Any(c => c != ' ' && c != '\t')) return null;
+        string nl = source.Contains("\r\n", StringComparison.Ordinal)
+            ? "\r\n" : "\n";
+        // Replace from the end to maintain exact lexer/source offsets.
+        string result = source.Insert(predicateStart,
+            PredicateMarker + " this." + method + "(" + index + ") && ");
+        result = result.Insert(loop.Index + loop.Length,
+            nl + indent + "    " + index + " += 1;");
+        result = result.Insert(loop.Index,
+            "let " + index + ": Int32 = -1;" + nl + indent);
+        if (Regex.Matches(result, Regex.Escape(PredicateMarker)).Count != 1)
+            throw new InvalidDataException("NATIVE_PREDICATE_POSTCONDITION");
+        return result;
+    }
+
+    private static int FindBlockEnd(string masked, int opening)
+    {
+        int depth = 0;
+        foreach (var tok in SourceAdmission.ReadTokens(masked))
+        {
+            if (tok.Start < opening) continue;
+            if (tok.Value == "{") depth++;
+            if (tok.Value == "}" && --depth == 0) return tok.End;
+        }
+        return -1;
     }
 
     private static bool Inside(string child, string root)
