@@ -1484,7 +1484,18 @@ try {
     if ([string]::IsNullOrWhiteSpace($FrameworkRoot)) { throw 'GCO_SHARED_NATIVE_FRAMEWORK_OWNER_MISSING' }
     & dotnet $dll stage-shared-native --game $game --cet-runtime $nativeOwnerRoot --framework $FrameworkRoot --out $nativeStage *> $nativeStageLog
     if ($LASTEXITCODE -ne 0) {
-        throw 'GCO_SHARED_NATIVE_REAL_DLL_DISPATCH_FAILED'
+        # Keep private source paths off public CI. Report only controlled
+        # stage codes and a small, known non-identifying diagnostic family.
+        $stageText = if (Test-Path -LiteralPath $nativeStageLog -PathType Leaf) {
+            Get-Content -LiteralPath $nativeStageLog -Raw
+        } else { '' }
+        $code = [regex]::Match($stageText, 'SHARED_NATIVE_[A-Z0-9_]+')
+        $kind = if ($code.Success) { $code.Value }
+            elseif ($stageText -match 'Unclosed block comment') { 'SOURCE_TOKEN_COMMENT' }
+            elseif ($stageText -match 'Unclosed string literal') { 'SOURCE_TOKEN_LITERAL' }
+            elseif ($stageText -match 'not found|not exist') { 'RESOURCE_MISSING' }
+            else { 'UNCLASSIFIED_STAGE_FAILURE' }
+        throw ('GCO_SHARED_NATIVE_REAL_DLL_DISPATCH_FAILED reason=' + $kind)
     }
     $nativeBridge = Join-Path $nativeStage 'r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds'
     if (!(Test-Path -LiteralPath $nativeBridge -PathType Leaf)) {
