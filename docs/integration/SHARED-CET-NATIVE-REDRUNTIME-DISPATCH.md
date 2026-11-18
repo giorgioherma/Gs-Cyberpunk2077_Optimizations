@@ -1,5 +1,10 @@
 # Shared CET native coordinator + REDscript consumers — development contract
 
+## 2026-11-18 native subscriber source-lifecycle correction (CI pending)
+
+The original `GCO_NativeLocation_<owner>.reds` wrapper-heavy design failed official SCC even with the original proximity predicate restored (GCO #752, `native-adapter-without-predicate` phase exit 3). No precise private compiler code was public. The GCO generator now emits a **pure listener companion**, while direct source replacements put the listener reference, subscription tokens, `GCOMayBeNear`, registration and cleanup **inside the existing source-defined ScriptableSystem class**, with injected Start/Stop calls. Original Start/Stop implementation, poll loop, notifications and interaction checks remain; only authoritative FAR skips the exact repeated distance expression. G-REDruntime `NativeLocationSignals` remains the single coordinator consumer. No mod lists/semantic recipes, no duplicate framework, no game ZIP. First whole-stack SCC acceptance remains pending on #757; original files unaffected.
+
+
 Date: 2026-11-18. Owner-approved direction. GCO `dev/redscript/resolver_handoff` is the one managed REDscript optimizer alongside the CET owner Resolver. Framework owns runtime services; CET owns the C++ DLL. One .NET 10 application and one eventual output ZIP.
 
 ## Runtime architecture
