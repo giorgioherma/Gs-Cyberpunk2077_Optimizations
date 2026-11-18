@@ -170,11 +170,21 @@ internal static class GenericNativeLocationSubscriberPass
         var candidates = Discover(gameRoot);
         if (Inside(outFile, gameRoot) || File.Exists(outFile))
             throw new InvalidDataException("NATIVE_CONSUMER_SCAN_OUTPUT_COLLISION");
+        var remaining = new List<Candidate>();
+        int complete = 0;
         foreach (var c in candidates)
         {
-            if (File.Exists(Path.Combine(SourceRoot(gameRoot),
-                    c.AdapterPath.Replace('/', Path.DirectorySeparatorChar))))
-                throw new InvalidDataException("NATIVE_CONSUMER_ALREADY_PRESENT_OR_COLLISION");
+            string present = Path.Combine(SourceRoot(gameRoot),
+                c.AdapterPath.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(present))
+            {
+                remaining.Add(c);
+                continue;
+            }
+            if (!string.Equals(File.ReadAllText(present, Encoding.UTF8),
+                    Generate(c), StringComparison.Ordinal))
+                throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            complete++;
         }
         if (!string.Equals(admission.SourceStackSha256,
                 admission.FingerprintCurrentSources(),
@@ -185,7 +195,8 @@ internal static class GenericNativeLocationSubscriberPass
         File.WriteAllText(outFile, JsonSerializer.Serialize(new {
             schemaVersion = "gco.redscript.native-location-subscriber.v1",
             rule = Rule, sourceStackSha256 = admission.SourceStackSha256,
-            eligible = candidates.Count,
+            eligible = remaining.Count,
+            alreadyComplete = complete,
             mode = "OBSERVER_ONLY_ORIGINAL_MOD_BEHAVIOR_UNCHANGED",
             requiresNative = true, productionZipAuthorized = false,
             candidates = candidates.Select(x => new {
@@ -193,10 +204,11 @@ internal static class GenericNativeLocationSubscriberPass
                 sitePath = "r6/scripts/" + x.SitesPath,
                 adapterPath = "r6/scripts/" + x.AdapterPath,
                 x.Owner, x.SiteCount,
-                state = "PRISTINE_APPLICABLE"
+                state = remaining.Contains(x) ?
+                    "PRISTINE_APPLICABLE" : "ALREADY_COMPLETE"
             })
         }), new UTF8Encoding(false));
-        return candidates.Count;
+        return remaining.Count;
     }
 
     internal static int Preview(string gameRoot, string outputRoot,
@@ -220,10 +232,17 @@ internal static class GenericNativeLocationSubscriberPass
             string rel = "r6/scripts/" + c.AdapterPath;
             string destination = Path.GetFullPath(Path.Combine(output,
                 rel.Replace('/', Path.DirectorySeparatorChar)));
-            if (!Inside(destination, output) ||
-                File.Exists(Path.Combine(Path.GetFullPath(gameRoot),
-                    rel.Replace('/', Path.DirectorySeparatorChar))))
+            string liveAdapter = Path.Combine(Path.GetFullPath(gameRoot),
+                rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!Inside(destination, output))
                 throw new InvalidDataException("NATIVE_CONSUMER_PATH_COLLISION");
+            if (File.Exists(liveAdapter))
+            {
+                if (!string.Equals(File.ReadAllText(liveAdapter, Encoding.UTF8),
+                        Generate(c), StringComparison.Ordinal))
+                    throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+                continue;
+            }
             generated.Add((destination, Generate(c)));
         }
         if (!string.Equals(admission.SourceStackSha256,
