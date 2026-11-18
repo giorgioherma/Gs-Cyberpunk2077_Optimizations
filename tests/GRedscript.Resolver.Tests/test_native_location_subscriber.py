@@ -80,15 +80,21 @@ class NativeLocationSubscriberTests(unittest.TestCase):
                      "--source-sha", data["sourceStackSha256"])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         adapters = list(self.output.rglob("*.reds"))
-        self.assertEqual(len(adapters), 1)
-        a = adapters[0].read_text()
+        self.assertEqual(len(adapters), 2)
+        a = next(x for x in adapters if x.name.startswith("GCO_NativeLocation_")).read_text()
+        original_overlay = (self.output / "r6/scripts/ExampleMod/System.reds").read_text()
+        self.assertIn("GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1", original_overlay)
+        self.assertIn("GCOMayBeNear_", original_overlay)
+        self.assertIn("&& Vector4.Distance(playerPos, site.location)", original_overlay)
+        self.assertIn("for site in SampleSites()", original_overlay)
+        self.assertIn("this.QueueProximityCheck" if "this.QueueProximityCheck" in CONSUMER else "return;", original_overlay)
         for token in (
             "NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
             "@wrapMethod(SampleController)", "public func Start() -> Void",
             "public func Stop() -> Void",
             "SubscribeLocation(", "UnsubscribeLocation(",
             "new GCETNativeLocationBackend()", "AllKnownFar()",
-            "wrappedMethod()", "owner", "state"):
+            "wrappedMethod()", "owner", "state", "MayBeNear(index: Int32)"):
             self.assertIn(token, a)
         self.assertEqual((self.folder / "Sites.reds").read_text(), SITES)
         self.assertEqual((self.folder / "System.reds").read_text(), CONSUMER)
@@ -123,13 +129,15 @@ class NativeLocationSubscriberTests(unittest.TestCase):
         r = self.cli("preview-native-location-subscribers", "--out", self.output,
                      "--source-sha", first["sourceStackSha256"])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        adapter = next(self.output.rglob("*.reds"))
+        adapter = next(p for p in self.output.rglob("*.reds")
+                       if p.name.startswith("GCO_NativeLocation_"))
         installed = self.folder / adapter.name
         installed.write_bytes(adapter.read_bytes())
         self.scan_path.unlink()
         second = self.scan()
-        self.assertEqual(second["eligible"], 0)
-        self.assertEqual(second["alreadyComplete"], 1)
+        self.assertEqual(second["eligible"], 1)
+        self.assertEqual(second["alreadyComplete"], 0)
+        # Partial stage (adapter only) requires the original predicate rewrite.
 
     def test_modified_generated_source_refused(self):
         first = self.scan()
@@ -142,6 +150,32 @@ class NativeLocationSubscriberTests(unittest.TestCase):
         r = self.cli("scan-native-location-subscribers", "--out", self.scan_path)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("NATIVE_CONSUMER_SOURCE_COLLISION", r.stdout + r.stderr)
+
+    def test_complete_pristine_second_pass_no_work(self):
+        initial = self.scan()
+        stage = self.cli("preview-native-location-subscribers", "--out",
+                         self.output, "--source-sha", initial["sourceStackSha256"])
+        self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
+        for staged in self.output.rglob("*.reds"):
+            installed = self.game / staged.relative_to(self.output)
+            installed.parent.mkdir(parents=True, exist_ok=True)
+            installed.write_bytes(staged.read_bytes())
+        self.scan_path.unlink()
+        again = self.scan()
+        self.assertEqual(again["eligible"], 0)
+        self.assertEqual(again["alreadyComplete"], 1)
+
+    def test_fallback_and_dynamic_extra_site_never_skipped(self):
+        data = self.scan()
+        stage = self.cli("preview-native-location-subscribers", "--out",
+                         self.output, "--source-sha", data["sourceStackSha256"])
+        self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
+        adapter = next(p for p in self.output.rglob("*.reds")
+                       if p.name.startswith("GCO_NativeLocation_")).read_text()
+        self.assertIn("if index < 0 || index >= ArraySize(this.siteStates)", adapter)
+        self.assertIn("return true; // dynamic or absent site", adapter)
+        self.assertIn("return this.siteStates[index] != 0;", adapter)
+        self.assertIn("this.siteStates[i] = -1;", adapter)
 
     def test_native_not_required_for_initial_scan(self):
         self.assertEqual(self.scan()["eligible"], 1)
