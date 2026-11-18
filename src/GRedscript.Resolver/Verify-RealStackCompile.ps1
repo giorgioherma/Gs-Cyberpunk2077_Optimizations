@@ -416,13 +416,40 @@ try {
         }
         $target=Join-Path $scripts $relative
         if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
-          # Two narrowly owned additive families only in the native-enabled
-          # composite lane: one framework RTTI backend, and source-derived
-          # per-mod subscribers. All other new files remain prohibited.
+          # Only named native RTTI and source-derived subscriber additions.
           $normal=$relative.Replace('\','/')
           $isBridge=$normal -ceq 'G-RedRuntime/Native/GCETNativeLocationBackend.reds'
           $isSubscriber=[regex]::IsMatch($normal,
-              '^(?!G-RedRuntime/).+/GCO_NativeLocation_[0-9]{9,10}\.reds
+              '^(?!G-RedRuntime/).+/GCO_NativeLocation_[0-9]{9,10}\.reds$')
+          if ($scenario -ne 'framework-all-generics-preview' -or
+              (!$isBridge -and !$isSubscriber)) {
+            throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          }
+          $newText=Get-Content -LiteralPath $file.FullName -Raw
+          if ($isBridge) {
+            if ($nativeBridgeAdded -ne 0) { throw 'R6_SHARED_NATIVE_BRIDGE_DUPLICATE' }
+            foreach($capability in @('GCETNativeLocationBackend','NativeLocationBackend',
+                    'GCETStaticReady','GCETStaticOwnerCount','GCETStaticOwnerAnchor',
+                    'GCETStaticSubscribe','GCETStaticPoll','GCETStaticAckSnapshot')) {
+              if (!$newText.Contains($capability,[StringComparison]::Ordinal)) {
+                throw 'R6_SHARED_NATIVE_BRIDGE_CAPABILITY_DRIFT'
+              }
+            }
+            $nativeBridgeAdded++
+          } else {
+            $sourceDir=Split-Path $target -Parent
+            $originalModFiles=@(Get-ChildItem -LiteralPath $sourceDir -Filter '*.reds' -File -ErrorAction SilentlyContinue)
+            if ($originalModFiles.Count -eq 0 -or
+                !$newText.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
+                !$newText.Contains('SubscribeLocation(',[StringComparison]::Ordinal) -or
+                !$newText.Contains('UnsubscribeLocation(',[StringComparison]::Ordinal) -or
+                !$newText.Contains('@wrapMethod(',[StringComparison]::Ordinal)) {
+              throw 'R6_NATIVE_SUBSCRIBER_OWNER_OR_CONTRACT_INVALID'
+            }
+            $nativeSubscriberAdded++
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        }
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
       if ($scenario -eq 'framework-all-generics-preview' -and
@@ -452,7 +479,7 @@ try {
       }
     }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$nativeBridgeAdded)) {
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$nativeBridgeAdded+$nativeSubscriberAdded)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
