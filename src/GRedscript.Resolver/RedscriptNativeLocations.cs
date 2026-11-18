@@ -23,6 +23,59 @@ internal static class RedscriptNativeLocations
 
     private sealed record Site(int Owner, float X, float Y, float Z,
         float Radius, bool XY);
+    // Source-literal player proximity zones. Site admission is structural:
+    // constructor(Enum.Value, Vector4(x,y,z,w), radius, Enum.Value).
+    // It is NOT inferred from a generic NPC/world-object GetWorldPosition().
+    private static readonly Regex Sphere = new(
+        @"\b[A-Za-z_][A-Za-z0-9_]*\s*\(\s*" +
+        @"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\s*,\s*" +
+        @"(?:new\s+)?Vector4\s*\(\s*" +
+        @"(?<x>" + Number + @")\s*,\s*" +
+        @"(?<y>" + Number + @")\s*,\s*" +
+        @"(?<z>" + Number + @")\s*,\s*" +
+        @"(?<w>" + Number + @")\s*\)\s*,\s*" +
+        @"(?<radius>" + Number + @")\s*,\s*" +
+        @"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\s*\)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    internal sealed record SourceSites(string RelativePath, int Owner,
+        int SphereCount, int QuadCount);
+
+    internal static IReadOnlyList<SourceSites> Inventory(string gameRoot)
+    {
+        var scripts = Path.Combine(Path.GetFullPath(gameRoot), "r6", "scripts");
+        var result = new List<SourceSites>();
+        foreach (string file in Directory.EnumerateFiles(scripts, "*.reds",
+            SearchOption.AllDirectories)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = Path.GetRelativePath(scripts, file).Replace('\\', '/');
+            if (relative.StartsWith("G-RedRuntime/", StringComparison.OrdinalIgnoreCase))
+                continue;
+            string masked = CodeOnly(File.ReadAllText(file, Encoding.UTF8));
+            int sphereCount = Sphere.Matches(masked).Cast<Match>()
+                .Count(m => ValidSphere(m));
+            int quadCount = Quad.Matches(masked).Count;
+            if (sphereCount > 0 || quadCount > 0)
+                result.Add(new(relative, Owner(relative), sphereCount, quadCount));
+        }
+        return result;
+    }
+
+    private static bool ValidSphere(Match match)
+    {
+        float[] vals = new float[5];
+        string[] keys = ["x", "y", "z", "w", "radius"];
+        for (int i = 0; i < keys.Length; i++)
+            if (!float.TryParse(match.Groups[keys[i]].Value,
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out vals[i]) ||
+                !float.IsFinite(vals[i]))
+                return false;
+        return vals[4] > 0f && vals[4] <= 1024f &&
+            Math.Abs(vals[0]) <= 100000f && Math.Abs(vals[1]) <= 100000f &&
+            Math.Abs(vals[2]) <= 100000f;
+    }
+
 
     private static string CodeOnly(string source)
     {
@@ -69,6 +122,25 @@ internal static class RedscriptNativeLocations
                 string source = File.ReadAllText(file, Encoding.UTF8);
                 var masked = CodeOnly(source);
                 int owner = Owner(rel);
+                foreach (Match m in Sphere.Matches(masked))
+                {
+                    if (!ValidSphere(m)) continue;
+                    float x = float.Parse(m.Groups["x"].Value,
+                        CultureInfo.InvariantCulture);
+                    float y = float.Parse(m.Groups["y"].Value,
+                        CultureInfo.InvariantCulture);
+                    float z = float.Parse(m.Groups["z"].Value,
+                        CultureInfo.InvariantCulture);
+                    float radius = float.Parse(m.Groups["radius"].Value,
+                        CultureInfo.InvariantCulture) + 16.0f;
+                    if (radius > 1024f) continue;
+                    if (owners.TryGetValue(owner, out string? prior) &&
+                        prior != rel)
+                        throw new InvalidDataException(
+                            "SHARED_NATIVE_REDSCRIPT_OWNER_COLLISION");
+                    owners[owner] = rel;
+                    sites.Add(new(owner, x, y, z, radius, false));
+                }
                 foreach (Match m in Quad.Matches(masked))
                 {
                     var xs = m.Groups["x"].Captures;
