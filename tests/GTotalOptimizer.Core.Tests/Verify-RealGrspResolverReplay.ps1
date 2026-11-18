@@ -1519,7 +1519,7 @@ try {
     $nativeSubscribers = Get-Content -LiteralPath $nativeSubscribersJson -Raw | ConvertFrom-Json
     if ($nativeSubscribers.schemaVersion -ne 'gco.redscript.native-location-subscriber.v1' -or
         $nativeSubscribers.sourceStackSha256 -ne $expectedSourceHash -or
-        $nativeSubscribers.mode -ne 'OBSERVER_ONLY_ORIGINAL_MOD_BEHAVIOR_UNCHANGED' -or
+        $nativeSubscribers.mode -ne 'NATIVE_FAR_PREDICATE_BYPASS_ORIGINAL_CALLBACK_PRESERVED' -or
         $nativeSubscribers.productionZipAuthorized -ne $false) {
         throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_SCAN_CONTRACT_FAILED'
     }
@@ -1527,32 +1527,58 @@ try {
     if ($subscriberCount -gt 0) {
         $subscriberFolder = Join-Path $work 'gco-native-subscriber-preview'
         $subscriberLog = Join-Path $work 'gco-native-subscriber-preview.log'
-        & dotnet $dll preview-native-location-subscribers --game $game --out $subscriberFolder --source-sha $expectedSourceHash *> $subscriberLog
+        & dotnet $dll preview-native-location-subscribers --game $game --out $subscriberFolder --source-sha $expectedSourceHash --base-preview $callbackFolder *> $subscriberLog
         if ($LASTEXITCODE -ne 0) {
-            throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_PREVIEW_FAILED'
+            throw 'GCO_NATIVE_LOCATION_PREDICATE_PREVIEW_FAILED'
         }
         $subscriberScripts = Join-Path $subscriberFolder 'r6/scripts'
-        $newAdapters = @(Get-ChildItem -LiteralPath $subscriberScripts -Recurse -Filter '*.reds' -File)
-        if ($newAdapters.Count -ne $subscriberCount) {
-            throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_COUNT_MISMATCH'
+        $generated = @(Get-ChildItem -LiteralPath $subscriberScripts -Recurse -Filter '*.reds' -File)
+        $adapters = @($generated | Where-Object { $_.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' })
+        $predicates = @($generated | Where-Object { $_.Name -notmatch '^GCO_NativeLocation_[0-9]{9,10}\.reds$' })
+        if ($adapters.Count -ne $subscriberCount -or
+            $predicates.Count -ne $subscriberCount -or
+            $generated.Count -ne (2 * $subscriberCount)) {
+            throw 'GCO_NATIVE_LOCATION_PREDICATE_AND_ADAPTER_COUNT_MISMATCH'
         }
-        foreach ($adapter in $newAdapters) {
-            $relative = [IO.Path]::GetRelativePath($subscriberScripts, $adapter.FullName)
+        foreach ($file in $generated) {
+            $relative = [IO.Path]::GetRelativePath($subscriberScripts, $file.FullName)
             $live = Join-Path (Join-Path $game 'r6/scripts') $relative
             $destination = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
+            $text = Get-Content -LiteralPath $file.FullName -Raw
             if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
-                $relative.Contains(':') -or (Test-Path -LiteralPath $live) -or
-                (Test-Path -LiteralPath $destination) -or
-                (Get-Content -LiteralPath $adapter.FullName -Raw) -cnotmatch
-                    'GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1') {
-                throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_OWNERSHIP_COLLISION'
+                $relative.Contains(':')) {
+                throw 'GCO_NATIVE_LOCATION_SOURCE_PATH_ESCAPE'
+            }
+            if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$') {
+                if (Test-Path -LiteralPath $live -PathType Leaf -or
+                    (Test-Path -LiteralPath $destination -PathType Leaf) -or
+                    !$text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal)) {
+                    throw 'GCO_NATIVE_LOCATION_ADAPTER_COLLISION'
+                }
+            } else {
+                if (!(Test-Path -LiteralPath $live -PathType Leaf) -or
+                    !$text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+                    !$text.Contains('Vector4.Distance',[StringComparison]::Ordinal)) {
+                    throw 'GCO_NATIVE_LOCATION_PREDICATE_SOURCE_INVALID'
+                }
+                if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                    $prior = Get-Content -LiteralPath $destination -Raw
+                    $markers = @([regex]::Matches($prior,
+                        '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                        ForEach-Object { $_.Value } | Select-Object -Unique)
+                    foreach ($marker in $markers) {
+                        if (!$text.Contains($marker,[StringComparison]::Ordinal)) {
+                            throw 'GCO_NATIVE_LOCATION_PREDICATE_LOST_PRIOR_RULE'
+                        }
+                    }
+                }
             }
             New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
-            Copy-Item -LiteralPath $adapter.FullName -Destination $destination -ErrorAction Stop
+            Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
         }
     }
     Write-Host ('PASS GCO native location subscription staging: adapters=' +
-        $subscriberCount + ' modSourcesUntouched=true originalPollingUnchanged=true deployable=false')
+        $subscriberCount + ' originalModFilesUntouched=true distanceBypassedOnNativeFar=true callbackCadenceUnchanged=true deployable=false')
 
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
@@ -1561,7 +1587,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0 -or $subscriberCount -gt 0) {
         $extra.CallbackPreviewRoot = $legacyCallbackFolder
         $extra.FrameworkPreviewRoot = $callbackFolder
     }
