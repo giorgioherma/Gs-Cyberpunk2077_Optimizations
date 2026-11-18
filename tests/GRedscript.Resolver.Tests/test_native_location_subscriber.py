@@ -144,8 +144,9 @@ class NativeLocationSubscriberTests(unittest.TestCase):
         r = self.cli("preview-native-location-subscribers", "--out", self.output,
                      "--source-sha", first["sourceStackSha256"])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        adapter = next(self.output.rglob("*.reds"))
-        (self.folder / adapter.name).write_text(adapter.read_text() + "// drift\\n")
+        adapter = next(p for p in self.output.rglob("*.reds")
+                       if p.name.startswith("GCO_NativeLocation_"))
+        (self.folder / adapter.name).write_text(adapter.read_text() + "// drift\n")
         self.scan_path.unlink()
         r = self.cli("scan-native-location-subscribers", "--out", self.scan_path)
         self.assertNotEqual(r.returncode, 0)
