@@ -1399,7 +1399,7 @@ try {
     if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
-        [int]$orderedPlan.implementedRuleCount -ne 9 -or
+        [int]$orderedPlan.implementedRuleCount -ne 10 -or
         [int]$orderedPlan.captureGatedExistingRules -ne 1 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
@@ -1411,14 +1411,19 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 8 -or $deferred.Count -ne 5 -or
+    if ($scheduled.Count -ne 9 -or $deferred.Count -ne 5 -or
         $gated.Count -ne 1 -or $gated[0].id -ne 'measured-cname-membership') {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
+    $nativePlanRow = @($scheduled | Where-Object { $_.id -eq 'native-player-location-predicate' })
+    if ($nativePlanRow.Count -ne 1) {
+        throw 'GCO_REDSCRIPT_NATIVE_PREDICATE_RULE_MISSING'
+    }
+    $nativePlanned = [int]$nativePlanRow[0].eligible
     $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
-            $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount)) {
+            $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount + $nativePlanned)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
     }
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
@@ -1443,13 +1448,22 @@ try {
     }
     $stageFiles = @(Get-ChildItem -LiteralPath $stageScripts -Recurse -Filter *.reds -File)
     $manualFiles = @(Get-ChildItem -LiteralPath $manualScripts -Recurse -Filter *.reds -File)
-    if ($stageFiles.Count -ne $manualFiles.Count -or
-        $stageFiles.Count -ne [int]$stageReport.generatedFiles) {
+    if ($stageFiles.Count -ne [int]$stageReport.generatedFiles -or
+        $stageFiles.Count -lt $manualFiles.Count) {
         throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
     }
+    # Independent source-only parity remains exact. Native predicate and
+    # companion adapter are compared to the separately run generator later.
     foreach ($f in $stageFiles) {
         $rel = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
         $manual = Join-Path $manualScripts $rel
+        $text = Get-Content -LiteralPath $f.FullName -Raw
+        $isNative = $text.Contains(
+            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
+            [StringComparison]::Ordinal) -or $text.Contains(
+            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',
+            [StringComparison]::Ordinal)
+        if ($isNative) { continue }
         if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
             (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
             (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
@@ -1575,6 +1589,22 @@ try {
             }
             New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
             Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
+        }
+    }
+    # The canonical ninth generator must produce IDENTICAL bytes to the
+    # independently invoked native-lane generator for every mod-owned file.
+    $manualAfterNative = @(Get-ChildItem -LiteralPath (Join-Path $callbackFolder 'r6/scripts') -Recurse -Filter '*.reds' -File |
+        Where-Object { $_.Name -ne 'GCETNativeLocationBackend.reds' })
+    if ($manualAfterNative.Count -ne $stageFiles.Count) {
+        throw 'GCO_NATIVE_PREDICATE_CANONICAL_FILE_COUNT_DIFF'
+    }
+    foreach ($f in $stageFiles) {
+        $relative = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
+        $actual = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
+        if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
+            throw 'GCO_NATIVE_PREDICATE_CANONICAL_SOURCE_MISMATCH'
         }
     }
     Write-Host ('PASS GCO native location subscription staging: adapters=' +
