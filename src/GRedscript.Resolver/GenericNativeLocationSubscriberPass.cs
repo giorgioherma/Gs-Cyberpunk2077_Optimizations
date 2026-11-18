@@ -381,7 +381,7 @@ internal static class GenericNativeLocationSubscriberPass
     }
 
     internal static int Preview(string gameRoot, string outputRoot,
-        string? expectedSourceHash = null)
+        string? expectedSourceHash = null, string? basePreviewRoot = null)
     {
         var admission = new SourceAdmission(gameRoot);
         _ = admission.AuditAll();
@@ -396,6 +396,13 @@ internal static class GenericNativeLocationSubscriberPass
             throw new InvalidDataException("NATIVE_CONSUMER_OUTPUT_COLLISION");
         var candidates = Discover(gameRoot);
         var generated = new List<(string Path, string Source)>();
+        string? baseScripts = basePreviewRoot is null ? null :
+            Path.Combine(Path.GetFullPath(basePreviewRoot), "r6", "scripts");
+        if (baseScripts is not null &&
+            (!Directory.Exists(baseScripts) || Inside(baseScripts, gameRoot) ||
+             Inside(output, baseScripts) || Inside(baseScripts, output)))
+            throw new InvalidDataException("NATIVE_PREDICATE_BASE_STAGE_INVALID");
+        int optimizedPredicates = 0;
         foreach (var c in candidates)
         {
             string rel = "r6/scripts/" + c.AdapterPath;
@@ -405,14 +412,47 @@ internal static class GenericNativeLocationSubscriberPass
                 rel.Replace('/', Path.DirectorySeparatorChar));
             if (!Inside(destination, output))
                 throw new InvalidDataException("NATIVE_CONSUMER_PATH_COLLISION");
-            if (File.Exists(liveAdapter))
+            bool alreadyAdapter = File.Exists(liveAdapter) &&
+                string.Equals(File.ReadAllText(liveAdapter, Encoding.UTF8),
+                    Generate(c), StringComparison.Ordinal);
+            if (File.Exists(liveAdapter) && !alreadyAdapter &&
+                !File.ReadAllText(liveAdapter, Encoding.UTF8).Contains(Marker,
+                    StringComparison.Ordinal))
+                throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
+            if (!alreadyAdapter)
+                generated.Add((destination, Generate(c)));
+
+            string sourceRel = "r6/scripts/" + c.SourcePath;
+            string sourcePath = Path.Combine(Path.GetFullPath(gameRoot),
+                sourceRel.Replace('/', Path.DirectorySeparatorChar));
+            string effective = File.ReadAllText(sourcePath, Encoding.UTF8);
+            if (baseScripts is not null)
             {
-                if (!string.Equals(File.ReadAllText(liveAdapter, Encoding.UTF8),
-                        Generate(c), StringComparison.Ordinal))
-                    throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
-                continue;
+                string prior = Path.Combine(baseScripts,
+                    c.SourcePath.Replace('/', Path.DirectorySeparatorChar));
+                if (!Inside(prior, baseScripts))
+                    throw new InvalidDataException("NATIVE_PREDICATE_BASE_PATH_ESCAPE");
+                if (File.Exists(prior)) effective = File.ReadAllText(prior,
+                    Encoding.UTF8);
             }
-            generated.Add((destination, Generate(c)));
+            if (!effective.Contains(PredicateMarker, StringComparison.Ordinal))
+            {
+                string sitePath = Path.Combine(SourceRoot(gameRoot),
+                    c.SitesPath.Replace('/', Path.DirectorySeparatorChar));
+                string? replacement = RewriteSource(effective,
+                    File.ReadAllText(sitePath, Encoding.UTF8), c);
+                if (replacement is null)
+                    throw new InvalidDataException(
+                        "NATIVE_PREDICATE_EFFECTIVE_SOURCE_DRIFT");
+                string sourceDest = Path.Combine(output,
+                    sourceRel.Replace('/', Path.DirectorySeparatorChar));
+                if (!Inside(sourceDest, output) ||
+                    generated.Any(item => item.Path.Equals(sourceDest,
+                        StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("NATIVE_PREDICATE_STAGE_COLLISION");
+                generated.Add((sourceDest, replacement));
+                optimizedPredicates++;
+            }
         }
         if (!string.Equals(admission.SourceStackSha256,
                 admission.FingerprintCurrentSources(),
@@ -423,7 +463,8 @@ internal static class GenericNativeLocationSubscriberPass
             Directory.CreateDirectory(Path.GetDirectoryName(item.Path)!);
             File.WriteAllText(item.Path, item.Source, new UTF8Encoding(false));
         }
-        return generated.Count;
+        // Count optimizations, not merely additional adapter files.
+        return optimizedPredicates;
     }
 
     private static string Generate(Candidate c)
