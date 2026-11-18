@@ -510,7 +510,7 @@ try {
           (Join-Path $liveSources $relative)
         )
         $original=@($candidatePaths | Where-Object {
-          Test-Path -LiteralPath $_ -PathType Leaf -and
+          (Test-Path -LiteralPath $_ -PathType Leaf) -and
           !(Get-Content -LiteralPath $_ -Raw).Contains(
             'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
             [StringComparison]::Ordinal)
