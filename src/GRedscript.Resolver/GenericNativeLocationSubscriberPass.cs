@@ -107,12 +107,12 @@ internal static class GenericNativeLocationSubscriberPass
                     {
                         string id = position.Groups["player"].Value;
                         return Regex.IsMatch(body,
-                            @"\\bthis\\." + Regex.Escape(id) +
-                            @"\\s*=\\s*GetPlayer\\s*\\(",
+                            @"\bthis\." + Regex.Escape(id) +
+                            @"\s*=\s*GetPlayer\s*\(",
                             RegexOptions.CultureInvariant) ||
                             Regex.IsMatch(body,
-                                @"\\blet\\s+" + Regex.Escape(id) +
-                                @"\\s*(?::[^=;]+)?=\\s*GetPlayer\\s*\\(",
+                                @"\blet\s+" + Regex.Escape(id) +
+                                @"\s*(?::[^=;]+)?=\s*GetPlayer\s*\(",
                                 RegexOptions.CultureInvariant);
                     });
                 if (!playerPositionProven) continue;
