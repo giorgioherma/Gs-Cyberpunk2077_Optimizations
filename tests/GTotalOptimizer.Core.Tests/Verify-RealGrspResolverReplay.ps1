@@ -1579,6 +1579,7 @@ try {
             } else {
                 if (!(Test-Path -LiteralPath $live -PathType Leaf) -or
                     !$text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+                    !$text.Contains('GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1',[StringComparison]::Ordinal) -or
                     !$text.Contains('Vector4.Distance',[StringComparison]::Ordinal)) {
                     throw 'GCO_NATIVE_LOCATION_PREDICATE_SOURCE_INVALID'
                 }
