@@ -500,7 +500,7 @@ try {
       $diagnosticScripts=Join-Path $diagnosticRoot 'r6/scripts'
       $reverted=0
       foreach($f in @(Get-ChildItem -LiteralPath $diagnosticScripts -Filter '*.reds' -File -Recurse)) {
-        if (!(Get-Content -LiteralPath $f.FullName -Raw).Contains(
+        if (!([IO.File]::ReadAllText($f.FullName)).Contains(
             'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
             [StringComparison]::Ordinal)) { continue }
         $relative=[IO.Path]::GetRelativePath($diagnosticScripts,$f.FullName)
@@ -511,7 +511,7 @@ try {
         )
         $original=@($candidatePaths | Where-Object {
           (Test-Path -LiteralPath $_ -PathType Leaf) -and
-          !(Get-Content -LiteralPath $_ -Raw).Contains(
+          !([IO.File]::ReadAllText($_)).Contains(
             'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
             [StringComparison]::Ordinal)
         } | Select-Object -First 1)
