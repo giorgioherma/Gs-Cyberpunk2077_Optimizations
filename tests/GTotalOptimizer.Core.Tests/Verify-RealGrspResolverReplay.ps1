@@ -1550,7 +1550,7 @@ try {
                 throw 'GCO_NATIVE_LOCATION_SOURCE_PATH_ESCAPE'
             }
             if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$') {
-                if (Test-Path -LiteralPath $live -PathType Leaf -or
+                if ((Test-Path -LiteralPath $live -PathType Leaf) -or
                     (Test-Path -LiteralPath $destination -PathType Leaf) -or
                     !$text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal)) {
                     throw 'GCO_NATIVE_LOCATION_ADAPTER_COLLISION'
