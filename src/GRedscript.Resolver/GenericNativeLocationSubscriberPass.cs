@@ -423,7 +423,7 @@ internal static class GenericNativeLocationSubscriberPass
                 this.{{listener}} = null;
               }
 
-            """.Replace("\n", nl);
+            """.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", nl, StringComparison.Ordinal);
 
         // Insert all source edits in descending position order. Preserve
         // existing Start/Stop statement order, callback cadence and returns.
@@ -635,10 +635,6 @@ internal static class GenericNativeLocationSubscriberPass
     private static string Generate(Candidate c)
     {
         string name = "GCO_NativeSiteObserver_" + c.Owner;
-        string fields = "m_gcoNativeLocations_" + c.Owner;
-        string listener = "m_gcoNativeListener_" + c.Owner;
-        string attach = "GCOAttachNativeLocations_" + c.Owner;
-        string detach = "GCODetachNativeLocations_" + c.Owner;
         string text = $$"""
             module {{c.ModuleName}}
             
