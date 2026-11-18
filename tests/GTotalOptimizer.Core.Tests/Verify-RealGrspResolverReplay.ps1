@@ -1539,8 +1539,12 @@ try {
     }
     $subscriberCount = [int]$nativeSubscribers.eligible
     if (Test-Path -LiteralPath $nativeSubscribersLog -PathType Leaf) {
-        @(Get-Content -LiteralPath $nativeSubscribersLog |
-            Where-Object { $_ -match '^NATIVE_PREDICATE_REFUSED:[A-Z_]+
+        foreach ($diag in @(Get-Content -LiteralPath $nativeSubscribersLog)) {
+            if ($diag.StartsWith('NATIVE_PREDICATE_REFUSED:',[StringComparison]::Ordinal)) {
+                Write-Host $diag
+            }
+        }
+    }
     if ($subscriberCount -gt 0) {
         $subscriberFolder = Join-Path $work 'gco-native-subscriber-preview'
         $subscriberLog = Join-Path $work 'gco-native-subscriber-preview.log'
