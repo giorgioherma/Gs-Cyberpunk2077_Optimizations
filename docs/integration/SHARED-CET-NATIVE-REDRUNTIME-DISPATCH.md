@@ -51,3 +51,11 @@ Other framework services already exist: `QuestFactSignals`, `InputHub`, `Schedul
 Game test symptoms when enabled: shared-player stale after save/load, attaching/detaching, vehicle transitions or teleport; native FAR false-negatives near a static area; input consumption/order mismatches after InputHub adoption; missed quest/UI refresh after quest listener adoption. Neither native generation nor player service integration is part of a production game ZIP yet.
 
 **Do not silently deploy generated mods or native DLL into the live installation.** GCO generation will output one game-relative overlay and recommend Vortex deployment after integration and gameplay review.
+
+## First actual source-generated per-mod subscriptions (2026-11-18 experimental)
+
+GCO now owns `GenericNativeLocationSubscriberPass`. It detects *source structure*, not mod names: static literal XYZ sphere factory; same-module ScriptableSystem; Start/Stop; OnProximityCheck; direct source-proven `GetPlayer()` receiver; per-site distance/radius loop. It generates an additive `GCO_NativeLocation_<owner>.reds` next to the original mod, containing `@addField` token/listener state, `@addMethod` register/cleanup and `@wrapMethod` Start/Stop calls. It never modifies original mod files or timer/effect logic in this first stage.
+
+The generated `NativeLocationListener` retains -1 UNKNOWN / 0 FAR / 1 NEAR observations for **testing**, but has no authority to skip the original distance check. Generated code only exists in a **separate native-enabled compiler preview** until the actual source stack, framework, and RTTI backend compile together. Full/native generation is still experimental and **not** part of the production ZIP. `scan-native-location-subscribers` and `preview-native-location-subscribers` have source SHA verification, duplicate file ownership checks, idempotence for exact generated files and collision refusal for changed output.
+
+**Regression isolation:** First validate generated source/SCC with all original mod mechanics untouched; test native callback NEAR/FAR and UNKNOWN with player attach/detach and fast travel; only then add an explicitly separate pass ID to suppress redundant far-away work. Never use player NEAR/FAR for ReinforcementsSystem's NPC-coordinate quad checks.
