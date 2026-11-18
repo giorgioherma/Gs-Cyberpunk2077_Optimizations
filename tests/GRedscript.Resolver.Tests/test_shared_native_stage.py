@@ -87,6 +87,31 @@ public class GCETNativeLocationBackend extends NativeLocationBackend {}
         self.assertNotIn("GetWorldPosition", source)
         self.assertFalse(list(self.root.rglob("*.zip")))
 
+    def test_literal_sphere_sites_share_one_native_manifest(self):
+        f = self.game / "r6/scripts/Sample/Proximity.reds"
+        f.parent.mkdir(parents=True)
+        f.write_text("""
+module Sample
+public func StaticPlaces() -> array<SampleSite> {
+  return [
+    SampleSite(SiteKind.First, Vector4(12.0, 34.0, 56.0, 1.0), 2.5, TypeKind.A),
+    SampleSite(SiteKind.Second, Vector4(-13.0, -35.0, 57.0, 1.0), 5.0, TypeKind.B)
+  ];
+}
+""")
+        result = self.run_stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        entries = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(entries), 2)
+        self.assertEqual([x[5] for x in entries], [0, 0])  # XYZ
+        self.assertEqual([x[4] for x in entries], [18.5, 21.0])
+        self.assertEqual([(x[1], x[2], x[3]) for x in entries],
+                         [(12.0, 34.0, 56.0), (-13.0, -35.0, 57.0)])
+        self.assertEqual(entries[0][-1], entries[1][-1])  # source owner
+        original = (self.output / LOCATIONS).read_bytes()
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual((self.output / LOCATIONS).read_bytes(), original)
+
     def test_live_redscript_quads_compile_inert_xy_native_anchors(self):
         target = self.game / "r6/scripts/IndependentAuthor/Areas.reds"
         target.parent.mkdir(parents=True)
