@@ -488,6 +488,53 @@ try {
     # Same direct native API proven by empty-source smoke, now complete
     # installed source tree. Explicit output path protects the vanilla cache.
     $privateLog=Join-Path $work ($scenario + '-scc.log')
+    if ($scenario -eq 'framework-all-generics-preview' -and
+        $nativeSubscriberAdded -gt 0) {
+      # Narrow real-SCC stage before combined source: keep framework, native
+      # backend and generated consumer, but substitute the prior generated
+      # source version for the newly rewritten native predicate. This checks
+      # whether a failure is from native adapter declarations or source edit.
+      # All compiler errors stay private, only stage outcomes are public.
+      $diagnosticRoot=Join-Path $work 'native-adapter-without-predicate'
+      Copy-Item -LiteralPath $root -Destination $diagnosticRoot -Recurse -Force
+      $diagnosticScripts=Join-Path $diagnosticRoot 'r6/scripts'
+      $reverted=0
+      foreach($f in @(Get-ChildItem -LiteralPath $diagnosticScripts -Filter '*.reds' -File -Recurse)) {
+        if (!(Get-Content -LiteralPath $f.FullName -Raw).Contains(
+            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
+            [StringComparison]::Ordinal)) { continue }
+        $relative=[IO.Path]::GetRelativePath($diagnosticScripts,$f.FullName)
+        $candidatePaths=@(
+          (Join-Path $callbackOverlayRoot $relative),
+          (Join-Path $overlayRoot $relative),
+          (Join-Path $liveSources $relative)
+        )
+        $original=@($candidatePaths | Where-Object {
+          Test-Path -LiteralPath $_ -PathType Leaf -and
+          !(Get-Content -LiteralPath $_ -Raw).Contains(
+            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
+            [StringComparison]::Ordinal)
+        } | Select-Object -First 1)
+        if ($original.Count -ne 1) {
+          throw 'R6_NATIVE_ADAPTER_DIAGNOSTIC_BASELINE_MISSING'
+        }
+        Copy-Item -LiteralPath $original[0] -Destination $f.FullName -Force
+        $reverted++
+      }
+      if ($reverted -ne $nativeSubscriberAdded) {
+        throw ('R6_NATIVE_ADAPTER_DIAGNOSTIC_REWRITE_COUNT: reverted='+
+          $reverted+' adapters='+$nativeSubscriberAdded)
+      }
+      try {
+        $null=Invoke-HeadlessScc -Phase 'native-adapter-without-predicate' -IsolatedRoot $diagnosticRoot -CompilerLib $libs[0].FullName -TimeoutSeconds 240
+        Write-Host ('PASS R6 native adapter-only SCC: ownerFiles='+$nativeSubscriberAdded+
+          ' originalPredicatesRestored='+$reverted)
+      } catch {
+        Write-Host ('FAIL R6 native adapter-only SCC: generatedAdapterOrNativeBinding=true'+
+          ' originalPredicatesRestored='+$reverted)
+        throw
+      }
+    }
     $fullStatus=Invoke-HeadlessScc -Phase $scenario -IsolatedRoot $root -CompilerLib $libs[0].FullName -TimeoutSeconds 240
     $compiled=$cache+'.modded'
     if (!(Test-Path -LiteralPath $compiled -PathType Leaf)) {
