@@ -90,12 +90,17 @@ class NativeLocationSubscriberTests(unittest.TestCase):
         self.assertIn("this.QueueProximityCheck" if "this.QueueProximityCheck" in CONSUMER else "return;", original_overlay)
         for token in (
             "NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
-            "@wrapMethod(SampleController)", "public func Start() -> Void",
-            "public func Stop() -> Void",
-            "SubscribeLocation(", "UnsubscribeLocation(",
-            "new GCETNativeLocationBackend()", "AllKnownFar()",
-            "wrappedMethod()", "owner", "state", "MayBeNear(index: Int32)"):
+            "extends NativeLocationListener", "AllKnownFar()",
+            "owner", "state", "MayBeNear(index: Int32)"):
             self.assertIn(token, a)
+        for token in (
+            "GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1",
+            "SubscribeLocation(", "UnsubscribeLocation(",
+            "new GCETNativeLocationBackend()",
+            "this.GCOAttachNativeLocations_", "this.GCODetachNativeLocations_",
+            "import GRedRuntime.*"):
+            self.assertIn(token, original_overlay)
+        self.assertNotIn("@wrapMethod(", a)
         self.assertEqual((self.folder / "Sites.reds").read_text(), SITES)
         self.assertEqual((self.folder / "System.reds").read_text(), CONSUMER)
 
@@ -124,8 +129,9 @@ private func AdditionalSite() -> SampleSite =
         self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
         adapter = next(p for p in self.output.rglob("*.reds")
                        if p.name.startswith("GCO_NativeLocation_")).read_text()
-        self.assertIn("this.m_gcoNativeListener_", adapter)
-        self.assertIn(".Initialize(2)", adapter)
+        original_overlay = (self.output / "r6/scripts/ExampleMod/System.reds").read_text()
+        self.assertIn("this.m_gcoNativeListener_", original_overlay)
+        self.assertIn(".Initialize(2)", original_overlay)
 
     def test_factory_site_reordering_is_not_admitted(self):
         source = (self.folder / "Sites.reds")
