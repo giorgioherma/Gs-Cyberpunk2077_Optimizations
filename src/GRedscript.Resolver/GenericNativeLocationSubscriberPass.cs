@@ -9,8 +9,8 @@ namespace GRedscript.Resolver;
 /// Recognizes an opt-in source SHAPE, not a fixed mod list:
 /// ScriptableSystem Start/Stop + player world-position proximity callback
 /// looping over a same-module literal sphere factory. Generates an additive
-/// REDscript adapter in the source mod directory. Original mod timers, distance
-/// checks, state transitions and callbacks remain unchanged at this checkpoint.
+/// REDscript listener in the source mod directory, with lifecycle injected
+/// into the staged original .reds copy. Original gameplay logic remains intact.
 /// </summary>
 internal static class GenericNativeLocationSubscriberPass
 {
@@ -260,25 +260,49 @@ internal static class GenericNativeLocationSubscriberPass
     // The overlay rewrites the ORIGINAL source path, just like
     // SHARED_PLAYER_SIGNAL_V1. The separately generated adapter only owns
     // the listener lifecycle and cheap per-site shared-state lookup.
+    // Rewrite the original author class in the staged copy. Script-defined
+    // classes do not require cross-file @wrapMethod or @addField support.
+    // The per-mod companion contains only its native event listener.
     private static string? RewriteSource(string source, string sitesSource,
         Candidate candidate, out string refusal)
     {
         refusal = "NONE";
         string index = "__gcoSiteIndex_" + candidate.Owner;
         string method = "GCOMayBeNear_" + candidate.Owner;
+        string attach = "GCOAttachNativeLocations_" + candidate.Owner;
+        string detach = "GCODetachNativeLocations_" + candidate.Owner;
+        string fields = "m_gcoNativeLocations_" + candidate.Owner;
+        string listener = "m_gcoNativeListener_" + candidate.Owner;
+        string listenerType = "GCO_NativeSiteObserver_" + candidate.Owner;
         if (source.Contains(PredicateMarker, StringComparison.Ordinal))
         {
             refusal = "ALREADY_REWRITTEN";
-            return null; // already optimized; a partial stage is handled above
+            return null;
         }
-        if (source.Contains(index, StringComparison.Ordinal) ||
-            source.Contains(method, StringComparison.Ordinal))
+        if (new[] { index, method, attach, detach, fields, listener }
+            .Any(x => source.Contains(x, StringComparison.Ordinal)))
             throw new InvalidDataException("NATIVE_PREDICATE_SYMBOL_COLLISION");
+
         string code = CodeOnly(source);
+        var owners = SystemClass.Matches(code).Cast<Match>()
+            .Where(m => m.Groups["name"].Value == candidate.ClassName).ToArray();
+        if (owners.Length != 1)
+        {
+            refusal = "CLASS_MAPPING";
+            return null;
+        }
+        int classOpen = owners[0].Index + owners[0].Length - 1;
+        int classEnd = FindBlockEnd(code, classOpen);
+        if (classEnd <= classOpen)
+        {
+            refusal = "CLASS_BODY";
+            return null;
+        }
         var loops = Regex.Matches(code,
             @"\bfor\s+(?<item>[A-Za-z_]\w*)\s+in\s+" +
             Regex.Escape(candidate.FactoryName) + @"\s*\(\s*\)\s*\{",
-            RegexOptions.CultureInvariant).Cast<Match>().ToArray();
+            RegexOptions.CultureInvariant).Cast<Match>()
+            .Where(x => x.Index > classOpen && x.Index < classEnd).ToArray();
         if (loops.Length != 1)
         {
             refusal = "LOOP_MAPPING";
@@ -287,7 +311,7 @@ internal static class GenericNativeLocationSubscriberPass
         var loop = loops[0];
         string itemName = loop.Groups["item"].Value;
         int end = FindBlockEnd(code, loop.Index + loop.Length - 1);
-        if (end <= loop.Index)
+        if (end <= loop.Index || end > classEnd)
         {
             refusal = "LOOP_BODY";
             return null;
@@ -303,8 +327,6 @@ internal static class GenericNativeLocationSubscriberPass
         string posName = predicate.Groups["pos"].Value;
         string location = predicate.Groups["location"].Value;
         string radius = predicate.Groups["radius"].Value;
-        // The vector must be sourced from GetWorldPosition() of the
-        // source-identified PLAYER receiver, not an arbitrary NPC or object.
         if (!Regex.IsMatch(code[..loop.Index],
                 @"\blet\s+" + Regex.Escape(posName) +
                 @"\s*(?::\s*Vector4)?\s*=\s*this\.(?<receiver>[A-Za-z_]\w*)\s*\.\s*GetWorldPosition\s*\(\s*\)",
@@ -319,6 +341,29 @@ internal static class GenericNativeLocationSubscriberPass
             refusal = "STATIC_PREFIX";
             return null;
         }
+
+        // Exact lifecycle bodies in the original source, not native
+        // @wrapMethod hooks on author-defined ScriptableSystem classes.
+        string classCode = code.Substring(classOpen, classEnd - classOpen);
+        int[] FindLifecycle(string lifecycle)
+        {
+            var matches = Regex.Matches(classCode,
+                @"\bpublic\s+func\s+" + Regex.Escape(lifecycle) +
+                @"\s*\(\s*\)\s*(?:->\s*Void\s*)?\{",
+                RegexOptions.CultureInvariant).Cast<Match>().ToArray();
+            if (matches.Length != 1) return [];
+            int opening = classOpen + matches[0].Index + matches[0].Length - 1;
+            int closing = FindBlockEnd(code, opening) - 1;
+            return closing > opening && closing < classEnd ?
+                [opening, closing] : [];
+        }
+        int[] startBounds = FindLifecycle("Start");
+        int[] stopBounds = FindLifecycle("Stop");
+        if (startBounds.Length != 2 || stopBounds.Length != 2)
+        {
+            refusal = "SOURCE_LIFECYCLE";
+            return null;
+        }
         int predicateStart = loop.Index + predicate.Groups["expr"].Index;
         int lineStart = source.LastIndexOf('\n', loop.Index);
         lineStart = lineStart < 0 ? 0 : lineStart + 1;
@@ -330,14 +375,87 @@ internal static class GenericNativeLocationSubscriberPass
         }
         string nl = source.Contains("\r\n", StringComparison.Ordinal)
             ? "\r\n" : "\n";
-        // Replace from the end to maintain exact lexer/source offsets.
-        string result = source.Insert(predicateStart,
-            PredicateMarker + " this." + method + "(" + index + ") && ");
-        result = result.Insert(loop.Index + loop.Length,
-            nl + indent + "    " + index + " += 1;");
-        result = result.Insert(loop.Index,
-            "let " + index + ": Int32 = -1;" + nl + indent);
-        if (Regex.Matches(result, Regex.Escape(PredicateMarker)).Count != 1)
+        string additions = $$"""
+
+            
+              // GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1
+              private let {{fields}}: array<Int32>;
+              private let {{listener}}: ref<{{listenerType}}>;
+
+              private func {{method}}(siteIndex: Int32) -> Bool {
+                if !IsDefined(this.{{listener}}) { return true; }
+                return this.{{listener}}.MayBeNear(siteIndex);
+              }
+
+              private func {{attach}}() -> Void {
+                if ArraySize(this.{{fields}}) > 0 { return; }
+                let runtime = Runtime.Get(GetGameInstance());
+                if !IsDefined(runtime) || !runtime.IsReady() { return; }
+                let service = runtime.GetNativeLocations();
+                if !IsDefined(service) { return; }
+                let native = new GCETNativeLocationBackend();
+                this.{{listener}} = new {{listenerType}}();
+                this.{{listener}}.Initialize({{candidate.SiteCount}});
+                let i: Int32 = 0;
+                while i < {{candidate.SiteCount}} {
+                  let id = service.SubscribeLocation({{candidate.Owner}}, i,
+                    {{candidate.SiteCount}}, this.{{listener}}, native);
+                  if id <= 0 {
+                    this.{{detach}}();
+                    return;
+                  }
+                  ArrayPush(this.{{fields}}, id);
+                  i += 1;
+                }
+              }
+
+              private func {{detach}}() -> Void {
+                let runtime = Runtime.Get(GetGameInstance());
+                if IsDefined(runtime) && runtime.IsReady() {
+                  let service = runtime.GetNativeLocations();
+                  if IsDefined(service) {
+                    for id in this.{{fields}} {
+                      service.UnsubscribeLocation(id);
+                    }
+                  }
+                }
+                ArrayClear(this.{{fields}});
+                this.{{listener}} = null;
+              }
+
+            """.Replace("\n", nl);
+
+        // Insert all source edits in descending position order. Preserve
+        // existing Start/Stop statement order, callback cadence and returns.
+        var edits = new List<(int At, string Value)>
+        {
+            (predicateStart, PredicateMarker + " this." + method + "(" + index + ") && "),
+            (loop.Index + loop.Length, nl + indent + "    " + index + " += 1;"),
+            (loop.Index, "let " + index + ": Int32 = -1;" + nl + indent),
+            (startBounds[1], nl + "    this." + attach + "();" + nl),
+            (stopBounds[0] + 1, nl + "    this." + detach + "();" + nl),
+            (classOpen + 1, additions)
+        };
+        string result = source;
+        foreach (var edit in edits.OrderByDescending(x => x.At))
+            result = result.Insert(edit.At, edit.Value);
+
+        if (!Regex.IsMatch(result,
+                @"(?m)^[ \t]*import[ \t]+GRedRuntime\.\*[ \t]*\r?$",
+                RegexOptions.CultureInvariant))
+        {
+            var mod = Module.Match(result);
+            if (!mod.Success)
+                throw new InvalidDataException("NATIVE_PREDICATE_MODULE_MISSING");
+            int afterModule = result.IndexOf('\n', mod.Index);
+            if (afterModule < 0)
+                throw new InvalidDataException("NATIVE_PREDICATE_MODULE_LINE_MISSING");
+            result = result.Insert(afterModule + 1, "import GRedRuntime.*" + nl);
+        }
+
+        if (Regex.Matches(result, Regex.Escape(PredicateMarker)).Count != 1 ||
+            !result.Contains("GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1",
+                StringComparison.Ordinal))
             throw new InvalidDataException("NATIVE_PREDICATE_POSTCONDITION");
         return result;
     }
@@ -563,69 +681,6 @@ internal static class GenericNativeLocationSubscriberPass
               }
             }
             
-            @addField({{c.ClassName}})
-            private let {{fields}}: array<Int32>;
-            
-            @addField({{c.ClassName}})
-            private let {{listener}}: ref<{{name}}>;
-            
-            // Accessed only by a source-rewritten loop from this SAME
-            // owning ScriptableSystem. UNKNOWN/unsupported sites fail open.
-            @addMethod({{c.ClassName}})
-            private func GCOMayBeNear_{{c.Owner}}(index: Int32) -> Bool {
-              if !IsDefined(this.{{listener}}) { return true; }
-              return this.{{listener}}.MayBeNear(index);
-            }
-
-            @addMethod({{c.ClassName}})
-            private func {{attach}}() -> Void {
-              if ArraySize(this.{{fields}}) > 0 { return; }
-              let runtime = Runtime.Get(GetGameInstance());
-              if !IsDefined(runtime) || !runtime.IsReady() { return; }
-              let service = runtime.GetNativeLocations();
-              if !IsDefined(service) { return; }
-              let native = new GCETNativeLocationBackend();
-              this.{{listener}} = new {{name}}();
-              this.{{listener}}.Initialize({{c.SiteCount}});
-              let i: Int32 = 0;
-              while i < {{c.SiteCount}} {
-                let id = service.SubscribeLocation({{c.Owner}}, i,
-                  {{c.SiteCount}}, this.{{listener}}, native);
-                if id <= 0 {
-                  this.{{detach}}();
-                  return;
-                }
-                ArrayPush(this.{{fields}}, id);
-                i += 1;
-              }
-            }
-            
-            @addMethod({{c.ClassName}})
-            private func {{detach}}() -> Void {
-              let runtime = Runtime.Get(GetGameInstance());
-              if IsDefined(runtime) && runtime.IsReady() {
-                let service = runtime.GetNativeLocations();
-                if IsDefined(service) {
-                  for id in this.{{fields}} {
-                    service.UnsubscribeLocation(id);
-                  }
-                }
-              }
-              ArrayClear(this.{{fields}});
-              this.{{listener}} = null;
-            }
-            
-            @wrapMethod({{c.ClassName}})
-            public func Start() -> Void {
-              wrappedMethod();
-              this.{{attach}}();
-            }
-            
-            @wrapMethod({{c.ClassName}})
-            public func Stop() -> Void {
-              this.{{detach}}();
-              wrappedMethod();
-            }
             """;
         return text + "\n";
     }
