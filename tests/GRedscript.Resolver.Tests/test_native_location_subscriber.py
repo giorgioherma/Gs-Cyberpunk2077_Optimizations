@@ -107,6 +107,26 @@ class NativeLocationSubscriberTests(unittest.TestCase):
             .replace("Vector4.Distance(playerPos", "Vector4.Distance(npcPos"))
         self.assertEqual(self.scan()["eligible"], 0)
 
+    def test_conditional_helper_sphere_not_mapped_into_static_prefix(self):
+        sites = self.folder / "Sites.reds"
+        sites.write_text(SITES + """
+@if(ModuleExists("ExtraMod"))
+private func AdditionalSite() -> SampleSite =
+    SampleSite(SampleArea.Other, Vector4(111.0, 222.0, 333.0, 1.0),
+               5.0, ExampleType.Other);
+""")
+        result = self.scan()
+        self.assertEqual(result["eligible"], 1)
+        self.assertEqual(result["candidates"][0]["SiteCount"], 2)
+        stage = self.cli("preview-native-location-subscribers",
+                         "--out", self.output,
+                         "--source-sha", result["sourceStackSha256"])
+        self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
+        adapter = next(p for p in self.output.rglob("*.reds")
+                       if p.name.startswith("GCO_NativeLocation_")).read_text()
+        self.assertIn("this.m_gcoNativeListener_", adapter)
+        self.assertIn(".Initialize(2)", adapter)
+
     def test_factory_site_reordering_is_not_admitted(self):
         source = (self.folder / "Sites.reds")
         source.write_text(SITES.replace(
