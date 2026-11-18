@@ -443,7 +443,7 @@ try {
                 !$newText.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
                 !$newText.Contains('SubscribeLocation(',[StringComparison]::Ordinal) -or
                 !$newText.Contains('UnsubscribeLocation(',[StringComparison]::Ordinal) -or
-                !$newText.Contains('@wrapMethod(',[StringComparison]::Ordinal)) {
+                !$newText.Contains('extends NativeLocationListener',[StringComparison]::Ordinal)) {
               throw 'R6_NATIVE_SUBSCRIBER_OWNER_OR_CONTRACT_INVALID'
             }
             $nativeSubscriberAdded++
