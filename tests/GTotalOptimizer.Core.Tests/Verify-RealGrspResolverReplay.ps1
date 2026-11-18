@@ -1506,6 +1506,54 @@ try {
     Copy-Item -LiteralPath $nativeBridge -Destination $nativeScriptDestination -ErrorAction Stop
     Write-Host 'PASS GCO real CET native DLL first-writer dispatch + REDscript RTTI bridge staged for official SCC'
 
+    # Experimental native location consumers are additive, source-matched
+    # per-mod wrappers. Stage ONLY in the framework+native SCC lane, after
+    # ordered-plan parity, so geometry/action/player regressions stay isolated.
+    $nativeSubscribersJson = Join-Path $work 'gco-native-location-subscribers.json'
+    $nativeSubscribersLog = Join-Path $work 'gco-native-location-subscribers.log'
+    & dotnet $dll scan-native-location-subscribers --game $game --out $nativeSubscribersJson *> $nativeSubscribersLog
+    if ($LASTEXITCODE -ne 0 -or
+        !(Test-Path -LiteralPath $nativeSubscribersJson -PathType Leaf)) {
+        throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_SCAN_FAILED'
+    }
+    $nativeSubscribers = Get-Content -LiteralPath $nativeSubscribersJson -Raw | ConvertFrom-Json
+    if ($nativeSubscribers.schemaVersion -ne 'gco.redscript.native-location-subscriber.v1' -or
+        $nativeSubscribers.sourceStackSha256 -ne $expectedSourceHash -or
+        $nativeSubscribers.mode -ne 'OBSERVER_ONLY_ORIGINAL_MOD_BEHAVIOR_UNCHANGED' -or
+        $nativeSubscribers.productionZipAuthorized -ne $false) {
+        throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_SCAN_CONTRACT_FAILED'
+    }
+    $subscriberCount = [int]$nativeSubscribers.eligible
+    if ($subscriberCount -gt 0) {
+        $subscriberFolder = Join-Path $work 'gco-native-subscriber-preview'
+        $subscriberLog = Join-Path $work 'gco-native-subscriber-preview.log'
+        & dotnet $dll preview-native-location-subscribers --game $game --out $subscriberFolder --source-sha $expectedSourceHash *> $subscriberLog
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_PREVIEW_FAILED'
+        }
+        $subscriberScripts = Join-Path $subscriberFolder 'r6/scripts'
+        $newAdapters = @(Get-ChildItem -LiteralPath $subscriberScripts -Recurse -Filter '*.reds' -File)
+        if ($newAdapters.Count -ne $subscriberCount) {
+            throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_COUNT_MISMATCH'
+        }
+        foreach ($adapter in $newAdapters) {
+            $relative = [IO.Path]::GetRelativePath($subscriberScripts, $adapter.FullName)
+            $live = Join-Path (Join-Path $game 'r6/scripts') $relative
+            $destination = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
+            if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
+                $relative.Contains(':') -or (Test-Path -LiteralPath $live) -or
+                (Test-Path -LiteralPath $destination) -or
+                (Get-Content -LiteralPath $adapter.FullName -Raw) -cnotmatch
+                    'GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1') {
+                throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_OWNERSHIP_COLLISION'
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+            Copy-Item -LiteralPath $adapter.FullName -Destination $destination -ErrorAction Stop
+        }
+    }
+    Write-Host ('PASS GCO native location subscription staging: adapters=' +
+        $subscriberCount + ' modSourcesUntouched=true originalPollingUnchanged=true deployable=false')
+
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
     $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
