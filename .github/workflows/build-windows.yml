@@ -178,6 +178,7 @@ jobs:
           path: unified/.gco-ci-framework
           sparse-checkout: |
             r6/scripts/G-RedRuntime
+            optional-native/r6/scripts/G-RedRuntime/Native
           sparse-checkout-cone-mode: true
       - name: Audit private REDscript stack with GCO-local REDscript CLI
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
