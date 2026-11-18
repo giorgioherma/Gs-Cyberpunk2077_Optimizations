@@ -138,9 +138,18 @@ internal static class GenericNativeLocationSubscriberPass
                     string adapter = Path.GetDirectoryName(rel)!
                         .Replace('\\', '/') + "/GCO_NativeLocation_" +
                         f.Sites.Owner + ".reds";
-                    candidates.Add(new(rel, f.Sites.RelativePath,
+                    var candidate = new Candidate(rel, f.Sites.RelativePath,
                         f.Module, klass.Groups["name"].Value,
-                        factoryName, f.Sites.Owner, count, adapter));
+                        factoryName, f.Sites.Owner, count, adapter);
+                    string siteSource = File.ReadAllText(Path.Combine(root,
+                        f.Sites.RelativePath.Replace('/', Path.DirectorySeparatorChar)),
+                        Encoding.UTF8);
+                    // Scan and generation share the EXACT source pattern
+                    // admission. No observation-only adapter can be emitted.
+                    if (!source.Contains(PredicateMarker, StringComparison.Ordinal) &&
+                        RewriteSource(source, siteSource, candidate) is null)
+                        continue;
+                    candidates.Add(candidate);
                 }
             }
         }
@@ -330,15 +339,20 @@ internal static class GenericNativeLocationSubscriberPass
         {
             string present = Path.Combine(SourceRoot(gameRoot),
                 c.AdapterPath.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(present))
-            {
-                remaining.Add(c);
-                continue;
-            }
-            if (!string.Equals(File.ReadAllText(present, Encoding.UTF8),
-                    Generate(c), StringComparison.Ordinal))
+            string owned = Path.Combine(SourceRoot(gameRoot),
+                c.SourcePath.Replace('/', Path.DirectorySeparatorChar));
+            string original = File.ReadAllText(owned, Encoding.UTF8);
+            bool predicateComplete = original.Contains(PredicateMarker,
+                StringComparison.Ordinal);
+            bool adapterComplete = File.Exists(present) &&
+                string.Equals(File.ReadAllText(present, Encoding.UTF8),
+                    Generate(c), StringComparison.Ordinal);
+            if (File.Exists(present) && !adapterComplete &&
+                !File.ReadAllText(present, Encoding.UTF8).Contains(Marker,
+                    StringComparison.Ordinal))
                 throw new InvalidDataException("NATIVE_CONSUMER_SOURCE_COLLISION");
-            complete++;
+            if (predicateComplete && adapterComplete) complete++;
+            else remaining.Add(c); // untouched or partial generated stage
         }
         if (!string.Equals(admission.SourceStackSha256,
                 admission.FingerprintCurrentSources(),
@@ -351,7 +365,8 @@ internal static class GenericNativeLocationSubscriberPass
             rule = Rule, sourceStackSha256 = admission.SourceStackSha256,
             eligible = remaining.Count,
             alreadyComplete = complete,
-            mode = "OBSERVER_ONLY_ORIGINAL_MOD_BEHAVIOR_UNCHANGED",
+            mode = "NATIVE_FAR_PREDICATE_BYPASS_ORIGINAL_CALLBACK_PRESERVED",
+            predicateRule = PredicateRule,
             requiresNative = true, productionZipAuthorized = false,
             candidates = candidates.Select(x => new {
                 path = "r6/scripts/" + x.SourcePath,
