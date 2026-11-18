@@ -84,7 +84,12 @@ public static class RedscriptGenerationPlan
         ("shared-player-signal", "C", "SHARED_PLAYER_SIGNAL_V1",
             "scan-shared-player", "preview-shared-player",
             "eligible", "alreadyComplete", "candidates",
-            "Player attach generation or cached handle may differ from live getter")
+            "Player attach generation or cached handle may differ from live getter"),
+        ("native-player-location-predicate", "E",
+            "NATIVE_PLAYER_LOCATION_PREDICATE_V1",
+            "scan-native-location-subscribers", "preview-native-location-subscribers",
+            "eligible", "alreadyComplete", "candidates",
+            "Native FAR state may lag teleport/rapid movement; original check executes on NEAR/UNKNOWN")
     ];
 
     // This generator already exists but depends on capture-matched per-loop
@@ -149,6 +154,8 @@ public static class RedscriptGenerationPlan
                         CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
                     case "shared-player-signal":
                         GenericSharedPlayerSignalPass.Scan(game, report); break;
+                    case "native-player-location-predicate":
+                        GenericNativeLocationSubscriberPass.Scan(game, report); break;
                     default: throw new InvalidOperationException(
                         "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
                 }
@@ -336,6 +343,9 @@ public static class RedscriptGenerationPlan
                 "shared-player-signal" =>
                     GenericSharedPlayerSignalPass.Preview(game,
                         analysis, next, basePreview),
+                "native-player-location-predicate" =>
+                    GenericNativeLocationSubscriberPass.Preview(game,
+                        next, document.SourceStackSha256, basePreview),
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
@@ -356,14 +366,27 @@ public static class RedscriptGenerationPlan
                     game, "r6", "scripts", rel));
                 string destination = Path.GetFullPath(Path.Combine(
                     final, "r6", "scripts", rel));
+                bool newNativeAdapter =
+                    item.Id == "native-player-location-predicate" &&
+                    Path.GetFileName(rel).StartsWith("GCO_NativeLocation_",
+                        StringComparison.Ordinal) &&
+                    Path.GetExtension(rel).Equals(".reds",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !File.Exists(live) &&
+                    Directory.Exists(Path.GetDirectoryName(live)!) &&
+                    File.ReadAllText(file).Contains(
+                        "GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
+                        StringComparison.Ordinal);
                 if (!IsInside(destination, final) ||
-                    !File.Exists(live) || !IsInside(live, game))
+                    !IsInside(live, game) ||
+                    (!File.Exists(live) && !newNativeAdapter))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
                     item.Id is not ("blackboard-definitions" or
                         "pure-constant-slices" or "immutable-action-event-snapshot" or
-                        "shared-player-signal"))
+                        "shared-player-signal" or
+                        "native-player-location-predicate"))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_UNCOMPOSABLE_SOURCE_COLLISION: " +
                         item.Id + " " + rel);
