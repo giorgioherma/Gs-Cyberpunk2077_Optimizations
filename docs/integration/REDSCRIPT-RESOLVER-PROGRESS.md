@@ -1,5 +1,15 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-18 — SOURCE-GENERATED native FAR bypass and source-owned lifecycle: CI #758 PASS
+
+[CI #758 FULL SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44227121050), code `1ad191a6`. The existing `GenericNativeLocationSubscriberPass` generates two game-relative artifacts in an **external preview** for admitted installed sources: original `.reds` path rewritten with native FAR short-circuit, in-class subscriber fields/Start/Stop lifecycle, plus a separate `GCO_NativeLocation_<owner>.reds` **listener-only** source. Framework owner stays `G-REDruntime/main`, CET owns `GCETStaticLocations.dll`; GCO source generator has **no mod-name-specific patch**. #752 demonstrated the former wrapper-heavy companion failed SCC even with original distance restored; the direct-source rewrite now succeeds.
+
+**Evidence:** 167/167 managed safety tests, 9 ordered rules, 148 eligible source edits, 59 staged source files, one native subscriber, 2,319 untouched installed source inputs; 7 player and 8 quest contracts; SCC 0.5.31 untouched/optimized/callback/framework/adapter-only/**full combined** compiles all pass, 12 G-REDruntime sources and 60 framework preview files, 323 app/package contracts, one bundled .NET 10 GUI runtime. Source and baseline cache unchanged. Generated output is **preview-only**; original authored callbacks and native UNKNOWN/dynamic location fallback remain. **No deployed ZIP, game test or measured performance gain.**
+
+**Next:** keep CI #758 as a locked source/compiler checkpoint, validate safe handling of legacy predicate-only partial installations before production ZIP, then identify additional generic player-location consumers from current source. User gameplay tests for NEAR/FAR transition timing, teleport, reload and UI effects are still required. Do not use player NEAR/FAR for NPC-position restricted-area checks.
+
+
+
 ## 2026-11-17 — GCO bundled .NET10 Resolver-to-generator plan VERIFIED (#657)
 
 **User decision:** No REDscript ZIP yet. Resolver must decide the **ordered source pass plan**, while the existing generators consume it. Work inside the current GCO two-page full app with **one bundled .NET 10 runtime**, not a second developer executable/runtime. The approved A–E aggressive experimental mechanisms remain development priorities and are **not yet broadly implemented**.
