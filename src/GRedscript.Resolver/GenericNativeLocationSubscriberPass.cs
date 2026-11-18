@@ -124,7 +124,12 @@ internal static class GenericNativeLocationSubscriberPass
                     string item = loop.Groups["item"].Value;
                     // Generic field names: location and radius are discovered
                     // from the typed, positive Vector4.Distance source shape.
-                    if (!HasPositiveDistancePredicate(body, item))
+                    // Fully generated sources have the original exact
+                    // expression after a native prefix. Recognize the marker
+                    // for second-pass idempotence without re-injecting it.
+                    if (!HasPositiveDistancePredicate(body, item) &&
+                        !(source.Contains(PredicateMarker, StringComparison.Ordinal) &&
+                          body.Contains("GCOMayBeNear_", StringComparison.Ordinal)))
                         continue;
                     var matches = factories.Where(f =>
                         f.Module == module.Groups["module"].Value &&
