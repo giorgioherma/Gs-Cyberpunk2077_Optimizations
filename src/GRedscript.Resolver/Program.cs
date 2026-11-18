@@ -749,14 +749,15 @@ internal static class Program
 
     private static int RunNativeSubscriberPreview(Dictionary<string, string> options)
     {
-        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--source-sha")))
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--source-sha" or "--base-preview")))
             throw new ArgumentException(
-                "Native subscriber preview accepts --game, --out, --source-sha");
+                "Native subscriber preview accepts --game, --out, --source-sha, --base-preview");
         int count = GenericNativeLocationSubscriberPass.Preview(
             Required(options, "--game"), Required(options, "--out"),
-            options.GetValueOrDefault("--source-sha"));
+            options.GetValueOrDefault("--source-sha"),
+            options.GetValueOrDefault("--base-preview"));
         Console.WriteLine("GCO native location subscriber preview: adapters=" +
-            count + " originalModSourcesUnchanged=true deployable=false");
+            count + " originalModSourcesUnchanged=true nativeFarPredicateEdits=true deployable=false");
         return 0;
     }
 
