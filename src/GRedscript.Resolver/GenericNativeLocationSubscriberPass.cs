@@ -17,7 +17,7 @@ internal static class GenericNativeLocationSubscriberPass
     internal const string Rule = "NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1";
     private const string Marker = "// GCO-GENERIC:" + Rule;
     private static readonly Regex Module = new(
-        @"(?m)^[ \t]*module[ \t]+(?<module>[A-Za-z_][\w.]*)[ \t]*$",
+        @"(?m)^[ \t]*module[ \t]+(?<module>[A-Za-z_][\w.]*)[ \t]*\r?$",
         RegexOptions.CultureInvariant);
     private static readonly Regex Factory = new(
         @"\bpublic\s+func\s+(?<name>[A-Za-z_]\w*)\s*\(\s*\)\s*->\s*array\s*<",
