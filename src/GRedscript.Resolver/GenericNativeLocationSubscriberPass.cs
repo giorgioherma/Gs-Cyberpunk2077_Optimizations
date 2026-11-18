@@ -98,9 +98,24 @@ internal static class GenericNativeLocationSubscriberPass
                         RegexOptions.CultureInvariant) ||
                     !Regex.IsMatch(body, @"\b(?:public|private)\s+func\s+OnProximityCheck\s*\(\s*\)",
                         RegexOptions.CultureInvariant) ||
-                    !PlayerPosition.IsMatch(body) ||
                     !body.Contains("Vector4.Distance(", StringComparison.Ordinal))
                     continue;
+                // Only the actual player source is valid for the CET native
+                // coordinator. NPC/puppet position queries must not qualify.
+                bool playerPositionProven = PlayerPosition.Matches(body)
+                    .Cast<Match>().Any(position =>
+                    {
+                        string id = position.Groups["player"].Value;
+                        return Regex.IsMatch(body,
+                            @"\\bthis\\." + Regex.Escape(id) +
+                            @"\\s*=\\s*GetPlayer\\s*\\(",
+                            RegexOptions.CultureInvariant) ||
+                            Regex.IsMatch(body,
+                                @"\\blet\\s+" + Regex.Escape(id) +
+                                @"\\s*(?::[^=;]+)?=\\s*GetPlayer\\s*\\(",
+                                RegexOptions.CultureInvariant);
+                    });
+                if (!playerPositionProven) continue;
 
                 var loops = ForFactory.Matches(body).Cast<Match>().ToArray();
                 foreach (var loop in loops)
