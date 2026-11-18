@@ -107,6 +107,35 @@ class NativeLocationSubscriberTests(unittest.TestCase):
             .replace("Vector4.Distance(playerPos", "Vector4.Distance(npcPos"))
         self.assertEqual(self.scan()["eligible"], 0)
 
+    def test_factory_site_reordering_is_not_admitted(self):
+        source = (self.folder / "Sites.reds")
+        source.write_text(SITES.replace(
+            "  return sites;",
+            "  ArrayInsert(sites, 0, extraSite);\n  return sites;"))
+        self.assertEqual(self.scan()["eligible"], 0)
+
+    def test_static_prefix_with_dynamic_trailing_site_remains_eligible(self):
+        source = (self.folder / "Sites.reds")
+        source.write_text(SITES.replace(
+            "  return sites;",
+            "  if useExtraSite { ArrayPush(sites, extraSite); }\n  return sites;"))
+        data = self.scan()
+        self.assertEqual(data["eligible"], 1)
+        self.assertEqual(data["candidates"][0]["SiteCount"], 2)
+        r = self.cli("preview-native-location-subscribers", "--out", self.output,
+                     "--source-sha", data["sourceStackSha256"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        adapter = next(p for p in self.output.rglob("*.reds")
+                       if p.name.startswith("GCO_NativeLocation_")).read_text()
+        self.assertIn("index >= ArraySize(this.siteStates)", adapter)
+        self.assertIn("return true;", adapter)
+
+    def test_untypeable_distance_field_is_not_rewritten(self):
+        source = (self.folder / "Sites.reds")
+        source.write_text(SITES.replace("let proximityRadius: Float;",
+                                        "let proximityRadius: Int32;"))
+        self.assertEqual(self.scan()["eligible"], 0)
+
     def test_no_start_stop_lifecycle_refused(self):
         p = self.folder / "System.reds"
         p.write_text(CONSUMER.replace("public func Stop()", "public func Release()"))
