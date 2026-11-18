@@ -31,6 +31,10 @@ internal static class Program
                 return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-redscript-plan")
                 return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
+                return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
+                return RunNativeSubscriberPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-shared-native")
                 return RunSharedNativeStage(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-callbacks")
@@ -732,6 +736,30 @@ internal static class Program
         return 0;
     }
 
+    private static int RunNativeSubscriberScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Native subscriber scan accepts --game and --out");
+        int count = GenericNativeLocationSubscriberPass.Scan(
+            Required(options, "--game"), Required(options, "--out"));
+        Console.WriteLine("GCO native location subscriber scan: eligible=" + count +
+            " deployable=false");
+        return 0;
+    }
+
+    private static int RunNativeSubscriberPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--source-sha")))
+            throw new ArgumentException(
+                "Native subscriber preview accepts --game, --out, --source-sha");
+        int count = GenericNativeLocationSubscriberPass.Preview(
+            Required(options, "--game"), Required(options, "--out"),
+            options.GetValueOrDefault("--source-sha"));
+        Console.WriteLine("GCO native location subscriber preview: adapters=" +
+            count + " originalModSourcesUnchanged=true deployable=false");
+        return 0;
+    }
+
     private static int RunSharedNativeStage(
         Dictionary<string, string> options)
     {
@@ -757,7 +785,7 @@ internal static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);
