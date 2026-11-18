@@ -117,6 +117,32 @@ class NativeLocationSubscriberTests(unittest.TestCase):
                       r.stdout + r.stderr)
         self.assertFalse(self.output.exists())
 
+    def test_generated_source_is_idempotent(self):
+        first = self.scan()
+        self.assertEqual(first["eligible"], 1)
+        r = self.cli("preview-native-location-subscribers", "--out", self.output,
+                     "--source-sha", first["sourceStackSha256"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        adapter = next(self.output.rglob("*.reds"))
+        installed = self.folder / adapter.name
+        installed.write_bytes(adapter.read_bytes())
+        self.scan_path.unlink()
+        second = self.scan()
+        self.assertEqual(second["eligible"], 0)
+        self.assertEqual(second["alreadyComplete"], 1)
+
+    def test_modified_generated_source_refused(self):
+        first = self.scan()
+        r = self.cli("preview-native-location-subscribers", "--out", self.output,
+                     "--source-sha", first["sourceStackSha256"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        adapter = next(self.output.rglob("*.reds"))
+        (self.folder / adapter.name).write_text(adapter.read_text() + "// drift\\n")
+        self.scan_path.unlink()
+        r = self.cli("scan-native-location-subscribers", "--out", self.scan_path)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("NATIVE_CONSUMER_SOURCE_COLLISION", r.stdout + r.stderr)
+
     def test_native_not_required_for_initial_scan(self):
         self.assertEqual(self.scan()["eligible"], 1)
         self.assertFalse((self.game / "red4ext").exists())
