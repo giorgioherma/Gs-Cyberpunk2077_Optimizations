@@ -50,6 +50,16 @@ internal static class RedscriptNativeLocations
                 continue;
             spans.Add((init.Index, close));
         }
+        // Some authors return the literal array directly rather than
+        // assigning it to a local first. Both forms have stable ordering.
+        foreach (Match inline in Regex.Matches(masked,
+            @"\breturn\s*\[", RegexOptions.CultureInvariant))
+        {
+            int close = masked.IndexOf("];", inline.Index + inline.Length,
+                StringComparison.Ordinal);
+            if (close > inline.Index)
+                spans.Add((inline.Index, close));
+        }
         return Sphere.Matches(masked).Cast<Match>()
             .Where(m => ValidSphere(m) &&
                 spans.Any(s => m.Index >= s.Start &&
