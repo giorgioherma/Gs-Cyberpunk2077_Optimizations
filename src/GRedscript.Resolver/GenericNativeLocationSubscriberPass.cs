@@ -424,8 +424,8 @@ internal static class GenericNativeLocationSubscriberPass
             import GRedRuntime.*
             
             {{Marker}}
-            // Experimental native location observer. The original source
-            // checks, callbacks, UI and 0.25s game timer are NOT replaced.
+            // Shared native FAR gates only the exact source-proven geometry
+            // predicate. Callback frequency, state, UI and cleanup persist.
             public class {{name}} extends NativeLocationListener {
               public let siteStates: array<Int32>;
               public func Initialize(count: Int32) -> Void {
@@ -442,6 +442,12 @@ internal static class GenericNativeLocationSubscriberPass
                    index < ArraySize(this.siteStates) {
                   this.siteStates[index] = state;
                 }
+              }
+              public func MayBeNear(index: Int32) -> Bool {
+                if index < 0 || index >= ArraySize(this.siteStates) {
+                  return true; // dynamic or absent site => original check
+                }
+                return this.siteStates[index] != 0;
               }
               public func AllKnownFar() -> Bool {
                 if ArraySize(this.siteStates) != {{c.SiteCount}} {
@@ -460,6 +466,14 @@ internal static class GenericNativeLocationSubscriberPass
             @addField({{c.ClassName}})
             private let {{listener}}: ref<{{name}}>;
             
+            // Accessed only by a source-rewritten loop from this SAME
+            // owning ScriptableSystem. UNKNOWN/unsupported sites fail open.
+            @addMethod({{c.ClassName}})
+            private func GCOMayBeNear_{{c.Owner}}(index: Int32) -> Bool {
+              if !IsDefined(this.{{listener}}) { return true; }
+              return this.{{listener}}.MayBeNear(index);
+            }
+
             @addMethod({{c.ClassName}})
             private func {{attach}}() -> Void {
               if ArraySize(this.{{fields}}) > 0 { return; }
