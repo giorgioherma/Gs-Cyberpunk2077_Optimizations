@@ -441,9 +441,10 @@ try {
             $originalModFiles=@(Get-ChildItem -LiteralPath $sourceDir -Filter '*.reds' -File -ErrorAction SilentlyContinue)
             if ($originalModFiles.Count -eq 0 -or
                 !$newText.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
-                !$newText.Contains('SubscribeLocation(',[StringComparison]::Ordinal) -or
-                !$newText.Contains('UnsubscribeLocation(',[StringComparison]::Ordinal) -or
-                !$newText.Contains('extends NativeLocationListener',[StringComparison]::Ordinal)) {
+                !$newText.Contains('extends NativeLocationListener',[StringComparison]::Ordinal) -or
+                !$newText.Contains('MayBeNear(index: Int32)',[StringComparison]::Ordinal) -or
+                $newText.Contains('SubscribeLocation(',[StringComparison]::Ordinal) -or
+                $newText.Contains('@wrapMethod(',[StringComparison]::Ordinal)) {
               throw 'R6_NATIVE_SUBSCRIBER_OWNER_OR_CONTRACT_INVALID'
             }
             $nativeSubscriberAdded++
