@@ -152,8 +152,14 @@ internal static class GenericNativeLocationSubscriberPass
                     // Scan and generation share the EXACT source pattern
                     // admission. No observation-only adapter can be emitted.
                     if (!source.Contains(PredicateMarker, StringComparison.Ordinal) &&
-                        RewriteSource(source, siteSource, candidate) is null)
+                        RewriteSource(source, siteSource, candidate,
+                            out var reason) is null)
+                    {
+                        // No private author paths, coordinates or source
+                        // excerpts in CI: one structural refusal category.
+                        Console.WriteLine("NATIVE_PREDICATE_REFUSED:" + reason);
                         continue;
+                    }
                     candidates.Add(candidate);
                 }
             }
@@ -255,12 +261,16 @@ internal static class GenericNativeLocationSubscriberPass
     // SHARED_PLAYER_SIGNAL_V1. The separately generated adapter only owns
     // the listener lifecycle and cheap per-site shared-state lookup.
     private static string? RewriteSource(string source, string sitesSource,
-        Candidate candidate)
+        Candidate candidate, out string refusal)
     {
+        refusal = "NONE";
         string index = "__gcoSiteIndex_" + candidate.Owner;
         string method = "GCOMayBeNear_" + candidate.Owner;
         if (source.Contains(PredicateMarker, StringComparison.Ordinal))
+        {
+            refusal = "ALREADY_REWRITTEN";
             return null; // already optimized; a partial stage is handled above
+        }
         if (source.Contains(index, StringComparison.Ordinal) ||
             source.Contains(method, StringComparison.Ordinal))
             throw new InvalidDataException("NATIVE_PREDICATE_SYMBOL_COLLISION");
@@ -270,14 +280,25 @@ internal static class GenericNativeLocationSubscriberPass
             Regex.Escape(candidate.FactoryName) + @"\s*\(\s*\)\s*\{",
             RegexOptions.CultureInvariant).Cast<Match>().ToArray();
         if (loops.Length != 1)
+        {
+            refusal = "LOOP_MAPPING";
             return null;
+        }
         var loop = loops[0];
         string itemName = loop.Groups["item"].Value;
         int end = FindBlockEnd(code, loop.Index + loop.Length - 1);
-        if (end <= loop.Index) return null;
+        if (end <= loop.Index)
+        {
+            refusal = "LOOP_BODY";
+            return null;
+        }
         string body = code.Substring(loop.Index, end - loop.Index);
         var matches = Predicate(itemName).Matches(body).Cast<Match>().ToArray();
-        if (matches.Length != 1) return null;
+        if (matches.Length != 1)
+        {
+            refusal = "POSITIVE_PREDICATE";
+            return null;
+        }
         var predicate = matches[0];
         string posName = predicate.Groups["pos"].Value;
         string location = predicate.Groups["location"].Value;
@@ -288,15 +309,25 @@ internal static class GenericNativeLocationSubscriberPass
                 @"\blet\s+" + Regex.Escape(posName) +
                 @"\s*(?::\s*Vector4)?\s*=\s*this\.(?<receiver>[A-Za-z_]\w*)\s*\.\s*GetWorldPosition\s*\(\s*\)",
                 RegexOptions.CultureInvariant))
+        {
+            refusal = "PLAYER_RECEIVER";
             return null;
+        }
         if (!HasStableStaticPrefix(sitesSource, candidate.FactoryName,
                 candidate.SiteCount, location, radius))
+        {
+            refusal = "STATIC_PREFIX";
             return null;
+        }
         int predicateStart = loop.Index + predicate.Groups["expr"].Index;
         int lineStart = source.LastIndexOf('\n', loop.Index);
         lineStart = lineStart < 0 ? 0 : lineStart + 1;
         string indent = source[lineStart..loop.Index];
-        if (indent.Any(c => c != ' ' && c != '\t')) return null;
+        if (indent.Any(c => c != ' ' && c != '\t'))
+        {
+            refusal = "LOOP_INDENTATION";
+            return null;
+        }
         string nl = source.Contains("\r\n", StringComparison.Ordinal)
             ? "\r\n" : "\n";
         // Replace from the end to maintain exact lexer/source offsets.
@@ -455,10 +486,11 @@ internal static class GenericNativeLocationSubscriberPass
                 string sitePath = Path.Combine(SourceRoot(gameRoot),
                     c.SitesPath.Replace('/', Path.DirectorySeparatorChar));
                 string? replacement = RewriteSource(effective,
-                    File.ReadAllText(sitePath, Encoding.UTF8), c);
+                    File.ReadAllText(sitePath, Encoding.UTF8), c,
+                    out var previewReason);
                 if (replacement is null)
                     throw new InvalidDataException(
-                        "NATIVE_PREDICATE_EFFECTIVE_SOURCE_DRIFT");
+                        "NATIVE_PREDICATE_EFFECTIVE_SOURCE_DRIFT: " + previewReason);
                 string sourceDest = Path.Combine(output,
                     sourceRel.Replace('/', Path.DirectorySeparatorChar));
                 if (!Inside(sourceDest, output) ||
