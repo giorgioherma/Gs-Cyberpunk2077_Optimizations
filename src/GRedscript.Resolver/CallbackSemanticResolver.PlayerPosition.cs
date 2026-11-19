@@ -30,6 +30,10 @@ internal static partial class CallbackSemanticResolver
         MethodSource Callee, int Line, string Receiver,
         bool DirectPositionArgument, bool ProvenLocalPositionArgument);
 
+    private sealed record PositionGeometry(FileSource File,
+        MethodSource? Method, int At, int Line, string Operation,
+        bool DirectLocalPlayerOperand, bool DirectOtherOrUnknownOperand);
+
     private static readonly PositionOrigin DirectLocal =
         new("LOCAL_PLAYER", "SOURCE_LOCAL_PLAYER_GETTER", true);
     private static readonly PositionOrigin NpcEntity =
@@ -78,6 +82,32 @@ internal static partial class CallbackSemanticResolver
                     PositionOperation(method);
                 sites.Add(new PositionSite(method, file, i, t[i].Line,
                     receiver, origin, lifetime, operation));
+            }
+        }
+
+        // Include every active Vector4.Distance/Squared operation even if
+        // the player position came from a different helper or earlier frame.
+        // Same-method context is NOT sufficient to claim operand identity.
+        var geometries = new List<PositionGeometry>();
+        foreach (var file in files)
+        {
+            var t = file.Tokens;
+            byFile.TryGetValue(file.Path, out var inFile);
+            var fileSites = sites.Where(x => x.File.Path == file.Path).ToArray();
+            for (int i = 2; i + 1 < t.Count; i++)
+            {
+                if (t[i - 2].Value != "Vector4" ||
+                    t[i - 1].Value != "." ||
+                    t[i].Value is not ("Distance" or "DistanceSquared") ||
+                    t[i + 1].Value != "(") continue;
+                var method = inFile?.FirstOrDefault(m => m.Open < i && m.Close > i);
+                int end = Match(t, i + 1, "(", ")");
+                var operands = fileSites.Where(x => x.At > i + 1 &&
+                    x.At < end).ToArray();
+                geometries.Add(new PositionGeometry(file, method, i,
+                    t[i].Line, t[i].Value,
+                    operands.Any(x => x.Origin.LocalPlayerProven),
+                    operands.Any(x => !x.Origin.LocalPlayerProven)));
             }
         }
 
@@ -214,6 +244,22 @@ internal static partial class CallbackSemanticResolver
             provenLocalPlayerFiles = provenLocalFiles,
             provenLocalPlayerOwnerFolders = provenLocalFolders,
             categoryCounts = counts,
+            distanceCallsites = geometries.Count(x => x.Operation == "Distance"),
+            distanceSquaredCallsites = geometries.Count(x => x.Operation == "DistanceSquared"),
+            distanceCallsWithDirectLocalPlayerOperand =
+                geometries.Count(x => x.DirectLocalPlayerOperand),
+            geometries = geometries.OrderBy(x => x.File.Relative, StringComparer.Ordinal)
+                .ThenBy(x => x.Line).Select(x => new {
+                    path = x.File.Relative,
+                    owner = x.Method?.Owner ?? "",
+                    method = x.Method?.Name ?? "",
+                    line = x.Line,
+                    operation = x.Operation,
+                    directLocalPlayerOperand = x.DirectLocalPlayerOperand,
+                    directOtherOrUnknownOperand = x.DirectOtherOrUnknownOperand,
+                    operandOriginIfForwardedByAliases = "UNRESOLVED",
+                    generationAuthorized = false
+                }).ToArray(),
             provenLocalPlayerCallsites = local,
             indirectConsumerMethods = summary.IndirectConsumers,
             downstreamGeometryWithDirectPositionArguments = valueForwarded.Count,
