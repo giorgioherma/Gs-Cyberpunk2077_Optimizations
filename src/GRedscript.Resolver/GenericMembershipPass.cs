@@ -121,7 +121,7 @@ internal static class GenericMembershipPass
         if (!string.Equals(fingerprint, root.GetProperty("source")
                 .GetProperty("sourceStackSha256").GetString(),
                 StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("CNAME_MEMBERSHIP_SOURCE_DRIFT");
+            throw new InvalidDataException("SOURCE_DRIFT_DETECTED: CNAME_MEMBERSHIP_SOURCE_DRIFT");
         var inspected = Inspect(game, admission);
         var staged = new List<(string Relative, string Text)>();
         int edits = 0;
@@ -189,10 +189,15 @@ internal static class GenericMembershipPass
                 stagedFiles = staged.Count,
                 applicableFileCount = staged.Count,
                 measuredOperatorEdgesInApplicableLoops = 0L,
-                candidates = staged.Select(x => new {
-                    path = x.Relative, state = "PRISTINE_APPLICABLE",
-                    rule = Rule
-                }).ToArray(),
+                candidates = inspected.Where(x =>
+                    x.Matches.Count > 0 || x.Complete > 0)
+                    .Select(x => new {
+                        path = x.Relative,
+                        state = x.Matches.Count == 0 ? "ALREADY_COMPLETE" :
+                            x.Complete > 0 ? "PARTIALLY_APPLICABLE" :
+                            "PRISTINE_APPLICABLE",
+                        rule = Rule, matchedLoops = x.Matches.Count
+                    }).ToArray(),
                 alreadyCompleteFileCount = inspected.Sum(f => f.Complete),
                 compilerValidated = false, gameplayValidated = false,
                 generationAuthorized = false, deployable = false,
