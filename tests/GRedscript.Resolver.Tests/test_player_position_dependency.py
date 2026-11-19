@@ -123,6 +123,11 @@ class PlayerPositionDependencyTests(unittest.TestCase):
         rows = report["callsites"]
         self.assertGreaterEqual(len(rows), 9)
         self.assertEqual(len(rows), report["worldPositionCallsites"])
+        self.assertEqual(report["distanceCallsites"], 2)
+        self.assertEqual(report["distanceSquaredCallsites"], 0)
+        self.assertEqual(len(report["geometries"]), 2)
+        self.assertTrue(all(not x["generationAuthorized"]
+                            for x in report["geometries"]))
         locals_ = [r for r in rows if r["positionOrigin"] == "LOCAL_PLAYER"]
         self.assertGreaterEqual(len(locals_), 2)
         self.assertTrue(any(r["receiver"] == "<call-result>" for r in locals_))
