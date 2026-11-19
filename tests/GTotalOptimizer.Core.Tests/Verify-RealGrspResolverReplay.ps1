@@ -361,6 +361,8 @@ try {
         [int]$position.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
         [int]$position.worldPositionCallsites -lt 50 -or
         [int]$position.worldPositionCallsites -ne @($position.callsites).Count -or
+        ([int]$position.distanceCallsites + [int]$position.distanceSquaredCallsites) -ne @($position.geometries).Count -or
+        @($position.geometries | Where-Object { $_.generationAuthorized -ne $false }).Count -ne 0 -or
         [int]$position.sourceFilesWithWorldPosition -le 0 -or
         [int]$position.sourceFilesWithWorldPosition -gt [int]$position.sourceFiles -or
         [int]$position.sourceOwnerFoldersWithWorldPosition -gt [int]$position.sourceFilesWithWorldPosition -or
@@ -373,7 +375,9 @@ try {
         throw 'GCO_PLAYER_POSITION_SOURCE_GRAPH_CONTRACT_FAILED'
     }
     Write-Host ('PASS GCO player position source graph: worldPositionReads=' +
-        $position.worldPositionCallsites + ' files=' +
+        $position.worldPositionCallsites + ' distance=' +
+        $position.distanceCallsites + ' squared=' +
+        $position.distanceSquaredCallsites + ' files=' +
         $position.sourceFilesWithWorldPosition + ' sourceFolders=' +
         $position.sourceOwnerFoldersWithWorldPosition + ' localFiles=' +
         $position.provenLocalPlayerFiles + ' localFolders=' +
