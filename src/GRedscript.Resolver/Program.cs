@@ -19,6 +19,10 @@ internal static class Program
                 return RunGenericPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-generic")
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-cname-membership")
+                return RunCnameMembershipScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-cname-membership")
+                return RunCnameMembershipPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "resolve-callbacks")
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-shared-work")
@@ -360,6 +364,42 @@ internal static class Program
             Path.GetFullPath(Required(options, "--out")));
         Console.WriteLine("GRSP generic PREVIEW only: staged external source, " +
                           "not compiled, not a deployment ZIP.");
+        return 0;
+    }
+
+
+    // Source-proven membership admission is independent of whether the
+    // measured playthrough happened to execute an eligible loop.
+    private static int RunCnameMembershipScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "CName membership scan accepts --game --out only");
+        var summary = GenericMembershipPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO source CName membership: files=" +
+            summary.SourceFiles + " eligible=" + summary.Eligible +
+            " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunCnameMembershipPreview(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+                "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "CName membership preview accepts --game --analysis --out [--base-preview]");
+        int count = GenericMembershipPass.PreviewOrdered(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var basePreview)
+                ? Path.GetFullPath(basePreview) : null);
+        Console.WriteLine("GCO source CName membership: transformed=" + count +
+            " gameplayValidated=false deployable=false");
         return 0;
     }
 
