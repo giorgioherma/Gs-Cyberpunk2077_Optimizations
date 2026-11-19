@@ -361,6 +361,11 @@ try {
         [int]$position.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
         [int]$position.worldPositionCallsites -lt 50 -or
         [int]$position.worldPositionCallsites -ne @($position.callsites).Count -or
+        [int]$position.sourceFilesWithWorldPosition -le 0 -or
+        [int]$position.sourceFilesWithWorldPosition -gt [int]$position.sourceFiles -or
+        [int]$position.sourceOwnerFoldersWithWorldPosition -gt [int]$position.sourceFilesWithWorldPosition -or
+        [int]$position.provenLocalPlayerFiles -gt [int]$position.sourceFilesWithWorldPosition -or
+        [int]$position.provenLocalPlayerOwnerFolders -gt [int]$position.provenLocalPlayerFiles -or
         $classified -ne [int]$position.worldPositionCallsites -or
         $position.generationAuthorized -ne $false -or
         $position.originalSourcesModified -ne $false -or
@@ -368,7 +373,11 @@ try {
         throw 'GCO_PLAYER_POSITION_SOURCE_GRAPH_CONTRACT_FAILED'
     }
     Write-Host ('PASS GCO player position source graph: worldPositionReads=' +
-        $position.worldPositionCallsites + ' provenLocal=' +
+        $position.worldPositionCallsites + ' files=' +
+        $position.sourceFilesWithWorldPosition + ' sourceFolders=' +
+        $position.sourceOwnerFoldersWithWorldPosition + ' localFiles=' +
+        $position.provenLocalPlayerFiles + ' localFolders=' +
+        $position.provenLocalPlayerOwnerFolders + ' provenLocal=' +
         $position.provenLocalPlayerCallsites + ' npc=' +
         [int]$position.categoryCounts.NPC + ' vehicle=' +
         [int]$position.categoryCounts.VEHICLE + ' unknown=' +
