@@ -322,6 +322,48 @@ public abstract class QuestLocationChecks {
         self.assertIn("NATIVE_GROUP_GENERATED_GUARD_DRIFT",
                       result.stdout + result.stderr)
 
+    def test_quest_fixed_position_uses_far_as_only_short_circuit_operand(self):
+        path = self.game / "r6/scripts/IndependentQuest/QuestWake.reds"
+        path.parent.mkdir(parents=True)
+        authored = """module Quest.Fixed
+public class QuestWake extends ScriptableService {
+  public static func Centre() -> Vector4 {
+    return new Vector4(-123.0, 444.0, 9.0, 1.0);
+  }
+  public func Wake() -> Void {
+    if !this.CanRun() { return; }
+    let player = GetPlayer(GetGameInstance());
+    if !IsDefined(player) { return; }
+    if Vector4.Distance(player.GetWorldPosition(), QuestWake.Centre()) > 75.0 &&
+       this.GetQuestFact() == 0 { return; }
+    this.UpdateQuest();
+  }
+}
+"""
+        path.write_text(authored)
+        report = self.scan()
+        self.assertEqual(report["eligible"], 2)
+        self.assertEqual(report["locationGroupEligible"], 1)
+        group = next(c for c in report["candidates"]
+                     if c.get("kind") == "STATIC_QUEST_DISTANCE")
+        self.assertEqual(group["siteCount"], 1)
+        stage = self.cli("preview-native-location-subscribers",
+                         "--out", self.output,
+                         "--source-sha", report["sourceStackSha256"])
+        self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
+        effective = (self.output / path.relative_to(self.game)).read_text()
+        self.assertIn("GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1", effective)
+        self.assertIn("|| Vector4.Distance(player.GetWorldPosition(), "
+                      "QuestWake.Centre()) > 75.0", effective)
+        self.assertIn("this.GetQuestFact() == 0", effective)
+        self.assertIn("this.UpdateQuest();", effective)
+        self.assertEqual(path.read_text(), authored)
+        path.write_text(effective)
+        self.scan_path.unlink()
+        repeated = self.scan()
+        self.assertEqual(repeated["locationGroupEligible"], 0)
+        self.assertEqual(repeated["locationGroupAlreadyComplete"], 1)
+
     def test_group_rejects_dynamic_or_unbounded_radius(self):
         path = self.game / "r6/scripts/QuestLocations/Rules.reds"
         path.parent.mkdir(parents=True)
