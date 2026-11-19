@@ -923,7 +923,6 @@ try {
             $originalPath = Join-Path (Join-Path $game 'r6/scripts') $relative
             $target = Join-Path $callbackScripts $relative
             if (!(Test-Path -LiteralPath $originalPath -PathType Leaf) -or
-                (Test-Path -LiteralPath $target) -or
                 (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
                 (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
                 throw 'GCO_ACTION_FILTER_SOURCE_OWNERSHIP_OR_OVERLAY_COLLISION'
@@ -1026,7 +1025,7 @@ try {
     $lateFolder = Join-Path $work 'gco-late-system-read-preview'
     if ($lateCount -gt 0) {
         $lateLog = Join-Path $work 'gco-late-system-read-preview.log'
-        & dotnet $dll preview-late-system-read --game $game --analysis $result --out $lateFolder *> $lateLog
+        & dotnet $dll preview-late-system-read --game $game --analysis $result --out $lateFolder --base-preview $callbackFolder *> $lateLog
         if ($LASTEXITCODE -ne 0) {
             throw 'GCO_LATE_SYSTEM_READ_REAL_SOURCE_PREVIEW_FAILED'
         }
@@ -1054,8 +1053,24 @@ try {
                 'GCO-GENERIC:(?:SYSTEM_READ_AFTER_ACTION_GUARD_V1|LOCAL_SYSTEM_HANDLE_REUSE_V1)') {
                 throw 'GCO_LATE_SYSTEM_READ_UNSAFE_SOURCE_OR_OVERLAY_COLLISION'
             }
-            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
-            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                # Earlier ordered source rules may already occupy this file.
+                # Verify they persist in the owner-generated composed output.
+                $before = Get-Content -LiteralPath $target -Raw
+                $after = Get-Content -LiteralPath $file.FullName -Raw
+                $priorMarkers = @([regex]::Matches($before,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                foreach ($marker in $priorMarkers) {
+                    if (!$after.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_LATE_SYSTEM_REUSE_LOST_PRIOR_RULE'
+                    }
+                }
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force -ErrorAction Stop
         }
         Write-Host ('PASS GCO generic late-system read real-source preview: candidates=' +
             $lateCount + ' stagedFiles=' + $lateFiles.Count +
