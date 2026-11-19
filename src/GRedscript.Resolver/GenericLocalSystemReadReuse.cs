@@ -154,10 +154,15 @@ internal static class GenericLocalSystemReadReuse
                 if (t[k].Value == arg && t[k + 1].Value == "=")
                     reassigned = true;
             if (reassigned) return null;
+            string exact = text[t[j].Start..t[j + 5].End];
+            // Original comments and instrumentation inside the getter may
+            // never be discarded by replacing an expression.
+            if (exact.Contains("//", StringComparison.Ordinal) ||
+                exact.Contains("/*", StringComparison.Ordinal))
+                return null;
             count++;
             found = new(t[j].Start, t[j + 5].End,
-                t[j + 2].Value, arg,
-                text[t[j].Start..t[j + 5].End]);
+                t[j + 2].Value, arg, exact);
         }
         return count == 1 && found is not null
             ? new(start, end, found) : null;
