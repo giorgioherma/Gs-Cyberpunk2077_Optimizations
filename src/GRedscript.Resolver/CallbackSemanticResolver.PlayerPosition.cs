@@ -287,6 +287,17 @@ internal static partial class CallbackSemanticResolver
             string owner = method?.Owner ?? "";
             if (owner == "VehicleObject") return VehicleEntity;
             if (owner == "NPCPuppet") return NpcEntity;
+            // Source-declared subclasses can use this.GetWorldPosition()
+            // without naming their base type in the method.
+            for (int k = 0; k + 3 < t.Count; k++)
+                if (t[k].Value == "class" && t[k + 1].Value == owner &&
+                    t[k + 2].Value == "extends")
+                {
+                    var baseType = FromType(t[k + 3].Value);
+                    if (baseType.Kind is "NPC" or "VEHICLE")
+                        return baseType;
+                    break;
+                }
             if (owner == "PlayerPuppet")
                 return new("UNKNOWN", "PLAYER_PUPPET_CONTEXT_LOCAL_UNPROVEN",
                     PlayerTypeHint: true);
@@ -310,16 +321,29 @@ internal static partial class CallbackSemanticResolver
             var st = sourceMethod.File.Tokens;
             for (int i = sourceMethod.Open + 1; i + 1 < sourceMethod.Close; i++)
             {
-                if (st[i].Value != name || st[i + 1].Value != "=" ||
+                if (st[i].Value != name ||
                     (field && (i < 2 || st[i - 1].Value != "." ||
                                st[i - 2].Value != "this")))
                     continue;
                 if (!field && i > 0 && st[i - 1].Value == ".") continue;
-                int finish = i + 2;
+                int assignAt = i + 1;
+                // let player: ref<PlayerPuppet> = GetPlayer(...)
+                // has a typed initializer rather than name = ... .
+                if (!field && assignAt < sourceMethod.Close &&
+                    st[assignAt].Value == ":")
+                {
+                    while (assignAt < sourceMethod.Close &&
+                           assignAt < i + 18 &&
+                           st[assignAt].Value is not ("=" or ";" or "{"))
+                        assignAt++;
+                }
+                if (assignAt >= sourceMethod.Close ||
+                    st[assignAt].Value != "=") continue;
+                int finish = assignAt + 1;
                 while (finish < sourceMethod.Close &&
-                       finish < i + 45 &&
+                       finish < assignAt + 45 &&
                        st[finish].Value is not (";" or "{")) finish++;
-                var expr = st.Skip(i + 2).Take(finish - i - 2)
+                var expr = st.Skip(assignAt + 1).Take(finish - assignAt - 1)
                     .Select(x => x.Value).ToArray();
                 if (expr.Length == 0) continue;
                 if (expr.Contains("GetPlayer") &&
