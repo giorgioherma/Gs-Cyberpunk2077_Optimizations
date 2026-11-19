@@ -187,6 +187,12 @@ internal static class GenericMembershipPass
                 sourceCount = admission.InspectedFileCount,
                 sourceShapeDriven = true, transformedLoops = edits,
                 stagedFiles = staged.Count,
+                applicableFileCount = staged.Count,
+                measuredOperatorEdgesInApplicableLoops = 0L,
+                candidates = staged.Select(x => new {
+                    path = x.Relative, state = "PRISTINE_APPLICABLE",
+                    rule = Rule
+                }).ToArray(),
                 alreadyCompleteFileCount = inspected.Sum(f => f.Complete),
                 compilerValidated = false, gameplayValidated = false,
                 generationAuthorized = false, deployable = false,
