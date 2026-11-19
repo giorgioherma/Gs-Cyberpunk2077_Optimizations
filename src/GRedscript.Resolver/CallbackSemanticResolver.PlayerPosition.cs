@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace GRedscript.Resolver;
 
@@ -32,6 +34,7 @@ internal static partial class CallbackSemanticResolver
 
     private sealed record PositionGeometry(FileSource File,
         MethodSource? Method, int At, int Line, string Operation,
+        string LeftOrigin, string RightOrigin, string Dependency,
         bool DirectLocalPlayerOperand, bool DirectOtherOrUnknownOperand);
 
     private static readonly PositionOrigin DirectLocal =
@@ -104,8 +107,25 @@ internal static partial class CallbackSemanticResolver
                 int end = Match(t, i + 1, "(", ")");
                 var operands = fileSites.Where(x => x.At > i + 1 &&
                     x.At < end).ToArray();
+                // Distances must have two source-separated operands. A
+                // comma inside nested Vector4() is not an argument boundary.
+                int comma = -1, depth = 0;
+                for (int k = i + 2; k < end; k++)
+                {
+                    if (t[k].Value is "(" or "[" or "{") depth++;
+                    else if (t[k].Value is ")" or "]" or "}") depth--;
+                    else if (t[k].Value == "," && depth == 0)
+                    { comma = k; break; }
+                }
+                string left = comma > i + 2 ?
+                    PositionGeometryOperand(file, method, i + 2, comma,
+                        fileSites) : "UNKNOWN";
+                string right = comma >= 0 && comma + 1 < end ?
+                    PositionGeometryOperand(file, method, comma + 1, end,
+                        fileSites) : "UNKNOWN";
+                string dependency = PositionGeometryDependency(left, right);
                 geometries.Add(new PositionGeometry(file, method, i,
-                    t[i].Line, t[i].Value,
+                    t[i].Line, t[i].Value, left, right, dependency,
                     operands.Any(x => x.Origin.LocalPlayerProven),
                     operands.Any(x => !x.Origin.LocalPlayerProven)));
             }
@@ -248,6 +268,10 @@ internal static partial class CallbackSemanticResolver
             distanceSquaredCallsites = geometries.Count(x => x.Operation == "DistanceSquared"),
             distanceCallsWithDirectLocalPlayerOperand =
                 geometries.Count(x => x.DirectLocalPlayerOperand),
+            geometryDependencyCounts = geometries.GroupBy(x => x.Dependency)
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .ToDictionary(x => x.Key, x => x.Count(),
+                    StringComparer.Ordinal),
             geometries = geometries.OrderBy(x => x.File.Relative, StringComparer.Ordinal)
                 .ThenBy(x => x.Line).Select(x => new {
                     path = x.File.Relative,
@@ -255,6 +279,9 @@ internal static partial class CallbackSemanticResolver
                     method = x.Method?.Name ?? "",
                     line = x.Line,
                     operation = x.Operation,
+                    leftOrigin = x.LeftOrigin,
+                    rightOrigin = x.RightOrigin,
+                    positionDependency = x.Dependency,
                     directLocalPlayerOperand = x.DirectLocalPlayerOperand,
                     directOtherOrUnknownOperand = x.DirectOtherOrUnknownOperand,
                     operandOriginIfForwardedByAliases = "UNRESOLVED",
@@ -552,6 +579,86 @@ internal static partial class CallbackSemanticResolver
                         ? "SAVED_TO_FIELD" : "CALL_LOCAL_OR_PASSED";
         }
         return "IMMEDIATE_OR_ARGUMENT";
+    }
+
+    private static string PositionGeometryOperand(FileSource file,
+        MethodSource? method, int start, int end,
+        IReadOnlyList<PositionSite> sameFileSites)
+    {
+        var t = file.Tokens;
+        if (start >= end || start < 0 || end > t.Count) return "UNKNOWN";
+        var calls = sameFileSites.Where(x => x.At >= start &&
+            x.At < end).ToArray();
+        if (calls.Length > 0)
+        {
+            var types = calls.Select(x => x.Origin.Kind).Distinct().ToArray();
+            return types.Length == 1 ? types[0] : "MIXED";
+        }
+
+        // Immutable numeric literal geometry is evidence of a literal
+        // coordinate expression, NOT a guarantee that an enclosing array
+        // or site registry stays immutable after construction.
+        string raw = file.Text[t[start].Start..t[end - 1].End].Trim();
+        var vector = Regex.Match(raw,
+            @"^(?:new\s+)?Vector4\s*\((?<components>[^()]*)\)$",
+            RegexOptions.CultureInvariant);
+        if (vector.Success)
+        {
+            var components = vector.Groups["components"].Value.Split(',');
+            if (components.Length == 4 && components.All(x =>
+                float.TryParse(x.Trim(), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out float v) &&
+                float.IsFinite(v)))
+                return "STATIC_LITERAL_VECTOR";
+        }
+
+        if (raw.StartsWith("this.", StringComparison.Ordinal))
+            return "STORED_OR_DYNAMIC_FIELD";
+
+        // Local position aliases: only an unambiguous, same-method
+        // assignment from a source-identified read can be propagated.
+        if (method is not null && end - start == 1 &&
+            Ident(t[start].Value))
+        {
+            string symbol = t[start].Value;
+            var bindings = new List<PositionOrigin>();
+            for (int k = method.Open + 1; k + 1 < start; k++)
+            {
+                if (t[k].Value != symbol || t[k + 1].Value != "=" ||
+                    (k > 0 && t[k - 1].Value == ".")) continue;
+                int semi = k + 2;
+                while (semi < start && t[semi].Value != ";") semi++;
+                var matches = sameFileSites.Where(x => x.At > k + 1 &&
+                    x.At < semi).Select(x => x.Origin).ToArray();
+                if (matches.Length == 1)
+                    bindings.Add(matches[0]);
+                else
+                    bindings.Add(PositionOrigin.Unknown(
+                        "LOCAL_ALIAS_SOURCE_UNRESOLVED"));
+            }
+            if (bindings.Count == 1)
+                return bindings[0].Kind;
+            if (bindings.Count > 1)
+                return "MIXED";
+        }
+        return "UNKNOWN";
+    }
+
+    private static string PositionGeometryDependency(
+        string left, string right)
+    {
+        bool local = left == "LOCAL_PLAYER" || right == "LOCAL_PLAYER";
+        bool dynamic = left is "NPC" or "VEHICLE" ||
+                       right is "NPC" or "VEHICLE";
+        if (local && dynamic) return "PLAYER_AND_DYNAMIC_ENTITY";
+        if (local && (left == "STATIC_LITERAL_VECTOR" ||
+                      right == "STATIC_LITERAL_VECTOR"))
+            return "PLAYER_AND_LITERAL_POSITION";
+        if (local) return "PLAYER_WITH_UNRESOLVED_TARGET";
+        if (left is "NPC" or "VEHICLE" &&
+            right is "NPC" or "VEHICLE")
+            return "NONPLAYER_ENTITY_DISTANCE";
+        return "GEOMETRY_ORIGIN_UNRESOLVED";
     }
 
     private static string PositionOperation(MethodSource method)
