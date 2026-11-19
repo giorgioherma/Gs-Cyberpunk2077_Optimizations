@@ -1510,6 +1510,8 @@ try {
             'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
             [StringComparison]::Ordinal) -or $text.Contains(
             'GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',
+            [StringComparison]::Ordinal) -or $text.Contains(
+            'GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',
             [StringComparison]::Ordinal)
         if ($isNative) { continue }
         if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
