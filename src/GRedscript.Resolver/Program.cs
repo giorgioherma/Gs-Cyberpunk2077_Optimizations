@@ -27,6 +27,8 @@ internal static class Program
                 return RunUiOutputScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-quest-facts")
                 return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-player-position")
+                return RunPlayerPositionScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "plan-redscript")
                 return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-redscript-plan")
@@ -464,6 +466,26 @@ internal static class Program
             " names=" + scan.LiteralFactNames +
             " crossOwnerListenerNames=" + scan.CrossOwnerListenerFactNames +
             " generationAuthorized=false sourceWrites=0");
+        return 0;
+    }
+
+    // Source-wide position origin and bounded helper traversal. This reports
+    // candidates, not rewrite permissions or native subscription admission.
+    private static int RunPlayerPositionScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "Player position scan accepts --game and --out only");
+        var summary = CallbackSemanticResolver.ScanPlayerPositionDependencies(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO player position source graph: files=" +
+            summary.SourceFiles + " calls=" + summary.WorldPositionCalls +
+            " local=" + summary.LocalPlayer + " npc=" + summary.Npc +
+            " vehicle=" + summary.Vehicle + " unknown=" +
+            summary.Unknown + " mixed=" + summary.Mixed +
+            " indirectConsumers=" + summary.IndirectConsumers +
+            " rewrites=0 productionZipAuthorized=false");
         return 0;
     }
 
