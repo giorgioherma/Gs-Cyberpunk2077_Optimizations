@@ -97,7 +97,7 @@ internal static class GenericMembershipPass
         string game = Path.GetFullPath(gameRoot);
         string evidence = Path.GetFullPath(analysisFile);
         string output = Path.GetFullPath(outputRoot);
-        if (Within(output, game) || Within(output, Path.GetDirectoryName(evidence)!) ||
+        if (Within(output, game) || output.Equals(evidence, StringComparison.OrdinalIgnoreCase) ||
             File.Exists(output) || Directory.Exists(output))
             throw new InvalidDataException("CNAME_MEMBERSHIP_PREVIEW_OUTPUT_INVALID");
         if (basePreview is not null &&
