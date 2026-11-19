@@ -163,6 +163,63 @@ public class Areas {
         self.assertEqual(self.run_stage().returncode, 0)
         self.assertEqual(decode((self.output / LOCATIONS).read_bytes()), entries)
 
+    def test_source_driven_fixed_location_groups_emit_shared_native_sites(self):
+        one = self.game / "r6/scripts/UrbanFacilities/Places.reds"
+        one.parent.mkdir(parents=True)
+        one.write_text("""module Urban.Facilities
+public abstract class Places {
+  public static func IsAtFacility(player: ref<GameObject>) -> Bool {
+    let places = Places.Locations();
+    return Places.Close(player.GetWorldPosition(), places, 2.0);
+  }
+  public static func Locations() -> array<Vector4> {
+    let points: array<Vector4> = [
+      new Vector4(11.0, 22.0, 33.0, 1.0),
+      new Vector4(44.0, 55.0, 66.0, 1.0)
+    ];
+    return points;
+  }
+  private static func Close(pos: Vector4, spots: array<Vector4>, radius: Float) -> Bool {
+    for site in spots {
+      if Vector4.Distance(pos, site) < radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        two = self.game / "r6/scripts/WorldQuests/Locations.reds"
+        two.parent.mkdir(parents=True)
+        two.write_text("""module World.Quests
+public abstract class QuestZones {
+  public static func IsInArea(player: ref<PlayerPuppet>) -> Bool {
+    let markers: array<Vector4> = [
+      new Vector4(-101.0, 20.0, 0.0, 1.0)
+    ];
+    return QuestZones.InRange(player.GetWorldPosition(), markers, 75.0);
+  }
+  private static func InRange(pos: Vector4, sites: array<Vector4>, radius: Float) -> Bool {
+    for site in sites {
+      if Vector4.Distance(pos, site) <= radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        staged = self.run_stage()
+        self.assertEqual(staged.returncode, 0, staged.stdout + staged.stderr)
+        rows = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([(r[1], r[2], r[3]) for r in rows],
+                         [(11., 22., 33.), (44., 55., 66.),
+                          (-101., 20., 0.)])
+        self.assertTrue(all(row[4] == 256.0 and row[5] == 0
+                            for row in rows))
+        self.assertEqual(rows[0][6], rows[1][6])
+        self.assertNotEqual(rows[0][6], rows[2][6])
+        identical = (self.output / LOCATIONS).read_bytes()
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual((self.output / LOCATIONS).read_bytes(), identical)
+
     def test_cet_first_then_red_owner_merge_and_repeat_idempotent(self):
         target = self.output / LOCATIONS
         target.parent.mkdir(parents=True)
