@@ -30,7 +30,15 @@ internal static partial class CallbackSemanticResolver
 
     private sealed record PositionLink(MethodSource Caller,
         MethodSource Callee, int Line, string Receiver,
-        bool DirectPositionArgument, bool ProvenLocalPositionArgument);
+        bool DirectPositionArgument, bool ProvenLocalPositionArgument,
+        int CallTokenAt);
+
+    // These are callsite-specific observations, never a global replacement
+    // of the callee. The same helper may be called with NPC or saved positions.
+    private sealed record PositionParameterGeometryFlow(
+        MethodSource Caller, MethodSource Callee, int CallLine,
+        int ArgumentIndex, string Parameter, int GeometryLine,
+        string Operation, string OtherOperandOrigin);
 
     private sealed record PositionGeometry(FileSource File,
         MethodSource? Method, int At, int Line, string Operation,
@@ -136,6 +144,8 @@ internal static partial class CallbackSemanticResolver
         // Resolve only a uniquely named, source-defined receiver class.
         var links = PositionHelperLinks(methods, byOwnerMethod, fieldTypes,
             sites);
+        var parameterFlows = PositionParameterGeometryFlows(
+            links, sites, geometries);
         var forward = links.GroupBy(e => e.Caller.Identity,
             StringComparer.Ordinal).ToDictionary(g => g.Key,
             g => g.ToArray(), StringComparer.Ordinal);
@@ -288,6 +298,33 @@ internal static partial class CallbackSemanticResolver
                     generationAuthorized = false
                 }).ToArray(),
             provenLocalPlayerCallsites = local,
+            callsiteScopedPlayerGeometryFlows = parameterFlows.Count,
+            helperParameterGeometryFlows = parameterFlows
+                .OrderBy(x => x.Caller.File.Relative, StringComparer.Ordinal)
+                .ThenBy(x => x.CallLine).ThenBy(x => x.ArgumentIndex)
+                .ThenBy(x => x.Callee.Identity, StringComparer.Ordinal)
+                .Select(x => new {
+                    callerPath = x.Caller.File.Relative,
+                    callerOwner = x.Caller.Owner,
+                    callerMethod = x.Caller.Name,
+                    callLine = x.CallLine,
+                    calleePath = x.Callee.File.Relative,
+                    calleeOwner = x.Callee.Owner,
+                    calleeMethod = x.Callee.Name,
+                    argumentIndex = x.ArgumentIndex,
+                    calleeParameter = x.Parameter,
+                    geometryLine = x.GeometryLine,
+                    operation = x.Operation,
+                    positionOrigin = "LOCAL_PLAYER",
+                    otherOperandOrigin = x.OtherOperandOrigin,
+                    sourceParameterUsedAsExactGeometryOperand = true,
+                    callsiteScoped = true,
+                    allCalleeCallersUseLocalPlayer = false,
+                    parameterMutationAndTimingClosureProven = false,
+                    nativePositionFreshnessProven = false,
+                    safeToRewriteCallee = false,
+                    generationAuthorized = false
+                }).ToArray(),
             indirectConsumerMethods = summary.IndirectConsumers,
             downstreamGeometryWithDirectPositionArguments = valueForwarded.Count,
             sourceOnly = true,
@@ -427,7 +464,10 @@ internal static partial class CallbackSemanticResolver
                 if (t[open].Value == ")") level++;
                 if (t[open].Value == "(" && --level == 0) break;
             }
-            if (open > 0 && t[open - 1].Value == "GetPlayer")
+            // A method called SomeObject.GetPlayer() is not the engine's
+            // global local-player getter.
+            if (open > 0 && t[open - 1].Value == "GetPlayer" &&
+                (open < 2 || t[open - 2].Value != "."))
                 return DirectLocal;
             if (open > 0 && t[open - 1].Value ==
                 "GetLocalPlayerMainGameObject")
@@ -499,10 +539,7 @@ internal static partial class CallbackSemanticResolver
                 var expr = st.Skip(assignAt + 1).Take(finish - assignAt - 1)
                     .Select(x => x.Value).ToArray();
                 if (expr.Length == 0) continue;
-                if (expr.Contains("GetPlayer") &&
-                    expr.Contains("("))
-                    assigned.Add(DirectLocal);
-                else if (expr.Contains("GetLocalPlayerMainGameObject"))
+                if (PositionIsDirectLocalGetter(expr))
                     assigned.Add(DirectLocal);
                 else if (expr.Contains("NPCPuppet"))
                     assigned.Add(NpcEntity);
@@ -515,7 +552,7 @@ internal static partial class CallbackSemanticResolver
                 }
                 else if (expr.Length == 1 && Ident(expr[0]))
                     assigned.Add(ResolvePositionReceiver(sourceMethod,
-                        sourceMethod.File, i + 2, fields, all,
+                        sourceMethod.File, assignAt + 1, fields, all,
                         new HashSet<string>(visited, StringComparer.Ordinal),
                         depth + 1));
                 else
@@ -747,10 +784,166 @@ internal static partial class CallbackSemanticResolver
                     site.At > i + 1 && site.At < end).ToArray() ?? [];
                 links.Add(new PositionLink(caller, target, t[i].Line,
                     receiver, arguments.Length > 0,
-                    arguments.Any(site => site.Origin.LocalPlayerProven)));
+                    arguments.Any(site => site.Origin.LocalPlayerProven),
+                    i));
             }
         }
         return links.DistinctBy(x => x.Caller.Identity + "\0" +
-                x.Callee.Identity + "\0" + x.Line).ToList();
+                x.Callee.Identity + "\0" + x.CallTokenAt).ToList();
+    }
+
+    // Require the getter to be the expression result, not an argument to
+    // arbitrary wrapper code (Identity(GetPlayer(game)), factory(...), etc).
+    private static bool PositionIsDirectLocalGetter(IReadOnlyList<string> e)
+    {
+        if (e.Count < 3) return false;
+        static int Close(IReadOnlyList<string> t, int at)
+        {
+            if (at >= t.Count || t[at] != "(") return -1;
+            int depth = 0;
+            for (int i = at; i < t.Count; i++)
+            {
+                if (t[i] == "(") depth++;
+                if (t[i] == ")" && --depth == 0) return i;
+            }
+            return -1;
+        }
+        static bool EndOrCast(IReadOnlyList<string> t, int end) =>
+            end == t.Count - 1 ||
+            (end == t.Count - 3 && t[end + 1] == "as" &&
+             t[end + 2] == "PlayerPuppet");
+
+        if (e[0] == "GetPlayer" && e[1] == "(")
+            return EndOrCast(e, Close(e, 1));
+
+        // GameInstance.GetPlayerSystem(game).GetLocalPlayerMainGameObject()
+        if (e.Count >= 10 && e[0] == "GameInstance" &&
+            e[1] == "." && e[2] == "GetPlayerSystem" && e[3] == "(")
+        {
+            int systemEnd = Close(e, 3);
+            if (systemEnd >= 0 && systemEnd + 4 < e.Count &&
+                e[systemEnd + 1] == "." &&
+                e[systemEnd + 2] == "GetLocalPlayerMainGameObject" &&
+                e[systemEnd + 3] == "(" &&
+                EndOrCast(e, Close(e, systemEnd + 3)))
+                return true;
+        }
+        return false;
+    }
+
+    // Extract argument spans at the *actual* callsite. Commas nested inside
+    // constructors, arrays and generic type arguments are not separators.
+    private static List<(int Start, int End)> PositionArgumentRanges(
+        IReadOnlyList<SourceAdmission.Token> t, int open, int close)
+    {
+        var ranges = new List<(int, int)>();
+        if (open < 0 || close <= open || t[open].Value != "(" ||
+            t[close].Value != ")") return ranges;
+        int start = open + 1, depth = 0;
+        for (int i = start; i < close; i++)
+        {
+            string value = t[i].Value;
+            if (value is "(" or "[" or "{" or "<") depth++;
+            else if (value is ")" or "]" or "}" or ">") depth--;
+            if (depth < 0) return [];
+            if (value == "," && depth == 0)
+            {
+                if (start >= i) return [];
+                ranges.Add((start, i));
+                start = i + 1;
+            }
+        }
+        if (depth != 0) return [];
+        if (start < close) ranges.Add((start, close));
+        return ranges;
+    }
+
+    private static List<PositionParameterGeometryFlow> PositionParameterGeometryFlows(
+        IReadOnlyList<PositionLink> links,
+        IReadOnlyList<PositionSite> sites,
+        IReadOnlyList<PositionGeometry> geometries)
+    {
+        var results = new List<PositionParameterGeometryFlow>();
+        var byMethodSites = sites.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+        var byGeometry = geometries.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+        foreach (var link in links)
+        {
+            var caller = link.Caller;
+            var callee = link.Callee;
+            var ct = caller.File.Tokens;
+            int callOpen = link.CallTokenAt + 1;
+            if (callOpen >= ct.Count || ct[callOpen].Value != "(") continue;
+            int callClose = Match(ct, callOpen, "(", ")");
+            if (callClose <= callOpen) continue;
+            var arguments = PositionArgumentRanges(ct, callOpen, callClose);
+            var st = callee.File.Tokens;
+            var parameters = PositionArgumentRanges(st,
+                callee.SignatureOpen, callee.SignatureClose);
+            // Absent/optional/named parameters and overload ambiguities
+            // cannot establish a source-typed positional binding.
+            if (arguments.Count == 0 || arguments.Count != parameters.Count)
+                continue;
+            byMethodSites.TryGetValue(caller.Identity, out var callerSites);
+            byGeometry.TryGetValue(callee.Identity, out var calleeGeometries);
+            if (calleeGeometries is null || calleeGeometries.Length == 0)
+                continue;
+            for (int n = 0; n < arguments.Count; n++)
+            {
+                var formal = parameters[n];
+                if (formal.End - formal.Start < 3 ||
+                    !Ident(st[formal.Start].Value) ||
+                    st[formal.Start + 1].Value != ":" ||
+                    st[formal.Start + 2].Value != "Vector4")
+                    continue;
+                string name = st[formal.Start].Value;
+                var arg = arguments[n];
+                bool proven = false;
+                if (arg.End - arg.Start == 1 && callerSites is not null)
+                {
+                    proven = PositionGeometryOperand(caller.File, caller,
+                        arg.Start, arg.End, callerSites) == "LOCAL_PLAYER";
+                }
+                else if (callerSites is not null)
+                {
+                    proven = callerSites.Any(site =>
+                        site.Origin.LocalPlayerProven &&
+                        site.At == arg.End - 3 &&
+                        ct[site.At - 1].Value == "." &&
+                        ct[site.At + 1].Value == "(" &&
+                        ct[site.At + 2].Value == ")" &&
+                        (arg.Start == site.At - 2 ||
+                         (arg.Start == site.At - 4 &&
+                          ct[arg.Start].Value == "this" &&
+                          ct[arg.Start + 1].Value == ".") ||
+                         (ct[arg.Start].Value == "GetPlayer" &&
+                          arg.Start + 1 < site.At &&
+                          ct[arg.Start + 1].Value == "(" &&
+                          Match(ct, arg.Start + 1, "(", ")") == site.At - 2)));
+                }
+                if (!proven) continue;
+                foreach (var geometry in calleeGeometries)
+                {
+                    int go = geometry.At + 1;
+                    int gc = Match(st, go, "(", ")");
+                    if (gc <= go) continue;
+                    var operands = PositionArgumentRanges(st, go, gc);
+                    if (operands.Count != 2) continue;
+                    bool left = operands[0].End - operands[0].Start == 1 &&
+                        st[operands[0].Start].Value == name;
+                    bool right = operands[1].End - operands[1].Start == 1 &&
+                        st[operands[1].Start].Value == name;
+                    if (left == right) continue;
+                    results.Add(new PositionParameterGeometryFlow(
+                        caller, callee, link.Line, n, name, geometry.Line,
+                        geometry.Operation,
+                        left ? geometry.RightOrigin : geometry.LeftOrigin));
+                }
+            }
+        }
+        return results.Distinct().ToList();
     }
 }

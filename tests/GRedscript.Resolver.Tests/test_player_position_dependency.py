@@ -23,11 +23,24 @@ public class Detector extends IScriptable {
 }
 
 public class SpatialChecks extends IScriptable {
+  public static func IdentityObject(obj: ref<PlayerPuppet>) -> ref<GameObject> {
+    return obj;
+  }
   public static func IsNear(position: Vector4) -> Bool {
     return Vector4.Distance(position, new Vector4(1.0, 1.0, 1.0, 1.0)) < 5.0;
   }
   public static func ForwardLocal() -> Bool {
     return SpatialChecks.IsNear(GetPlayer(GetGameInstance()).GetWorldPosition());
+  }
+  public static func ForwardNpc(npc: ref<NPCPuppet>) -> Bool {
+    return SpatialChecks.IsNear(npc.GetWorldPosition());
+  }
+  public static func IdentityPosition(pos: Vector4) -> Vector4 {
+    return pos;
+  }
+  public static func ForwardTransformed() -> Bool {
+    return SpatialChecks.IsNear(SpatialChecks.IdentityPosition(
+      GetPlayer(GetGameInstance()).GetWorldPosition()));
   }
 }
 
@@ -48,6 +61,11 @@ public class Consumer extends ScriptableSystem {
     let vehiclePos = vehicle.GetWorldPosition();
     let player: ref<NPCPuppet> = null;
     let wronglyNamed = player.GetWorldPosition();
+  }
+
+  public func NotDirectGetter() -> Void {
+    let disguised = SpatialChecks.IdentityObject(GetPlayer(GetGameInstance()));
+    let misleading = disguised.GetWorldPosition();
   }
 
   public func CompareNpc(npc: ref<NPCPuppet>) -> Bool {
@@ -134,7 +152,7 @@ class PlayerPositionDependencyTests(unittest.TestCase):
         rows = report["callsites"]
         # Exact lexer count: comments/strings containing GetWorldPosition
         # and non-call identifiers must not inflate source coverage.
-        self.assertEqual(len(rows), 15)
+        self.assertEqual(len(rows), 18)
         self.assertEqual(len(rows), report["worldPositionCallsites"])
         self.assertEqual(report["distanceCallsites"], 4)
         self.assertEqual(report["distanceSquaredCallsites"], 0)
@@ -171,6 +189,26 @@ class PlayerPositionDependencyTests(unittest.TestCase):
                             for h in forwarded["downstreamHelpers"]))
         self.assertGreaterEqual(
             report["downstreamGeometryWithDirectPositionArguments"], 1)
+        flows = report["helperParameterGeometryFlows"]
+        self.assertEqual(report["callsiteScopedPlayerGeometryFlows"],
+                         len(flows))
+        proven = [f for f in flows if f["callerMethod"] == "ForwardLocal"
+                  and f["calleeMethod"] == "IsNear"]
+        self.assertEqual(len(proven), 1)
+        self.assertEqual(proven[0]["argumentIndex"], 0)
+        self.assertEqual(proven[0]["calleeParameter"], "position")
+        self.assertEqual(proven[0]["otherOperandOrigin"],
+                         "STATIC_LITERAL_VECTOR")
+        self.assertTrue(proven[0]["sourceParameterUsedAsExactGeometryOperand"])
+        self.assertTrue(proven[0]["callsiteScoped"])
+        self.assertFalse(proven[0]["parameterMutationAndTimingClosureProven"])
+        self.assertFalse(proven[0]["generationAuthorized"])
+        self.assertFalse(any(f["callerMethod"] in (
+            "ForwardNpc", "ForwardTransformed") for f in flows))
+        disguised = next(r for r in rows if
+                         r["method"] == "NotDirectGetter")
+        self.assertEqual(disguised["positionOrigin"], "UNKNOWN")
+        self.assertFalse(disguised["localPlayerProven"])
         after = {p.name: p.read_bytes() for p in
                  (self.game / "r6/scripts/Test").glob("*.reds")}
         self.assertEqual(before, after)
