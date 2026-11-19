@@ -182,6 +182,23 @@ internal static partial class CallbackSemanticResolver
             counts[group.Key] = group.Count();
         int N(string kind) => counts.GetValueOrDefault(kind);
         int local = N("LOCAL_PLAYER");
+        static string OwnerFolder(string relative)
+        {
+            const string prefix = "r6/scripts/";
+            string rest = relative.StartsWith(prefix, StringComparison.Ordinal)
+                ? relative[prefix.Length..] : relative;
+            int separator = rest.IndexOf('/');
+            return separator < 0 ? "(root)" : rest[..separator];
+        }
+        int positionFiles = sorted.Select(x => x.File.Relative)
+            .Distinct(StringComparer.Ordinal).Count();
+        int positionFolders = sorted.Select(x => OwnerFolder(x.File.Relative))
+            .Distinct(StringComparer.Ordinal).Count();
+        int provenLocalFiles = sorted.Where(x => x.Origin.LocalPlayerProven)
+            .Select(x => x.File.Relative).Distinct(StringComparer.Ordinal).Count();
+        int provenLocalFolders = sorted.Where(x => x.Origin.LocalPlayerProven)
+            .Select(x => OwnerFolder(x.File.Relative))
+            .Distinct(StringComparer.Ordinal).Count();
         var summary = new PlayerPositionSummary(
             admission.InspectedFileCount, methods.Count, sites.Count,
             local, N("NPC"), N("VEHICLE"), N("OTHER_ENTITY"),
@@ -192,6 +209,10 @@ internal static partial class CallbackSemanticResolver
             sourceFiles = summary.SourceFiles,
             methodSpans = summary.MethodSpans,
             worldPositionCallsites = summary.WorldPositionCalls,
+            sourceFilesWithWorldPosition = positionFiles,
+            sourceOwnerFoldersWithWorldPosition = positionFolders,
+            provenLocalPlayerFiles = provenLocalFiles,
+            provenLocalPlayerOwnerFolders = provenLocalFolders,
             categoryCounts = counts,
             provenLocalPlayerCallsites = local,
             indirectConsumerMethods = summary.IndirectConsumers,
