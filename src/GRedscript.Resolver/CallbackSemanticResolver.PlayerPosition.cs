@@ -167,8 +167,19 @@ internal static partial class CallbackSemanticResolver
 
         var sorted = sites.OrderBy(s => s.File.Relative, StringComparer.Ordinal)
             .ThenBy(s => s.Line).ThenBy(s => s.At).ToArray();
-        var counts = sorted.GroupBy(s => s.Origin.Kind)
-            .ToDictionary(x => x.Key, x => x.Count(), StringComparer.Ordinal);
+        // Stable schema: every category exists even if none was found in
+        // this installation. CI/report clients must not guess missing values.
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["LOCAL_PLAYER"] = 0,
+            ["NPC"] = 0,
+            ["VEHICLE"] = 0,
+            ["OTHER_ENTITY"] = 0,
+            ["UNKNOWN"] = 0,
+            ["MIXED"] = 0
+        };
+        foreach (var group in sorted.GroupBy(s => s.Origin.Kind))
+            counts[group.Key] = group.Count();
         int N(string kind) => counts.GetValueOrDefault(kind);
         int local = N("LOCAL_PLAYER");
         var summary = new PlayerPositionSummary(
