@@ -79,6 +79,125 @@ class LateSystemReadContracts(unittest.TestCase):
                         "--analysis", self.analysis,
                         "--out", out if out is not None else self.preview)
 
+    def test_generic_same_block_engine_getter_reuse_and_idempotence(self):
+        source = """module OtherAuthor
+public class ServiceConsumer extends IScriptable {
+    public func Tick(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"first") > 0;
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"second") > 0;
+        if a && b { this.DoSomething(); }
+    }
+}
+"""
+        self.source.write_text(source, encoding="utf8")
+        scanned = self.scan_source()
+        self.assertEqual(scanned["eligible"], 1)
+        self.assertEqual(scanned["candidates"][0]["rule"],
+                         "LOCAL_SYSTEM_HANDLE_REUSE_V1")
+        self.assertEqual(scanned["candidates"][0]["redundantReads"], 1)
+        self.seal()
+        run = self.preview_source()
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        self.assertIn("transformed=1", run.stdout)
+        rewritten = (self.preview / "r6/scripts/AnyMod/Test.reds").read_text()
+        self.assertEqual(rewritten.count("GameInstance.GetQuestsSystem(gi)"), 1)
+        self.assertEqual(rewritten.count(".GetFact("), 2)
+        self.assertIn("GCO-GENERIC:LOCAL_SYSTEM_HANDLE_REUSE_V1:", rewritten)
+        self.assertIn("if a && b { this.DoSomething(); }", rewritten)
+        self.assertEqual(self.source.read_text(), source)
+        shutil.copyfile(self.preview / "r6/scripts/AnyMod/Test.reds", self.source)
+        self.scan.unlink()
+        complete = self.scan_source()
+        self.assertEqual(complete["eligible"], 0)
+        self.assertEqual(complete["alreadyComplete"], 1)
+
+    def test_generic_same_block_multiple_owners_and_service_types(self):
+        self.source.write_text("""module ModOne
+public class A extends IScriptable {
+    public func Run(gameInstance: GameInstance) -> Void {
+        GameInstance.GetStatsSystem(gameInstance).RemoveAllModifiers(Cast<StatsObjectID>(this.m_id), gamedataStatType.QuickHackUpload);
+        GameInstance.GetStatsSystem(gameInstance).AddModifier(Cast<StatsObjectID>(this.m_id), this.modifier);
+    }
+}
+""", encoding="utf8")
+        second = self.game / "r6/scripts/IndependentOwner/Timed.reds"
+        second.parent.mkdir(parents=True)
+        second.write_text("""module ModTwo
+public class B extends IScriptable {
+    public func Run(gi: GameInstance) -> Void {
+        let first = GameInstance.GetDelaySystem(gi).CancelDelay(this.m_first);
+        let second = GameInstance.GetDelaySystem(gi).CancelDelay(this.m_second);
+    }
+}
+""", encoding="utf8")
+        scanned = self.scan_source()
+        self.assertEqual(scanned["eligible"], 2)
+        self.assertEqual({row["path"].split("/")[2]
+                          for row in scanned["candidates"]},
+                         {"AnyMod", "IndependentOwner"})
+        self.seal()
+        result = self.preview_source()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("transformed=2", result.stdout)
+        self.assertEqual(len(list(self.preview.rglob("*.reds"))), 2)
+
+    def test_generic_same_block_must_not_cross_mutation_or_control_flow(self):
+        cases = [
+            """module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"a");
+        if a > 0 { this.Adjust(); }
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"b");
+    }
+}
+""",
+            """module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"a");
+        gi = GameInstance.GetQuestsSystem(gi).GetGameInstance();
+    }
+}
+""",
+            """module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"a");
+        let b = GameInstance.GetDelaySystem(gi).GetTime();
+    }
+}
+""",
+        ]
+        for text in cases:
+            with self.subTest(text=text[:60]):
+                self.source.write_text(text, encoding="utf8")
+                self.assertEqual(self.scan_source()["eligible"], 0)
+                self.scan.unlink()
+
+    def test_generic_same_block_marker_drift_fails_closed(self):
+        self.source.write_text("""module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"a");
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"b");
+    }
+}
+""", encoding="utf8")
+        self.seal()
+        self.assertEqual(self.preview_source().returncode, 0)
+        generated = (self.preview / "r6/scripts/AnyMod/Test.reds").read_text()
+        self.source.write_text(
+            generated.replace("= GameInstance.GetQuestsSystem(gi);",
+                              "= GameInstance.GetDelaySystem(gi);"),
+            encoding="utf8")
+        failed = self.cli("scan-late-system-read", "--game", self.game,
+                          "--out", self.scan)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("LOCAL_SYSTEM_REUSE_PARTIAL_MARKER",
+                      failed.stderr + failed.stdout)
+        self.assertFalse(self.scan.exists())
+
     def test_pristine_then_completed_then_second_pass_zero(self):
         original = self.source.read_bytes()
         before = self.scan_source()
