@@ -134,8 +134,8 @@ internal static class RedscriptNativeLocations
     private static IReadOnlyList<(float X, float Y, float Z)>
         ParseGroupVectors(string initializer)
     {
-        if (!initializer.StartsWith('[', StringComparison.Ordinal) ||
-            !initializer.EndsWith(']', StringComparison.Ordinal)) return [];
+        if (!initializer.StartsWith("[", StringComparison.Ordinal) ||
+            !initializer.EndsWith("]", StringComparison.Ordinal)) return [];
         string inner = initializer[1..^1];
         var found = NumericVector.Matches(inner).Cast<Match>().ToArray();
         if (found.Length == 0 || found.Length > 256) return [];
@@ -219,7 +219,7 @@ internal static class RedscriptNativeLocations
 
             string init = matched.Groups["initializer"].Value.Trim();
             IReadOnlyList<(float X, float Y, float Z)> positions;
-            if (init.StartsWith('[', StringComparison.Ordinal))
+            if (init.StartsWith("[", StringComparison.Ordinal))
             {
                 positions = ParseGroupVectors(init);
             }
