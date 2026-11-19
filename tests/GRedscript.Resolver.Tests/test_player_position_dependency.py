@@ -22,6 +22,15 @@ public class Detector extends IScriptable {
   }
 }
 
+public class SpatialChecks extends IScriptable {
+  public static func IsNear(position: Vector4) -> Bool {
+    return Vector4.Distance(position, new Vector4(1.0, 1.0, 1.0, 1.0)) < 5.0;
+  }
+  public static func ForwardLocal() -> Bool {
+    return SpatialChecks.IsNear(GetPlayer(GetGameInstance()).GetWorldPosition());
+  }
+}
+
 public class Consumer extends ScriptableSystem {
   private let detector: ref<Detector>;
   private let m_player: wref<PlayerPuppet>;
@@ -130,6 +139,13 @@ class PlayerPositionDependencyTests(unittest.TestCase):
         self.assertEqual(helper["operation"], "DISTANCE")
         self.assertTrue(any(h["method"] == "Check" for h in helper["helperCallers"]))
         self.assertGreaterEqual(report["indirectConsumerMethods"], 1)
+        forwarded = next(r for r in rows if r["method"] == "ForwardLocal")
+        self.assertTrue(any(h["method"] == "IsNear" and
+                            h["operation"] == "DISTANCE" and
+                            h["provenLocalPositionArgument"]
+                            for h in forwarded["downstreamHelpers"]))
+        self.assertGreaterEqual(
+            report["downstreamGeometryWithDirectPositionArguments"], 1)
         after = {p.name: p.read_bytes() for p in
                  (self.game / "r6/scripts/Test").glob("*.reds")}
         self.assertEqual(before, after)
