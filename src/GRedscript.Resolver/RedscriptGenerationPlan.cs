@@ -315,7 +315,8 @@ public static class RedscriptGenerationPlan
                 "literal-action-filter" =>
                     GenericActionFilterPass.Preview(game, analysis, next),
                 "late-system-read" =>
-                    GenericLateSystemReadPass.Preview(game, analysis, next),
+                    GenericLateSystemReadPass.Preview(game, analysis, next,
+                        basePreview),
                 "angle-sort" =>
                     GenericAngleSortPass.Preview(game, analysis, next),
                 "source-cname-membership" =>
@@ -373,7 +374,8 @@ public static class RedscriptGenerationPlan
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
-                    item.Id is not ("source-cname-membership" or
+                    item.Id is not ("late-system-read" or
+                        "source-cname-membership" or
                         "blackboard-definitions" or
                         "pure-constant-slices" or "immutable-action-event-snapshot" or
                         "shared-player-signal" or
