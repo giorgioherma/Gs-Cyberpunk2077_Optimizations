@@ -255,6 +255,23 @@ internal static class RedscriptNativeLocations
             result.Add(new(relative, methodName, owner,
                 positions.Count, player, open, positions));
         }
+        // Generated guard markers are owned by this same discovery lane.
+        // Never silently omit a partially edited/tampered location method
+        // merely because its original expression is no longer recognized.
+        var markers = Regex.Matches(source,
+            @"GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:(?<owner>\d+)",
+            RegexOptions.CultureInvariant);
+        foreach (Match marker in markers)
+        {
+            if (!int.TryParse(marker.Groups["owner"].Value,
+                    NumberStyles.None, CultureInfo.InvariantCulture,
+                    out int owner) ||
+                result.Count(x => x.Owner == owner) != 1 ||
+                markers.Cast<Match>().Count(x =>
+                    x.Groups["owner"].Value == marker.Groups["owner"].Value) != 1)
+                throw new InvalidDataException(
+                    "NATIVE_GROUP_GENERATED_GUARD_DRIFT");
+        }
         return result;
     }
 
