@@ -168,6 +168,22 @@ public class C extends IScriptable {
     }
 }
 """,
+            """module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = this.SideEffect() + GameInstance.GetQuestsSystem(gi).GetFact(n"a");
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"b");
+    }
+}
+""",
+            """module Case
+public class C extends IScriptable {
+    public func Read(gi: GameInstance) -> Void {
+        let a = this.m_enabled && GameInstance.GetQuestsSystem(gi).GetFact(n"a") > 0;
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"b");
+    }
+}
+""",
         ]
         for text in cases:
             with self.subTest(text=text[:60]):
