@@ -301,8 +301,9 @@ internal static partial class CallbackSemanticResolver
     }
 
     private static PositionOrigin FromType(string type) =>
-        type.Contains("NPCPuppet", StringComparison.Ordinal) ||
-        type.Contains("ScriptedPuppet", StringComparison.Ordinal)
+        // ScriptedPuppet is not synonymous with NPCPuppet; it can
+        // describe broader puppet hierarchies and does not prove NPC.
+        type.Contains("NPCPuppet", StringComparison.Ordinal)
             ? NpcEntity :
         type.Contains("VehicleObject", StringComparison.Ordinal) ||
         type.Contains("VehiclePuppet", StringComparison.Ordinal)
