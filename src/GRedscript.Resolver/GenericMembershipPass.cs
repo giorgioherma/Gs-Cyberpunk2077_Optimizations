@@ -15,233 +15,226 @@ internal static class GenericMembershipPass
     internal const string Rule = "CNAME_ARRAY_MEMBERSHIP_V1";
     private const string Marker = "// GRSP-GENERIC:" + Rule;
 
-    private sealed record Evidence(
-        string RelativePath, string SourceFunction, int Line,
-        long ObservedLoopEdges, string OriginalSha256);
-
     private sealed record Match(
         int Start, int End, string Replacement, int Line);
+    internal sealed record Summary(int SourceFiles, int Eligible,
+        int AlreadyComplete);
+    private sealed record Inspected(string Relative, string Text,
+        IReadOnlyList<Match> Matches, int Complete);
 
-    internal static object Preview(
-        string gameRoot, string analysisFile, string outputRoot)
+    // Source structure decides eligibility, not whether this exact loop
+    // executed in the user's F11 capture. The sealed capture is still
+    // mandatory before generation and must match the entire installed stack.
+    internal static Summary Scan(string gameRoot, string outputFile)
     {
-        string scripts = Path.GetFullPath(Path.Combine(gameRoot, "r6", "scripts"));
-        string destination = Path.GetFullPath(outputRoot);
-        string evidenceFile = Path.GetFullPath(analysisFile);
-        if (!Directory.Exists(scripts) || !File.Exists(evidenceFile))
-            throw new InvalidDataException("Missing current source or owner evidence");
-        if (Within(destination, gameRoot))
-            throw new InvalidDataException(
-                "Generic preview must be outside the installed source root");
-        if (Directory.Exists(destination) &&
-            Directory.EnumerateFileSystemEntries(destination).Any())
-            throw new InvalidDataException(
-                "Generic preview refuses nonempty output (no silent overwrite)");
-
-        using var document = JsonDocument.Parse(File.ReadAllText(evidenceFile));
-        JsonElement root = document.RootElement;
-        if (root.GetProperty("schemaVersion").GetString() != "grsp.resolver.input.v1" ||
-            root.GetProperty("generationAuthorized").GetBoolean() ||
-            root.GetProperty("capture").GetProperty("collectionProvenance").GetString() !=
-                "GCO_INDEXED_COLLECTED_BYTES_VERIFIED")
-            throw new InvalidDataException("Unverified GRSP owner capture analysis");
-
-        var source = new SourceAdmission(gameRoot);
-        _ = source.AuditAll();
-        string currentStack = source.SourceStackSha256!;
-        string expectedStack = root.GetProperty("source")
-            .GetProperty("sourceStackSha256").GetString() ?? "";
-        if (!string.Equals(currentStack, expectedStack,
+        string game = Path.GetFullPath(gameRoot);
+        string output = Path.GetFullPath(outputFile);
+        if (Within(output, game) || File.Exists(output) ||
+            Directory.Exists(output))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_SCAN_OUTPUT_INVALID");
+        var admission = new SourceAdmission(game);
+        _ = admission.AuditAll();
+        string fingerprint = admission.SourceStackSha256!;
+        var files = Inspect(game, admission);
+        if (!string.Equals(fingerprint, admission.FingerprintCurrentSources(),
                 StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("SOURCE_DRIFT_DETECTED: stack differs from owner analysis");
+            throw new InvalidDataException("CNAME_MEMBERSHIP_SOURCE_CHANGED");
 
-        var targets = new SortedDictionary<string, List<Evidence>>(
-            StringComparer.OrdinalIgnoreCase);
-        var raw = root.GetProperty("rawTables")
-            .GetProperty("Developer/RSP_CallSites.csv")
-            .GetProperty("rows");
-        var observations = root.GetProperty("sourceObservations");
-        if (observations.GetArrayLength() != raw.GetArrayLength())
-            throw new InvalidDataException("Lossless callsite evidence alignment failed");
-
-        // Native source_line on the VM loop's OperatorLess and
-        // OperatorAssignAdd edges is a measurement anchor, NOT a guarantee
-        // that each edge represents a callback entry or savings.
-        var grouped = new Dictionary<string, (string Relative, string Function,
-            int Line, string Sha, long Less, long Add)>(StringComparer.Ordinal);
-        int k = 0;
-        foreach (JsonElement observation in observations.EnumerateArray())
-        {
-            JsonElement row = raw[k++];
-            string operation = observation.GetProperty("target").GetString() ?? "";
-            if (operation is not ("OperatorLess" or "OperatorAssignAdd") ||
-                observation.GetProperty("evidence").GetProperty("status").GetString() !=
-                    "LINE_METHOD_NAME_MATCH_RECEIVER_UNVERIFIED")
-                continue;
-            string captured = observation.GetProperty("capturedPath").GetString() ?? "";
-            string? relative = SourceAdmission.RelativeScriptPath(captured);
-            if (relative is null) continue;
-            int line = observation.GetProperty("sourceLine").GetInt32();
-            string function = observation.GetProperty("sourceFunction").GetString() ?? "";
-            string originalHash = observation.GetProperty("evidence")
-                .GetProperty("sha256").GetString() ?? "";
-            string key = relative + "\0" + function + "\0" + line;
-            long count = long.Parse(row.GetProperty("calls").GetString()!,
-                System.Globalization.CultureInfo.InvariantCulture);
-            if (count <= 0) continue;
-            if (!grouped.TryGetValue(key, out var previous))
-                previous = (relative, function, line, originalHash, 0, 0);
-            if (!originalHash.Equals(previous.Sha, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Source identity changed inside native evidence");
-            if (operation == "OperatorLess")
-                previous.Less = checked(previous.Less + count);
-            else
-                previous.Add = checked(previous.Add + count);
-            grouped[key] = previous;
-        }
-
-        foreach (var group in grouped.Values)
-        {
-            if (group.Less == 0 || group.Add == 0) continue;
-            if (!targets.TryGetValue(group.Relative, out List<Evidence>? bucket))
-                targets[group.Relative] = bucket = new List<Evidence>();
-            bucket.Add(new Evidence(group.Relative, group.Function, group.Line,
-                checked(group.Less + group.Add), group.Sha));
-        }
-
-        var rows = new List<object>();
-        var staged = new List<(string Path, byte[] Data)>();
-        int applicable = 0, drifted = 0, already = 0;
-        long eligibleObservedEdges = 0;
-        foreach (var group in targets.OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
-            string relative = group.Key;
-            string full = Path.GetFullPath(Path.Combine(
-                scripts, relative.Replace('/', Path.DirectorySeparatorChar)));
-            if (!Within(full, scripts) || !File.Exists(full))
-            {
-                drifted++;
-                rows.Add(new { path = relative, state = "UNPROVEN_OR_DRIFTED",
-                    reason = "Current source missing" });
-                continue;
-            }
-            byte[] bytes = File.ReadAllBytes(full);
-            string sha = Convert.ToHexString(SHA256.HashData(bytes));
-            string text = Encoding.UTF8.GetString(bytes);
-            if (group.Value.Any(e => !sha.Equals(e.OriginalSha256,
-                    StringComparison.OrdinalIgnoreCase)))
-            {
-                drifted++;
-                rows.Add(new { path = relative, state = "UNPROVEN_OR_DRIFTED",
-                    reason = "Source bytes differ from measured evidence" });
-                continue;
-            }
-            var tokens = SourceAdmission.ReadTokens(text);
-            var matches = new List<Match>();
-            int rejected = 0;
-            foreach (Evidence candidate in group.Value.OrderBy(e => e.Line))
-            {
-                var proof = source.Check(
-                    "r6/scripts/" + relative, candidate.SourceFunction, candidate.Line);
-                if (proof.Status != "LINE_METHOD_NAME_MATCH_RECEIVER_UNVERIFIED")
-                {
-                    rejected++;
-                    continue;
-                }
-                Match? rewrite = TryMatch(text, tokens, candidate.Line,
-                    candidate.SourceFunction);
-                if (rewrite is null) { rejected++; continue; }
-                if (matches.Any(m => m.Start == rewrite.Start))
-                    continue;
-                matches.Add(rewrite);
-                eligibleObservedEdges = checked(eligibleObservedEdges +
-                    candidate.ObservedLoopEdges);
-            }
-
-            bool marker = text.Contains(Marker, StringComparison.Ordinal);
-            bool completed = marker && HasCompletedStructuralState(tokens, text);
-            string state;
-            // A marker is not permission to overwrite an unknown partial
-            // optimization; validate already-generated statements first.
-            if (marker && !completed)
-            {
-                drifted++;
-                rows.Add(new { path = relative, state = "UNPROVEN_OR_DRIFTED",
-                    reason = "Previously generated rule marker is structurally inconsistent" });
-                continue;
-            }
-            if (matches.Count == 0)
-            {
-                state = completed ? "ALREADY_COMPLETE" : "UNPROVEN_OR_DRIFTED";
-                if (completed) already++; else drifted++;
-            }
-            else
-            {
-                if (rejected > 0) { drifted++; state = "UNPROVEN_OR_DRIFTED"; }
-                else
-                {
-                    state = marker ? "PARTIALLY_APPLICABLE" : "PRISTINE_APPLICABLE";
-                    applicable++;
-                }
-            }
-            if (state is "PRISTINE_APPLICABLE" or "PARTIALLY_APPLICABLE")
-            {
-                // Apply exact token spans backward, retaining all other bytes,
-                // comments, formatting, lifecycle and mod ownership.
-                string updated = text;
-                foreach (Match m in matches.OrderByDescending(m => m.Start))
-                    updated = updated[..m.Start] + m.Replacement + updated[m.End..];
-                if (updated == text)
-                    throw new InvalidDataException("Generic pass produced no source difference");
-                staged.Add(("r6/scripts/" + relative, Encoding.UTF8.GetBytes(updated)));
-            }
-            rows.Add(new {
-                path = relative, state, rule = Rule,
-                matchedLoops = matches.Count, unprovenMatches = rejected,
-                resultKind = "PREVIEW_ONLY_NOT_COMPILED"
-            });
-        }
-
-        // Verify input did not change while matching. The preview is generated
-        // from current source and never reaches the user's installed mods.
-        if (source.FingerprintCurrentSources() != currentStack)
-            throw new InvalidDataException(
-                "SOURCE_DRIFT_DETECTED: source changed during preview");
-
-        Directory.CreateDirectory(destination);
-        foreach (var item in staged)
-        {
-            string output = Path.GetFullPath(Path.Combine(destination, "overlay",
-                item.Path.Replace('/', Path.DirectorySeparatorChar)));
-            if (!Within(output, destination))
-                throw new InvalidDataException("Invalid source ownership in overlay");
-            Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-            File.WriteAllBytes(output, item.Data);
-        }
-
-        object result = new {
-            schemaVersion = "grsp.generic.preview.v1",
-            owner = "GRSP",
-            rule = Rule,
-            sourceStackSha256 = currentStack,
-            sourceCount = source.InspectedFileCount,
-            measuredOperatorEdgesInApplicableLoops = eligibleObservedEdges,
-            measuredOperatorEdgesAreNotPredictedSavings = true,
-            applicableFileCount = applicable,
-            unprovenFileCount = drifted,
-            alreadyCompleteFileCount = already,
-            stagedFiles = staged.Count,
-            compilerValidated = false,
-            gameplayValidated = false,
-            generationAuthorized = false,
-            deployable = false,
-            outputKind = "ISOLATED_SOURCE_PREVIEW_NOT_GAME_ZIP",
-            candidates = rows
+        int eligible = files.Sum(f => f.Matches.Count);
+        int complete = files.Sum(f => f.Complete);
+        var rows = files.SelectMany(f => f.Matches.Select(m => new {
+            path = "r6/scripts/" + f.Relative, line = m.Line,
+            rule = Rule, state = "PRISTINE_APPLICABLE",
+            sourceOnlyEligibility = true
+        })).ToArray();
+        var report = new {
+            schemaVersion = "gco.redscript.cname-membership.scan.v1",
+            sourceStackSha256 = fingerprint,
+            sourceFiles = admission.InspectedFileCount,
+            eligible, alreadyComplete = complete,
+            candidates = rows, sourceWrites = false,
+            productionZipAuthorized = false
         };
-        File.WriteAllText(Path.Combine(destination, "preview.json"),
-            JsonSerializer.Serialize(result, new JsonSerializerOptions {
-                WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            }), new UTF8Encoding(false));
+        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+        File.WriteAllText(output, JsonSerializer.Serialize(report,
+            new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(false));
+        return new(admission.InspectedFileCount, eligible, complete);
+    }
+
+    // Preserve the old CLI's preview.json and overlay layout. Both entrypoints
+    // use ONE source-driven implementation and the same exact TryMatch proof.
+    internal static object Preview(string gameRoot, string analysisFile,
+        string outputRoot)
+    {
+        var result = Generate(gameRoot, analysisFile, outputRoot, null, true);
+        return new {
+            schemaVersion = "grsp.generic.preview.v1",
+            rule = Rule, sourceStackSha256 = result.Fingerprint,
+            sourceCount = result.SourceFiles,
+            sourceShapeDriven = true,
+            sourceSitesGeneratedWithoutIndividualCaptureHit = true,
+            applicableFileCount = result.Files,
+            alreadyCompleteFileCount = result.AlreadyComplete,
+            stagedFiles = result.Files,
+            transformedLoops = result.Edits,
+            compilerValidated = false, gameplayValidated = false,
+            generationAuthorized = false, deployable = false,
+            outputKind = "ISOLATED_SOURCE_PREVIEW_NOT_GAME_ZIP"
+        };
+    }
+
+    internal static int PreviewOrdered(string gameRoot, string analysisFile,
+        string outputRoot, string? basePreview = null) =>
+        Generate(gameRoot, analysisFile, outputRoot, basePreview, false).Edits;
+
+    private sealed record Generated(int Edits, int Files,
+        int AlreadyComplete, int SourceFiles, string Fingerprint);
+
+    private static Generated Generate(string gameRoot, string analysisFile,
+        string outputRoot, string? basePreview, bool legacyOverlay)
+    {
+        string game = Path.GetFullPath(gameRoot);
+        string evidence = Path.GetFullPath(analysisFile);
+        string output = Path.GetFullPath(outputRoot);
+        if (Within(output, game) || Within(output, Path.GetDirectoryName(evidence)!) ||
+            File.Exists(output) || Directory.Exists(output))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_PREVIEW_OUTPUT_INVALID");
+        if (basePreview is not null &&
+            (Within(Path.GetFullPath(basePreview), game) ||
+             Within(output, Path.GetFullPath(basePreview)) ||
+             Within(Path.GetFullPath(basePreview), output)))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_BASE_PREVIEW_INVALID");
+
+        using var capture = JsonDocument.Parse(File.ReadAllText(evidence));
+        var root = capture.RootElement;
+        if (root.GetProperty("schemaVersion").GetString() !=
+                "grsp.resolver.input.v1" ||
+            root.GetProperty("generationAuthorized").GetBoolean() ||
+            root.GetProperty("capture").GetProperty("collectionProvenance")
+                .GetString() != "GCO_INDEXED_COLLECTED_BYTES_VERIFIED")
+            throw new InvalidDataException("CNAME_MEMBERSHIP_CAPTURE_UNVERIFIED");
+
+        var admission = new SourceAdmission(game);
+        _ = admission.AuditAll();
+        string fingerprint = admission.SourceStackSha256!;
+        if (!string.Equals(fingerprint, root.GetProperty("source")
+                .GetProperty("sourceStackSha256").GetString(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_SOURCE_DRIFT");
+        var inspected = Inspect(game, admission);
+        var staged = new List<(string Relative, string Text)>();
+        int edits = 0;
+        foreach (var file in inspected.Where(f => f.Matches.Count > 0))
+        {
+            string effective = file.Text;
+            if (basePreview is not null)
+            {
+                string stagedPath = Path.Combine(basePreview, "r6", "scripts",
+                    file.Relative.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(stagedPath))
+                    effective = File.ReadAllText(stagedPath, Encoding.UTF8);
+            }
+
+            // The prior generator may have inserted earlier source edits.
+            // Rebase only exact original loop bytes, uniquely, never by a
+            // changed line number or by trusting an unverified marker.
+            foreach (var match in file.Matches.Reverse())
+            {
+                string originalLoop = file.Text[match.Start..match.End];
+                int at = effective.IndexOf(originalLoop, StringComparison.Ordinal);
+                if (at < 0 || effective.IndexOf(originalLoop,
+                        at + originalLoop.Length, StringComparison.Ordinal) >= 0)
+                    throw new InvalidDataException(
+                        "CNAME_MEMBERSHIP_COMPOSITION_DRIFT_OR_AMBIGUITY: " +
+                        file.Relative);
+                effective = effective[..at] + match.Replacement +
+                    effective[(at + originalLoop.Length)..];
+                edits++;
+            }
+            var tokens = SourceAdmission.ReadTokens(effective);
+            int expected = file.Complete + file.Matches.Count;
+            int actual = CountMarkers(effective);
+            if (actual != expected ||
+                !HasCompletedStructuralState(tokens, effective))
+                throw new InvalidDataException(
+                    "CNAME_MEMBERSHIP_GENERATED_POSTCONDITION: " + file.Relative);
+            staged.Add((file.Relative, effective));
+        }
+
+        if (!string.Equals(fingerprint, admission.FingerprintCurrentSources(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_SOURCE_CHANGED");
+
+        Directory.CreateDirectory(output);
+        foreach (var file in staged)
+        {
+            string relative = legacyOverlay ?
+                Path.Combine("overlay", "r6", "scripts", file.Relative) :
+                Path.Combine("r6", "scripts", file.Relative);
+            string target = Path.GetFullPath(Path.Combine(output, relative));
+            if (!Within(target, output))
+                throw new InvalidDataException("CNAME_MEMBERSHIP_PATH_INVALID");
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllText(target, file.Text, new UTF8Encoding(false));
+        }
+
+        if (legacyOverlay)
+        {
+            var report = new {
+                schemaVersion = "grsp.generic.preview.v1",
+                rule = Rule, sourceStackSha256 = fingerprint,
+                sourceCount = admission.InspectedFileCount,
+                sourceShapeDriven = true, transformedLoops = edits,
+                stagedFiles = staged.Count,
+                alreadyCompleteFileCount = inspected.Sum(f => f.Complete),
+                compilerValidated = false, gameplayValidated = false,
+                generationAuthorized = false, deployable = false,
+                outputKind = "ISOLATED_SOURCE_PREVIEW_NOT_GAME_ZIP"
+            };
+            File.WriteAllText(Path.Combine(output, "preview.json"),
+                JsonSerializer.Serialize(report,
+                    new JsonSerializerOptions { WriteIndented = true }),
+                new UTF8Encoding(false));
+        }
+        return new(edits, staged.Count, inspected.Sum(f => f.Complete),
+            admission.InspectedFileCount, fingerprint);
+    }
+
+    private static int CountMarkers(string text) =>
+        text.Split(Marker, StringSplitOptions.None).Length - 1;
+
+    private static IReadOnlyList<Inspected> Inspect(string game,
+        SourceAdmission admission)
+    {
+        string scripts = Path.Combine(game, "r6", "scripts");
+        if (!Directory.Exists(scripts))
+            throw new InvalidDataException("CNAME_MEMBERSHIP_SCRIPTS_MISSING");
+        var result = new List<Inspected>();
+        foreach (string full in Directory.EnumerateFiles(
+                     scripts, "*.reds", SearchOption.AllDirectories)
+                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+            if ((File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("CNAME_MEMBERSHIP_SYMLINK_REFUSED");
+            if (!admission.IsFileIndexed(full)) continue;
+            string text = File.ReadAllText(full, Encoding.UTF8);
+            var tokens = SourceAdmission.ReadTokens(text);
+            int complete = CountMarkers(text);
+            if (complete > 0 && !HasCompletedStructuralState(tokens, text))
+                throw new InvalidDataException(
+                    "CNAME_MEMBERSHIP_PARTIAL_OR_DRIFTED_MARKER: " + full);
+            var lines = tokens.Where(t => t.Value == "for")
+                .Select(t => t.Line).Distinct().ToArray();
+            var matches = new List<Match>();
+            foreach (int line in lines)
+            {
+                var candidate = TryMatch(text, tokens, line, null);
+                if (candidate is not null) matches.Add(candidate);
+            }
+            result.Add(new(Path.GetRelativePath(scripts, full)
+                .Replace('\\', '/'), text, matches, complete));
+        }
         return result;
     }
 
