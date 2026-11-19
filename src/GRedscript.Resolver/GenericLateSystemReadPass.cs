@@ -39,8 +39,20 @@ internal static class GenericLateSystemReadPass
         foreach (var file in Files(game, admission))
         {
             var e = Examine(file.Text, file.Tokens);
-            eligible += e.Eligible.Count;
-            complete += e.Complete;
+            var reuse = GenericLocalSystemReadReuse.Examine(file.Text, file.Tokens);
+            eligible += e.Eligible.Count + reuse.Candidates.Count;
+            complete += e.Complete + reuse.AlreadyComplete;
+            foreach (var edit in reuse.Candidates)
+                candidates.Add(new {
+                    path = "r6/scripts/" + file.Relative,
+                    line = edit.Line,
+                    rule = GenericLocalSystemReadReuse.Rule,
+                    state = "PRISTINE_APPLICABLE",
+                    expensiveRead = "GameInstance." + edit.System,
+                    guard = "CONSECUTIVE_SAME_BLOCK_SERVICE_HANDLE",
+                    redundantReads = edit.AvoidedReads,
+                    generationAuthorized = false
+                });
             foreach (var edit in e.Eligible)
                 candidates.Add(new {
                     path = "r6/scripts/" + file.Relative,
@@ -98,7 +110,9 @@ internal static class GenericLateSystemReadPass
         foreach (var file in Files(game, admission))
         {
             var selected = Examine(file.Text, file.Tokens);
-            if (selected.Eligible.Count == 0) continue;
+            var reusable = GenericLocalSystemReadReuse.Examine(file.Text, file.Tokens);
+            if (selected.Eligible.Count == 0 && reusable.Candidates.Count == 0)
+                continue;
             string changed = file.Text;
             foreach (var edit in selected.Eligible.OrderByDescending(e => e.Begin))
             {
@@ -115,6 +129,15 @@ internal static class GenericLateSystemReadPass
                 changed = changed[..edit.Begin] + replacement + changed[edit.End..];
                 edits++;
             }
+            // Same canonical generator, source-index and sealed capture gate:
+            // reuse stable system handles inside adjacent straight-line work.
+            var composed = GenericLocalSystemReadReuse.Rewrite(changed,
+                SourceAdmission.ReadTokens(changed));
+            if (composed.Edits != reusable.Candidates.Count)
+                throw new InvalidDataException(
+                    "LATE_SYSTEM_READ_REUSE_COMPOSITION_COUNT_DRIFT");
+            changed = composed.Source;
+            edits += composed.Edits;
             outputFiles.Add((file.Relative, changed));
         }
         AssertStable(admission);
