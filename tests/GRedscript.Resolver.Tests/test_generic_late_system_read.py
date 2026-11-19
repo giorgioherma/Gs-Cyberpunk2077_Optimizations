@@ -125,8 +125,8 @@ public class A extends IScriptable {
         second.write_text("""module ModTwo
 public class B extends IScriptable {
     public func Run(gi: GameInstance) -> Void {
-        let first = GameInstance.GetDelaySystem(gi).CancelDelay(this.m_first);
-        let second = GameInstance.GetDelaySystem(gi).CancelDelay(this.m_second);
+        GameInstance.GetDelaySystem(gi).CancelDelay(this.m_first);
+        GameInstance.GetDelaySystem(gi).CancelDelay(this.m_second);
     }
 }
 """, encoding="utf8")
