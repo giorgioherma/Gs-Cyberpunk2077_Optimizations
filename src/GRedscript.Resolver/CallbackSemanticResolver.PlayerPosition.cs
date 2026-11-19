@@ -624,11 +624,20 @@ internal static partial class CallbackSemanticResolver
             var bindings = new List<PositionOrigin>();
             for (int k = method.Open + 1; k + 1 < start; k++)
             {
-                if (t[k].Value != symbol || t[k + 1].Value != "=" ||
+                if (t[k].Value != symbol ||
                     (k > 0 && t[k - 1].Value == ".")) continue;
-                int semi = k + 2;
+                int assignAt = k + 1;
+                if (assignAt < start && t[assignAt].Value == ":")
+                {
+                    while (assignAt < start && assignAt < k + 14 &&
+                           t[assignAt].Value is not ("=" or ";" or "{"))
+                        assignAt++;
+                }
+                if (assignAt >= start || t[assignAt].Value != "=")
+                    continue;
+                int semi = assignAt + 1;
                 while (semi < start && t[semi].Value != ";") semi++;
-                var matches = sameFileSites.Where(x => x.At > k + 1 &&
+                var matches = sameFileSites.Where(x => x.At > assignAt &&
                     x.At < semi).Select(x => x.Origin).ToArray();
                 if (matches.Length == 1)
                     bindings.Add(matches[0]);
@@ -655,8 +664,8 @@ internal static partial class CallbackSemanticResolver
                       right == "STATIC_LITERAL_VECTOR"))
             return "PLAYER_AND_LITERAL_POSITION";
         if (local) return "PLAYER_WITH_UNRESOLVED_TARGET";
-        if (left is "NPC" or "VEHICLE" &&
-            right is "NPC" or "VEHICLE")
+        if ((left is "NPC" or "VEHICLE") &&
+            (right is "NPC" or "VEHICLE"))
             return "NONPLAYER_ENTITY_DISTANCE";
         return "GEOMETRY_ORIGIN_UNRESOLVED";
     }
