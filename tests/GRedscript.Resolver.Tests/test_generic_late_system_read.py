@@ -175,6 +175,60 @@ public class C extends IScriptable {
                 self.assertEqual(self.scan_source()["eligible"], 0)
                 self.scan.unlink()
 
+    def test_same_source_composes_with_prior_generated_work(self):
+        source = """module OtherAuthor
+public class ServiceConsumer extends IScriptable {
+    public func Tick(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"first");
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"second");
+    }
+}
+"""
+        self.source.write_text(source, encoding="utf8")
+        self.seal()
+        prior = self.preview.parent / "prior"
+        older = prior / "r6/scripts/AnyMod/Test.reds"
+        older.parent.mkdir(parents=True)
+        older.write_text(source.replace(
+            "        let a =",
+            "        // GCO-GENERIC:PRIOR_TEST_PASS\n        let a ="),
+            encoding="utf8")
+        result = self.cli("preview-late-system-read", "--game", self.game,
+                          "--analysis", self.analysis, "--out", self.preview,
+                          "--base-preview", prior)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        staged = (self.preview / "r6/scripts/AnyMod/Test.reds").read_text()
+        self.assertIn("GCO-GENERIC:PRIOR_TEST_PASS", staged)
+        self.assertIn("GCO-GENERIC:LOCAL_SYSTEM_HANDLE_REUSE_V1:", staged)
+        self.assertEqual(staged.count("GameInstance.GetQuestsSystem(gi)"), 1)
+        self.assertEqual(self.source.read_text(), source)
+
+    def test_same_source_refuses_prior_stage_candidate_drift(self):
+        source = """module OtherAuthor
+public class ServiceConsumer extends IScriptable {
+    public func Tick(gi: GameInstance) -> Void {
+        let a = GameInstance.GetQuestsSystem(gi).GetFact(n"first");
+        let b = GameInstance.GetQuestsSystem(gi).GetFact(n"second");
+    }
+}
+"""
+        self.source.write_text(source, encoding="utf8")
+        self.seal()
+        prior = self.preview.parent / "prior"
+        other = prior / "r6/scripts/AnyMod/Test.reds"
+        other.parent.mkdir(parents=True)
+        other.write_text(source.replace(
+            'let b = GameInstance.GetQuestsSystem(gi).GetFact(n"second");',
+            'let b = GameInstance.GetDelaySystem(gi).GetTime();'),
+            encoding="utf8")
+        result = self.cli("preview-late-system-read", "--game", self.game,
+                          "--analysis", self.analysis, "--out", self.preview,
+                          "--base-preview", prior)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("LATE_SYSTEM_READ_COMPOSITION_CANDIDATE_DRIFT",
+                      result.stderr + result.stdout)
+        self.assertFalse(self.preview.exists())
+
     def test_generic_same_block_marker_drift_fails_closed(self):
         self.source.write_text("""module Case
 public class C extends IScriptable {
