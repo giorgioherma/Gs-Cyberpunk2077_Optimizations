@@ -492,12 +492,17 @@ internal static class GenericNativeLocationSubscriberPass
         RedscriptNativeLocations.LocationDependencyGroup group)
     {
         string code = CodeOnly(source);
-        return Regex.IsMatch(code,
-            @"\bif\s+GCETNativeLocationGuard\.DefinitelyFarPlayer\s*" +
+        string call = @"GCETNativeLocationGuard\.DefinitelyFarPlayer\s*" +
             @"\(\s*" + Regex.Escape(group.PlayerName) +
             @"\s*,\s*" + group.Owner + @"\s*,\s*" + group.Count +
-            @"\s*\)\s*\{\s*return\s+false\s*;\s*\}",
-            RegexOptions.CultureInvariant);
+            @"\s*\)";
+        return group.Mode == "STATIC_QUEST_DISTANCE"
+            ? Regex.IsMatch(code, call + @"\s*\|\|\s*Vector4\s*\.\s*Distance",
+                RegexOptions.CultureInvariant)
+            : Regex.IsMatch(code,
+                @"\bif\s+" + call +
+                @"\s*\{\s*return\s+false\s*;\s*\}",
+                RegexOptions.CultureInvariant);
     }
 
     private static int StageLocationDependencies(string gameRoot,
@@ -538,7 +543,7 @@ internal static class GenericNativeLocationSubscriberPass
             foreach (var original in owner)
             {
                 var matches = current.Where(x => x.Owner == original.Owner &&
-                    x.Method == original.Method &&
+                    x.Method == original.Method && x.Mode == original.Mode &&
                     x.Count == original.Count).ToArray();
                 if (matches.Length != 1)
                     throw new InvalidDataException(
@@ -552,11 +557,27 @@ internal static class GenericNativeLocationSubscriberPass
                             "NATIVE_GROUP_GENERATED_GUARD_DRIFT");
                     continue;
                 }
-                string guard = nl + "    " + marker +
-                    " if GCETNativeLocationGuard.DefinitelyFarPlayer(" +
+                string nativeCall = "GCETNativeLocationGuard.DefinitelyFarPlayer(" +
                     candidate.PlayerName + ", " + candidate.Owner + ", " +
-                    candidate.Count + ") { return false; }" + nl;
-                edits.Add((candidate.OpenBrace + 1, guard));
+                    candidate.Count + ")";
+                if (candidate.Mode == "STATIC_QUEST_DISTANCE")
+                {
+                    // Substitute only the original distance Boolean operand.
+                    // Keep quest facts, callback execution, return branches
+                    // and other reads in their original order.
+                    if (candidate.PredicateStart < 0 || candidate.PredicateLength <= 0)
+                        throw new InvalidDataException("NATIVE_GROUP_QUEST_PROOF");
+                    edits.Add((candidate.PredicateStart +
+                        candidate.PredicateLength, ")"));
+                    edits.Add((candidate.PredicateStart,
+                        "(" + marker + " " + nativeCall + " || "));
+                }
+                else
+                {
+                    edits.Add((candidate.OpenBrace + 1,
+                        nl + "    " + marker + " if " + nativeCall +
+                        " { return false; }" + nl));
+                }
                 changed++;
             }
             if (edits.Count == 0) continue;
@@ -665,6 +686,7 @@ internal static class GenericNativeLocationSubscriberPass
                 method = x.Method,
                 owner = x.Owner,
                 siteCount = x.Count,
+                kind = x.Mode,
                 rule = LocationGroupRule,
                 state = File.ReadAllText(Path.Combine(SourceRoot(gameRoot),
                     x.RelativePath.Replace('/', Path.DirectorySeparatorChar)),
