@@ -1051,7 +1051,7 @@ try {
                 (Get-FileHash -LiteralPath $originalPath -Algorithm SHA256).Hash -eq
                 (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -or
                 (Get-Content -LiteralPath $file.FullName -Raw) -cnotmatch
-                'GCO-GENERIC:SYSTEM_READ_AFTER_ACTION_GUARD_V1') {
+                'GCO-GENERIC:(?:SYSTEM_READ_AFTER_ACTION_GUARD_V1|LOCAL_SYSTEM_HANDLE_REUSE_V1)') {
                 throw 'GCO_LATE_SYSTEM_READ_UNSAFE_SOURCE_OR_OVERLAY_COLLISION'
             }
             New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
