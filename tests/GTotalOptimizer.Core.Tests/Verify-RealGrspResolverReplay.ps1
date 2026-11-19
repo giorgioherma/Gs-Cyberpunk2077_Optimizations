@@ -191,7 +191,8 @@ try {
         $preview.applicableFileCount -lt 1 -or
         $preview.stagedFiles -ne $preview.applicableFileCount -or
         $preview.stagedFiles -ne $applied.Count -or
-        $preview.measuredOperatorEdgesInApplicableLoops -le 0 -or
+        $preview.sourceShapeDriven -ne $true -or
+        [int]$preview.transformedLoops -lt [int]$preview.stagedFiles -or
         $preview.compilerValidated -ne $false -or
         $preview.generationAuthorized -ne $false -or
         $preview.deployable -ne $false) {
@@ -219,9 +220,9 @@ try {
             throw 'GRSP_GENERIC_PREVIEW_OUTPUT_NOT_STRUCTURALLY_DISTINCT'
         }
     }
-    Write-Host ('PASS GRSP generic measured source preview: files=' +
-                $preview.stagedFiles + ' observedLoopOperatorEdges=' +
-                $preview.measuredOperatorEdgesInApplicableLoops +
+    Write-Host ('PASS GRSP generic source-admitted preview: files=' +
+                $preview.stagedFiles + ' transformedLoops=' +
+                $preview.transformedLoops +
                 ' compilerValidated=false deployable=false originalSourceUnchanged=true')
 
     # R4/R5 full installed-stack discovery uses GRSP's exact structural
@@ -1448,7 +1449,7 @@ try {
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
         [int]$orderedPlan.implementedRuleCount -ne 10 -or
-        [int]$orderedPlan.captureGatedExistingRules -ne 1 -or
+        [int]$orderedPlan.captureGatedExistingRules -ne 0 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
         [int]$orderedPlan.readyRuleCount -lt 1) {
@@ -1459,8 +1460,9 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 9 -or $deferred.Count -ne 5 -or
-        $gated.Count -ne 1 -or $gated[0].id -ne 'measured-cname-membership') {
+    if ($scheduled.Count -ne 10 -or $deferred.Count -ne 5 -or
+        $gated.Count -ne 0 -or
+        @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' }).Count -ne 1) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
     $nativePlanRow = @($scheduled | Where-Object { $_.id -eq 'native-player-location-predicate' })
@@ -1468,11 +1470,66 @@ try {
         throw 'GCO_REDSCRIPT_NATIVE_PREDICATE_RULE_MISSING'
     }
     $nativePlanned = [int]$nativePlanRow[0].eligible
+    $membershipRow = @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' })
+    $membershipPlanned = [int]$membershipRow[0].eligible
+    $membershipScan = Join-Path $work 'gco-cname-source-membership-scan.json'
+    & dotnet $dll scan-cname-membership --game $game --out $membershipScan
+    if ($LASTEXITCODE -ne 0 -or
+        !(Test-Path -LiteralPath $membershipScan -PathType Leaf)) {
+        throw 'GCO_CNAME_MEMBERSHIP_SOURCE_SCAN_FAILED'
+    }
+    $memberReport = Get-Content -LiteralPath $membershipScan -Raw | ConvertFrom-Json
+    if ([int]$memberReport.eligible -ne $membershipPlanned -or
+        $memberReport.sourceStackSha256 -ne $expectedSourceHash) {
+        throw 'GCO_CNAME_MEMBERSHIP_PLAN_SOURCE_SCAN_MISMATCH'
+    }
     $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
-            $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount + $nativePlanned)) {
+            $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount +
+            $membershipPlanned + $nativePlanned)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
+    }
+    # Independently produce the same source-admitted membership edits on the
+    # existing fully composed manual overlay. Unlike the old measured-only
+    # preview, no individual OperatorLess/AssignAdd capture row is required.
+    if ($membershipPlanned -gt 0) {
+        $memberManual = Join-Path $work 'gco-manual-cname-membership-composed'
+        & dotnet $dll preview-cname-membership --game $game --analysis $result --out $memberManual --base-preview $callbackFolder
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_CNAME_MEMBERSHIP_MANUAL_COMPOSITION_FAILED'
+        }
+        $memberManualScripts = Join-Path $memberManual 'r6/scripts'
+        $memberGeneratedFiles = @(Get-ChildItem -LiteralPath $memberManualScripts -Filter *.reds -File -Recurse)
+        if ($memberGeneratedFiles.Count -lt 1 -or
+            $memberGeneratedFiles.Count -gt $membershipPlanned) {
+            throw 'GCO_CNAME_MEMBERSHIP_MANUAL_FILE_COUNT_INVALID'
+        }
+        foreach ($memberFile in $memberGeneratedFiles) {
+            $rel = [IO.Path]::GetRelativePath($memberManualScripts, $memberFile.FullName)
+            $destination = Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+            $after = Get-Content -LiteralPath $memberFile.FullName -Raw
+            if ($rel.StartsWith('..') -or $rel.Contains(':') -or
+                !$after.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1',
+                                 [StringComparison]::Ordinal)) {
+                throw 'GCO_CNAME_MEMBERSHIP_MANUAL_OUTPUT_INVALID'
+            }
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $before = Get-Content -LiteralPath $destination -Raw
+                $markers = @([regex]::Matches($before,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                foreach ($marker in $markers) {
+                    if (!$after.Contains($marker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_CNAME_MEMBERSHIP_MANUAL_LOST_PREVIOUS_RULE'
+                    }
+                }
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $memberFile.FullName -Destination $destination -Force
+        }
     }
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
