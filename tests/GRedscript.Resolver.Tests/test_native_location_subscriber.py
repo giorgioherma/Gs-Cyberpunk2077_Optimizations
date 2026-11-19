@@ -233,6 +233,118 @@ private func AdditionalSite() -> SampleSite =
         self.assertIn("return this.siteStates[index] != 0;", adapter)
         self.assertIn("this.siteStates[i] = -1;", adapter)
 
+    def test_generic_location_groups_across_independent_mods(self):
+        # Neither module has a ScriptableSystem, Start/Stop or a direct
+        # native subscription. The ordinary Bool methods acquire a lazy
+        # shared FAR signal and preserve their original nearby work.
+        facilities = self.game / "r6/scripts/TownFacilities/Sites.reds"
+        facilities.parent.mkdir(parents=True)
+        facilities.write_text("""module Town.Facilities
+public abstract class FacilityIndex {
+  public static func IsNearby(player: ref<GameObject>) -> Bool {
+    let points = FacilityIndex.Spots();
+    return FacilityIndex.Close(player.GetWorldPosition(), points, 3.0);
+  }
+  public static func Spots() -> array<Vector4> {
+    let locations: array<Vector4> = [
+      new Vector4(1.0, 2.0, 3.0, 1.0),
+      new Vector4(5.0, 6.0, 7.0, 1.0)
+    ];
+    return locations;
+  }
+  private static func Close(pos: Vector4, spots: array<Vector4>, radius: Float) -> Bool {
+    for site in spots {
+      if Vector4.Distance(pos, site) < radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        quest = self.game / "r6/scripts/QuestLocations/FixedQuest.reds"
+        quest.parent.mkdir(parents=True)
+        quest.write_text("""module Quest.Location
+public abstract class QuestLocationChecks {
+  public static func IsAtMarker(player: ref<GameObject>) -> Bool {
+    let sites: array<Vector4> = [
+      new Vector4(-100.0, 32.0, 5.0, 1.0),
+      new Vector4(-104.0, 30.0, 6.0, 1.0)
+    ];
+    return QuestLocationChecks.InRange(player.GetWorldPosition(), sites, 75.0);
+  }
+  private static func InRange(pos: Vector4, spots: array<Vector4>, radius: Float) -> Bool {
+    for spot in spots {
+      if Vector4.Distance(pos, spot) <= radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        report = self.scan()
+        self.assertEqual(report["eligible"], 3)
+        self.assertEqual(report["locationGroupEligible"], 2)
+        groups = [c for c in report["candidates"]
+                  if c.get("rule") == "LOCATION_DEPENDENCY_FAR_V1"]
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(sorted(g["siteCount"] for g in groups), [2, 2])
+        self.assertNotEqual(groups[0]["owner"], groups[1]["owner"])
+        stage = self.cli("preview-native-location-subscribers",
+                         "--out", self.output,
+                         "--source-sha", report["sourceStackSha256"])
+        self.assertEqual(stage.returncode, 0, stage.stdout + stage.stderr)
+        for path in (facilities, quest):
+            staged = self.output / path.relative_to(self.game)
+            self.assertTrue(staged.is_file())
+            optimized = staged.read_text()
+            self.assertEqual(optimized.count(
+                "GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:"), 1)
+            self.assertIn(
+                "GCETNativeLocationGuard.DefinitelyFarPlayer", optimized)
+            self.assertIn("import GRedRuntime.*", optimized)
+            self.assertIn("Vector4.Distance(pos, ", optimized)
+            self.assertIn("return false;", optimized)
+            self.assertEqual(path.read_text().startswith("module "), True)
+
+        # A completed staged owner retains source/anchor identity and cannot
+        # be rewritten twice; a modified generated FAR guard is rejected.
+        for path in (facilities, quest):
+            staged = self.output / path.relative_to(self.game)
+            path.write_bytes(staged.read_bytes())
+        self.scan_path.unlink()
+        repeated = self.scan()
+        self.assertEqual(repeated["locationGroupAlreadyComplete"], 2)
+        self.assertEqual(repeated["locationGroupEligible"], 0)
+        facilities.write_text(facilities.read_text().replace(
+            "return false; }", "return true; }", 1))
+        self.scan_path.unlink()
+        result = self.cli("scan-native-location-subscribers",
+                          "--out", self.scan_path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("NATIVE_GROUP_GENERATED_GUARD_DRIFT",
+                      result.stdout + result.stderr)
+
+    def test_group_rejects_dynamic_or_unbounded_radius(self):
+        path = self.game / "r6/scripts/QuestLocations/Rules.reds"
+        path.parent.mkdir(parents=True)
+        path.write_text("""module Quest.Location
+public abstract class QuestRules {
+  public static func IsNear(player: ref<GameObject>) -> Bool {
+    let points: array<Vector4> = [
+      new Vector4(1.0, 2.0, 3.0, 1.0)
+    ];
+    return QuestRules.Close(player.GetWorldPosition(), points, 200.0);
+  }
+  private static func Close(pos: Vector4, spots: array<Vector4>, radius: Float) -> Bool {
+    for spot in spots {
+      if Vector4.Distance(pos, spot) < radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        report = self.scan()
+        self.assertEqual(report["locationGroupEligible"], 0)
+        self.assertEqual(report["eligible"], 1)
+
     def test_native_not_required_for_initial_scan(self):
         self.assertEqual(self.scan()["eligible"], 1)
         self.assertFalse((self.game / "red4ext").exists())
