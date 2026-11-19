@@ -77,16 +77,16 @@ public class IndependentAuthor extends IScriptable {
                          "gco.redscript.generation-plan.v1")
         self.assertEqual(doc["sourceFiles"], 2)
         self.assertEqual(doc["implementedRuleCount"], 10)
-        self.assertEqual(doc["captureGatedExistingRules"], 1)
+        self.assertEqual(doc["captureGatedExistingRules"], 0)
         self.assertEqual(doc["deferredExperimentalSystems"], 5)
         self.assertFalse(doc["productionZipAuthorized"])
         self.assertFalse(doc["gameplayValidated"])
-        active = doc["rules"][:9]
-        self.assertEqual([r["order"] for r in active], list(range(1, 10)))
+        active = doc["rules"][:10]
+        self.assertEqual([r["order"] for r in active], list(range(1, 11)))
         self.assertEqual([r["id"] for r in active], [
             "fixed-cname-index", "literal-action-filter",
             "angle-sort", "late-system-read",
-            "blackboard-definitions", "pure-constant-slices",
+            "source-cname-membership", "blackboard-definitions", "pure-constant-slices",
             "immutable-action-event-snapshot", "shared-player-signal",
             "native-player-location-predicate"
         ])
@@ -94,14 +94,13 @@ public class IndependentAuthor extends IScriptable {
             r["status"] == "READY_FOR_GENERATOR" for r in active))
         self.assertEqual(doc["eligibleSourceEdits"], sum(
             r["eligible"] for r in active))
-        self.assertEqual(doc["rules"][5]["eligible"], 2)
-        self.assertEqual(doc["rules"][5]["sourceFolders"], ["Consumer"])
-        capture_gated = doc["rules"][9]
-        self.assertEqual(capture_gated["id"], "measured-cname-membership")
-        self.assertEqual(capture_gated["status"], "CAPTURE_GATED_EXISTING_GENERATOR")
-        self.assertEqual(capture_gated["generator"], "preview-generic")
-        self.assertIsNone(capture_gated["order"])
-        self.assertIsNone(capture_gated["eligible"])
+        self.assertEqual(doc["rules"][6]["eligible"], 2)
+        self.assertEqual(doc["rules"][6]["sourceFolders"], ["Consumer"])
+        source_membership = doc["rules"][4]
+        self.assertEqual(source_membership["id"], "source-cname-membership")
+        self.assertEqual(source_membership["generator"], "preview-cname-membership")
+        self.assertEqual(source_membership["scanCommand"], "scan-cname-membership")
+        self.assertIsNotNone(source_membership["eligible"])
         for rule in doc["rules"][10:]:
             self.assertEqual(rule["status"], "NO_GENERATOR_YET")
             self.assertIsNone(rule["order"])
@@ -134,6 +133,77 @@ public class IndependentAuthor extends IScriptable {
         self.assertIn("GameInstance.GetQuestsSystem(gi).GetFact", value)
         self.assertEqual(self.consumer.read_bytes(), original)
         self.assertFalse(list(self.staged.rglob("*.zip")))
+
+
+    def test_source_proven_membership_does_not_require_matching_hot_loop_capture(self):
+        member = self.game / "r6/scripts/SecondAuthor/Membership.reds"
+        member.parent.mkdir(parents=True)
+        pristine = """module IndependentAuthor
+public class MembershipSource extends IScriptable {
+  public let names: array<CName>;
+  public func IsMember() -> Bool {
+    let found: Bool = false;
+    let needle: CName = n"Jump";
+    for entry in this.names {
+      if Equals(entry, needle) {
+        found = true;
+        break;
+      }
+    }
+    return found;
+  }
+}
+"""
+        member.write_text(pristine, encoding="utf8")
+        doc = self.make_plan()
+        membership = doc["rules"][4]
+        self.assertEqual(membership["eligible"], 1)
+        self.assertEqual(membership["sourceFolders"], ["SecondAuthor"])
+        # No per-callsite rows: the capture admission is still mandatory,
+        # but a never-executed safe loop is not excluded.
+        self.make_analysis(doc["sourceStackSha256"])
+        result = self.cli("stage-redscript-plan", "--game", self.game,
+                          "--plan", self.plan, "--analysis", self.analysis,
+                          "--out", self.staged)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        generated = (self.staged / "effective-preview/r6/scripts/"
+                     "SecondAuthor/Membership.reds").read_text(encoding="utf8")
+        self.assertIn("GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1", generated)
+        self.assertIn("found = ArrayContains(this.names, needle);", generated)
+        self.assertIn("return found;", generated)
+        self.assertEqual(member.read_text(encoding="utf8"), pristine)
+        # A generated overlay is structurally complete and idempotent.
+        member.write_text(generated, encoding="utf8")
+        second = self.root / "second-plan.json"
+        res = self.cli("plan-redscript", "--game", self.game, "--out", second)
+        self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
+        replan = json.loads(second.read_text(encoding="utf8"))
+        self.assertEqual(replan["rules"][4]["eligible"], 0)
+        self.assertEqual(replan["rules"][4]["alreadyComplete"], 1)
+
+    def test_membership_drift_does_not_enter_ordered_plan(self):
+        member = self.game / "r6/scripts/SecondAuthor/Membership.reds"
+        member.parent.mkdir(parents=True)
+        member.write_text("""module Check
+public class C extends IScriptable {
+  public let names: array<CName>;
+  public func Check() -> Bool {
+    let found: Bool = false;
+    let needle: CName = n"Jump";
+    for entry in this.names {
+      if Equals(entry, needle) {
+        found = false;
+        break;
+      }
+    }
+    return found;
+  }
+}
+""", encoding="utf8")
+        doc = self.make_plan()
+        self.assertEqual(doc["rules"][4]["eligible"], 0)
+        # No output rewrites for the source-unsafe case.
+        self.assertFalse(doc["rules"][4]["status"] == "READY_FOR_GENERATOR")
 
     def test_plan_order_cannot_be_modified_by_caller(self):
         doc = self.make_plan()
