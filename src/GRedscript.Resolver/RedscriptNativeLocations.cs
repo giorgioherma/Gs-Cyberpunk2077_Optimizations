@@ -85,6 +85,198 @@ internal static class RedscriptNativeLocations
     internal sealed record SourceSites(string RelativePath, int Owner,
         int SphereCount, int QuadCount);
 
+    // Source-driven location-dependency cohorts: a Bool helper which builds
+    // a static Vector4 set and immediately tests the supplied player's
+    // world position against that set. No mod name or callback class.
+    // One native owner per source METHOD, not per source file.
+    // Native radius is deliberately wider than admitted source thresholds:
+    // a stale FAR during regular player motion is the accepted experimental
+    // risk; game teleport/session invalidation remains mandatory.
+    private const float LocationGroupNativeRadius = 256f;
+    internal sealed record LocationDependencyGroup(
+        string RelativePath, string Method, int Owner, int Count,
+        string PlayerName, int OpenBrace,
+        IReadOnlyList<(float X, float Y, float Z)> Positions);
+
+    private static readonly Regex GroupConsumerMethod = new(
+        @"\b(?:public|private|protected)\s+static\s+func\s+" +
+        @"(?<method>[A-Za-z_]\w*)\s*\(\s*(?<player>[A-Za-z_]\w*)\s*:\s*" +
+        @"(?:ref|wref)\s*<\s*(?:GameObject|PlayerPuppet)\s*>\s*\)" +
+        @"\s*->\s*Bool\s*\{", RegexOptions.CultureInvariant);
+
+    private static readonly Regex GroupResult = new(
+        @"^\s*let\s+(?<list>[A-Za-z_]\w*)\s*" +
+        @"(?::\s*array\s*<\s*Vector4\s*>)?\s*=\s*" +
+        @"(?<initializer>\[[\s\S]*?\]|[A-Za-z_]\w*\.[A-Za-z_]\w*\s*\(\s*\))" +
+        @"\s*;\s*return\s+(?<checker>[A-Za-z_]\w*)\.(?<near>[A-Za-z_]\w*)" +
+        @"\s*\(\s*(?<player>[A-Za-z_]\w*)\.GetWorldPosition\s*\(\s*\)" +
+        @"\s*,\s*(?<arg>[A-Za-z_]\w*)\s*,\s*(?<radius>" + Number +
+        @")\s*\)\s*;\s*$", RegexOptions.CultureInvariant);
+
+    private static readonly Regex NumericVector = new(
+        @"(?:new\s+)?Vector4\s*\(\s*(?<x>" + Number + @")\s*,\s*" +
+        @"(?<y>" + Number + @")\s*,\s*(?<z>" + Number + @")\s*,\s*" +
+        @"(?<w>" + Number + @")\s*\)", RegexOptions.CultureInvariant);
+
+    private static int GroupBlockEnd(string source, int open)
+    {
+        int depth = 0;
+        foreach (var token in SourceAdmission.ReadTokens(source))
+        {
+            if (token.Start < open) continue;
+            if (token.Value == "{") depth++;
+            else if (token.Value == "}" && --depth == 0)
+                return token.Start;
+        }
+        return -1;
+    }
+
+    private static IReadOnlyList<(float X, float Y, float Z)>
+        ParseGroupVectors(string initializer)
+    {
+        if (!initializer.StartsWith('[', StringComparison.Ordinal) ||
+            !initializer.EndsWith(']', StringComparison.Ordinal)) return [];
+        string inner = initializer[1..^1];
+        var found = NumericVector.Matches(inner).Cast<Match>().ToArray();
+        if (found.Length == 0 || found.Length > 256) return [];
+        // Every list element must be a literal Vector4, with no runtime
+        // expression, mutable helper call or computed coordinate.
+        string leftover = NumericVector.Replace(inner, "");
+        if (leftover.Any(c => !char.IsWhiteSpace(c) && c != ','))
+            return [];
+        var points = new List<(float X, float Y, float Z)>();
+        foreach (var match in found)
+        {
+            float[] values = new float[4];
+            string[] axes = ["x", "y", "z", "w"];
+            for (int n = 0; n < 4; n++)
+                if (!float.TryParse(match.Groups[axes[n]].Value,
+                    NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out values[n]) || !float.IsFinite(values[n]))
+                    return [];
+            if (Math.Abs(values[0]) > 100000f ||
+                Math.Abs(values[1]) > 100000f ||
+                Math.Abs(values[2]) > 100000f) return [];
+            points.Add((values[0], values[1], values[2]));
+        }
+        return points;
+    }
+
+    // Uses existing SourceAdmission tokenization for method-body boundaries
+    // and comment/string masking. The same inventory drives BOTH generation
+    // and compiled native site mapping (never a corrective second pass).
+    internal static IReadOnlyList<LocationDependencyGroup>
+        LocationDependencyGroups(string relative, string source)
+    {
+        if (!source.Contains("GetWorldPosition", StringComparison.Ordinal) ||
+            !source.Contains("Vector4", StringComparison.Ordinal))
+            return [];
+        string masked = CodeOnly(source);
+        var result = new List<LocationDependencyGroup>();
+        foreach (Match method in GroupConsumerMethod.Matches(masked))
+        {
+            string methodName = method.Groups["method"].Value;
+            string player = method.Groups["player"].Value;
+            if (GroupConsumerMethod.Matches(masked).Cast<Match>()
+                .Count(x => x.Groups["method"].Value == methodName) != 1)
+                continue;
+            int open = method.Index + method.Length - 1;
+            int close = GroupBlockEnd(masked, open);
+            if (close <= open) continue;
+            string body = masked[(open + 1)..close];
+            // Existing generated FAR guards are inert for inventory and
+            // idempotence; the original author expression remains visible.
+            body = Regex.Replace(body,
+                @"^\s*if\s+GCETNativeLocationGuard\.DefinitelyFarPlayer" +
+                @"\s*\([^;]*\)\s*\{\s*return\s+false\s*;\s*\}\s*",
+                "", RegexOptions.CultureInvariant);
+            var matched = GroupResult.Match(body);
+            if (!matched.Success ||
+                matched.Groups["list"].Value != matched.Groups["arg"].Value ||
+                matched.Groups["player"].Value != player)
+                continue;
+            if (!float.TryParse(matched.Groups["radius"].Value,
+                NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float radius) || !float.IsFinite(radius) ||
+                radius <= 0f || radius > 128f) continue;
+
+            string nearMethod = matched.Groups["near"].Value;
+            // The helper may be named anything, but its local behavior must
+            // contain a distance check and a false result for no matches.
+            var near = Regex.Match(masked,
+                @"\b(?:public|private|protected)\s+static\s+func\s+" +
+                Regex.Escape(nearMethod) +
+                @"\s*\([^)]*\)\s*->\s*Bool\s*\{",
+                RegexOptions.CultureInvariant);
+            if (!near.Success) continue;
+            int nearClose = GroupBlockEnd(masked,
+                near.Index + near.Length - 1);
+            if (nearClose <= near.Index) continue;
+            string nearBody = masked[near.Index..(nearClose + 1)];
+            if (!nearBody.Contains("Vector4.Distance", StringComparison.Ordinal) ||
+                !Regex.IsMatch(nearBody, @"\breturn\s+false\s*;",
+                    RegexOptions.CultureInvariant)) continue;
+
+            string init = matched.Groups["initializer"].Value.Trim();
+            IReadOnlyList<(float X, float Y, float Z)> positions;
+            if (init.StartsWith('[', StringComparison.Ordinal))
+            {
+                positions = ParseGroupVectors(init);
+            }
+            else
+            {
+                var fac = Regex.Match(init,
+                    @"^(?<class>[A-Za-z_]\w*)\.(?<name>[A-Za-z_]\w*)" +
+                    @"\s*\(\s*\)$", RegexOptions.CultureInvariant);
+                if (!fac.Success) continue;
+                string name = fac.Groups["name"].Value;
+                var factories = Regex.Matches(masked,
+                    @"\b(?:public|private|protected)\s+static\s+func\s+" +
+                    Regex.Escape(name) +
+                    @"\s*\(\s*\)\s*->\s*array\s*<\s*Vector4\s*>\s*\{",
+                    RegexOptions.CultureInvariant);
+                if (factories.Count != 1) continue;
+                Match f = factories[0];
+                int end = GroupBlockEnd(masked, f.Index + f.Length - 1);
+                if (end <= f.Index) continue;
+                string factoryBody = masked[(f.Index + f.Length)..end];
+                var literal = Regex.Match(factoryBody,
+                    @"^\s*let\s+(?<var>[A-Za-z_]\w*)\s*" +
+                    @"(?::\s*array\s*<\s*Vector4\s*>)?\s*=\s*" +
+                    @"(?<array>\[[\s\S]*?\])\s*;\s*return\s+" +
+                    @"(?<returned>[A-Za-z_]\w*)\s*;\s*$",
+                    RegexOptions.CultureInvariant);
+                positions = literal.Success &&
+                    literal.Groups["var"].Value == literal.Groups["returned"].Value
+                    ? ParseGroupVectors(literal.Groups["array"].Value) : [];
+            }
+            if (positions.Count == 0) continue;
+            int owner = Owner(relative + "#location:" + methodName);
+            result.Add(new(relative, methodName, owner,
+                positions.Count, player, open, positions));
+        }
+        return result;
+    }
+
+    internal static IReadOnlyList<LocationDependencyGroup>
+        LocationDependencyGroups(string gameRoot)
+    {
+        var root = Path.Combine(Path.GetFullPath(gameRoot), "r6", "scripts");
+        var result = new List<LocationDependencyGroup>();
+        foreach (string file in Directory.EnumerateFiles(root, "*.reds",
+            SearchOption.AllDirectories).OrderBy(x => x,
+            StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (relative.StartsWith("G-RedRuntime/",
+                StringComparison.OrdinalIgnoreCase)) continue;
+            result.AddRange(LocationDependencyGroups(relative,
+                File.ReadAllText(file, Encoding.UTF8)));
+        }
+        return result;
+    }
+
+
     internal static IReadOnlyList<SourceSites> Inventory(string gameRoot)
     {
         var scripts = Path.Combine(Path.GetFullPath(gameRoot), "r6", "scripts");
@@ -221,6 +413,21 @@ internal static class RedscriptNativeLocations
                     sites.Add(new(owner, cx, cy, 0f, radius, true));
                 }
             }
+        }
+        // Include only source-matched location-dependent Bool consumers.
+        // The same SOURCE recognition drives their generated FAR guards.
+        // A wide native 256m radius is used only when the original authored
+        // proximity threshold is <=128m.
+        foreach (var group in LocationDependencyGroups(game))
+        {
+            if (owners.TryGetValue(group.Owner, out string? previous) &&
+                previous != group.RelativePath)
+                throw new InvalidDataException(
+                    "SHARED_NATIVE_REDSCRIPT_OWNER_COLLISION");
+            owners[group.Owner] = group.RelativePath;
+            foreach (var point in group.Positions)
+                sites.Add(new(group.Owner, point.X, point.Y, point.Z,
+                    LocationGroupNativeRadius, false));
         }
         if (sites.Count > 100000)
             throw new InvalidDataException("SHARED_NATIVE_REDSCRIPT_SITE_LIMIT");
