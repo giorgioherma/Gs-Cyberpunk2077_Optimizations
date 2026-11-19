@@ -50,6 +50,17 @@ public class Consumer extends ScriptableSystem {
     let wronglyNamed = player.GetWorldPosition();
   }
 
+  public func CompareNpc(npc: ref<NPCPuppet>) -> Bool {
+    let here = GetPlayer(GetGameInstance()).GetWorldPosition();
+    let there = npc.GetWorldPosition();
+    return Vector4.Distance(here, there) < 9.0;
+  }
+
+  public func CompareTwoNpcs(npc: ref<NPCPuppet>, other: ref<NPCPuppet>) -> Bool {
+    return Vector4.Distance(npc.GetWorldPosition(),
+                            other.GetWorldPosition()) < 9.0;
+  }
+
   public func Parameter(possiblePlayer: ref<PlayerPuppet>,
                         someone: ref<GameObject>) {
     let a = possiblePlayer.GetWorldPosition();
@@ -123,13 +134,20 @@ class PlayerPositionDependencyTests(unittest.TestCase):
         rows = report["callsites"]
         # Exact lexer count: comments/strings containing GetWorldPosition
         # and non-call identifiers must not inflate source coverage.
-        self.assertEqual(len(rows), 11)
+        self.assertEqual(len(rows), 15)
         self.assertEqual(len(rows), report["worldPositionCallsites"])
-        self.assertEqual(report["distanceCallsites"], 2)
+        self.assertEqual(report["distanceCallsites"], 4)
         self.assertEqual(report["distanceSquaredCallsites"], 0)
-        self.assertEqual(len(report["geometries"]), 2)
+        self.assertEqual(len(report["geometries"]), 4)
         self.assertTrue(all(not x["generationAuthorized"]
                             for x in report["geometries"]))
+        geom = report["geometries"]
+        self.assertTrue(any(x["positionDependency"] == "PLAYER_AND_LITERAL_POSITION"
+                            and x["method"] == "HasPlayerDistance" for x in geom))
+        self.assertTrue(any(x["positionDependency"] == "PLAYER_AND_DYNAMIC_ENTITY"
+                            and x["method"] == "CompareNpc" for x in geom))
+        self.assertTrue(any(x["positionDependency"] == "NONPLAYER_ENTITY_DISTANCE"
+                            and x["method"] == "CompareTwoNpcs" for x in geom))
         locals_ = [r for r in rows if r["positionOrigin"] == "LOCAL_PLAYER"]
         self.assertGreaterEqual(len(locals_), 2)
         self.assertTrue(any(r["receiver"] == "<call-result>" for r in locals_))
