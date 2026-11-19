@@ -263,6 +263,7 @@ internal static class RedscriptNativeLocations
     {
         var root = Path.Combine(Path.GetFullPath(gameRoot), "r6", "scripts");
         var result = new List<LocationDependencyGroup>();
+        if (!Directory.Exists(root)) return result;
         foreach (string file in Directory.EnumerateFiles(root, "*.reds",
             SearchOption.AllDirectories).OrderBy(x => x,
             StringComparer.OrdinalIgnoreCase))
