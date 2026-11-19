@@ -69,6 +69,10 @@ public static class RedscriptGenerationPlan
             "scan-late-system-read", "preview-late-system-read",
             "eligible", "alreadyComplete", "candidates",
             "Moved service lookup may change exceptional edge cases"),
+        ("source-cname-membership", "D", "CNAME_ARRAY_MEMBERSHIP_V1",
+            "scan-cname-membership", "preview-cname-membership",
+            "eligible", "alreadyComplete", "candidates",
+            "Typed CName ArrayContains equivalence or unusual source ownership"),
         ("blackboard-definitions", "C", "BLACKBOARD_DEFINITION_STATEMENT_AND_SEQUENCE_V1",
             "scan-blackboard-defs", "preview-blackboard-defs",
             "eligible", "alreadyComplete", "candidates",
@@ -91,12 +95,6 @@ public static class RedscriptGenerationPlan
             "eligible", "alreadyComplete", "candidates",
             "Native FAR state may lag teleport/rapid movement; original check executes on NEAR/UNKNOWN")
     ];
-
-    // This generator already exists but depends on capture-matched per-loop
-    // native evidence. It cannot be scheduled from a SOURCE-ONLY plan.
-    // Inventory it explicitly rather than silently claiming it is absent or
-    // inventing an eligible count.
-    private const string CaptureGatedId = "measured-cname-membership";
 
     // Explicit inventory for the approved A-E experimental systems.
     // An existing narrower rule does not mean that the system is implemented.
@@ -146,6 +144,8 @@ public static class RedscriptGenerationPlan
                         GenericLateSystemReadPass.Scan(game, report); break;
                     case "angle-sort":
                         GenericAngleSortPass.Scan(game, report); break;
+                    case "source-cname-membership":
+                        GenericMembershipPass.Scan(game, report); break;
                     case "blackboard-definitions":
                         GenericBlackboardDefinitionPass.Scan(game, report); break;
                     case "pure-constant-slices":
@@ -197,11 +197,6 @@ public static class RedscriptGenerationPlan
                     complete > 0 ? "ALREADY_COMPLETE" : "NOT_APPLICABLE",
                     def.Risk, folders.ToArray()));
             }
-            rows.Add(new(null, CaptureGatedId, "D",
-                GenericMembershipPass.Rule, "scan-generic",
-                "preview-generic", null, null, "CAPTURE_GATED_EXISTING_GENERATOR",
-                "Current loop/native-call evidence may not match source; keep its own measured source gate",
-                []));
             foreach (var deferred in Deferred)
                 rows.Add(new(null, deferred.Id, deferred.System,
                     deferred.Id.ToUpperInvariant().Replace('-', '_'),
@@ -213,10 +208,10 @@ public static class RedscriptGenerationPlan
                 throw new InvalidDataException("REDSCRIPT_PLAN_CHANGED_DURING_SCAN");
             var document = new Document(Schema, sourceHash,
                 admission.InspectedFileCount, true, false, false,
-                Implemented.Length + 1,
+                Implemented.Length,
                 rows.Count(x => x.Status == "READY_FOR_GENERATOR"),
                 rows.Sum(x => x.Eligible ?? 0),
-                Deferred.Length, 1, rows.ToArray());
+                Deferred.Length, 0, rows.ToArray());
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             File.WriteAllText(output, JsonSerializer.Serialize(document,
                 JsonOptions), new UTF8Encoding(false));
@@ -248,10 +243,10 @@ public static class RedscriptGenerationPlan
         if (document.SchemaVersion != Schema ||
             !document.BasedOnCurrentInstalledSource ||
             document.ProductionZipAuthorized ||
-            document.Rules.Length != Implemented.Length + 1 + Deferred.Length ||
-            document.ImplementedRuleCount != Implemented.Length + 1 ||
+            document.Rules.Length != Implemented.Length + Deferred.Length ||
+            document.ImplementedRuleCount != Implemented.Length ||
             document.DeferredExperimentalSystems != Deferred.Length ||
-            document.CaptureGatedExistingRules != 1 ||
+            document.CaptureGatedExistingRules != 0 ||
             !string.Equals(document.SourceStackSha256,
                 admission.SourceStackSha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("REDSCRIPT_PLAN_STALE_OR_TAMPERED");
@@ -274,17 +269,9 @@ public static class RedscriptGenerationPlan
                     "ALREADY_COMPLETE" : "NOT_APPLICABLE"))
                 throw new InvalidDataException("REDSCRIPT_PLAN_COMMAND_OR_ORDER_DRIFT");
         }
-        var captureGated = document.Rules[Implemented.Length];
-        if (captureGated.Id != CaptureGatedId ||
-            captureGated.Rule != GenericMembershipPass.Rule ||
-            captureGated.Generator != "preview-generic" ||
-            captureGated.Status != "CAPTURE_GATED_EXISTING_GENERATOR" ||
-            captureGated.Order is not null ||
-            captureGated.Eligible is not null)
-            throw new InvalidDataException("REDSCRIPT_PLAN_CAPTURE_GATED_RULE_DRIFT");
         for (int i = 0; i < Deferred.Length; i++)
         {
-            var item = document.Rules[Implemented.Length + 1 + i];
+            var item = document.Rules[Implemented.Length + i];
             if (item.Id != Deferred[i].Id ||
                 item.System != Deferred[i].System || item.Order is not null ||
                 item.Generator is not null || item.Eligible is not null ||
@@ -331,6 +318,9 @@ public static class RedscriptGenerationPlan
                     GenericLateSystemReadPass.Preview(game, analysis, next),
                 "angle-sort" =>
                     GenericAngleSortPass.Preview(game, analysis, next),
+                "source-cname-membership" =>
+                    GenericMembershipPass.PreviewOrdered(game, analysis,
+                        next, basePreview),
                 "blackboard-definitions" =>
                     GenericBlackboardDefinitionPass.Preview(game, analysis,
                         next, basePreview),
@@ -383,7 +373,8 @@ public static class RedscriptGenerationPlan
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
-                    item.Id is not ("blackboard-definitions" or
+                    item.Id is not ("source-cname-membership" or
+                        "blackboard-definitions" or
                         "pure-constant-slices" or "immutable-action-event-snapshot" or
                         "shared-player-signal" or
                         "native-player-location-predicate"))
