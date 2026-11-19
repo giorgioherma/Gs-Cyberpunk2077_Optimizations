@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-19 — CName membership source admission instead of per-loop capture gate (CI #799 in progress)
+
+- **Decision:** every normal GCO Analyze/Generate already requires a sealed, completed capture and exact live source-stack fingerprint. The extra restriction that an individual `CNAME_ARRAY_MEMBERSHIP_V1` loop must have recorded GRSP `OperatorLess` AND `OperatorAssignAdd` edges was unnecessary. Source structure, not whether a playthrough triggered that loop, now admits the original narrowly typed `array<CName>` / pure `Equals` / Bool flag transform. No arbitrary loop/general collection expansion.
+- **Owner implementation:** the ORIGINAL `GenericMembershipPass` now has one shared source-only matcher-driven `Scan` / `PreviewOrdered` / legacy `preview-generic` implementation, with existing marker/refusal and original-source preservation; optional `scan-generic` GRSP evidence remains available for **priority ranking** only. It is the **tenth source-ordered rule** in `RedscriptGenerationPlan` (previously nine plus one capture-gated standalone). `captureGatedExistingRules=0`; generation still requires sealed analysis evidence matching the source-stack SHA, and remains preview-only/no game writes.
+- **Contracts:** generated-source/idempotence/partial/unsafe-loop tests in the existing test suites; independent real-stack preview and ordered-source parity plus official SCC remain required. [CI #799](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44631147662) pending terminal conclusion at documentation update. No gameplay/performance proof or production ZIP.
+
+
 ## 2026-11-19 — full generic-only CET→REDscript source opportunity audit (research; no source generator changes)
 
 - **Scope:** The user requests every plausible safe **cross-mod generic** opportunity, including small mechanical gains, explicitly excluding mod-specific semantic rules and any further native-location pattern expansion. Independently inspected CET source/transfer ledger, current GCO generation plan, G-REDruntime, 2,319 original installed `.reds` sources and the 384.517s sealed GRSP capture.
