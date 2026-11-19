@@ -342,6 +342,41 @@ try {
         ' helperForwarders=' + $semantic.callbacksWithForwardedHelpers +
         ' noUnprovenRouting=true noGeneratedFiles=true')
 
+    # One canonical, source-wide position dependency inventory before
+    # native proximity admission. No mod list, no extra parser, no output
+    # paths published from this sealed runner.
+    $positionReport = Join-Path $work 'gco-player-position-dependencies.json'
+    $positionLog = Join-Path $work 'gco-player-position-dependencies.log'
+    & dotnet $dll scan-player-position --game $game --out $positionReport *> $positionLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $positionReport -PathType Leaf)) {
+        throw 'GCO_PLAYER_POSITION_SOURCE_GRAPH_FAILED'
+    }
+    $position = Get-Content -LiteralPath $positionReport -Raw | ConvertFrom-Json -Depth 80
+    $classified = [int]$position.categoryCounts.LOCAL_PLAYER +
+        [int]$position.categoryCounts.NPC + [int]$position.categoryCounts.VEHICLE +
+        [int]$position.categoryCounts.OTHER_ENTITY + [int]$position.categoryCounts.UNKNOWN +
+        [int]$position.categoryCounts.MIXED
+    if ($position.schemaVersion -ne 'gco.redscript.player-position-dependencies.v1' -or
+        $position.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$position.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        [int]$position.worldPositionCallsites -lt 50 -or
+        [int]$position.worldPositionCallsites -ne @($position.callsites).Count -or
+        $classified -ne [int]$position.worldPositionCallsites -or
+        $position.generationAuthorized -ne $false -or
+        $position.originalSourcesModified -ne $false -or
+        $position.productionZipAuthorized -ne $false) {
+        throw 'GCO_PLAYER_POSITION_SOURCE_GRAPH_CONTRACT_FAILED'
+    }
+    Write-Host ('PASS GCO player position source graph: worldPositionReads=' +
+        $position.worldPositionCallsites + ' provenLocal=' +
+        $position.provenLocalPlayerCallsites + ' npc=' +
+        [int]$position.categoryCounts.NPC + ' vehicle=' +
+        [int]$position.categoryCounts.VEHICLE + ' unknown=' +
+        [int]$position.categoryCounts.UNKNOWN + ' mixed=' +
+        [int]$position.categoryCounts.MIXED + ' indirectConsumers=' +
+        $position.indirectConsumerMethods +
+        ' sourceReadOnly=true generated=0 capturedFrequencyClaimed=false')
+
     # R5: full-source read-only recurring refresh/maintenance work triage.
     # Reuses the existing callback owner parser and same source-verified
     # outgoing callsite join. Never mistakes summed edges for callback
