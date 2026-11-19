@@ -121,7 +121,9 @@ class PlayerPositionDependencyTests(unittest.TestCase):
         self.assertFalse(report["productionZipAuthorized"])
         self.assertTrue(report["originalSourcesModified"] is False)
         rows = report["callsites"]
-        self.assertGreaterEqual(len(rows), 9)
+        # Exact lexer count: comments/strings containing GetWorldPosition
+        # and non-call identifiers must not inflate source coverage.
+        self.assertEqual(len(rows), 11)
         self.assertEqual(len(rows), report["worldPositionCallsites"])
         self.assertEqual(report["distanceCallsites"], 2)
         self.assertEqual(report["distanceSquaredCallsites"], 0)
