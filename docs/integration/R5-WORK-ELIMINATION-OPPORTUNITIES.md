@@ -1,5 +1,12 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-19 — shared player-position dependency index, not another one-mod native patch
+
+GCO now implements `scan-player-position` in `CallbackSemanticResolver.PlayerPosition.cs` using the already authoritative source lexer and method spans, with strict source-hash/isolated-output safety. First real stack [CI #767 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44584144000): 323 active world-position reads in 2,319 files, of which 75 proven local player / 42 NPC / 17 vehicle / 188 unknown / 1 mixed. The reverse source-defined helper graph reaches 284 methods, NOT 284 proven rewrites; generic read-only analysis must not manufacture native FAR consumers from those numbers. Later development also inventories all Distance/Squared callsites and forwards operand provenance, with dedicated fixture regressions; verify newer CI before declaring those extended outputs accepted.
+
+**Binding rule:** separate (1) source-origin discovery, (2) actual original-operation/operand analysis, (3) source-owned and measured generation. Feed this shared index into existing generic passes only after freshness, mutability, caller closure and output effect proof. Source-proven local positions are candidates for shared *current* reads; dynamic NPC/vehicle geometry must still read its live target, and source-proven static anchors may use CET native FAR only with original fallback. Unknown and mixed remain visible, not optimized. Continue from the existing nine-pass ordered plan and shared G-REDruntime provider. No new capture or release ZIP is requested for this milestone.
+
+
 ## 2026-11-17 — First shared-work source transforms integrated
 
 Existing GCO Resolver generation plan now lists **8 existing generator families: 7 ordered, 1 capture-gated**. New generic ACTION_EVENT_SNAPSHOT_V1 reuses stable per-callback action name/type reads, not engine registration changes. **CI #671 PASS**: 33 reducible getter reads in five real files, 107 total eligible edits in the ordered plan, 48 staged .reds, full private SCC and GCO bundled-runtime package PASS. https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44178965800
