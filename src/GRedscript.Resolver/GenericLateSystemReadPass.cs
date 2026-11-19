@@ -81,13 +81,18 @@ internal static class GenericLateSystemReadPass
         return new(admission.InspectedFileCount, eligible, complete);
     }
 
-    internal static int Preview(string gameRoot, string analysisFile, string outputRoot)
+    internal static int Preview(string gameRoot, string analysisFile,
+        string outputRoot, string? basePreview = null)
     {
         var game = Path.GetFullPath(gameRoot);
         var analysis = Path.GetFullPath(analysisFile);
         var output = Path.GetFullPath(outputRoot);
         if (Within(output, game) || File.Exists(output) ||
-            (Directory.Exists(output) && Directory.EnumerateFileSystemEntries(output).Any()))
+            (Directory.Exists(output) && Directory.EnumerateFileSystemEntries(output).Any()) ||
+            (basePreview is not null &&
+                (Within(Path.GetFullPath(basePreview), game) ||
+                 Within(Path.GetFullPath(basePreview), output) ||
+                 Within(output, Path.GetFullPath(basePreview)))))
             throw new InvalidDataException("LATE_SYSTEM_READ_PREVIEW_OUTPUT_NOT_ISOLATED");
         if (!File.Exists(analysis))
             throw new InvalidDataException("LATE_SYSTEM_READ_VERIFIED_CAPTURE_REQUIRED");
@@ -109,11 +114,34 @@ internal static class GenericLateSystemReadPass
         int edits = 0;
         foreach (var file in Files(game, admission))
         {
-            var selected = Examine(file.Text, file.Tokens);
-            var reusable = GenericLocalSystemReadReuse.Examine(file.Text, file.Tokens);
-            if (selected.Eligible.Count == 0 && reusable.Candidates.Count == 0)
+            var sourceSelection = Examine(file.Text, file.Tokens);
+            var sourceReuse = GenericLocalSystemReadReuse.Examine(
+                file.Text, file.Tokens);
+            if (sourceSelection.Eligible.Count == 0 &&
+                sourceReuse.Candidates.Count == 0)
                 continue;
             string changed = file.Text;
+            if (basePreview is not null)
+            {
+                string prior = Path.GetFullPath(Path.Combine(basePreview,
+                    "r6", "scripts",
+                    file.Relative.Replace('/', Path.DirectorySeparatorChar)));
+                if (!Within(prior, basePreview))
+                    throw new InvalidDataException(
+                        "LATE_SYSTEM_READ_UNSAFE_BASE_PREVIEW");
+                if (File.Exists(prior))
+                    changed = File.ReadAllText(prior, Encoding.UTF8);
+            }
+            // Previous ordered passes may already have modified this same
+            // owner file. Re-examine the effective bytes; do NOT replace an
+            // earlier generated file with an original-source rewrite.
+            var tokens = SourceAdmission.ReadTokens(changed);
+            var selected = Examine(changed, tokens);
+            var reusable = GenericLocalSystemReadReuse.Examine(changed, tokens);
+            if (selected.Eligible.Count != sourceSelection.Eligible.Count ||
+                reusable.Candidates.Count != sourceReuse.Candidates.Count)
+                throw new InvalidDataException(
+                    "LATE_SYSTEM_READ_COMPOSITION_CANDIDATE_DRIFT");
             foreach (var edit in selected.Eligible.OrderByDescending(e => e.Begin))
             {
                 string nl = changed.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
