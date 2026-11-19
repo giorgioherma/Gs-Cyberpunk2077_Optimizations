@@ -732,12 +732,15 @@ internal static class Program
 
     private static int RunLateSystemPreview(Dictionary<string, string> options)
     {
-        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out")))
-            throw new ArgumentException("Late-system preview accepts --game, --analysis, --out");
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+            "--out" or "--base-preview")))
+            throw new ArgumentException("Late-system preview accepts --game, --analysis, --out, --base-preview");
         int count = GenericLateSystemReadPass.Preview(
             Path.GetFullPath(Required(options, "--game")),
             Path.GetFullPath(Required(options, "--analysis")),
-            Path.GetFullPath(Required(options, "--out")));
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var prior)
+                ? Path.GetFullPath(prior) : null);
         Console.WriteLine("GCO late system-read preview: transformed=" + count +
             " compilerValidated=false gameplayValidated=false deployable=false");
         return 0;
