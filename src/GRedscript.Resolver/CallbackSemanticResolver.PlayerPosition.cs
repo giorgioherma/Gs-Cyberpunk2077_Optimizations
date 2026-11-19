@@ -27,7 +27,8 @@ internal static partial class CallbackSemanticResolver
         string Lifetime, string Operation);
 
     private sealed record PositionLink(MethodSource Caller,
-        MethodSource Callee, int Line, string Receiver);
+        MethodSource Callee, int Line, string Receiver,
+        bool DirectPositionArgument, bool ProvenLocalPositionArgument);
 
     private static readonly PositionOrigin DirectLocal =
         new("LOCAL_PLAYER", "SOURCE_LOCAL_PLAYER_GETTER", true);
@@ -83,12 +84,18 @@ internal static partial class CallbackSemanticResolver
         // Interprocedural CALL paths are evidence of potential downstream
         // consumers, never proof that an arbitrary argument is the player.
         // Resolve only a uniquely named, source-defined receiver class.
-        var links = PositionHelperLinks(methods, byOwnerMethod, fieldTypes);
+        var links = PositionHelperLinks(methods, byOwnerMethod, fieldTypes,
+            sites);
+        var forward = links.GroupBy(e => e.Caller.Identity,
+            StringComparer.Ordinal).ToDictionary(g => g.Key,
+            g => g.ToArray(), StringComparer.Ordinal);
         var reverse = links.GroupBy(e => e.Callee.Identity,
             StringComparer.Ordinal).ToDictionary(g => g.Key,
             g => g.ToArray(), StringComparer.Ordinal);
         var upstream = new Dictionary<string, object[]>(StringComparer.Ordinal);
+        var downstream = new Dictionary<string, object[]>(StringComparer.Ordinal);
         var reachable = new HashSet<string>(StringComparer.Ordinal);
+        var valueForwarded = new HashSet<string>(StringComparer.Ordinal);
         foreach (var method in sites.Where(s => s.Method is not null)
                      .Select(s => s.Method!).DistinctBy(m => m.Identity))
         {
@@ -122,6 +129,40 @@ internal static partial class CallbackSemanticResolver
                 }
             }
             upstream[method.Identity] = found.ToArray();
+            var outgoing = new List<object>();
+            var visitedCallees = new HashSet<string>(StringComparer.Ordinal) {
+                method.Identity
+            };
+            var calleeQueue = new Queue<(MethodSource Node, int Depth, bool Flow)>();
+            calleeQueue.Enqueue((method, 0, true));
+            while (calleeQueue.Count > 0 && visitedCallees.Count < 80)
+            {
+                var (node, depth, flow) = calleeQueue.Dequeue();
+                if (depth >= 3 || !forward.TryGetValue(node.Identity, out var edges))
+                    continue;
+                foreach (var link in edges)
+                {
+                    if (!visitedCallees.Add(link.Callee.Identity)) continue;
+                    bool directFlow = flow && link.ProvenLocalPositionArgument;
+                    if (directFlow) valueForwarded.Add(link.Callee.Identity);
+                    outgoing.Add(new {
+                        path = link.Callee.File.Relative,
+                        owner = link.Callee.Owner,
+                        method = link.Callee.Name,
+                        callsiteLine = link.Line,
+                        depth = depth + 1,
+                        operation = PositionOperation(link.Callee),
+                        directPositionArgument = link.DirectPositionArgument,
+                        provenLocalPositionArgument = directFlow,
+                        // A call edge does not prove consumption of the
+                        // passed parameter or safe downstream replacement.
+                        parameterUseClosureProven = false
+                    });
+                    if (outgoing.Count >= 64) break;
+                    calleeQueue.Enqueue((link.Callee, depth + 1, directFlow));
+                }
+            }
+            downstream[method.Identity] = outgoing.ToArray();
         }
 
         var sorted = sites.OrderBy(s => s.File.Relative, StringComparer.Ordinal)
@@ -143,6 +184,7 @@ internal static partial class CallbackSemanticResolver
             categoryCounts = counts,
             provenLocalPlayerCallsites = local,
             indirectConsumerMethods = summary.IndirectConsumers,
+            downstreamGeometryWithDirectPositionArguments = valueForwarded.Count,
             sourceOnly = true,
             captureNeededForDiscovery = false,
             generationAuthorized = false,
@@ -163,6 +205,10 @@ internal static partial class CallbackSemanticResolver
                 playerTypeHint = s.Origin.PlayerTypeHint,
                 lifetime = s.Lifetime,
                 operation = s.Operation,
+                operationIsMethodContextNotVerifiedOperandUse = true,
+                downstreamHelpers = s.Method is not null &&
+                    downstream.TryGetValue(s.Method.Identity, out var callees)
+                        ? callees : [],
                 strategy = s.Origin.LocalPlayerProven
                     ? s.Operation is "DISTANCE" or "DISTANCE_SQUARED"
                         ? "PLAYER_POSITION_REUSE_CANDIDATE"
@@ -176,6 +222,7 @@ internal static partial class CallbackSemanticResolver
             helperGraph = new {
                 resolvedEdges = links.Count,
                 indirectConsumerMethods = reachable.Count,
+                downstreamMethodsWithDirectPositionArguments = valueForwarded.Count,
                 maxDepth = 3,
                 maxCallersPerDirectMethod = 64,
                 dynamicReceiversAndUnknownImportsAreNotAssumed = true,
@@ -447,9 +494,13 @@ internal static partial class CallbackSemanticResolver
     private static List<PositionLink> PositionHelperLinks(
         IReadOnlyList<MethodSource> methods,
         IReadOnlyDictionary<string, MethodSource[]> byOwnerMethod,
-        IReadOnlyDictionary<string, string> fields)
+        IReadOnlyDictionary<string, string> fields,
+        IReadOnlyList<PositionSite> sites)
     {
         var links = new List<PositionLink>();
+        var siteIndex = sites.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
         foreach (var caller in methods)
         {
             var t = caller.File.Tokens;
@@ -495,7 +546,13 @@ internal static partial class CallbackSemanticResolver
                     candidates.Length == 1 ? candidates[0] : null;
                 if (target is null || target.Identity == caller.Identity)
                     continue;
-                links.Add(new PositionLink(caller, target, t[i].Line, receiver));
+                int end = Match(t, i + 1, "(", ")");
+                siteIndex.TryGetValue(caller.Identity, out var directSites);
+                var arguments = directSites?.Where(site =>
+                    site.At > i + 1 && site.At < end).ToArray() ?? [];
+                links.Add(new PositionLink(caller, target, t[i].Line,
+                    receiver, arguments.Length > 0,
+                    arguments.Any(site => site.Origin.LocalPlayerProven)));
             }
         }
         return links.DistinctBy(x => x.Caller.Identity + "\0" +
