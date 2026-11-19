@@ -54,7 +54,8 @@ internal static class GenericLocalSystemReadReuse
             if (indent.Any(x => x != ' ' && x != '\t'))
                 throw new InvalidDataException("LOCAL_SYSTEM_REUSE_INDENT_UNPROVEN");
             string nl = source.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-            string inserted = Marker + group.Variable + nl + indent +
+            string inserted = Marker + group.Variable + ":" + group.Name +
+                ":" + group.Arg + nl + indent +
                 "let " + group.Variable + " = " + group.Declaration + ";" +
                 nl + indent;
             updated = updated[..group.Start] + inserted + updated[group.Start..];
@@ -212,10 +213,16 @@ internal static class GenericLocalSystemReadReuse
             int lineEnd = source.IndexOf('\n', at + Marker.Length);
             if (lineEnd < 0)
                 throw new InvalidDataException("LOCAL_SYSTEM_REUSE_PARTIAL_MARKER");
-            string variable = source[(at + Marker.Length)..lineEnd].Trim();
+            string[] annotation = source[(at + Marker.Length)..lineEnd]
+                .Trim().Split(':');
+            if (annotation.Length != 3)
+                throw new InvalidDataException("LOCAL_SYSTEM_REUSE_PARTIAL_MARKER");
+            string variable = annotation[0], getter = annotation[1],
+                argument = annotation[2];
             if (!variable.StartsWith("__gcoLocalSystemL",
                     StringComparison.Ordinal) ||
-                !variable.All(c => char.IsLetterOrDigit(c) || c == '_'))
+                !variable.All(c => char.IsLetterOrDigit(c) || c == '_') ||
+                !IsSystemGetter(getter) || !IsIdentifier(argument))
                 throw new InvalidDataException("LOCAL_SYSTEM_REUSE_PARTIAL_MARKER");
 
             int definition = -1;
@@ -230,9 +237,9 @@ internal static class GenericLocalSystemReadReuse
                 tokens[definition + 2].Value != "=" ||
                 tokens[definition + 3].Value != "GameInstance" ||
                 tokens[definition + 4].Value != "." ||
-                !IsSystemGetter(tokens[definition + 5].Value) ||
+                tokens[definition + 5].Value != getter ||
                 tokens[definition + 6].Value != "(" ||
-                !IsIdentifier(tokens[definition + 7].Value) ||
+                tokens[definition + 7].Value != argument ||
                 tokens[definition + 8].Value != ")" ||
                 tokens[definition + 9].Value != ";" ||
                 !string.IsNullOrWhiteSpace(source[
