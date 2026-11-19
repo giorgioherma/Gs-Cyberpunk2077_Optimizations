@@ -607,7 +607,8 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertEqual('CNAME_ARRAY_MEMBERSHIP_V1', plan['rule'])
         self.assertEqual(1, plan['stagedFiles'])
         self.assertEqual(1, plan['applicableFileCount'])
-        self.assertEqual(300, plan['measuredOperatorEdgesInApplicableLoops'])
+        self.assertEqual(0, plan['measuredOperatorEdgesInApplicableLoops'])
+        self.assertTrue(plan['sourceShapeDriven'])
         self.assertEqual('PRISTINE_APPLICABLE',
                          plan['candidates'][0]['state'])
         self.assertFalse(plan['deployable'])
@@ -672,11 +673,10 @@ class GrspResolverContracts(unittest.TestCase):
         analyzed = self.run_cli()
         self.assertEqual(0, analyzed.returncode, analyzed.stderr)
         preview, folder = self.preview_generic()
-        self.assertEqual(0, preview.returncode, preview.stderr)
-        plan = json.loads((folder / 'preview.json').read_text())
-        self.assertEqual('UNPROVEN_OR_DRIFTED',
-                         plan['candidates'][0]['state'])
-        self.assertEqual(0, plan['stagedFiles'])
+        self.assertNotEqual(0, preview.returncode)
+        self.assertIn('CNAME_MEMBERSHIP_PARTIAL_OR_DRIFTED_MARKER',
+                      preview.stderr)
+        self.assertFalse(folder.exists())
 
     def test_generic_membership_requires_cname_needle_type(self):
         self.prepare_measured_membership(lambda text: text.replace(
@@ -687,8 +687,7 @@ class GrspResolverContracts(unittest.TestCase):
         preview, folder = self.preview_generic()
         self.assertEqual(0, preview.returncode, preview.stderr)
         plan = json.loads((folder / 'preview.json').read_text())
-        self.assertEqual('UNPROVEN_OR_DRIFTED',
-                         plan['candidates'][0]['state'])
+        self.assertEqual([], plan['candidates'])
         self.assertEqual(0, plan['stagedFiles'])
 
     def test_generic_membership_refuses_side_effects_in_loop(self):
@@ -701,8 +700,7 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertEqual(0, preview.returncode, preview.stderr)
         plan = json.loads((folder / 'preview.json').read_text())
         self.assertEqual(0, plan['stagedFiles'])
-        self.assertEqual('UNPROVEN_OR_DRIFTED',
-                         plan['candidates'][0]['state'])
+        self.assertEqual([], plan['candidates'])
 
     def test_generic_membership_refuses_nonfalse_initial_flag(self):
         self.prepare_measured_membership(
@@ -714,8 +712,7 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertEqual(0, preview.returncode, preview.stderr)
         plan = json.loads((folder / 'preview.json').read_text())
         self.assertEqual(0, plan['stagedFiles'])
-        self.assertEqual('UNPROVEN_OR_DRIFTED',
-                         plan['candidates'][0]['state'])
+        self.assertEqual([], plan['candidates'])
 
     def test_generic_membership_refuses_analysis_to_source_drift(self):
         self.prepare_measured_membership()
