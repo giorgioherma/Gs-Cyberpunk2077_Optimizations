@@ -58,6 +58,19 @@ class NativeSharedAssetContracts(unittest.TestCase):
         self.bridge_source.write_text("""module GRedRuntime
 @addMethod(GameInstance)
 public static native func GCETStaticSubscribe(consumer: Int32, owner: Int32) -> Bool
+@addMethod(GameInstance)
+public static native func GCETPlayerVector4Live() -> Vector4
+@addMethod(GameInstance)
+public static native func GCETPlayerVector4Valid() -> Bool
+public abstract class GCETNativePlayerVector {
+  public static func LiveOrOriginal(player: ref<PlayerPuppet>) -> Vector4 {
+    let position: Vector4 = GameInstance.GCETPlayerVector4Live();
+    if GameInstance.GCETPlayerVector4Valid() {
+      return position;
+    }
+    return player.GetWorldPosition();
+  }
+}
 public class GCETNativeLocationBackend extends NativeLocationBackend {}
 """, encoding="utf-8")
         dll = self.cet / "runtime/native/GCETStaticLocations.dll"
@@ -82,9 +95,13 @@ public class GCETNativeLocationBackend extends NativeLocationBackend {}
         self.assertIn("@addMethod(GameInstance)", source)
         self.assertIn("public static native func GCETStaticSubscribe(", source)
         self.assertIn("extends NativeLocationBackend", source)
+        self.assertIn("native func GCETPlayerVector4Live() -> Vector4", source)
+        self.assertIn("native func GCETPlayerVector4Valid() -> Bool", source)
+        self.assertIn("GameInstance.GCETPlayerVector4Valid()", source)
+        self.assertIn("return player.GetWorldPosition();", source)
         self.assertEqual(source, self.bridge_source.read_text())
         self.assertNotIn("Schedule.Every", source)
-        self.assertNotIn("GetWorldPosition", source)
+        self.assertNotIn("native func GCETPlayerVector4()", source)
         self.assertFalse(list(self.root.rglob("*.zip")))
 
     def test_literal_sphere_sites_share_one_native_manifest(self):
@@ -205,6 +222,21 @@ public class Areas {
         self.assertIn("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_MISSING",
                       run.stdout + run.stderr)
         self.assertFalse((self.output / BRIDGE).exists())
+
+    def test_incomplete_player_vector_bridge_refused_before_any_output(self):
+        for marker in ("native func GCETPlayerVector4Live()",
+                       "native func GCETPlayerVector4Valid()",
+                       "return player.GetWorldPosition();"):
+            original = self.bridge_source.read_text()
+            self.bridge_source.write_text(original.replace(marker,
+                                                          "missing_native_symbol"))
+            result = self.run_stage()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_INVALID",
+                          result.stdout + result.stderr)
+            self.assertFalse((self.output / NATIVE).exists())
+            self.assertFalse((self.output / BRIDGE).exists())
+            self.bridge_source.write_text(original)
 
     def test_invalid_manifest_and_missing_native_fail_without_output(self):
         invalid = self.root / "invalid"

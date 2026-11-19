@@ -185,11 +185,27 @@ public static class SharedNativeRuntimeStage
         var combined = Merge(existing, incoming);
         if (combined.Count > 100000)
             throw new InvalidDataException("SHARED_NATIVE_LOCATIONS_LIMIT");
-        if (includeBridge && (!Encoding.UTF8.GetString(bridgeBytes).Contains(
+        // Stage the ONE framework-owned optional bridge, including CET's
+        // existing strict-live typed Vector4 declarations. Refuse old/partial
+        // bridge sources before writing either native DLL or location data.
+        string bridgeText = includeBridge ? Encoding.UTF8.GetString(bridgeBytes) : "";
+        if (includeBridge && (!bridgeText.Contains(
                 "public class GCETNativeLocationBackend extends NativeLocationBackend",
                 StringComparison.Ordinal) ||
-            !Encoding.UTF8.GetString(bridgeBytes).Contains(
-                "native func GCETStaticSubscribe", StringComparison.Ordinal)))
+            !bridgeText.Contains("native func GCETStaticSubscribe",
+                StringComparison.Ordinal) ||
+            !bridgeText.Contains(
+                "public static native func GCETPlayerVector4Live() -> Vector4",
+                StringComparison.Ordinal) ||
+            !bridgeText.Contains(
+                "public static native func GCETPlayerVector4Valid() -> Bool",
+                StringComparison.Ordinal) ||
+            !bridgeText.Contains("public abstract class GCETNativePlayerVector",
+                StringComparison.Ordinal) ||
+            !bridgeText.Contains("GameInstance.GCETPlayerVector4Valid()",
+                StringComparison.Ordinal) ||
+            !bridgeText.Contains("return player.GetWorldPosition();",
+                StringComparison.Ordinal)))
             throw new InvalidDataException("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_INVALID");
         if (includeBridge && File.Exists(bridgeFile) &&
             !File.ReadAllBytes(bridgeFile).AsSpan().SequenceEqual(bridgeBytes))
