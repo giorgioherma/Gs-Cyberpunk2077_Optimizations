@@ -96,7 +96,9 @@ internal static class RedscriptNativeLocations
     internal sealed record LocationDependencyGroup(
         string RelativePath, string Method, int Owner, int Count,
         string PlayerName, int OpenBrace,
-        IReadOnlyList<(float X, float Y, float Z)> Positions);
+        IReadOnlyList<(float X, float Y, float Z)> Positions,
+        string Mode, int PredicateStart, int PredicateLength,
+        float NativeRadius);
 
     private static readonly Regex GroupConsumerMethod = new(
         @"\b(?:public|private|protected)\s+static\s+func\s+" +
@@ -253,7 +255,85 @@ internal static class RedscriptNativeLocations
             if (positions.Count == 0) continue;
             int owner = Owner(relative + "#location:" + methodName);
             result.Add(new(relative, methodName, owner,
-                positions.Count, player, open, positions));
+                positions.Count, player, open, positions,
+                "STATIC_VECTOR_GROUP", -1, 0, LocationGroupNativeRadius));
+        }
+        // Generic fixed-point quest checks: the caller may have different
+        // lifecycle, work, facts and callbacks, but the one geographic
+        // expression is identical for FAR. Replace ONLY that Boolean
+        // expression, not its enclosing method, quest state or callback.
+        var directMethods = Regex.Matches(masked,
+            @"\b(?:public|private|protected)\s+(?:static\s+)?" +
+            @"(?:cb\s+)?func\s+(?<method>[A-Za-z_]\w*)\s*\([^)]*\)" +
+            @"\s*(?:->\s*[A-Za-z_]\w*\s*)?\{",
+            RegexOptions.CultureInvariant);
+        var directDistance = new Regex(
+            @"\bVector4\s*\.\s*Distance\s*\(\s*" +
+            @"(?<player>[A-Za-z_]\w*)\s*\.\s*GetWorldPosition\s*" +
+            @"\(\s*\)\s*,\s*(?<class>[A-Za-z_]\w*)\s*\." +
+            @"(?<factory>[A-Za-z_]\w*)\s*\(\s*\)\s*\)\s*" +
+            @"(?:>=|>)\s*(?<radius>" + Number + @")",
+            RegexOptions.CultureInvariant);
+        foreach (Match method in directMethods)
+        {
+            string methodName = method.Groups["method"].Value;
+            if (directMethods.Cast<Match>().Count(x =>
+                x.Groups["method"].Value == methodName) != 1 ||
+                result.Any(x => x.Method == methodName)) continue;
+            int open = method.Index + method.Length - 1;
+            int close = GroupBlockEnd(masked, open);
+            if (close <= open) continue;
+            string body = masked[(open + 1)..close];
+            var distances = directDistance.Matches(body).Cast<Match>().ToArray();
+            if (distances.Length != 1) continue;
+            Match distance = distances[0];
+            string player = distance.Groups["player"].Value;
+            string beforeCall = body[..distance.Index];
+            if (!Regex.IsMatch(beforeCall,
+                @"\blet\s+" + Regex.Escape(player) +
+                @"\s*(?::\s*(?:ref|wref)\s*<\s*PlayerPuppet\s*>)?" +
+                @"\s*=\s*GetPlayer\s*\(",
+                RegexOptions.CultureInvariant)) continue;
+            if (!float.TryParse(distance.Groups["radius"].Value,
+                NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float radius) || !float.IsFinite(radius) ||
+                radius <= 0 || radius > 960f) continue;
+            string factoryName = distance.Groups["factory"].Value;
+            var factories = Regex.Matches(masked,
+                @"\b(?:public|private|protected)\s+static\s+func\s+" +
+                Regex.Escape(factoryName) +
+                @"\s*\(\s*\)\s*->\s*Vector4\s*\{",
+                RegexOptions.CultureInvariant);
+            if (factories.Count != 1) continue;
+            Match factory = factories[0];
+            int factoryEnd = GroupBlockEnd(masked,
+                factory.Index + factory.Length - 1);
+            if (factoryEnd <= factory.Index) continue;
+            string value = masked[(factory.Index + factory.Length)..factoryEnd];
+            var returned = Regex.Match(value,
+                @"^\s*return\s+(?<point>(?:new\s+)?Vector4\s*" +
+                @"\([^;]*\))\s*;\s*$", RegexOptions.CultureInvariant);
+            if (!returned.Success) continue;
+            var vector = NumericVector.Match(returned.Groups["point"].Value);
+            if (!vector.Success ||
+                vector.Length != returned.Groups["point"].Length)
+                continue;
+            float[] coords = new float[4];
+            string[] axes = ["x", "y", "z", "w"];
+            bool valid = true;
+            for (int n = 0; n < 4; n++)
+                valid &= float.TryParse(vector.Groups[axes[n]].Value,
+                    NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out coords[n]) && float.IsFinite(coords[n]);
+            if (!valid || coords.Take(3).Any(x => Math.Abs(x) > 100000f))
+                continue;
+            int start = open + 1 + distance.Index;
+            result.Add(new LocationDependencyGroup(relative, methodName,
+                Owner(relative + "#location:" + methodName + ":distance"),
+                1, player, open,
+                [(coords[0], coords[1], coords[2])],
+                "STATIC_QUEST_DISTANCE", start, distance.Length,
+                MathF.Min(1024f, radius + 32f)));
         }
         // Generated guard markers are owned by this same discovery lane.
         // Never silently omit a partially edited/tampered location method
@@ -445,7 +525,7 @@ internal static class RedscriptNativeLocations
             owners[group.Owner] = group.RelativePath;
             foreach (var point in group.Positions)
                 sites.Add(new(group.Owner, point.X, point.Y, point.Z,
-                    LocationGroupNativeRadius, false));
+                    group.NativeRadius, false));
         }
         if (sites.Count > 100000)
             throw new InvalidDataException("SHARED_NATIVE_REDSCRIPT_SITE_LIMIT");
