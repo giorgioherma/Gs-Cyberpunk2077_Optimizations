@@ -480,6 +480,109 @@ internal static class GenericNativeLocationSubscriberPass
             StringComparison.OrdinalIgnoreCase);
     }
 
+    // Additional generic location-dependency lane INSIDE the existing native
+    // subscriber generator. Ordinary static Bool helpers can now subscribe via
+    // G-REDruntime's lazy location-group service; no ScriptableSystem lifecycle,
+    // per-mod timer, new native plugin or second generator is introduced.
+    private const string LocationGroupRule = "LOCATION_DEPENDENCY_FAR_V1";
+    private static string LocationGroupMarker(int owner) =>
+        "/* GCO-GENERIC:" + LocationGroupRule + ":" + owner + " */";
+
+    private static bool HasValidGroupGuard(string source,
+        RedscriptNativeLocations.LocationDependencyGroup group)
+    {
+        string code = CodeOnly(source);
+        return Regex.IsMatch(code,
+            @"\bif\s+GCETNativeLocationGuard\.DefinitelyFarPlayer\s*" +
+            @"\(\s*" + Regex.Escape(group.PlayerName) +
+            @"\s*,\s*" + group.Owner + @"\s*,\s*" + group.Count +
+            @"\s*\)\s*\{\s*return\s+false\s*;\s*\}",
+            RegexOptions.CultureInvariant);
+    }
+
+    private static int StageLocationDependencies(string gameRoot,
+        string? baseScripts, string output,
+        List<(string Path, string Source)> generated)
+    {
+        int changed = 0;
+        var discovered = RedscriptNativeLocations.LocationDependencyGroups(gameRoot);
+        foreach (var owner in discovered.GroupBy(x => x.RelativePath,
+                     StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = "r6/scripts/" + owner.Key;
+            string originalFile = Path.Combine(Path.GetFullPath(gameRoot),
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            string destination = Path.GetFullPath(Path.Combine(output,
+                relative.Replace('/', Path.DirectorySeparatorChar)));
+            if (!Inside(destination, output))
+                throw new InvalidDataException("NATIVE_GROUP_OUTPUT_PATH_ESCAPE");
+
+            int existing = generated.FindIndex(x => x.Path.Equals(
+                destination, StringComparison.OrdinalIgnoreCase));
+            string effective = existing >= 0 ? generated[existing].Source :
+                File.ReadAllText(originalFile, Encoding.UTF8);
+            if (existing < 0 && baseScripts is not null)
+            {
+                string prior = Path.GetFullPath(Path.Combine(baseScripts,
+                    owner.Key.Replace('/', Path.DirectorySeparatorChar)));
+                if (!Inside(prior, baseScripts))
+                    throw new InvalidDataException("NATIVE_GROUP_BASE_PATH_ESCAPE");
+                if (File.Exists(prior)) effective = File.ReadAllText(prior,
+                    Encoding.UTF8);
+            }
+            var current = RedscriptNativeLocations.LocationDependencyGroups(
+                owner.Key, effective);
+            var edits = new List<(int Position, string Text)>();
+            string nl = effective.Contains("\r\n", StringComparison.Ordinal)
+                ? "\r\n" : "\n";
+            foreach (var original in owner)
+            {
+                var matches = current.Where(x => x.Owner == original.Owner &&
+                    x.Method == original.Method &&
+                    x.Count == original.Count).ToArray();
+                if (matches.Length != 1)
+                    throw new InvalidDataException(
+                        "NATIVE_GROUP_EFFECTIVE_SOURCE_DRIFT: " + original.Method);
+                var candidate = matches[0];
+                string marker = LocationGroupMarker(candidate.Owner);
+                if (effective.Contains(marker, StringComparison.Ordinal))
+                {
+                    if (!HasValidGroupGuard(effective, candidate))
+                        throw new InvalidDataException(
+                            "NATIVE_GROUP_GENERATED_GUARD_DRIFT");
+                    continue;
+                }
+                string guard = nl + "    " + marker +
+                    " if GCETNativeLocationGuard.DefinitelyFarPlayer(" +
+                    candidate.PlayerName + ", " + candidate.Owner + ", " +
+                    candidate.Count + ") { return false; }" + nl;
+                edits.Add((candidate.OpenBrace + 1, guard));
+                changed++;
+            }
+            if (edits.Count == 0) continue;
+            foreach (var edit in edits.OrderByDescending(e => e.Position))
+                effective = effective.Insert(edit.Position, edit.Text);
+            if (!Regex.IsMatch(effective,
+                @"(?m)^[ \t]*import[ \t]+GRedRuntime\.\*[ \t]*\r?$",
+                RegexOptions.CultureInvariant))
+            {
+                var module = Module.Match(effective);
+                if (!module.Success)
+                    throw new InvalidDataException("NATIVE_GROUP_MODULE_MISSING");
+                int end = effective.IndexOf('\n', module.Index);
+                if (end < 0)
+                    throw new InvalidDataException("NATIVE_GROUP_MODULE_LINE");
+                effective = effective.Insert(end + 1,
+                    "import GRedRuntime.*" + nl);
+            }
+            if (existing >= 0)
+                generated[existing] = (destination, effective);
+            else
+                generated.Add((destination, effective));
+        }
+        return changed;
+    }
+
     internal static int Scan(string gameRoot, string outFile)
     {
         var admission = new SourceAdmission(gameRoot);
@@ -489,6 +592,24 @@ internal static class GenericNativeLocationSubscriberPass
             throw new InvalidDataException("NATIVE_CONSUMER_SCAN_OUTPUT_COLLISION");
         var remaining = new List<Candidate>();
         int complete = 0;
+        var groups = RedscriptNativeLocations.LocationDependencyGroups(gameRoot);
+        int groupEligible = 0;
+        int groupComplete = 0;
+        foreach (var group in groups)
+        {
+            string path = Path.Combine(SourceRoot(gameRoot),
+                group.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            string text = File.ReadAllText(path, Encoding.UTF8);
+            if (text.Contains(LocationGroupMarker(group.Owner),
+                    StringComparison.Ordinal))
+            {
+                if (!HasValidGroupGuard(text, group))
+                    throw new InvalidDataException("NATIVE_GROUP_GENERATED_GUARD_DRIFT");
+                groupComplete++;
+            }
+            else
+                groupEligible++;
+        }
         foreach (var c in candidates)
         {
             string present = Path.Combine(SourceRoot(gameRoot),
@@ -523,19 +644,34 @@ internal static class GenericNativeLocationSubscriberPass
         File.WriteAllText(outFile, JsonSerializer.Serialize(new {
             schemaVersion = "gco.redscript.native-location-subscriber.v1",
             rule = Rule, sourceStackSha256 = admission.SourceStackSha256,
-            eligible = remaining.Count,
-            alreadyComplete = complete,
-            mode = "NATIVE_FAR_PREDICATE_BYPASS_ORIGINAL_CALLBACK_PRESERVED",
+            eligible = remaining.Count + groupEligible,
+            alreadyComplete = complete + groupComplete,
+            locationDependencyRule = LocationGroupRule,
+            locationGroupEligible = groupEligible,
+            locationGroupAlreadyComplete = groupComplete,
+            mode = "NATIVE_FAR_PREDICATE_OR_GROUP_BYPASS_ORIGINAL_CALLBACK_PRESERVED",
             predicateRule = PredicateRule,
             requiresNative = true, productionZipAuthorized = false,
-            candidates = candidates.Select(x => new {
+            candidates = candidates.Select(x => (object)new {
                 path = "r6/scripts/" + x.SourcePath,
                 sitePath = "r6/scripts/" + x.SitesPath,
                 adapterPath = "r6/scripts/" + x.AdapterPath,
                 x.Owner, x.SiteCount,
+                rule = PredicateRule,
                 state = remaining.Contains(x) ?
                     "PRISTINE_APPLICABLE" : "ALREADY_COMPLETE"
-            })
+            }).Concat(groups.Select(x => (object)new {
+                path = "r6/scripts/" + x.RelativePath,
+                method = x.Method,
+                owner = x.Owner,
+                siteCount = x.Count,
+                rule = LocationGroupRule,
+                state = File.ReadAllText(Path.Combine(SourceRoot(gameRoot),
+                    x.RelativePath.Replace('/', Path.DirectorySeparatorChar)),
+                    Encoding.UTF8).Contains(LocationGroupMarker(x.Owner),
+                        StringComparison.Ordinal) ?
+                    "ALREADY_COMPLETE" : "PRISTINE_APPLICABLE"
+            })).ToArray()
         }), new UTF8Encoding(false));
         return remaining.Count;
     }
@@ -619,6 +755,8 @@ internal static class GenericNativeLocationSubscriberPass
                 optimizedPredicates++;
             }
         }
+        int optimizedGroups = StageLocationDependencies(
+            gameRoot, baseScripts, output, generated);
         if (!string.Equals(admission.SourceStackSha256,
                 admission.FingerprintCurrentSources(),
                 StringComparison.OrdinalIgnoreCase))
@@ -629,7 +767,7 @@ internal static class GenericNativeLocationSubscriberPass
             File.WriteAllText(item.Path, item.Source, new UTF8Encoding(false));
         }
         // Count optimizations, not merely additional adapter files.
-        return optimizedPredicates;
+        return optimizedPredicates + optimizedGroups;
     }
 
     private static string Generate(Candidate c)
