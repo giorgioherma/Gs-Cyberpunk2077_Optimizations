@@ -146,6 +146,11 @@ internal static class GenericLocalSystemReadReuse
                 !IsIdentifier(t[j + 4].Value) ||
                 t[j + 5].Value != ")")
                 continue;
+            // The service getter must be the leading evaluated expression
+            // of a plain assignment/declaration or a direct call. Hoisting a
+            // getter from behind a ternary, short-circuit or earlier function
+            // would change the author's evaluation order.
+            if (!LeadingUnconditionalRead(t, start, j)) return null;
             // Require a plain stable local or method argument, never a
             // mutable field/property path or side-effectful GameInstance call.
             string arg = t[j + 4].Value;
@@ -166,6 +171,27 @@ internal static class GenericLocalSystemReadReuse
         }
         return count == 1 && found is not null
             ? new(start, end, found) : null;
+    }
+
+    private static bool LeadingUnconditionalRead(
+        IReadOnlyList<SourceAdmission.Token> t, int start, int getter)
+    {
+        if (start == getter) return true; // direct service call statement
+        if (getter < start + 2 || t[getter - 1].Value != "=")
+            return false;
+        if (getter == start + 2 &&
+            IsIdentifier(t[start].Value) && t[start + 1].Value == "=")
+            return true; // local = native service(...)
+        if (t[start].Value != "let" ||
+            !IsIdentifier(t[start + 1].Value) ||
+            getter < start + 3) return false;
+        // A declaration may have an explicit type, but no evaluated
+        // expression may precede the native system accessor.
+        for (int i = start + 2; i < getter - 1; i++)
+            if (t[i].Value is not (":" or "<" or ">" or "," or "ref" or "wref") &&
+                !IsIdentifier(t[i].Value))
+                return false;
+        return true;
     }
 
     private static IEnumerable<(int Open, int Close)> MethodBodies(
