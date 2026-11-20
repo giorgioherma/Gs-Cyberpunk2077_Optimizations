@@ -197,14 +197,16 @@ if ($Integrated) {
   VerifyFile (Join-Path $sccDir 'scc_lib.dll') '49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100'
 
   $owner=Join-Path (Get-Location) 'vendor-redruntime'
-  if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container)) {
+  if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container) -or
+      !(Test-Path -LiteralPath (Join-Path $owner 'optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds') -PathType Leaf)) {
     throw 'Authoritative REDruntime owner source missing'
   }
   $frameworkDir=Join-Path $components 'redruntime/owner'
   $meta=@()
-  # The unused REDscript native-location bridge is no longer bundled.
-  # CET's separate native runtime is still packaged by its owner.
-  foreach ($part in @('r6/scripts/G-RedRuntime')) {
+  # Retain the optional experimental REDscript location backend in GCO's
+  # component assets, NOT in the automatic game ZIP. Only an explicit
+  # standalone experimental stage may consume this owner file.
+  foreach ($part in @('r6/scripts/G-RedRuntime','optional-native/r6/scripts/G-RedRuntime')) {
     $inputRoot=Join-Path $owner $part
     foreach ($file in @(Get-ChildItem -LiteralPath $inputRoot -Filter *.reds -File -Recurse)) {
       $rel=[IO.Path]::GetRelativePath($owner,$file.FullName).Replace('\','/')
