@@ -1,5 +1,13 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — Phase 2 first accepted source-aware semantic pass (DigitalVixenCore Footsteps)
+
+The owner-approved first semantic operation is `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` in GCO REDscript development. Recognize the current installed `DVFootstepsService.FindAudioClass` RTTI lookup structurally (no source version/hash/line-number lock) and cache **only successful** resolution of `EquipNewFootwearByPlayer`; preserve misses, footwear change behavior, carrier/state lifecycle and unrelated source. Complete partially applied field/guard/store work without duplicating, accept equivalent historical and newer/custom/direct-return forms, return zero changes on complete source, and narrowly refuse truly incompatible lookup flow. The ten generic rules execute first; the semantic pass is generated once from the resulting **effective** source inside the original GCO combined one-ZIP flow. SCC stays **CI-only**.
+
+**Validation:** [fast semantic CI #19 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44785775165), 10 source-state tests and actual 2,331-post-generic-source + semantic-output SCC 0.5.31; [full GCO CI #1006 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617357), 10 generic rules, 173 eligible generic edits and 1 semantic operation, 79 combined source files, actual ZIP topology, official SCC, CET/GRSP provenance, app build/package. No measured performance or in-game parity claimed; development PR #2 conflicts still prevent wholesale main merge.
+
+
+
 ## 2026-11-20 — Mandatory REDscript Phase 2 semantic source compatibility (owner decision)
 
 [Authoritative agent rules](../integration/IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md): Recognize and complete **partial** implementations without duplicates; produce the entire compatible semantic result in **one Generate from post-generic stock**; treat compatible newer, older and custom-modified source as eligible by **actual required structure and behavior**, preserving unrelated code and prior generic work. No fixed version gates, historical whole-file hashes, mandatory separate-pass ordering or broad refusals solely due to user edits. Skip only an actually incompatible/missing optimization target or an unprovable critical safety property, **as narrowly as possible**, with a clear reason and other safe operations proceeding. Keep full source and gameplay safety, idempotence, CI SCC (not bundled), ownership and rollback contracts. These are required implementation properties, not an approval to copy legacy optimized ZIP files or change gameplay behavior.
