@@ -9,6 +9,11 @@ on:
         type: boolean
         required: false
         default: false
+      research_diagnostics:
+        description: 'Manual-only retired REDscript native/location and read-only R5 research contracts'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff ]
     paths:
@@ -146,10 +151,12 @@ jobs:
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         with:
           python-version: '3.12'
-      - name: Build GCO-local REDscript Resolver and test native-evidence safety contracts
+      - name: Build GCO-local REDscript Resolver and verify approved source generator contracts
         if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
         shell: pwsh
         working-directory: unified
+        env:
+          GCO_REDSCRIPT_RESEARCH_TESTS: ${{ inputs.research_diagnostics && '1' || '0' }}
         run: |
           $ErrorActionPreference='Stop'
           dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
@@ -311,23 +318,9 @@ jobs:
               $audit.compilerValidated -ne $false) {
             throw 'GCO_FRESH_SOURCE_ADMISSION_UNPROVEN'
           }
-          $semanticPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-callback-semantics.json'
-          $semanticLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-callback-semantics.log'
-          & dotnet $dll resolve-callbacks --game $game --out $semanticPath *> $semanticLog
-          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $semanticPath -PathType Leaf)) {
-            throw 'GCO_FRESH_CALLBACK_CLASSIFICATION_FAILED'
-          }
-          $semantic = Get-Content -LiteralPath $semanticPath -Raw | ConvertFrom-Json -Depth 70
-          if ($semantic.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
-              $semantic.sourceStackSha256 -ne $audit.sourceStackSha256 -or
-              $semantic.sourceFiles -ne $audit.sourceFiles -or
-              [int]$semantic.classifiedCallbacks -le 45 -or
-              [int]$semantic.playerPuppetOnActionWrappers -lt 1 -or
-              $semantic.generationAuthorized -ne $false -or
-              $semantic.callbackEntryCountsKnown -ne $false -or
-              $semantic.sourceWrites -ne $false) {
-            throw 'GCO_FRESH_CALLBACK_CLASSIFICATION_CONTRACT_FAILED'
-          }
+          # The read-only callback classification is retained for explicit manual
+          # research only. Production GCO generation is governed by the ten
+          # canonical source generators and their independent SCC contracts.
           $anglePath = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.json'
           $angleLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.log'
           & dotnet $dll scan-angle-sort --game $game --out $anglePath *> $angleLog
@@ -401,7 +394,6 @@ jobs:
             if (!$before.ContainsKey($relative)) { $removed++ }
           }
           Write-Host ('PASS newer REDscript source read-only audit: files=' + $audit.sourceFiles +
-            ' callbacks=' + $semantic.classifiedCallbacks +
             ' olderFixtureModified=' + $modified + ' added=' + $added + ' removed=' + $removed +
             ' generationAuthorized=false captureIdentityNotAssumed=true')
       - name: Discover generic callback shapes in private effective REDscript stack
@@ -435,8 +427,8 @@ jobs:
             ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
             ' already=' + $scan.fixedCnameIndexAlreadyComplete +
             ' generated=0 originalSourcesUntouched=true')
-      - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+      - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers (manual research only)
+        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' && github.event_name == 'workflow_dispatch' && inputs.research_diagnostics }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -546,7 +538,7 @@ jobs:
           $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
           $effectiveCache = '.gco-ci-private-redscript/Compiler/modded/final.zip'
           $pluginsArchive = '.gco-ci-private-redscript/Compiler/plugins.zip'
-          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework'
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework' -IncludeResearchDiagnostics:('${{ inputs.research_diagnostics }}' -eq 'true')
           if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
       - name: Remove exact real GRSP fixture checkout
         if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
