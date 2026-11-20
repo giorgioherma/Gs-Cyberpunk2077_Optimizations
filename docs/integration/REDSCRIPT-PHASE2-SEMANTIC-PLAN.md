@@ -1,5 +1,11 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — FE minimap pass 9 residual intentionally not admitted
+
+- **Required behavior:** washroom minimap presentation and update behavior remain identical. The historical pass-9 idea removes `BaseMinimapMappinController.Update`, but that wrapper forces pin tint on **every** Update. The existing `MinimapPOIMappinController.UpdateIcon` does not prove that an intervening Update cannot reset/recompute tint without another UpdateIcon. This means compile/source tests alone cannot prove full visual equivalence.
+- **Decision:** no automatic minimap wrapper removal. Revert the exploratory operation #15 and its generator/CI extension, retain the original source and existing FE early-input semantic #14. Reconsider only after proving the update-event relationship, all relevant other wrappers, pin lifecycle and in-game tint/icon parity. This operation is explicitly deferred, not counted as an implemented semantic pass.
+
+
 **Phase 2 CI source:** [Post-generic source and SCC validation contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md). The private GitHub `base_after_generic/r6/scripts` is **already uploaded** and the standalone **fast Phase 2 checkpoint** now compiles the post-generic baseline with both current semantic overlays, DVCore Footsteps and Dark Future infinite-tag caching. The long GCO generic/capture CI remains separate; approved semantic rules extend the fast checkpoint with actual output, not extra full-app builds.
 
 **MANDATORY PHASE 2 IMPLEMENTATION POLICY:** [IMPORTANT FOR AGENTS — REDscript Optimization Rules](IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md). The owner requires **partial → complete**, **post-generic stock → complete in one Generate**, and **compatible version/custom edits → optimized**, with **narrow skips only for genuinely incompatible targets or unproven critical safety properties**. Historical archives demonstrate behavior, never serve as required precursor inputs or whole-file replacements.
@@ -52,13 +58,6 @@
 - **Compatibility:** emit missing field/gate/record-change pieces only, no-op on fully applied source, honor custom/relocated compatible source and prior generic and Dark Future tag-cache edits, narrow source refusal when the essential record flow is incompatible.
 - **One Generate:** generics (1–10) → Footsteps (11) → DF tag cache (12) → DF status icons (13); the two Dark Future operations compose into the **same actual owner file**, preserving existing snapshots and output provenance.
 - **Verified:** [fast Phase 2 #42 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44807947104): **26 tests**, 2,331 real post-generic .reds plus two effective semantic owner files, official SCC 0.5.31 compiled (43,483,119 bytes), original sources untouched. A real integration GCO build/ZIP replay and matched gameplay performance A/B are separately required; do not infer FPS benefit from call reduction.
-
-## 2026-11-20 — Historical FE pass 9 per-minimap Update wrapper remainder (implementation pending CI)
-
-- **Operation:** `FLUSHING_ETIQUETTE_MINIMAP_UPDATE_DORMANCY_V1` removes the FE-owned `BaseMinimapMappinController.Update` wrapper only when the actual `MinimapPOIMappinController.UpdateIcon` callback and `BaseMappinBaseController.FEApplyWashroomIcon` still provide the FE-specific pin tint. This is **not** a native proximity change; the 15 static pins and all gameplay coordinate tests remain untouched.
-- **Source behavior:** preserves other map/world hooks, author identity/accessor and existing GENERIC markers, does not introduce replacement callbacks, timers or new framework dependencies. A custom wrapper with unrelated effects is refused narrowly, not deleted. A previously removed wrapper is recognized as complete.
-- **Source provenance:** old combined pass 9 reference versus current `scriptsliveAFTERgeneric.zip`, `FlushingEtiquette/FE_Places.reds`; the historical pass was a concept reference, not an overlay. CI and in-game tint parity are separate gates. This operation is independent from FE early-input guard #14.
-- **Integration:** new `FlushingEtiquetteMinimapDormancyPass.cs`, CLI `phase2-fe-minimap`, canonical Stage order 15, source-state regressions and independent real-source composition comparison. Exact CI results must be recorded after final runs.
 
 ## 1. Evidence and exact archive inventory
 

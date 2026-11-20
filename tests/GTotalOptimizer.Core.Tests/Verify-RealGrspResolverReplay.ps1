@@ -1904,62 +1904,6 @@ try {
         ' edits=' + [int]$feReport.appliedEdits +
         ' genericSourceAndOnActionFallbackPreserved=true')
 
-    # Independent source generation for the fifth accepted Phase 2 operation.
-    # The original global minimap Update wrapper is removed ONLY when the
-    # washroom-specific UpdateIcon callback already owns the same tint.
-    $feMapReference=Join-Path $work 'gco-phase2-fe-minimap-reference'
-    $feMapLog=Join-Path $work 'gco-phase2-fe-minimap-reference.log'
-    & dotnet $dll phase2-fe-minimap --game $game --base-overlay $callbackFolder --out $feMapReference *> $feMapLog
-    if ($LASTEXITCODE -ne 0) {
-      $diagnostic=if (Test-Path -LiteralPath $feMapLog -PathType Leaf) {
-        Get-Content -LiteralPath $feMapLog -Raw
-      } else { '' }
-      $m=[regex]::Match([string]$diagnostic,'FE_MINIMAP_[A-Z0-9_]+')
-      $safe=if ($m.Success) { $m.Value } else { 'NO_SAFE_SOURCE_ERROR_CODE' }
-      throw ('GCO_FE_MINIMAP_REFERENCE_FAILED: '+$safe)
-    }
-    $feMapReport=Get-Content -LiteralPath (Join-Path $feMapReference 'phase2-result.json') -Raw | ConvertFrom-Json
-    if ($feMapReport.ruleId -ne 'FLUSHING_ETIQUETTE_MINIMAP_UPDATE_DORMANCY_V1' -or
-        $feMapReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
-      throw 'GCO_FE_MINIMAP_REFERENCE_RESULT_INVALID'
-    }
-    if ($feMapReport.status -eq 'APPLIED') {
-      $mapScripts=Join-Path $feMapReference 'r6/scripts'
-      $mapFiles=@(Get-ChildItem -LiteralPath $mapScripts -File -Recurse -Filter '*.reds')
-      if ($mapFiles.Count -ne 1 -or [int]$feMapReport.appliedEdits -ne 1) {
-        throw 'GCO_FE_MINIMAP_REFERENCE_EXPECTED_ONE_FILE'
-      }
-      foreach ($file in $mapFiles) {
-        $rel=[IO.Path]::GetRelativePath($mapScripts,$file.FullName)
-        if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
-          throw 'GCO_FE_MINIMAP_REFERENCE_PATH_ESCAPE'
-        }
-        $dest=Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
-        $new=Get-Content -LiteralPath $file.FullName -Raw
-        if ($new.Contains('@wrapMethod(BaseMinimapMappinController)') -or
-            !$new.Contains('@wrapMethod(MinimapPOIMappinController)') -or
-            !$new.Contains('this.FEApplyWashroomIcon();')) {
-          throw 'GCO_FE_MINIMAP_REFERENCE_LOST_TARGETED_UI_FALLBACK'
-        }
-        if (Test-Path -LiteralPath $dest -PathType Leaf) {
-          $old=Get-Content -LiteralPath $dest -Raw
-          foreach ($marker in @([regex]::Matches($old,
-              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
-              ForEach-Object Value | Sort-Object -Unique)) {
-            if (!$new.Contains($marker,[StringComparison]::Ordinal)) {
-              throw 'GCO_FE_MINIMAP_REFERENCE_LOST_GENERIC_SOURCE'
-            }
-          }
-        } else {
-          New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
-        }
-        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
-      }
-    }
-    Write-Host ('PASS Phase 2 FE minimap source reference: status='+
-        $feMapReport.status+' edits='+[int]$feMapReport.appliedEdits+
-        ' perPinGlobalUpdateRemovedOnlyIfTargetedIconProven=true')
-
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -2011,15 +1955,6 @@ try {
           [int]$feFamily[0].order -ne 14 -or
           [int]$feFamily[0].rewrittenExpressions -ne 1) {
         throw 'GCO_FE_INPUT_CANONICAL_STAGING_NOT_CONNECTED'
-      }
-    }
-    if ($feMapReport.status -eq 'APPLIED') {
-      $feMapFamily=@($stageReport.completed |
-        Where-Object { $_.id -eq 'flushing-etiquette-minimap-dormancy' })
-      if ($feMapFamily.Count -ne 1 -or
-          [int]$feMapFamily[0].order -ne 15 -or
-          [int]$feMapFamily[0].rewrittenExpressions -ne 1) {
-        throw 'GCO_FE_MINIMAP_CANONICAL_GENERATION_NOT_CONNECTED'
       }
     }
     # Every ordered generated REDscript source must match the independent

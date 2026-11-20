@@ -1,11 +1,10 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
-## 2026-11-20 — FE historical pass 9 global minimap wrapper remainder
+## 2026-11-20 — FE minimap visual parity gate; unapproved pass-9 transformation withdrawn
 
-- Semantic operation #15 `FLUSHING_ETIQUETTE_MINIMAP_UPDATE_DORMANCY_V1` is source-generated after the ten approved generics and four accepted semantics. Unlike the historical 62-file overlay, the owning pass removes only the FE-specific global `BaseMinimapMappinController.Update` wrapper after proving existing `MinimapPOIMappinController.UpdateIcon` + `FEApplyWashroomIcon` still serve the exact FE pin tint. No native REDscript location bridge, new listener or periodic poll; original source path preserved.
-- Source-state contracts: stock one-go, partial fallback already present, markerless complete, custom-moved/extra unrelated source, refusal on custom update effects or missing specific icon fallback, source drift/integrity and repeat-generation no-op. `test_phase2_fe_minimap.py` runs in the fast source-owned suite. Combined generator preserves all already-staged generic markers and independent semantics.
-- [Fast checkpoint #67 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44821395133): 45 semantic source-state tests, official SCC 0.5.31 compiled the real 2,331 post-generic source with four effective semantic owner overlays (43,483,194 bytes), no source mutation. Full integrated [CI #1021](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44821452000) pending at this record: independent reference composition, final ZIP, .NET10 app/owner restore and packaging must all pass before acceptance.
-- Still require minimap visual parity in-game, plus new matched GRSP/PresentMon before performance claims. Reinforcements RNG and geometry remain separate higher-risk work. No direct stable `main` merge.
+- User requires unchanged FlushingEtiquette minimap appearance and updates. `BaseMinimapMappinController.Update` tints FE pins on every update; the existing specific `MinimapPOIMappinController.UpdateIcon` does not prove equivalent redraw frequency. Accordingly the exploratory global-wrapper removal is **not an accepted semantic optimization**, despite source-state tests/official SCC #67 passing.
+- Restore canonical generator to 10 generics + four accepted Phase 2 semantics, preserving `FLUSHING_ETIQUETTE_UNRELATED_INPUT_GATE_V1`. No automatic FE minimap rewrite, no native proximity bridge, no duplicated wrappers/listeners/timers. Further optimization requires real runtime event proof and before/after visual parity; fallback is original source unchanged.
+- Repo correction restores all pre-experiment source and CI implementations atomically; only documentation records the specific refusal and reason. Do not conflate compiler success with appearance identity.
 
 ## 2026-11-20 — current Dark Future Phase 2 checkpoint: partial-state compatibility
 
