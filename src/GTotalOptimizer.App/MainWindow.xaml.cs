@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -1248,8 +1249,19 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = pinnedFramework &&
                 !running && !processLaunchPending;
             CollectButton.IsEnabled = !running && readyToCollect;
-            ContinueButton.IsEnabled = !running &&
-                CaptureAdmissionPolicy.CanContinue(saved, frame is null);
+            ContinueButton.IsEnabled = !running && !profilerReportRunning &&
+                CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
+                saved is not null && HasCompletedProfilerReport(saved.SessionId);
+            // Recover a sealed capture on restart or REFRESH without allowing
+            // Continue to skip unfinished derived report generation.
+            if (!running && saved is not null &&
+                CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
+                !profilerReportRunning && !HasCompletedProfilerReport(saved.SessionId))
+            {
+                await GenerateCollectedProfilerReportAsync(current.GameRoot!, saved.SessionId);
+                if (cancel.IsCancellationRequested || !IsLoaded || busy) return;
+                ContinueButton.IsEnabled = HasCompletedProfilerReport(saved.SessionId);
+            }
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
             LaunchButton.Content = running ? "GAME RUNNING"
@@ -1681,36 +1693,61 @@ public partial class MainWindow : Window
                 PinStatus("Collect failed. START again or RESTORE.");
             }
             EndConsoleActivity(collectActivity);
+            if (sealedSuccess && savedCapture is { } complete)
+                await GenerateCollectedProfilerReportAsync(game, complete.SessionId);
             SetBusy(false);
             await RefreshSourceAsync();
         }
-        // Reporting belongs to COLLECT's immutable profiler evidence. It
-        // never gates CONTINUE, owner restoration or Resolver generation.
-        if (sealedSuccess && savedCapture is { } complete)
-            _ = GenerateCollectedProfilerReportAsync(game, complete.SessionId);
     }
 
-    private async Task GenerateCollectedProfilerReportAsync(string game, string sessionId)
+    private bool HasCompletedProfilerReport(string sessionId)
     {
-        if (profilerReportRunning || File.Exists(
-                GcoProfilerReportService.ReportFile(packageRoot, sessionId)))
-            return;
+        var html = GcoProfilerReportService.ReportFile(packageRoot, sessionId);
+        var json = Path.Combine(Path.GetDirectoryName(html)!,
+            GcoProfilerReportService.JsonFile);
+        if (!File.Exists(html) || !File.Exists(json)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(json));
+            return document.RootElement.TryGetProperty("sessionId", out var id) &&
+                id.GetString() == sessionId &&
+                new FileInfo(html).Length > 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or InvalidOperationException)
+        {
+            Trace.TraceWarning("Combined report readiness: " + ex.Message);
+            return false;
+        }
+    }
+
+    private async Task<bool> GenerateCollectedProfilerReportAsync(string game, string sessionId)
+    {
+        if (profilerReportRunning) return false;
+        if (HasCompletedProfilerReport(sessionId)) return true;
         profilerReportRunning = true;
+        ContinueButton.IsEnabled = false;
         long reportActivity = BeginConsoleActivity("Preparing performance graphs and report");
         try
         {
             var result = await Task.Run(() =>
                 GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
+            if (!HasCompletedProfilerReport(sessionId))
+                throw new InvalidDataException("Combined profiler report was not published completely.");
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
-            // The complete profiler report remains available via OPEN RESULTS.
-            // Do not inject its storage path into the REDscript summary.
+            ClearStatusPin();
+            SetStatus("Combined profiler report ready. Click CONTINUE.");
+            return true;
         }
         catch (Exception ex)
         {
-            // Failure to render derived reports must never unseal a successful
-            // collection or strand the profiler restore workflow.
+            // Never discard sealed native captures on a derived report failure.
+            // REFRESH can retry reporting; emergency RESTORE remains available.
             Trace.TraceWarning("GCO combined profiler reporting: " + ex);
+            PinStatus("Combined report failed. Click REFRESH to retry. " +
+                "Captures are saved; CONTINUE is unavailable.", ex.ToString());
+            return false;
         }
         finally
         {
@@ -1793,6 +1830,13 @@ public partial class MainWindow : Window
         if (!CaptureAdmissionPolicy.CanContinue(saved, monStopped))
         {
             Warn("Collect CET and REDscript first, or use Restore.", "Continue");
+            return;
+        }
+        if (profilerReportRunning || saved is null ||
+            !HasCompletedProfilerReport(saved.SessionId))
+        {
+            Warn("Wait for the combined profiler report to finish. " +
+                "If reporting failed, click REFRESH to retry.", "Continue");
             return;
         }
         SetBusy(true);
