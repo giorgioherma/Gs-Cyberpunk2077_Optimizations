@@ -14,6 +14,11 @@ public static class CombinedPassOutputInspector
             path.Split('/').Any(x => x is "" or "." or ".."))
             return false;
         string file = Path.GetFileName(path);
+        // Preserve optional experimental native-location source in GitHub,
+        // never leak its generated adapters/backend into the default ZIP.
+        if (file.StartsWith("GCO_NativeLocation_", StringComparison.OrdinalIgnoreCase) ||
+            file.Equals("GCETNativeLocationBackend.reds", StringComparison.OrdinalIgnoreCase))
+            return false;
         if (new[] { "README", "LICENSE", "LICENCE", "CHANGELOG",
                     "HANDOFF", "CONTRIBUTORS", "NOTICE" }
             .Any(prefix => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
