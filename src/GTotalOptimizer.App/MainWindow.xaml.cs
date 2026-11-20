@@ -2048,7 +2048,7 @@ public partial class MainWindow : Window
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
             SetResultsConsoleStatus(redscriptPlanReady
-                ? "CET + REDscript analysis ready. GENERATE creates one source-checked Vortex overlay ZIP."
+                ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
                 : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.");
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
