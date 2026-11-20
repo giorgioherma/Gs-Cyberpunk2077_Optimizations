@@ -273,10 +273,10 @@ internal static class FlushingEtiquetteInputGatePass
             i += 8; // ! Equals ( name , n <literal> )
             if (i < brace)
             {
-                if (!Seq(t, i, "&&"))
+                if (!Seq(t, i, "&", "&"))
                     return new("REFUSED", "FE_UNKNOWN_GATE_OPERATOR",
                         0, 0, null);
-                i++;
+                i += 2;
             }
         }
         if (existing.SetEquals(allowed))
@@ -285,7 +285,8 @@ internal static class FlushingEtiquetteInputGatePass
         // through safely after exactly the author's negative return.
         int guardStart = t[ifPos].Start;
         int guardEnd = t[endIndex].End;
-        return new("ELIGIBLE", null, guardStart, guardEnd, guard);
+        return new("ELIGIBLE", null, guardStart, guardEnd,
+            guard.TrimStart(' ', '\t'));
     }
 
     internal static Result Generate(string gameRoot, string outputRoot,
