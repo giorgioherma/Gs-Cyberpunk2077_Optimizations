@@ -2019,7 +2019,11 @@ try {
            !$now.Contains('this.customQuickslotsFallbackRegistered = true;') -or
            !$now.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
            !$now.Contains('gamepadQuickslotInput = ArrayContains(this.gamepadActions, actionName)') -or
-           !$now.Contains('this.customQuickslotsInputListener.SyncGraceState();')) {
+           !$now.Contains('this.customQuickslotsInputListener.SyncGraceState();') -or
+           !$now.Contains('this.UnregisterInputListener(this.customQuickslotsInputListener);') -or
+           !$now.Contains('CustomQuickslotsGlobalInputListener.SetLastUsedKBM(') -or
+           @([regex]::Matches($now, 'func\s+OnGRedInput\s*\(')).Count -ne 1 -or
+           @([regex]::Matches($now, 'func\s+OnGRedInputDeviceChanged\s*\(')).Count -ne 1) {
           throw 'GCO_CQ_INPUT_REFERENCE_DISCARDED_GENERIC_OR_FALLBACK'
         }
         if(Test-Path -LiteralPath $dest -PathType Leaf) {
