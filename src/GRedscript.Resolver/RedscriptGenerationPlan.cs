@@ -115,9 +115,6 @@ public static class RedscriptGenerationPlan
             Directory.Exists(output))
             throw new InvalidDataException("REDSCRIPT_PLAN_OUTPUT_COLLISION");
 
-        // Detect obsolete generated files before parsing their potentially
-        // incomplete/partial source, so the refusal stays actionable.
-        VerifyNoRetiredLocationSources(game);
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
         string sourceHash = admission.SourceStackSha256 ??
@@ -234,9 +231,6 @@ public static class RedscriptGenerationPlan
         var document = JsonSerializer.Deserialize<Document>(
             File.ReadAllText(planPath), JsonOptions)
             ?? throw new InvalidDataException("REDSCRIPT_PLAN_INVALID_DOCUMENT");
-        // Detect obsolete generated files before parsing their potentially
-        // incomplete/partial source, so the refusal stays actionable.
-        VerifyNoRetiredLocationSources(game);
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
         if (document.SchemaVersion != Schema ||
@@ -398,48 +392,6 @@ public static class RedscriptGenerationPlan
             JsonSerializer.Serialize(result, JsonOptions),
             new UTF8Encoding(false));
         return result;
-    }
-
-    // The former native REDscript FAR/predicate generator is retired from
-    // automatic optimization. Existing generated files are NOT pristine
-    // author code: refuse with an actionable reason instead of replacing,
-    // re-generating, or silently bundling obsolete native dependencies.
-    // Recover by disabling/restoring that old experimental Vortex overlay.
-    private static void VerifyNoRetiredLocationSources(string game)
-    {
-        string scripts = Path.Combine(game, "r6", "scripts");
-        if (!Directory.Exists(scripts)) return;
-        foreach (string path in Directory.EnumerateFiles(scripts, "*.reds",
-                     SearchOption.AllDirectories))
-        {
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException(
-                    "REDSCRIPT_RETIRED_LOCATION_SYMLINK_REFUSED");
-            string content = File.ReadAllText(path);
-            bool generatedAdapter = Path.GetFileName(path).StartsWith(
-                "GCO_NativeLocation_", StringComparison.OrdinalIgnoreCase);
-            // The optional REDscript native backend was added only by the
-            // retired experiment. CET's own DLL and .locations file are
-            // independent and must not be rejected.
-            bool legacyBridge = Path.GetRelativePath(scripts, path)
-                .Replace('\\', '/').Equals(
-                    "G-RedRuntime/Native/GCETNativeLocationBackend.reds",
-                    StringComparison.OrdinalIgnoreCase);
-            bool generatedGuard =
-                content.Contains("GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1",
-                    StringComparison.Ordinal) ||
-                content.Contains("GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
-                    StringComparison.Ordinal) ||
-                content.Contains("GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1",
-                    StringComparison.Ordinal) ||
-                content.Contains("GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:",
-                    StringComparison.Ordinal);
-            if (generatedAdapter || generatedGuard || legacyBridge)
-                throw new InvalidDataException(
-                    "REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT: " +
-                    "Disable the old experimental REDscript location pass in " +
-                    "Vortex or restore the original mod sources before Analyze.");
-        }
     }
 
     private static bool IsInside(string child, string parent)
