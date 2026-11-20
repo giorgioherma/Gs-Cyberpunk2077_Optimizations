@@ -930,8 +930,9 @@
                                 <TextBlock x:Name="PresentCaptureStatusText" Foreground="#FFF000"
                                            FontWeight="Bold" FontSize="13" Text="PresentMon · NOT VERIFIED"/>
                             </StackPanel>
-                            <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
-                                       TextWrapping="Wrap" FontSize="13" Margin="0,6,0,0"/>
+                            <!-- Actual analysis / generation log belongs in the
+                                 console BELOW the action buttons, not under the
+                                 restored status and three capture indicators. -->
                             <Grid Margin="0,12,0,0">
                                 <fx:ChamferOutline Fill="#081012" Stroke="#36535B"
                                                    StrokeThickness="2.0" CornerCut="14"
@@ -978,6 +979,21 @@
                                         Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
+                            <!-- Page 2 console: working states, completion,
+                                 skips and failures share one scrollable place. -->
+                            <Border x:Name="ResultsConsoleHost" Background="#081012"
+                                    BorderBrush="#36535B" BorderThickness="1"
+                                    Padding="10,7" Margin="0,10,0,0">
+                                <ScrollViewer x:Name="ResultsConsoleScroll"
+                                              FocusVisualStyle="{x:Null}"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              MaxHeight="105" MinHeight="34">
+                                    <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
+                                               TextWrapping="Wrap" FontSize="12.5"
+                                               LineHeight="17" Text="Capture verified. Click ANALYZE to find optimizations."/>
+                                </ScrollViewer>
+                            </Border>
                             <StackPanel Margin="3,10,0,0">
                                 <TextBlock x:Name="OptimizationFooterFirstLine" Text="CET + REDscript  One clean zip with optimized files."
                                            Foreground="#98A9B1" FontSize="12.5" TextWrapping="Wrap"/>
