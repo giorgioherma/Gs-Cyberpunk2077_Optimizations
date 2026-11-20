@@ -1,5 +1,13 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-20 — STABLE_ARRAY_BOUND_V1 source-only generator (new R5 family)
+
+The previous 28-loop/17-owner audit shortlist was research, not generation admission. GCO now implements a single **token-proven** no-call stable-array-length hoist, independent of mod names and capture hit frequency. The canonical tenth rule `stable-array-bound` runs **after** the prior nine rules against their effective staged source. It transforms only exact bare-local/typed-parameter `while idx < ArraySize(arr) {` loops with verified same-method scope, read-only array indexing, no nested loops, unknown calls, array mutators, array/member writes or alias escape. The original loop body is preserved byte-for-byte. The transformed header uses one local `let __gcoArrBoundLNN: Int32 = ArraySize(arr);` before the loop. Markers verify the saved original body hash; missing, partial or manually edited output refuses rather than silently patching. A strict original/current source SHA match and optional effective-preview equivalence guard source drift.
+
+No per-owner implementation, fixed source hashes or editor overrides are added. The existing blackboard-definition generator remains unchanged. Original sources are never written. Official SCC 0.5.31 compilation, partial-state/idempotence, independent source composition and full-stack owner breadth are CI gates; performance gain is **unmeasured** pending paired A/B. This rule reduces one `ArraySize` re-evaluation per completed loop iteration when admitted, not callbacks or frame scheduling. Validation pending final complete CI.
+
+
+
 ## 2026-11-20 — Cross-owner callback-work admission research, source-first and no new instrumentation
 
 Implemented `scan-callback-work` in the existing GCO `CallbackSemanticResolver` to combine its canonical parser and sealed GRSP source-joined callsites. Seven approved semantic owners are configurable *ranking exclusions only*, never parser/generator allowlists. The read-only report inventories action metadata repeated reads (overlaps existing `ACTION_EVENT_SNAPSHOT_V1`), local action predicates (`GetName`/`GetType`/`IsAction`/button state), system lookups before action selection, and action forwarding without a local selector. It reports exact files, source folder breadth, captured outgoing edges and callsite-exclusive time, with unknown callback entries, exhaustive action-set proof, callee effects and potential savings left NULL/unproven. No new native/GRSP instrumentation or generated source.
