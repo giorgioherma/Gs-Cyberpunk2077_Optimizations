@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Phase 2 post-generic source CI accepted; dev-to-main merge remains blocked
+
+- GCO canonical Windows CI `build-windows.yml` now compiles already-applied ten-generic source from `original_cet_source/main/base_after_generic/r6/scripts` as a **sixth isolated SCC lane**. It does not replace the original 2,319-file capture-matched source, overwrite live files, package private sources, or depend on historical sequential semantic passes. [Exact contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md).
+- [CI #989 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44770961006), code `ea2844dd`: 10 generic rules 173/78 original preview, all six official SCC 0.5.31 lanes including **2,331 post-generic scripts**, unmodified source, full combined GCO .NET10 app checks, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run989-a1` ID `14648431268`. Initial #988 all SCC compilation exits 0 but post-scenario ordering assertion failed; corrected by named framework scenario selection in original harness. **No semantic output compiled yet**, must extend test for first real semantic generator.
+- Draft [PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) main integration cannot merge: `mergeable_state=dirty` with hundreds of branch commits and main-only changes. Do not force update/overwrite `main`; reconcile and validate actual merged code first.
+
+
 ## 2026-11-20 — Experimental location restored as optional, out of standard generation
 
 The user requested **available but disabled from workflow ZIP generation**, not deleted/retired. GCO restored the original experimental source generator, native staging helper, associated tests and manual CLI; the optional G-REDruntime bridge remains a packaged component asset. The automatic nine-rule REDscript plan and combined CET + REDscript ZIP do not invoke or stage those location transforms. CET-owned native code is unchanged. The unapproved global legacy-marker/adapter/bridge refusal was withdrawn. Previously generated source compatibility remains an open decision; only existing general source admission and drift checks apply. CI pending.
