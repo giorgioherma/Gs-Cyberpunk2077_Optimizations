@@ -31,7 +31,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     env:
-      PHASE2_OUTPUT: ${{ runner.temp }}/gco-phase2-generated
+      PHASE2_OUTPUT: ${{ github.workspace }}/.phase2-generated
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -96,6 +96,8 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          if (Test-Path -LiteralPath '.phase2-private') {
-            Remove-Item -LiteralPath '.phase2-private' -Force -Recurse
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT)) {
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Force -Recurse
+            }
           }
