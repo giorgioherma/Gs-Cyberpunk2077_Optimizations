@@ -1598,6 +1598,18 @@ try {
         $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
         ' realSourceOutputMatchesExistingCI=true productionZip=false')
 
+    # Publish the ACTUAL independently source-verified ordered REDscript
+    # output to a temporary game-relative archive. Validate with the same
+    # GCO shipping inspector used by the combined CET+REDscript product.
+    # Never include stage-result.json, profiler binaries or test evidence.
+    $gameOnlyStage = Join-Path $orderedStage 'effective-preview'
+    $realGameZip = Join-Path $work 'gco-ordered-real-source-game-pass.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory($gameOnlyStage, $realGameZip)
+    & dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --verify-combined-archive $realGameZip $stageFiles.Count
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GCO_REDSCRIPT_REAL_SOURCE_GAME_ZIP_INVALID'
+    }
+
     # Compile the REDscript native RTTI declarations from the REAL CET
     # test DLL, separate from all source-only generic passes. The owner
     # compiler then catches bad @addMethod native signatures/syntax.
