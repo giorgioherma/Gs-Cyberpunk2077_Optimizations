@@ -9,6 +9,17 @@ internal static class Program
 {
     private const string Schema = "grsp.resolver.input.v1";
 
+    // Invoke the existing verified CLI analyzer from GCO's one bundled
+    // .NET 10 runtime. No second capture parser or global dotnet install.
+    public static void AnalyzeCollected(string sessionFolder, string gameRoot,
+        string outputFile)
+    {
+        if (Main(["analyze", "--capture", sessionFolder, "--game", gameRoot,
+                  "--out", outputFile]) != 0 || !File.Exists(outputFile))
+            throw new InvalidDataException(
+                "REDscript Resolver rejected the indexed F11 capture or live source.");
+    }
+
     private static int Main(string[] args)
     {
         try
@@ -93,9 +104,13 @@ internal static class Program
                 throw new InvalidDataException(
                     "Refusing to write Resolver output into installed game or sealed capture");
 
-            string nativeRoot = Directory.Exists(Path.Combine(captureRoot, "G-REDscript"))
-                ? Path.Combine(captureRoot, "G-REDscript")
-                : captureRoot;
+            // Current dated GCO capture sessions use G-RED. Older flat
+            // sessions and standalone GRSP captures retain their layouts.
+            string nativeRoot = Directory.Exists(Path.Combine(captureRoot, "G-RED"))
+                ? Path.Combine(captureRoot, "G-RED")
+                : Directory.Exists(Path.Combine(captureRoot, "G-REDscript"))
+                    ? Path.Combine(captureRoot, "G-REDscript")
+                    : captureRoot;
             string metadata = Path.Combine(nativeRoot, "Data", "Metadata");
             string completion = Path.Combine(metadata, "GCO-F11-Complete.flag");
             if (!File.Exists(completion) ||
