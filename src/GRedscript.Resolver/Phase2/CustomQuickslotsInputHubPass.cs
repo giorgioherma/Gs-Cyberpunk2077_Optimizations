@@ -300,7 +300,8 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
     }
 
     private static void AddFields(string source,
-        IReadOnlyList<SourceAdmission.Token> t, List<Patch> changes)
+        IReadOnlyList<SourceAdmission.Token> t, List<Patch> changes,
+        bool needsEngineFallback)
     {
         string[] names = ["customQuickslotsInputHub",
             "customQuickslotsInputSubscriptions",
@@ -316,6 +317,9 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         var missing = new List<string>();
         for (int i = 0; i < names.Length; i++)
         {
+            // A previously hand-optimized InputHub owner has no legacy
+            // OnAction. Do not invent a now-unused fallback member there.
+            if (i == 4 && !needsEngineFallback) continue;
             int at = Find(t, 0, t.Count, "let", names[i], ":");
             if (at < 0)
                 missing.Add("@addField(PlayerPuppet)" + Eol(source) +
@@ -362,10 +366,23 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
             detached is null || grace is null)
             throw new Refused("CQ_INPUT_REQUIRED_LIFECYCLE_MISSING");
 
-        // Keep the full legacy event and generic membership implementation
-        // as the fallback, including all original gamepad action names.
-        if (!Contains(t, init.Open + 1, init.Close,
-                "this", ".", "gamepadActions", "=", "[") ||
+        // The tested historical 2.0/8.0 bridge in a previously optimized
+        // installation may have removed OnAction and the old local action
+        // array completely. Detect this independent, source-proven route
+        // without adding any fallback fields or duplicating its helpers.
+        bool alreadySpecificRoute =
+            action is null &&
+            Contains(t, attached.Open + 1, attached.Close,
+                "this", ".", "customQuickslotsInputHub", ".",
+                "Subscribe", "(") &&
+            Contains(t, detached.Open + 1, detached.Close,
+                "this", ".", "customQuickslotsInputHub", ".",
+                "Unsubscribe", "(");
+        // Fresh generic-first files still retain the entire legacy
+        // OnAction and membership implementation as engine fallback.
+        if ((!alreadySpecificRoute &&
+             !Contains(t, init.Open + 1, init.Close,
+                 "this", ".", "gamepadActions", "=", "[")) ||
             !Contains(t, init.Open + 1, init.Close,
                 "this", ".", "lastUsedKBM", "=") ||
             !Contains(t, init.Open + 1, init.Close,
@@ -386,7 +403,8 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         int sourceWrites = 0;
         for (int i = 0; i + 2 < t.Count; i++)
             if (Seq(t, i, "gamepadActions", "=")) sourceWrites++;
-        if (sourceWrites != 1 ||
+        if ((!alreadySpecificRoute && sourceWrites != 1) ||
+            (alreadySpecificRoute && sourceWrites != 0) ||
             Contains(t, 0, t.Count, "ArrayPush", "(", "this", ".",
                 "gamepadActions") ||
             Contains(t, 0, t.Count, "ArrayClear", "(", "this", ".",
@@ -411,7 +429,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
             changes.Add(new(t[listener.Open].Start,
                 t[listener.Open].Start, "extends InputListener "));
 
-        AddFields(source, t, changes);
+        AddFields(source, t, changes, !alreadySpecificRoute);
         var missingMethods = new List<string>();
         string[] methodNames = ["OnDeviceChanged", "SyncGraceState",
             "OnGRedInput"];
