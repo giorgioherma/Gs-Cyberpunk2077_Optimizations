@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Source-compatible Custom Quickslots InputHub semantic #16
+
+- `CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1`: one new `CustomQuickslotsInputHubPass` after the accepted 10 generics and 5 Phase 2 semantics. Avoid per-action engine observer cost on current post-generic source by subscribing only the owner-defined quickslot CNames through current G-REDruntime InputHub, plus device notification. Keep old original OnAction engine fallback if runtime/subscription fails, preserve CET Lua `SetLastUsedKBM`, grace transition and cleanup, no duplicated framework/helper, no D-pad-prohibition cache yet.
+- [Post-generic focused #89 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44830079620): 54 source-state tests, stock/partial/historical-complete/custom/missing ABI, exact idempotence, 2,331 private post-generic scripts + 6 semantic owner overlays, official SCC 0.5.31 cache 43,488,938 bytes and source unchanged. **Canonical GCO Stage** on this post-generic baseline produced 6 semantic edits, 6 owner files, order #16 applied, canonical Quickslots output byte-identical to independent semantic generator. This explicitly proves working from *already generic* stock.
+- The older full CI #1029 on 2,319-file capture-correlated source passed package contracts, but Quickslots reported a **narrow refusal**; that fixture did not apply #16. Full [#1030](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44829474253) was running; do not claim an applied Quickslots in that old source fixture. Additional version-fluid relocated/split framework source test and structurally detected GRedRuntime ABI are pending focused #91.
+- No game behavior or measured performance parity claimed; compare actual in-game quickslot use and KBM/gamepad transitions after current generated output.
+
+
 ## 2026-11-20 — Source-generated FE handmade session pins: full CI accepted
 
 - [Full CI #1026 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44825017762) at `363bf161`: 10 generic rules/173 eligible sites + five accepted semantic operations; 82 original-path source overlay files; source independent FE two-file reference and canonical Stage byte equivalence, actual SCC 0.5.31, ZIP topology, full Windows/CET/GRSP/package provenance and 361 package contracts all passed. Application ZIP artifact ID 14674596290.
