@@ -1738,6 +1738,58 @@ try {
         $semanticReport.status + ' edits=' + [int]$semanticReport.appliedEdits +
         ' originalTenGenericRulesPreserved=true')
 
+    # The second independently approved semantic operation must compose
+    # *after* Footsteps over the SAME effective ten-generic source. The
+    # original Dark Future UI and every animation call remain untouched.
+    $dfReference = Join-Path $work 'gco-phase2-dark-future-reference'
+    $dfReferenceLog = Join-Path $work 'gco-phase2-dark-future-reference.log'
+    & dotnet $dll phase2-dark-future --game $game --base-overlay $callbackFolder --out $dfReference *> $dfReferenceLog
+    if ($LASTEXITCODE -ne 0) {
+      $diagnostic=if (Test-Path -LiteralPath $dfReferenceLog -PathType Leaf) {
+        Get-Content -LiteralPath $dfReferenceLog -Raw
+      } else { '' }
+      $m=[regex]::Match([string]$diagnostic, 'DARK_FUTURE_[A-Z0-9_]+')
+      $safe=if ($m.Success) { $m.Value } else { 'NO_SAFE_SOURCE_ERROR_CODE' }
+      throw ('GCO_DARK_FUTURE_REFERENCE_GENERATOR_FAILED: '+$safe)
+    }
+    $dfReport = Get-Content -LiteralPath (Join-Path $dfReference 'phase2-result.json') -Raw | ConvertFrom-Json
+    if ($dfReport.ruleId -ne 'DARK_FUTURE_INFINITE_TAG_CACHE_V1' -or
+        $dfReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+      throw 'GCO_DARK_FUTURE_REFERENCE_RESULT_INVALID'
+    }
+    if ($dfReport.status -eq 'APPLIED') {
+      $dfScripts = Join-Path $dfReference 'r6/scripts'
+      $dfFiles = @(Get-ChildItem -LiteralPath $dfScripts -Filter '*.reds' -File -Recurse)
+      if ($dfFiles.Count -ne 1 -or [int]$dfReport.appliedEdits -ne 1) {
+        throw 'GCO_DARK_FUTURE_REFERENCE_EXPECTED_SINGLE_SOURCE'
+      }
+      foreach ($file in $dfFiles) {
+        $rel=[IO.Path]::GetRelativePath($dfScripts, $file.FullName)
+        if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+          throw 'GCO_DARK_FUTURE_REFERENCE_PATH_ESCAPE'
+        }
+        $dest = Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+        if (Test-Path -LiteralPath $dest -PathType Leaf) {
+          $old = Get-Content -LiteralPath $dest -Raw
+          $now = Get-Content -LiteralPath $file.FullName -Raw
+          foreach ($m in @([regex]::Matches($old,
+                   '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                   ForEach-Object Value | Sort-Object -Unique)) {
+            if (!$now.Contains($m, [StringComparison]::Ordinal)) {
+              throw 'GCO_DARK_FUTURE_REFERENCE_LOST_GENERIC_SOURCE'
+            }
+          }
+        }
+        else {
+          New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+      }
+    }
+    Write-Host ('PASS Phase 2 Dark Future reference: status='+$dfReport.status+
+        ' edits='+[int]$dfReport.appliedEdits+
+        ' originalUpdateAndAnimationsPreserved=true')
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -1763,6 +1815,14 @@ try {
     if ($stageFiles.Count -ne [int]$stageReport.generatedFiles -or
         $stageFiles.Count -ne $manualFiles.Count) {
         throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
+    }
+    if ($dfReport.status -eq 'APPLIED') {
+      $darkFamily=@($stageReport.completed | Where-Object { $_.id -eq 'dark-future-infinite-tag' })
+      if ($darkFamily.Count -ne 1 -or
+          $darkFamily[0].order -ne 12 -or
+          [int]$darkFamily[0].rewrittenExpressions -ne 1) {
+        throw 'GCO_DARK_FUTURE_CANONICAL_GENERATION_NOT_CONNECTED'
+      }
     }
     # Every ordered generated REDscript source must match the independent
     # composition. Retired native FAR/subscriber source is never emitted.
