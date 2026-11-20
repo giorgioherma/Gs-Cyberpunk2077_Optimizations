@@ -175,6 +175,19 @@ class FootstepsSemanticContracts(unittest.TestCase):
         self.assertEqual(report["status"], "COMPLETE")
         self.assertIsNone(staged)
 
+    def test_unrelated_reflection_member_is_not_reused_as_cache(self):
+        source = STOCK.replace("  private let m_warnedNoCooked: Bool;",
+            "  private let m_unrelatedClass: ref<ReflectionClass>;\\n"
+            "  private let m_warnedNoCooked: Bool;")
+        source = source.replace("    let classes = Reflection.GetClasses();",
+            "    let previous = this.m_unrelatedClass;\\n"
+            "    let classes = Reflection.GetClasses();")
+        result, staged = self.run_one(source)
+        self.assertEqual(result["status"], "APPLIED")
+        self.assert_complete(staged)
+        self.assertIn("let previous = this.m_unrelatedClass;", staged)
+        self.assertNotIn("return this.m_unrelatedClass", staged)
+
     def test_incompatible_target_refuses_only_footsteps(self):
         bad = STOCK.replace('n"EquipNewFootwearByPlayer"',
                             'n"OtherTargetFunction"')
