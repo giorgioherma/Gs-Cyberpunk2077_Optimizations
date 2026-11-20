@@ -23,6 +23,16 @@ public partial class MainWindow : Window
     private static readonly Brush AnalyzeOkGreen = new SolidColorBrush(Color.FromRgb(101, 220, 162));
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private readonly DispatcherTimer glitchTimer = new();
+    // One WPF-only progress indicator shared by Capture and Analyze consoles.
+    // Tokens keep independent operations (for example report generation)
+    // from stopping another operation's indicator prematurely.
+    private readonly DispatcherTimer consoleActivityTimer = new()
+        { Interval = TimeSpan.FromMilliseconds(350) };
+    private sealed record ConsoleActivity(string Message, bool Results, string PreviousText);
+    private readonly Dictionary<long, ConsoleActivity> consoleActivities = new();
+    private long nextConsoleActivityId;
+    private int consoleActivityDots;
+    private string? lastActivityRender;
     // Windows start notifications and process-handle exit events are idle
     // until the game transitions. Only start a slow timer if WMI is unavailable.
     private readonly GameProcessEvents gameProcesses = new();
@@ -126,6 +136,7 @@ public partial class MainWindow : Window
         Title = $"G's Cyberpunk 2077 Optimizer — v{version}";
         BuildVersionText.Text = $"v{version}";
         glitchTimer.Tick += GlitchTick;
+        consoleActivityTimer.Tick += (_, _) => AdvanceConsoleActivity();
         gameStateTimer.Tick += GameStateTimer_Tick;
         gameProcesses.Started += pid => DispatchGameEvent(() => GameStarted(pid));
         gameProcesses.Exited += pid => DispatchGameEvent(() => GameExited(pid));
@@ -847,6 +858,8 @@ public partial class MainWindow : Window
         gameStateTimer.Stop();
         gameProcesses.Dispose();
         glitchTimer.Stop();
+        consoleActivityTimer.Stop();
+        consoleActivities.Clear();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
         analysisCancellation?.Cancel();
@@ -947,6 +960,55 @@ public partial class MainWindow : Window
             ContinueButton.IsEnabled = false;
         if (!isBusy && (pendingExternalGameStart || pendingGameExitRefresh))
             QueueGameReconciliation();
+    }
+
+    // The same three-step animation is used by every actual asynchronous
+    // operation. It does not imply measured progress or create game files.
+    internal long BeginConsoleActivity(string message)
+    {
+        long id = ++nextConsoleActivityId;
+        bool results = ResultsPage.Visibility == Visibility.Visible;
+        string previous = results ? ResultsStatusText.Text : StatusText.Text;
+        consoleActivities.Add(id, new ConsoleActivity(message, results, previous));
+        consoleActivityDots = 0;
+        consoleActivityTimer.Start();
+        AdvanceConsoleActivity();
+        return id;
+    }
+
+    internal void AdvanceConsoleActivity()
+    {
+        if (consoleActivities.Count == 0) return;
+        var activity = consoleActivities.Last().Value;
+        consoleActivityDots = consoleActivityDots % 3 + 1;
+        string rendered = activity.Message + new string('.', consoleActivityDots);
+        lastActivityRender = activity.Results
+            ? rendered : UserFacingConsoleText.Render(rendered);
+        if (activity.Results)
+            ResultsStatusText.Text = lastActivityRender;
+        else
+            StatusText.Text = lastActivityRender;
+    }
+
+    internal void EndConsoleActivity(long id)
+    {
+        if (!consoleActivities.Remove(id, out var completed)) return;
+        bool sameText = lastActivityRender is not null &&
+            (completed.Results ? ResultsStatusText.Text : StatusText.Text) ==
+            lastActivityRender;
+        if (consoleActivities.Count > 0)
+        {
+            consoleActivityDots = 0;
+            AdvanceConsoleActivity();
+            return;
+        }
+        consoleActivityTimer.Stop();
+        lastActivityRender = null;
+        if (!sameText) return; // Preserve a real completed/error message.
+        if (completed.Results)
+            ResultsStatusText.Text = completed.PreviousText;
+        else
+            StatusText.Text = completed.PreviousText;
     }
 
     // The Capture console is the main workflow guide: brief normal statuses,
