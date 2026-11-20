@@ -25,8 +25,12 @@ on:
       - 'assets/ui/elements/**'
       - 'src/GTotalOptimizer.Launcher/**'
       - 'src/GTotalOptimizer.Core/**'
+      # Phase 2 source-only work has its own ~1-minute SCC checkpoint.
+      # Changes to the shared generator/orchestrator still run full CI.
       - 'src/GRedscript.Resolver/**'
+      - '!src/GRedscript.Resolver/Phase2/**'
       - 'tests/GRedscript.Resolver.Tests/**'
+      - '!tests/GRedscript.Resolver.Tests/test_phase2_*.py'
       - 'tests/GTotalOptimizer.Core.Tests/**'
 
 permissions:
