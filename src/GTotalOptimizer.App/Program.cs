@@ -624,7 +624,8 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Analyze BACK must match REFRESH on its left; CLOSE must be fully hidden before a successful ZIP.");
 
-                if (window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
+                if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1 &&
+                    window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
                         System.Windows.Visibility.Visible)
                     throw new InvalidOperationException(
                         "Default Analyze layout requires vertical scrolling before any expanded analysis results.");
