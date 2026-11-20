@@ -343,6 +343,53 @@ try {
         ' helperForwarders=' + $semantic.callbacksWithForwardedHelpers +
         ' noUnprovenRouting=true noGeneratedFiles=true')
 
+    # R5 generic callback-work triage: exclude the seven reserved semantic
+    # owners from ranking only; source discovery and generator admission are
+    # unaffected. All evidence comes from existing sealed GRSP + tokens.
+    $callbackWorkJson = Join-Path $work 'gco-generic-callback-work.json'
+    $callbackWorkLog = Join-Path $work 'gco-generic-callback-work.log'
+    $reservedSemanticOwners = 'ReinforcementsSystem;Dark Future;FlushingEtiquette;Crowd Voice Unlocked;custom_quickslots;MuchBetterContracts;DigitalVixenCore'
+    & dotnet $dll scan-callback-work --game $game --analysis $result --exclude-ranking-owners $reservedSemanticOwners --out $callbackWorkJson *> $callbackWorkLog
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $callbackWorkJson -PathType Leaf)) {
+        throw 'GCO_GENERIC_CALLBACK_WORK_REAL_SOURCE_SCAN_FAILED'
+    }
+    $callbackWork = Get-Content -LiteralPath $callbackWorkJson -Raw | ConvertFrom-Json -Depth 80
+    $rankedCallbackRows = @($callbackWork.callbacks | Where-Object { $_.rankingIncluded })
+    $sourceMeasured = @($rankedCallbackRows | Where-Object {
+        $null -ne $_.sourceMatchedCallsiteExclusiveMs
+    })
+    $multiOwnerPatterns = @($callbackWork.patterns | Where-Object { $_.crossOwnerStructure })
+    if ($callbackWork.schemaVersion -ne 'gco.redscript.generic-callback-work.v1' -or
+        $callbackWork.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$callbackWork.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        [int]$callbackWork.analyzedOnActionMethods -lt 20 -or
+        [int]$callbackWork.rankedOnActionMethods -ne $rankedCallbackRows.Count -or
+        [int]$callbackWork.rankedOnActionMethods -ge [int]$callbackWork.analyzedOnActionMethods -or
+        [int]$callbackWork.sourceMatchedMeasuredMethods -ne $sourceMeasured.Count -or
+        [int]$callbackWork.crossOwnerPatterns -ne $multiOwnerPatterns.Count -or
+        [int]$callbackWork.crossOwnerPatterns -lt 1 -or
+        $callbackWork.rankingExclusionsAffectGeneratorAdmission -ne $false -or
+        $callbackWork.anyFullForwardedCalleeEffectsProven -ne $false -or
+        $callbackWork.canSkipCallback -ne $false -or
+        $callbackWork.generationAuthorized -ne $false -or
+        $callbackWork.originalSourcesModified -ne $false -or
+        @($callbackWork.callbacks | Where-Object { $_.generationAuthorized -ne $false }).Count -ne 0) {
+        throw 'GCO_GENERIC_CALLBACK_WORK_REAL_SOURCE_CONTRACT_FAILED'
+    }
+    $patternSummary = @($multiOwnerPatterns | ForEach-Object {
+        $_.pattern + ':' + $_.sourceOwnerFolders + 'owners/' +
+            $_.callbackMethods + 'methods'
+    }) -join ','
+    Write-Host ('PASS GCO cross-owner generic callback-work discovery: ' +
+        'sourceFiles=' + $callbackWork.sourceFiles +
+        ' callbacks=' + $callbackWork.analyzedOnActionMethods +
+        ' ranked=' + $callbackWork.rankedOnActionMethods +
+        ' sourceMatchedMeasured=' + $callbackWork.sourceMatchedMeasuredMethods +
+        ' crossOwnerPatterns=' + $callbackWork.crossOwnerPatterns +
+        ' families=' + $patternSummary +
+        ' rewrites=0 entriesUnknown=true originalSourcesUnchanged=true')
+
+
     # One canonical, source-wide position dependency inventory before
     # native proximity admission. No mod list, no extra parser, no output
     # paths published from this sealed runner.
