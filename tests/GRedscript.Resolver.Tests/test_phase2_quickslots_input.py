@@ -147,14 +147,16 @@ class QuickslotsInputContracts(unittest.TestCase):
         self.base = Path(t.name)
         self.count = 0
 
-    def run_one(self, source=SOURCE, path=OWNER, framework=True):
+    def run_one(self, source=SOURCE, path=OWNER, framework=True,
+                framework_sources=None):
         self.count += 1
         game = self.base / f"game-{self.count}"
         owner = game / path
         owner.parent.mkdir(parents=True)
         owner.write_text(source, encoding="utf-8")
         if framework:
-            for rel, text in FRAMEWORK.items():
+            for rel, text in (FRAMEWORK if framework_sources is None
+                              else framework_sources).items():
                 other = game / rel
                 other.parent.mkdir(parents=True, exist_ok=True)
                 other.write_text(text, encoding="utf-8")
@@ -236,6 +238,31 @@ class QuickslotsInputContracts(unittest.TestCase):
         self.assertIn("this.CustomAuthorHook();", output)
         self.assertIn("this.MyExtraGameplaySideEffect();", output)
         self.verify(output)
+
+    def test_framework_reorganized_and_split_across_owner_files(self):
+        old = FRAMEWORK[HUB]
+        hub, listener_classes = old.split("public class InputListener", 1)
+        moved = {
+            "r6/scripts/CustomOwner/Functions/Hub_2027.reds": hub,
+            "r6/scripts/CustomOwner/API/Listeners_2027.reds":
+                "module GRedRuntime\npublic class InputListener" +
+                listener_classes,
+            "r6/scripts/CustomOwner/Runtime/Main_2027.reds":
+                FRAMEWORK[RUNTIME],
+        }
+        report, updated = self.run_one(framework_sources=moved)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.verify(updated)
+
+    def test_framework_with_missing_input_device_callback_narrow_refusal(self):
+        broken = dict(FRAMEWORK)
+        broken[HUB] = broken[HUB].replace(
+            "public func OnGRedInputDeviceChanged(lastUsedKBM: Bool) -> Void {}",
+            "public func OnUnknownCallback(lastUsedKBM: Bool) -> Void {}")
+        report, updated = self.run_one(framework_sources=broken)
+        self.assertEqual(report["status"], "REFUSED", report)
+        self.assertEqual(report["reason"], "CQ_INPUT_RUNTIME_ABI_NOT_PROVEN")
+        self.assertIsNone(updated)
 
     def test_framework_missing_refuses_only_bridge(self):
         r, s = self.run_one(framework=False)
