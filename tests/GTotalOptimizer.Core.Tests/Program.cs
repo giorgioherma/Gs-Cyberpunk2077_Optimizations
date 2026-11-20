@@ -2123,11 +2123,9 @@ if (args.Length > 0)
     // The builder checks original source/packaged SHA-256 identity.
     Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (1870, 652),
         "updated 1870x652 RGB blue skyline shipped under original filename");
-    var sccCompiler = Path.Combine(delivered, "components", "redscript-compiler", "scc_lib.dll");
-    Require(File.Exists(sccCompiler) &&
-        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            File.ReadAllBytes(sccCompiler))) == "49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100",
-        "official native SCC 0.5.31 compiler is packaged and SHA-verified");
+    Require(!Directory.Exists(Path.Combine(delivered, "components", "redscript-compiler")) &&
+        !File.Exists(Path.Combine(delivered, "components", "redscript-compiler", "scc_lib.dll")),
+        "third-party SCC compiler is CI-only and excluded from distributed GCO application");
     var frameworkManifest = Path.Combine(delivered, "components",
         "redruntime", "source-sha256.json");
     Require(File.Exists(frameworkManifest),
