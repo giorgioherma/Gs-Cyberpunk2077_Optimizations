@@ -270,7 +270,7 @@ internal static class Program
             // never unlock CONTINUE, even when F11 captures are sealed.
             var reportFixtureRoot = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(), "GCO-Report-Gate-" + Guid.NewGuid().ToString("N"));
-            const string reportFixtureSession = "fixture-session";
+            const string reportFixtureSession = "0123456789abcdef0123456789abcdef";
             try
             {
                 var html = GcoProfilerReportService.ReportFile(reportFixtureRoot,
@@ -287,7 +287,7 @@ internal static class Program
                 System.IO.File.WriteAllText(json, "{\"sessionId\":\"another-session\"}");
                 if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
                     throw new InvalidOperationException("Wrong-session report unlocked CONTINUE.");
-                System.IO.File.WriteAllText(json, "{\"sessionId\":\"fixture-session\"}");
+                System.IO.File.WriteAllText(json, JsonSerializer.Serialize(new { sessionId = reportFixtureSession }));
                 if (!MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
                     throw new InvalidOperationException("Complete report did not unlock CONTINUE.");
                 System.IO.File.WriteAllText(json, "{broken");
