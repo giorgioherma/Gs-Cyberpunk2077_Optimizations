@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Custom Quickslots #16: complete focused and full CI evidence
+
+- [Fast #91 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44830562006) (source `181a0957`): 56 semantic tests including current source, partial/historical-complete, custom moved/split framework API and narrow refusal; **2,331 post-generic** game source files, 6 effective semantic owner files, canonical GCO one-pass `Stage()` applied Quickslots at order 16 **without reapplying any generics** and matched independent Quickslots output byte-for-byte. Official SCC 0.5.31 succeeded (43,488,938 cache bytes), all original bytes unchanged.
+- [Full #1030 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44829474253): 82 historical real-source overlay files, source composition and SCC with framework owner, 361 package contracts, correct combined ZIP topology, `.NET 10` app artifact `v1.2.5-run1030-a1` (artifact 14675389533). On the distinct older **2,319-file** fixture Quickslots reported `REFUSED` because its runtime ABI was unproven; the fast **post-generic #91** is the authoritative applied #16 gate.
+- Source-generated InputHub bridge retains original OnAction / generic membership and engine fallback, cleans up both kinds of subscriptions, recognizes partially and fully manually optimized variants without duplicate listeners. No game-play equivalence/CPU savings proved by CI. D-pad pass 8 separate future candidate.
+
+
 ## 2026-11-20 — Source-compatible Custom Quickslots InputHub semantic #16
 
 - `CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1`: one new `CustomQuickslotsInputHubPass` after the accepted 10 generics and 5 Phase 2 semantics. Avoid per-action engine observer cost on current post-generic source by subscribing only the owner-defined quickslot CNames through current G-REDruntime InputHub, plus device notification. Keep old original OnAction engine fallback if runtime/subscription fails, preserve CET Lua `SetLastUsedKBM`, grace transition and cleanup, no duplicated framework/helper, no D-pad-prohibition cache yet.
