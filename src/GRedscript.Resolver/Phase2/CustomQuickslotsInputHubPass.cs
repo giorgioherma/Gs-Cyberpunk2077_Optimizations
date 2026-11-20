@@ -478,7 +478,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         }
         else if (legacyAttach >= 0)
             changes.Add(new(t[legacyAttach].Start,
-                t[legacyAttach + 7].End,
+                t[legacyAttach + 8].End,
                 AttachRouting.Replace("\n", Eol(source))));
         else throw new Refused("CQ_INPUT_ATTACH_ROUTE_MISSING");
 
@@ -496,7 +496,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         }
         else if (legacyDetach >= 0)
             changes.Add(new(t[legacyDetach].Start,
-                t[legacyDetach + 7].End,
+                t[legacyDetach + 8].End,
                 DetachRouting.Replace("\n", Eol(source))));
         else throw new Refused("CQ_INPUT_DETACH_ROUTE_MISSING");
 
@@ -506,8 +506,8 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
             throw new Refused("CQ_INPUT_GRACE_TRANSITION_CHANGED");
         if (!Contains(t, grace.Open + 1, grace.Close,
             "SyncGraceState", "(", ")", ";"))
-            changes.Add(new(t[graceSet + 6].End,
-                t[graceSet + 6].End,
+            changes.Add(new(t[graceSet + 5].End,
+                t[graceSet + 5].End,
                 Eol(source) + "  if IsDefined(this.customQuickslotsInputListener) {" +
                 Eol(source) + "    this.customQuickslotsInputListener.SyncGraceState();" +
                 Eol(source) + "  }"));
