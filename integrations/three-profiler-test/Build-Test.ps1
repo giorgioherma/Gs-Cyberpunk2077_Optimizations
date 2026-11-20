@@ -510,7 +510,9 @@ IMPORTANT
 - If a capture is missing, the app identifies the missing domain before Continue.
 - Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
   recovery action if interrupted during profiling.
-- The optimization generator/combined ZIP feature is not yet enabled.
+- GENERATE creates a source-checked CET + REDscript test ZIP after ANALYZE.
+- Official REDscript SCC compilation is run in GitHub CI, not on your PC.
+- Generated mods still require in-game validation; install as a reversible Vortex overlay.
 - Your captured data is under the app folder's RESULTS directory.
 
 VERSION $version (portable build). No system .NET installation required.
