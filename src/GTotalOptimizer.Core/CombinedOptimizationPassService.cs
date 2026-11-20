@@ -266,10 +266,8 @@ public sealed class CombinedOptimizationPassService
         {
             string rel = item.GetProperty("path").GetString() ?? "";
             string sha = item.GetProperty("sha256").GetString() ?? "";
-            if ((!rel.StartsWith("r6/scripts/G-RedRuntime/",
-                    StringComparison.OrdinalIgnoreCase) &&
-                 !rel.StartsWith("optional-native/r6/scripts/G-RedRuntime/",
-                    StringComparison.OrdinalIgnoreCase)) ||
+            if (!rel.StartsWith("r6/scripts/G-RedRuntime/",
+                    StringComparison.OrdinalIgnoreCase) ||
                 !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
                 rel.Contains('\\') || rel.Split('/').Any(x => x is "" or "." or "..") ||
                 sha.Length != 64 || !sha.All(Uri.IsHexDigit) ||
