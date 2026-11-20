@@ -44,6 +44,15 @@
   6/10-frame UI throttling is not implemented. This membership cache's individual
   measured savings are unknown; no FPS claim.
 
+## Implemented semantic operation 3 — Dark Future tagged icon 400ms visual cadence
+
+- **Owner decision:** routine `On Edge`, `Dehydrated`, `Hungry`, `Tired` status icons may refresh at **2.5 Hz / 400 ms**. Their gameplay conditions, penalties, status registration/removal, current record values, icon visibility and immediate first draw must remain correct.
+- **Scope:** only `buffListGameController.UpdateBuffDebuffList` calls to `buffListItemLogicController.SetData` for records bearing the actual `DarkFutureCanHideOnBuffBar` gameplay tag. Other Cyberpunk status icons keep the original cadence. No timing changes to hunger, hydration, Nerve or energy simulation or to the cooldown wheel.
+- **Implementation:** `DarkFutureStatusIconCadencePass` is a source-aware after-generic owner-local operation. A 400ms simulation-clock gate controls routine draws; changed effect records still draw immediately. If the player or time-system clock is unavailable, every call executes normally. Three per-controller fields maintain a private epoch. Clock rollback after game reload forces a full refresh; no timers, scheduled callbacks or framework services are added.
+- **Compatibility:** emit missing field/gate/record-change pieces only, no-op on fully applied source, honor custom/relocated compatible source and prior generic and Dark Future tag-cache edits, narrow source refusal when the essential record flow is incompatible.
+- **One Generate:** generics (1–10) → Footsteps (11) → DF tag cache (12) → DF status icons (13); the two Dark Future operations compose into the **same actual owner file**, preserving existing snapshots and output provenance.
+- **Verified:** [fast Phase 2 #42 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44807947104): **26 tests**, 2,331 real post-generic .reds plus two effective semantic owner files, official SCC 0.5.31 compiled (43,483,119 bytes), original sources untouched. A real integration GCO build/ZIP replay and matched gameplay performance A/B are separately required; do not infer FPS benefit from call reduction.
+
 ## 1. Evidence and exact archive inventory
 
 Primary **current source**: uploaded `scriptsliveAFTERgeneric.zip`, SHA-256 `3d1aaff0327196350621dcc54bd99cf03433556602f09b3b572b926f05768c3b`; its `scripts/` root maps to game-relative `r6/scripts/`. It contains **2,331 .reds files**. The user's `original_cet_source/main/base_after_generic` is also a separately uploaded source snapshot; use current effective live source for every future Generate, not a permanent fixture/mod list.
