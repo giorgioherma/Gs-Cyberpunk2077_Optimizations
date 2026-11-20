@@ -188,6 +188,16 @@ class DarkFutureSemanticContracts(unittest.TestCase):
         self.assertEqual(again["status"], "COMPLETE")
         self.assertIsNone(changed)
 
+    def test_compatible_owner_moved_to_custom_folder(self):
+        new_path = "r6/scripts/Custom_DarkFuture_2027/UI/Overrides.reds"
+        result, optimized = self.call(STOCK, new_path)
+        self.assertEqual(result["status"], "APPLIED")
+        self.assertEqual(result["sourcePath"], new_path)
+        self.complete(optimized)
+        repeated, staged = self.call(optimized, new_path)
+        self.assertEqual(repeated["status"], "COMPLETE")
+        self.assertIsNone(staged)
+
     def test_equivalent_postgeneric_overlay_used_not_overwritten(self):
         extra = "r6/scripts/Dark Future/UI/Another.reds"
         base = self.root / "prior-generic"
