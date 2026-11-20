@@ -266,6 +266,40 @@ internal static class Program
             }
 
 
+            // Missing, incomplete, stale and corrupt derived reports must
+            // never unlock CONTINUE, even when F11 captures are sealed.
+            var reportFixtureRoot = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "GCO-Report-Gate-" + Guid.NewGuid().ToString("N"));
+            const string reportFixtureSession = "fixture-session";
+            try
+            {
+                var html = GcoProfilerReportService.ReportFile(reportFixtureRoot,
+                    reportFixtureSession);
+                var json = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(html)!,
+                    GcoProfilerReportService.JsonFile);
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Missing report unlocked CONTINUE.");
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(html)!);
+                System.IO.File.WriteAllText(html, "<html>ready</html>");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("HTML-only report unlocked CONTINUE.");
+                System.IO.File.WriteAllText(json, "{\"sessionId\":\"another-session\"}");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Wrong-session report unlocked CONTINUE.");
+                System.IO.File.WriteAllText(json, "{\"sessionId\":\"fixture-session\"}");
+                if (!MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Complete report did not unlock CONTINUE.");
+                System.IO.File.WriteAllText(json, "{broken");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Corrupt report unlocked CONTINUE.");
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(reportFixtureRoot))
+                    System.IO.Directory.Delete(reportFixtureRoot, recursive: true);
+            }
+
             static void VerifyAtSize(MainWindow window, double width, double height)
             {
                 var root = window.Content as System.Windows.FrameworkElement
