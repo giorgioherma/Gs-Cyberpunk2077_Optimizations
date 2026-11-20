@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using GRedscript.Resolver.Phase2;
 
 namespace GRedscript.Resolver;
 
@@ -437,6 +438,58 @@ public static class RedscriptGenerationPlan
             results.Add(new(item.Order!.Value, item.Id, edits,
                 newlyCreated, composed, collisions.ToArray()));
         }
+
+        // The post-generic EFFECTIVE source is the Phase 2 semantic baseline.
+        // The same source-aware generator is used by the fast independent
+        // Phase 2 checkpoint and the one-invocation combined GCO Generate.
+        // No historical semantic pass, repair pass or whole-file overwrite.
+        string phase2Root = Path.Combine(output, "_stages", "11-dvcore-footsteps");
+        var footstep = DigitalVixenFootstepsPass.Generate(game, phase2Root,
+            Directory.Exists(final) ? final : null);
+        if (footstep.Status == "APPLIED")
+        {
+            string rel = footstep.SourcePath ??
+                throw new InvalidDataException("DVCORE_STAGE_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(phase2Root,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!IsInside(source, phase2Root) || !IsInside(target, final) ||
+                !File.Exists(source) || !rel.StartsWith("r6/scripts/",
+                    StringComparison.Ordinal) ||
+                !target.EndsWith(".reds", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("DVCORE_SEMANTIC_OUTPUT_UNSAFE");
+            bool existing = File.Exists(target);
+            if (existing)
+            {
+                // Semantic changes must retain all prior generic work even
+                // when the same owner file receives multiple accepted passes.
+                var earlier = System.Text.RegularExpressions.Regex.Matches(
+                    File.ReadAllText(target), @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                string rewritten = File.ReadAllText(source);
+                if (earlier.Any(marker => !rewritten.Contains(marker,
+                        StringComparison.Ordinal)))
+                    throw new InvalidDataException("DVCORE_LOST_PRIOR_GENERIC_MARKER");
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            }
+            File.Copy(source, target, overwrite: existing);
+            files += existing ? 0 : 1;
+            expressions += footstep.AppliedEdits;
+            results.Add(new(11, "dvcore-footsteps", footstep.AppliedEdits,
+                existing ? 0 : 1, existing ? 1 : 0, []));
+        }
+        else if (footstep.Status == "REFUSED")
+        {
+            // Only the affected mod-specific operation is deferred.
+            skipped.Add(new(11, "dvcore-footsteps", 1,
+                footstep.Reason ?? "DVCORE_SEMANTIC_INCOMPATIBLE"));
+        }
+        else if (footstep.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("DVCORE_UNKNOWN_GENERATOR_STATUS");
 
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
