@@ -38,7 +38,7 @@
   19 tests and combined actual Footsteps + Dark Future SCC source compilation
   on the 2,331-file post-generic baseline (43,482,205 bytes). Later alias/owner
   compatibility enhancements require the subsequent checkpoint result.
-  Full GCO independent source composition/ZIP verification remains separate.
+  Independently [full GCO CI #1009 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613): ten generics/173 eligible edits + both semantic rules = **80 composed game-relative `.reds` files**; output matches independently generated source, official SCC with framework, CET/GRSP/PresentMon, Windows app and package all pass. Later safety refinements passed focused #31; measured workload improvement and gameplay parity remain unproven.
 - **High-cost S1 deferred:** previously measured repeated `FillOutroAnimationStart`
   work cannot be safely skipped without animation/invalidation proof. Historical
   6/10-frame UI throttling is not implemented. This membership cache's individual
