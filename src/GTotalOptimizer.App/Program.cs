@@ -588,9 +588,17 @@ internal static class Program
                 }
 
                 Render();
+                window.CapturePage.Visibility = System.Windows.Visibility.Collapsed;
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
                 window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Collapsed ||
+                    window.CaptureFooterHost.IsVisible ||
+                    window.ContinueButton.IsVisible ||
+                    window.ConsoleTextHost.IsVisible ||
+                    !window.ResultsStatusText.IsVisible)
+                    throw new InvalidOperationException(
+                        "Analyze must hide the entire Capture footer, including stale status and CONTINUE, while retaining its own bottom console.");
                 // Restored/capture health stays at the top. Operational
                 // messages must be INSIDE the scrollable console BELOW actions.
                 if (window.AnalyzeButton.ActualWidth <= 0 ||
@@ -764,7 +772,14 @@ internal static class Program
 
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
+                window.CapturePage.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Visible ||
+                    !window.CaptureFooterHost.IsVisible ||
+                    !window.ConsoleTextHost.IsVisible ||
+                    !window.ContinueButton.IsVisible)
+                    throw new InvalidOperationException(
+                        "Capture return must restore the original footer and CONTINUE control.");
 
                 // The same activity animation must work in the older Page 1
                 // console without changing the Capture image/card structure.
