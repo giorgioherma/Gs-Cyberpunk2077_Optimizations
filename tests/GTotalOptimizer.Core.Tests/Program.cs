@@ -108,6 +108,15 @@ if (args.Length > 0 && args[0] is "--stage4-generate" or "--stage4-idempotent")
         throw new InvalidDataException(expectedSecond
             ? "CET owner generated new transforms after its complete first pass."
             : "Existing CET source owner produced no applied optimization pass.");
+    // The original CET generator classifies all non-applied outcomes in its
+    // companion manifest. The single GCO ZIP must retain those exact reasons
+    // and never report an unexplained number of ignored source candidates.
+    if (pass.SkipDetails.Length != pass.SkippedCount ||
+        pass.SkipDetails.Any(row =>
+            string.IsNullOrWhiteSpace(row.Category) ||
+            string.IsNullOrWhiteSpace(row.Reason)))
+        throw new InvalidDataException(
+            "CET_OWNER_SKIPPED_REASONS_NOT_PRESERVED");
     Console.WriteLine((expectedSecond
         ? "PASS Stage 4 completed-source CET second pass:"
         : "PASS Stage 4 CET source-owned generated game-relative ZIP:") +
