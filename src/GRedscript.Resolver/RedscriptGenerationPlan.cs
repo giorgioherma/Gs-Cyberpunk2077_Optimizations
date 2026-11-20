@@ -88,12 +88,7 @@ public static class RedscriptGenerationPlan
         ("shared-player-signal", "C", "SHARED_PLAYER_SIGNAL_V1",
             "scan-shared-player", "preview-shared-player",
             "eligible", "alreadyComplete", "candidates",
-            "Player attach generation or cached handle may differ from live getter"),
-        ("native-player-location-predicate", "E",
-            "NATIVE_PLAYER_LOCATION_PREDICATE_V1",
-            "scan-native-location-subscribers", "preview-native-location-subscribers",
-            "eligible", "alreadyComplete", "candidates",
-            "Native FAR state may lag teleport/rapid movement; original check executes on NEAR/UNKNOWN")
+            "Player attach generation or cached handle may differ from live getter")
     ];
 
     // Explicit inventory for the approved A-E experimental systems.
@@ -122,6 +117,7 @@ public static class RedscriptGenerationPlan
 
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
+        VerifyNoRetiredLocationSources(game);
         string sourceHash = admission.SourceStackSha256 ??
             throw new InvalidDataException("REDSCRIPT_PLAN_NO_SOURCE_HASH");
         var temp = Path.Combine(Path.GetTempPath(),
@@ -154,8 +150,6 @@ public static class RedscriptGenerationPlan
                         CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
                     case "shared-player-signal":
                         GenericSharedPlayerSignalPass.Scan(game, report); break;
-                    case "native-player-location-predicate":
-                        GenericNativeLocationSubscriberPass.Scan(game, report); break;
                     default: throw new InvalidOperationException(
                         "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
                 }
@@ -240,6 +234,7 @@ public static class RedscriptGenerationPlan
             ?? throw new InvalidDataException("REDSCRIPT_PLAN_INVALID_DOCUMENT");
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
+        VerifyNoRetiredLocationSources(game);
         if (document.SchemaVersion != Schema ||
             !document.BasedOnCurrentInstalledSource ||
             document.ProductionZipAuthorized ||
@@ -334,9 +329,6 @@ public static class RedscriptGenerationPlan
                 "shared-player-signal" =>
                     GenericSharedPlayerSignalPass.Preview(game,
                         analysis, next, basePreview),
-                "native-player-location-predicate" =>
-                    GenericNativeLocationSubscriberPass.Preview(game,
-                        next, document.SourceStackSha256, basePreview),
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
@@ -357,20 +349,9 @@ public static class RedscriptGenerationPlan
                     game, "r6", "scripts", rel));
                 string destination = Path.GetFullPath(Path.Combine(
                     final, "r6", "scripts", rel));
-                bool newNativeAdapter =
-                    item.Id == "native-player-location-predicate" &&
-                    Path.GetFileName(rel).StartsWith("GCO_NativeLocation_",
-                        StringComparison.Ordinal) &&
-                    Path.GetExtension(rel).Equals(".reds",
-                        StringComparison.OrdinalIgnoreCase) &&
-                    !File.Exists(live) &&
-                    Directory.Exists(Path.GetDirectoryName(live)!) &&
-                    File.ReadAllText(file).Contains(
-                        "GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
-                        StringComparison.Ordinal);
                 if (!IsInside(destination, final) ||
                     !IsInside(live, game) ||
-                    (!File.Exists(live) && !newNativeAdapter))
+                    !File.Exists(live))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_GENERATED_SOURCE_PATH_INVALID");
                 if (File.Exists(destination) &&
@@ -378,8 +359,7 @@ public static class RedscriptGenerationPlan
                         "source-cname-membership" or
                         "blackboard-definitions" or
                         "pure-constant-slices" or "immutable-action-event-snapshot" or
-                        "shared-player-signal" or
-                        "native-player-location-predicate"))
+                        "shared-player-signal"))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_UNCOMPOSABLE_SOURCE_COLLISION: " +
                         item.Id + " " + rel);
@@ -414,6 +394,41 @@ public static class RedscriptGenerationPlan
             JsonSerializer.Serialize(result, JsonOptions),
             new UTF8Encoding(false));
         return result;
+    }
+
+    // The former native REDscript FAR/predicate generator is retired from
+    // automatic optimization. Existing generated files are NOT pristine
+    // author code: refuse with an actionable reason instead of replacing,
+    // re-generating, or silently bundling obsolete native dependencies.
+    // Recover by disabling/restoring that old experimental Vortex overlay.
+    private static void VerifyNoRetiredLocationSources(string game)
+    {
+        string scripts = Path.Combine(game, "r6", "scripts");
+        if (!Directory.Exists(scripts)) return;
+        foreach (string path in Directory.EnumerateFiles(scripts, "*.reds",
+                     SearchOption.AllDirectories))
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException(
+                    "REDSCRIPT_RETIRED_LOCATION_SYMLINK_REFUSED");
+            string content = File.ReadAllText(path);
+            bool generatedAdapter = Path.GetFileName(path).StartsWith(
+                "GCO_NativeLocation_", StringComparison.OrdinalIgnoreCase);
+            bool generatedGuard =
+                content.Contains("GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1",
+                    StringComparison.Ordinal) ||
+                content.Contains("GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1",
+                    StringComparison.Ordinal) ||
+                content.Contains("GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1",
+                    StringComparison.Ordinal) ||
+                content.Contains("GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:",
+                    StringComparison.Ordinal);
+            if (generatedAdapter || generatedGuard)
+                throw new InvalidDataException(
+                    "REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT: " +
+                    "Disable the old experimental REDscript location pass in " +
+                    "Vortex or restore the original mod sources before Analyze.");
+        }
     }
 
     private static bool IsInside(string child, string parent)
