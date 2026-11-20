@@ -175,6 +175,99 @@ class FootstepsSemanticContracts(unittest.TestCase):
                          "DVCORE_RTTI_SUCCESS_BRANCH_INCOMPATIBLE")
         self.assertIsNone(staged)
 
+    def test_one_gco_stage_from_ungeneric_stock_applies_generic_and_semantic(self):
+        game = self.root / "full-stack"
+        dv = game / TARGET
+        dv.parent.mkdir(parents=True)
+        dv.write_text(STOCK, encoding="utf8")
+        provider = game / "r6/scripts/Settings/Static.reds"
+        consumer = game / "r6/scripts/Consumer/Example.reds"
+        provider.parent.mkdir(parents=True)
+        consumer.parent.mkdir(parents=True)
+        provider.write_text("""module TestReusableSettings
+public class ReusableSettings {
+  public final static func Enabled() -> Bool { return true; }
+  public final static func Diagnostics() -> Bool { return false; }
+}
+""", encoding="utf8")
+        consumer.write_text("""module GenericConsumer
+import TestReusableSettings.*
+public class IndependentAuthor extends IScriptable {
+  public func OnAction(gi: GameInstance) -> Bool {
+    return ReusableSettings.Enabled() &&
+           ReusableSettings.Diagnostics() &&
+           GameInstance.GetQuestsSystem(gi).GetFact(n"test") == 1;
+  }
+}
+""", encoding="utf8")
+        plan = self.root / "all-plan.json"
+        analysis = self.root / "all-capture.json"
+        output = self.root / "all-generated"
+        p = subprocess.run(["dotnet", str(DLL), "plan-redscript",
+                            "--game", str(game), "--out", str(plan)],
+                           text=True, capture_output=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        manifest = json.loads(plan.read_text("utf8"))
+        self.assertEqual(manifest["implementedRuleCount"], 10)
+        self.assertGreater(manifest["eligibleSourceEdits"], 0)
+        analysis.write_text(json.dumps({
+            "schemaVersion": "grsp.resolver.input.v1",
+            "generationAuthorized": False,
+            "capture": {"collectionProvenance":
+                        "GCO_INDEXED_COLLECTED_BYTES_VERIFIED"},
+            "source": {"sourceStackSha256":
+                       manifest["sourceStackSha256"]}
+        }), encoding="utf8")
+        run = subprocess.run(["dotnet", str(DLL), "stage-redscript-plan",
+                             "--game", str(game), "--plan", str(plan),
+                             "--analysis", str(analysis), "--out", str(output)],
+                             text=True, capture_output=True, timeout=60)
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        report = json.loads((output / "stage-result.json").read_text("utf8"))
+        families = [x["id"] for x in report["completed"]]
+        self.assertIn("pure-constant-slices", families)
+        self.assertIn("dvcore-footsteps", families)
+        self.assertEqual(11, report["completed"][-1]["order"])
+        self.assertEqual(1, report["completed"][-1]["rewrittenExpressions"])
+        optimized = (output / "effective-preview" / TARGET).read_text("utf8")
+        self.assert_complete(optimized)
+        self.assertEqual(dv.read_text("utf8"), STOCK)
+        consumerOutput = output / "effective-preview/r6/scripts/Consumer/Example.reds"
+        self.assertTrue(consumerOutput.exists())
+        self.assertIn("GCO-GENERIC:", consumerOutput.read_text("utf8"))
+
+        # A partial real owner file must complete in the same Generate,
+        # rather than requiring a historical pass before GCO stage.
+        partial = STOCK.replace("  private let m_warnedNoCooked: Bool;",
+            "  private let m_audioClass: ref<ReflectionClass>;\n"
+            "  private let m_warnedNoCooked: Bool;")
+        dv.write_text(partial, encoding="utf8")
+        againPlan = self.root / "partial-plan.json"
+        againCapture = self.root / "partial-capture.json"
+        againOutput = self.root / "partial-generated"
+        q = subprocess.run(["dotnet", str(DLL), "plan-redscript",
+                            "--game", str(game), "--out", str(againPlan)],
+                           text=True, capture_output=True, timeout=60)
+        self.assertEqual(q.returncode, 0, q.stderr)
+        m = json.loads(againPlan.read_text("utf8"))
+        againCapture.write_text(json.dumps({
+            "schemaVersion": "grsp.resolver.input.v1",
+            "generationAuthorized": False,
+            "capture": {"collectionProvenance":
+                        "GCO_INDEXED_COLLECTED_BYTES_VERIFIED"},
+            "source": {"sourceStackSha256": m["sourceStackSha256"]}
+        }), encoding="utf8")
+        stage = subprocess.run(["dotnet", str(DLL), "stage-redscript-plan",
+                                "--game", str(game), "--plan", str(againPlan),
+                                "--analysis", str(againCapture),
+                                "--out", str(againOutput)],
+                                text=True, capture_output=True, timeout=60)
+        self.assertEqual(stage.returncode, 0, stage.stderr + stage.stdout)
+        result = json.loads((againOutput / "stage-result.json").read_text("utf8"))
+        self.assertIn("dvcore-footsteps", [x["id"] for x in result["completed"]])
+        completed = (againOutput / "effective-preview" / TARGET).read_text("utf8")
+        self.assert_complete(completed)
+
     def test_uninstalled_mod_does_not_create_any_source(self):
         result, staged = self.run_one(
             "module DigitalVixenCore\npublic class NotFootsteps {}\n")
