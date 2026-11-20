@@ -1,6 +1,27 @@
 # REDscript Phase 2 — Dark Future workload-first semantic audit
 
-**Checkpoint:** 2026-11-20. **Status: source audit complete; first behavior-preserving infinite-tag-cache semantic generator implemented and compiled in Phase 2 CI; historical animation-throttling S1 remains deferred.** Companion to [Phase 2 portfolio](REDSCRIPT-PHASE2-SEMANTIC-PLAN.md) and the [agreed candidate document](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). This focused investigation changes the initial implementation priority **within Dark Future**; it does not imply that an entire tested historical pass can be copied into a different source version.
+**Checkpoint:** 2026-11-20. **Status: two Dark Future semantics implemented and integrated; version-fluid partial-state repair verified in fast Phase 2 CI #48.** Historical repeated-outro/finite-timer throttling and empty-widget-pool rewrite remain deferred pending source/behavior proof and a matched residual-work capture. Companion to [Phase 2 portfolio](REDSCRIPT-PHASE2-SEMANTIC-PLAN.md) and the [agreed candidate document](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). This focused investigation changes the initial implementation priority **within Dark Future**; it does not imply that an entire tested historical pass can be copied into a different source version.
+
+## Current continuation — work already implemented and next measured priorities
+
+**Verified before new work:** GCO has three ordered Phase 2 semantic operations: #11 DVCore Footsteps successful RTTI cache, #12 Dark Future infinite-duration gameplay-tag membership cache, and #13 **Dark Future four tagged status-icon visual cadence at 400 ms (2.5 Hz)**. Both Dark Future rules edit the *same effective owner file* in one generic-first Generate, producing only **two distinct semantic owner files** in total with DVCore. No historical whole-file optimization ZIP or additional timer/listener/runtime component is installed. Other effects, cooldown animations, list updates, input, needs, penalties, records and cleanup are unchanged by these two rules. The user explicitly approved the 400 ms icon-only cadence; it intentionally permits a small visual delay.
+
+- [**GCO full integration CI #1015 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44808200177), on the stock generator output before this compatibility-only repair: ten generics/173 eligible edits + three semantics composed into **80** actual game-relative `.reds` files, independent composition match, official SCC with framework, CET/GRSP owner checks, packaging and combined ZIP topology. No live mod files overwritten.
+- [**Fast Phase 2 #48 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44811616253): **30 source-state tests**, SCC 0.5.31 compiled the same 2,331 post-generic source files plus two semantic owner overlays (43,483,119 bytes); private input unchanged. The repair in `DarkFutureStatusIconCadencePass.cs` completes a missing routine visual due declaration even when the rest of the optimized clock remains, and **refuses unsafe/negated clock guard code** rather than incorrectly treating it as complete. Lexer-based guard proof accepts equivalent comments/whitespace and parenthesized checks. No stock generated gameplay/source change or new semantic operation.
+- **Unverified:** game UI/animation parity and real before/after savings. CI compilation and historical capture attribution do not establish either. The original sealed capture predates the now-integrated 400 ms rule.
+
+### Remaining historical work, ranked without fabricating savings
+
+These figures are **historical GRSP source-attributed exclusive callsite time in a 384.517 s capture**, not today's post-semantic residual or expected performance gains. Do not add together with CET/PresentMon as total CPU.
+
+| Unoptimized operation | Historical work | Instrumented equivalent | Admission blocker |
+|---|---:|---:|---|
+| `FillOutroAnimationStart` | 2,287.3 ms / 22,772 calls | 5.95 ms/s | The original animation start's reentrancy, side effects and effect/pool lifetime are not proven; **do not suppress repeated infinite-effect calls** by assumption |
+| Finite `SetTimeRemaining` original wrapped setter | 1,889.2 ms / 13,348 calls | 4.91 ms/s | Native formatting/text/animation effects not proven equivalent under a coalesced or delayed update |
+| Empty buff-widget pool (`GetController` + null-record setter + hide) | 464.8 ms combined / ~550k–592k calls | 1.21 ms/s | Dynamic pool churn and external/native widget writers/rebinding unknown; a last-active-index shortcut may leave stale UI |
+| `OnEffectUpdate → ParseBuffList` | 371.4 ms / 12,007 calls | 0.97 ms/s | Live buff duration, identity, stacks, mode and menu invalidation change each callback; count-only or every-N skipping is unsafe |
+
+The already-accepted 400 ms rule targets historical `buffListItemLogicController::SetData` (3,394.6 ms / 38,318 calls), so **old function rankings cannot be reused as current residual rankings**. A matched F11 capture with the installed generic + three-semantic generated ZIP, similar HUD visibility/parkour/combat, and the same GRSP measures is required before selecting the next high-value Dark Future transformation. If a source-proven safe animation guard emerges, it must be a new independent operation that preserves same-effect/effect-reuse transitions and first-update behavior. Otherwise keep the current three semantics and skip only that incompatible target.
 
 ## Current verified safe suboperation — immutable infinite-duration tag membership
 
