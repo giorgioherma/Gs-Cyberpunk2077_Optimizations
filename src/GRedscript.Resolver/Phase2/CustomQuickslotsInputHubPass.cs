@@ -257,6 +257,14 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
     private static string Eol(string text) =>
         text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 
+    // Raw C# source literals are CRLF in Windows checkout. Canonicalize
+    // before insertion; replacing LF alone would create CR-CRLF and new
+    // blank lines on every generated callback and class declaration.
+    private static string Template(string value, string owner) =>
+        value.Replace("\r\n", "\n", StringComparison.Ordinal)
+             .Replace('\r', '\n')
+             .Replace("\n", Eol(owner), StringComparison.Ordinal);
+
     private static string Apply(string source, List<Patch> changes)
     {
         string text = source;
@@ -462,13 +470,13 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
                 t[listener.Close].Start,
                 Eol(source) +
                 string.Join(Eol(source) + Eol(source),
-                    missingMethods).Replace("\n", Eol(source)) +
+                    missingMethods.Select(x => Template(x, source))) +
                 Eol(source)));
 
         if (device is null)
             changes.Add(new(t[listener.Close].End, t[listener.Close].End,
                 Eol(source) + Eol(source) +
-                DeviceClass.Replace("\n", Eol(source))));
+                Template(DeviceClass, source)));
         else
         {
             if (!Contains(t, device.Open + 1, device.Close,
@@ -566,7 +574,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         else if (legacyAttach >= 0)
             changes.Add(new(t[legacyAttach].Start,
                 t[legacyAttach + 8].End,
-                AttachRouting.Replace("\n", Eol(source))));
+                Template(AttachRouting, source)));
         else throw new Refused("CQ_INPUT_ATTACH_ROUTE_MISSING");
 
         int legacyDetach = Find(t, detached.Open + 1, detached.Close,
@@ -638,7 +646,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         else if (legacyDetach >= 0)
             changes.Add(new(t[legacyDetach].Start,
                 t[legacyDetach + 8].End,
-                DetachRouting.Replace("\n", Eol(source))));
+                Template(DetachRouting, source)));
         else throw new Refused("CQ_INPUT_DETACH_ROUTE_MISSING");
 
         int graceSet = Find(t, grace.Open + 1, grace.Close,
