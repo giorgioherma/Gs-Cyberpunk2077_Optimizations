@@ -1288,6 +1288,7 @@ public partial class MainWindow : Window
         }
         SetBusy(true);
         SetStatus("Installing CET and REDscript profilers...");
+        long installActivity = BeginConsoleActivity("Installing profilers");
         try
         {
             var result = await Workflow.InstallAsync(inspection.GameRoot);
@@ -1300,7 +1301,7 @@ public partial class MainWindow : Window
             else Warn(result.Detail, "Profiler installation");
         }
         catch (Exception ex) { Warn(ex.Message, "Profiler installation"); }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        finally { EndConsoleActivity(installActivity); SetBusy(false); await RefreshSourceAsync(); }
     }
 
     // A new GCO or directly observed Cyberpunk launch follows the exact same
@@ -1378,6 +1379,7 @@ public partial class MainWindow : Window
             !Workflow.HasSessionForGame(inspection.GameRoot)) return;
         var game = inspection.GameRoot;
         SetBusy(true);
+        long externalStartActivity = BeginConsoleActivity("Preparing capture for detected game");
         try
         {
             var state = await Workflow.InspectAsync(game);
@@ -1399,7 +1401,7 @@ public partial class MainWindow : Window
             PinStatus("Capture restart failed. Close Cyberpunk and use Restore.",
                 ex.ToString());
         }
-        finally { SetBusy(false); }
+        finally { EndConsoleActivity(externalStartActivity); SetBusy(false); }
     }
 
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
@@ -1422,6 +1424,7 @@ public partial class MainWindow : Window
         ClearStatusPin();
         var launched = false;
         SetBusy(true);
+        long launchActivity = BeginConsoleActivity("Preparing profilers and starting Cyberpunk");
         try
         {
             var state = await Workflow.InspectAsync(game);
@@ -1478,6 +1481,7 @@ public partial class MainWindow : Window
         {
             gcoLaunchInProgress = false;
             gcoLaunchedGamePid = null;
+            EndConsoleActivity(launchActivity);
             SetBusy(false);
             // Handoff when the launch request succeeds. The native tray and
             // observer are independent of whether Cyberpunk is observable
@@ -1529,6 +1533,7 @@ public partial class MainWindow : Window
         SetBusy(true);
         SetPortraitStage(PortraitStage.Collecting);
         SetStatus("Collecting profiler results...");
+        long collectActivity = BeginConsoleActivity("Collecting and verifying profiler results");
         var sealedSuccess = false;
         try
         {
@@ -1637,6 +1642,7 @@ public partial class MainWindow : Window
                 SetPortraitStage(PortraitStage.Black);
                 PinStatus("Collect failed. START again or RESTORE.");
             }
+            EndConsoleActivity(collectActivity);
             SetBusy(false);
             await RefreshSourceAsync();
         }
@@ -1745,6 +1751,7 @@ public partial class MainWindow : Window
             return;
         }
         SetBusy(true);
+        long continueActivity = BeginConsoleActivity("Restoring profilers and preparing analysis");
         try
         {
             // Only source-owner restoration can authorize Page 2. Missing
@@ -1777,7 +1784,7 @@ public partial class MainWindow : Window
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
-        finally { SetBusy(false); }
+        finally { EndConsoleActivity(continueActivity); SetBusy(false); }
     }
 
     private void RefreshCompletedWorkspace()
@@ -1855,7 +1862,7 @@ public partial class MainWindow : Window
         AnalyzeButton.Content = "ANALYZING";
         AnalyzeButton.IsEnabled = false;
         GenerateButton.IsEnabled = false;
-        ResultsStatusText.Text = "Analyzing verified CET capture and current source...";
+        long analyzeActivity = BeginConsoleActivity("Analyzing CET and REDscript sources");
         try
         {
             var report = await readOnlyAnalyzer.AnalyzeAsync(
@@ -1961,6 +1968,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            EndConsoleActivity(analyzeActivity);
             analysisRunning = false;
             AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
                 !generationRunning;
@@ -1991,7 +1999,7 @@ public partial class MainWindow : Window
         analysisCancellation?.Dispose();
         analysisCancellation = cancellation;
         GenerateButton.Content = "GENERATING...";
-        ResultsStatusText.Text = "Generating CET + REDscript source and validating source/ZIP safety...";
+        long generateActivity = BeginConsoleActivity("Generating CET and REDscript optimizations");
         try
         {
             // CET retains its owner generator; GCO-local REDscript stages
@@ -2006,18 +2014,18 @@ public partial class MainWindow : Window
                     "MOD_BLACKLIST").ToArray();
             string[] redSkipIds = pass.RedscriptSkipped
                 .Select(item => item.Id).ToArray();
-            ResultsStatusText.Text = "TEST PASS CREATED: " + Path.GetFileName(pass.ZipPath) +
-                " | Files: " + pass.GeneratedFiles +
-                " | CET transforms: " + pass.CetTransforms +
+            ResultsStatusText.Text = "Optimization ZIP created: " +
+                Path.GetFileName(pass.ZipPath) + Environment.NewLine +
+                "Files: " + pass.GeneratedFiles +
+                " | CET optimizations: " + pass.CetTransforms +
                 " | REDscript edits: " + pass.RedscriptEdits + Environment.NewLine +
                 "Not applied: CET " + pass.CetSkipped +
                 " (needs review: " + refused.Length + ")" +
-                " | REDscript rules " + redSkipIds.Length +
+                " | REDscript rules: " + redSkipIds.Length +
                 (redSkipIds.Length == 0 ? "" :
                     " (" + string.Join(", ", redSkipIds) + ")") + Environment.NewLine +
-                "Full skip reasons: " + Path.GetFileName(pass.ZipPath) +
-                ".ownership.json (beside ZIP). " +
-                "Compilation checked in GitHub CI; gameplay not yet tested.";
+                "Skip details: " + Path.GetFileName(pass.ZipPath) +
+                ".ownership.json (beside the ZIP).";
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
@@ -2032,6 +2040,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            EndConsoleActivity(generateActivity);
             generationRunning = false;
             if (IsLoaded)
             {
@@ -2064,6 +2073,7 @@ public partial class MainWindow : Window
         ClearStatusPin();
         SetBusy(true);
         SetStatus("Restoring original game files...");
+        long restoreActivity = BeginConsoleActivity("Restoring original game files");
         try
         {
             // No capture index/collection attempt is required. Recover even
@@ -2103,7 +2113,7 @@ public partial class MainWindow : Window
                 fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        finally { EndConsoleActivity(restoreActivity); SetBusy(false); await RefreshSourceAsync(); }
     }
 
     private void OpenResults_Click(object sender, RoutedEventArgs e)
