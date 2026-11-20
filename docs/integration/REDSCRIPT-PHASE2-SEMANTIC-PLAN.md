@@ -1,6 +1,6 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
-**Phase 2 CI source:** [Post-generic source and SCC validation contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md). The private GitHub `base_after_generic/r6/scripts` is **already uploaded** and the standalone **fast Phase 2 checkpoint** now compiles both this post-generic baseline and the first real DVCore Footsteps semantic overlay. The long GCO generic/capture CI remains separate; approved semantic rules extend the fast checkpoint with actual output, not extra full-app builds.
+**Phase 2 CI source:** [Post-generic source and SCC validation contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md). The private GitHub `base_after_generic/r6/scripts` is **already uploaded** and the standalone **fast Phase 2 checkpoint** now compiles the post-generic baseline with both current semantic overlays, DVCore Footsteps and Dark Future infinite-tag caching. The long GCO generic/capture CI remains separate; approved semantic rules extend the fast checkpoint with actual output, not extra full-app builds.
 
 **MANDATORY PHASE 2 IMPLEMENTATION POLICY:** [IMPORTANT FOR AGENTS — REDscript Optimization Rules](IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md). The owner requires **partial → complete**, **post-generic stock → complete in one Generate**, and **compatible version/custom edits → optimized**, with **narrow skips only for genuinely incompatible targets or unproven critical safety properties**. Historical archives demonstrate behavior, never serve as required precursor inputs or whole-file replacements.
 
@@ -15,6 +15,34 @@
 - **Partial/complete compatibility:** detect structural existing guard/store/member, including markerless historical early-return shape and custom names; do not append duplicate work. Fully optimized source is unchanged. An unknown success flow or incompatible target is a **specific operation-level refusal**, not an entire-mod rejection.
 - **One Generate:** canonical ten generics compose first, then the same Footsteps semantic generator runs against the **effective overlay** inside `RedscriptGenerationPlan.Stage`; the final game-relative combined ZIP and ownership sidecar include the resulting `.reds` without SCC/player-side writes. The fast Phase 2 CLI uses `phase2-footsteps` on the already-generic source.
 - **Verified:** [fast CI #19 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44785775165), 10 tests including one-call generic+semantic, partial completion, direct successful-return compatibility and no duplicate cache; official SCC 0.5.31 combined compile: 2,331 source files + 1 semantic overlay, 43,481,923 output bytes. This verifies source/SCC, **not** actual game behavior or saved FPS. Independently [full GCO #1006 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617357) verified 79-file canonical output and package; in-game parity and measured savings remain unproven.
+
+## Implemented semantic operation 2 — Dark Future infinite-tag cache (2026-11-20)
+
+- **Owner:** actual installed Dark Future `SingleCooldownManager` UI source, structurally
+  recognized by its tag field, activation wrapper and Update replacement.
+  Target file/owner folder may move without version/hash/line-number gates.
+- **Scope:** cache immutable `DarkFutureInfiniteDurationEffect` array membership
+  after the gameplay-tags assignment on each ActivateCooldown. Invalidate before
+  wrapped activation so synchronous Update uses the original fallback. Replace
+  only the negative ArrayContains result with an equivalent validity-controlled
+  cached flag or original fallback; preserve every frame's Update, visible UI,
+  finite timer, `SetTimeRemaining`, `SetStackCount`, outro and alignment calls.
+- **Partial & custom:** detect each missing field/reset/cache/valid/condition
+  independently, no duplicate changes or additional changes to completed source.
+  Safe source/layout drift and relocated owner apply; unknown tag-array mutation,
+  by-reference escapes and incompatible target refuse only this rule.
+- **Order and output:** ten generics → Footsteps → Dark Future, using current
+  effective sources in the single GCO Stage/Generate ZIP. No separate historical
+  pass, rate-limiter or new runtime framework service.
+- **CI evidence:** [fast checkpoint #27 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44790973090):
+  19 tests and combined actual Footsteps + Dark Future SCC source compilation
+  on the 2,331-file post-generic baseline (43,482,205 bytes). Later alias/owner
+  compatibility enhancements require the subsequent checkpoint result.
+  Full GCO independent source composition/ZIP verification remains separate.
+- **High-cost S1 deferred:** previously measured repeated `FillOutroAnimationStart`
+  work cannot be safely skipped without animation/invalidation proof. Historical
+  6/10-frame UI throttling is not implemented. This membership cache's individual
+  measured savings are unknown; no FPS claim.
 
 ## 1. Evidence and exact archive inventory
 
