@@ -1,5 +1,17 @@
 # Latest work / evidence status
 
+## 2026-11-20 — R5 stable ArraySize-bound source generator (in verification)
+
+**Owner instruction:** implement one additional genuinely broad source-only generic REDscript optimization, not a mod-specific semantic recipe. Leave `GenericBlackboardDefinitionPass` and both existing blackboard rules unchanged.
+
+**Implemented on GCO `dev/redscript/resolver_handoff`:** `GenericStableArrayBoundPass.cs` owns `STABLE_ARRAY_BOUND_V1` as the tenth, final source-composed family in `RedscriptGenerationPlan`. The two CLI commands `scan-stable-array-bound` / `preview-stable-array-bound` use `SourceAdmission.ReadTokens`, the existing source hash/collection-provenance contract and the prior `effective-preview`. No GRSP instrumentation, native bridge, framework services, extra app UI or original installation writes. The canonical generator hoists a proven no-call, no-mutation `while i < ArraySize(localOrParamArray)` condition into an `Int32` local just before the loop, keeping exact body bytes, indexing and early returns. It rejects unproven method/array scope, array writes, nested loops, function calls, identifier collisions, drifted effective sources and incomplete generated markers. Generated markers carry the original loop-body SHA-256 to refuse edited partial output.
+
+**Test contracts:** independent mod-owner source fixtures, out/parameter variables, previous-pass composition, untouched/partially/fully optimized states, generated-body tamper, source drift, no direct installed-source writes, canonical plan order and whole-stack source/GRSP/SCC independent parity. The real-source CI requires at least three **non-seven-semantic** owner folders with admitted current-source edits; the seven remain universally eligible to the generator. No measured speedup claims: `ArraySize` was not separately timed by GRSP.
+
+**Validation:** awaiting final CI after an initial contract correction (one test variable named `out` was conservatively mistaken for an escaping modifier). Do not call the change gameplay-validated or measured faster until an A/B capture confirms it.
+
+
+
 ## 2026-11-20 — R5 read-only cross-owner generic callback-work triage (validation in progress)
 
 **User decision:** pursue broad generic REDscript work elimination, not mod-specific callback recipes or more profiler instrumentation. Reserve ReinforcementsSystem, Dark Future, FlushingEtiquette, Crowd Voice Unlocked, custom_quickslots, MuchBetterContracts and DigitalVixenCore for late R7 semantics; exclude those seven source folders from **generic performance ranking only**. All their source remains discoverable and any true generic generator remains mod-agnostic.
