@@ -48,6 +48,6 @@
     <ProjectReference Include="../GTotalOptimizer.Core/GTotalOptimizer.Core.csproj" />
     <!-- The GCO-local REDscript Resolver is the only managed owner of
          ordered REDscript generation plans. It uses this same bundled .NET 10. -->
-    <ProjectReference Include="../GRedscript.Resolver/GRSP.Resolver.csproj" />
+    <!-- REDscript Resolver is referenced once through GCO Core orchestration. -->
   </ItemGroup>
 </Project>
