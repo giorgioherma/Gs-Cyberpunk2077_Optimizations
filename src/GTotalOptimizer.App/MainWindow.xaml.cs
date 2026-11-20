@@ -2073,6 +2073,16 @@ public partial class MainWindow : Window
                     "MOD_BLACKLIST").ToArray();
             string[] redSkipIds = pass.RedscriptSkipped
                 .Select(item => item.Id).ToArray();
+            // The optional CET-owned Hotscenes generation stage is deliberately
+            // excluded from read-only generic/semantic candidate counts.
+            // Show the verified actual pass outcome in the CET panel as well,
+            // so zero ordinary candidates never hides an applied user choice.
+            if (pass.HotscenesEnglishOnlyRequested)
+                CetReportText.Text += Environment.NewLine +
+                    "Hotscenes ENG-only: " +
+                    (pass.HotscenesEnglishOnlyEdits > 0
+                        ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
+                        : "not applied (see generation details)");
             SetResultsConsoleStatus("Optimization ZIP created: " +
                 Path.GetFileName(pass.ZipPath) + Environment.NewLine +
                 "Files: " + pass.GeneratedFiles +
