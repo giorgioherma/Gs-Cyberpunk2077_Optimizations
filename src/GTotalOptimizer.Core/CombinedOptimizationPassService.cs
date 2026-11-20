@@ -14,7 +14,7 @@ namespace GTotalOptimizer.Core;
 /// </summary>
 public sealed record CombinedPassOutcome(
     string ZipPath, int CetFiles, int RedscriptFiles, int GeneratedFiles,
-    int CetTransforms, int RedscriptEdits, bool SccPassed)
+    int CetTransforms, int RedscriptEdits)
 {
     public int AppliedRedscriptRules { get; init; }
 }
@@ -83,12 +83,10 @@ public sealed class CombinedOptimizationPassService
                 if (RequiresGRedRuntime(overlay))
                     _ = CopyMissingFramework(game, overlay, framework, owners);
 
-                string compiler = Path.Combine(package, "components",
-                    "redscript-compiler", "scc_lib.dll");
-                await Task.Run(() => RedscriptPassCompiler.Verify(
-                    game, overlay, Path.Combine(temp, "scc-work"),
-                    compiler, red.SourceStackSha256), token).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
+                // Official SCC compilation belongs to the existing GitHub CI
+                // real-source validation lane, not the player-side generator.
+                // Keep runtime source admission, drift, ownership, and output
+                // validation; never infer compilation success at generation.
             }
 
             if (cetFiles == 0 && redFiles == 0)
@@ -143,7 +141,8 @@ public sealed class CombinedOptimizationPassService
                         }).ToArray(),
                         redscriptDeferredCollisions = red.DeferredCollisions,
                         experimentalLocationGenerationIncluded = false,
-                        officialScc031Passed = redFiles > 0,
+                        officialScc031Passed = false,
+                        officialScc031Validation = "CI_ONLY_NOT_RUN_IN_APP",
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
                         installRecommendation = "Vortex overlay after originals; manually back up before direct installation",
@@ -166,7 +165,7 @@ public sealed class CombinedOptimizationPassService
                 }
                 finally { if (File.Exists(draft)) File.Delete(draft); }
                 return new(final, cetFiles, redFiles, indexed.Count,
-                    cetResult.TransformCount, red.AppliedEdits, redFiles > 0)
+                    cetResult.TransformCount, red.AppliedEdits)
                 {
                     AppliedRedscriptRules = red.Completed.Length
                 };
