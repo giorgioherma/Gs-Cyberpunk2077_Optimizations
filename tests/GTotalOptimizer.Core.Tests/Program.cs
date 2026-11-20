@@ -43,6 +43,40 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
         !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
         !html.Contains("redscriptExclusiveInstrumentedMs", StringComparison.Ordinal))
         throw new InvalidDataException("Consolidated report is missing source-owned report links or real graph series.");
+    // One authoritative hash-sealed native capture: the report must not
+    // duplicate byte-identical profiler CSVs. Native report download links
+    // remain functional by resolving to the same existing original files.
+    string reportDirectory = Path.GetDirectoryName(output.HtmlPath)!;
+    int redirected = 0;
+    foreach (var domain in new[] { ("CET", "CET", "CET_Report.html"),
+                                  ("REDscript", "GRSP", "GRSP_Report.html") })
+    {
+        string originals = CollectedCaptureStore.DomainFolder(args[1], args[3], domain.Item1);
+        string reportOwner = Path.Combine(reportDirectory, domain.Item2);
+        string ownerHtml = File.ReadAllText(Path.Combine(reportOwner, domain.Item3));
+        foreach (var original in Directory.EnumerateFiles(originals, "*.csv",
+                     SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(originals, original);
+            string duplicated = Path.Combine(reportOwner, relative);
+            if (!File.Exists(duplicated))
+            {
+                string link = "../../" + Path.GetFileName(originals) + "/" +
+                    relative.Replace('\\', '/');
+                if (ownerHtml.Contains("href=\\\"" + link + "\\\"", StringComparison.Ordinal))
+                    redirected++;
+            }
+            else if (new FileInfo(original).Length == new FileInfo(duplicated).Length &&
+                     System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(original))
+                         .AsSpan().SequenceEqual(
+                             System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(duplicated))))
+                throw new InvalidDataException(
+                    "REPORT_CSV_DUPLICATES_SEALED_CAPTURE: " + domain.Item2);
+        }
+    }
+    if (redirected == 0)
+        throw new InvalidDataException("REPORT_CSV_LINKS_NOT_REDIRECTED_TO_SEALED_INPUT");
+
     Console.WriteLine("PASS GCO real CET+GRSP+PresentMon profiler report: " +
         "presentFrames=" + output.PresentMonFrames +
         ", cetWindows=" + output.CetWindowCount +
