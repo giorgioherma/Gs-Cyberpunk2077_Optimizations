@@ -284,7 +284,7 @@ internal static class Program
                 foreach (var scroll in new[]
                          {
                              window.CapturePage, window.CaptureConsoleScroll,
-                             window.ResultsScrollViewer
+                             window.ResultsScrollViewer, window.ResultsConsoleScroll
                          })
                 {
                     if (scroll.FocusVisualStyle is not null)
@@ -590,18 +590,24 @@ internal static class Program
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
-                // Page 2 must expose capture/restoration verification before
-                // the user explicitly chooses ANALYZE, in a shared parent
-                // outside both detailed optimization panels.
+                // Restored/capture health stays at the top. Operational
+                // messages must be INSIDE the scrollable console BELOW actions.
                 if (window.AnalyzeButton.ActualWidth <= 0 ||
                     window.ResultsRestoreStatusText.ActualWidth <= 0 ||
                     window.CetCaptureStatusText.ActualWidth <= 0 ||
                     window.RedCaptureStatusText.ActualWidth <= 0 ||
                     window.PresentCaptureStatusText.ActualWidth <= 0 ||
-                    !ReferenceEquals(window.ResultsRestoreStatusText.Parent,
-                        window.ResultsStatusText.Parent))
+                    window.ResultsConsoleHost.ActualWidth <= 0 ||
+                    !ReferenceEquals(window.ResultsConsoleScroll.Content,
+                        window.ResultsStatusText) ||
+                    ReferenceEquals(window.ResultsRestoreStatusText.Parent,
+                        window.ResultsStatusText.Parent) ||
+                    window.ResultsConsoleHost.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y <=
+                    window.AnalyzeButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y)
                     throw new InvalidOperationException(
-                        "Analyze page restoration or native capture status controls are missing.");
+                        "Analyze console must be visible below buttons; restoration and capture indicators stay above panels.");
 
                 // The Page 2 overlay must not hide the original shared
                 // skyline and V art; Capture layout must remain unchanged.
@@ -681,6 +687,27 @@ internal static class Program
                         StringComparison.Ordinal))
                     throw new InvalidOperationException(
                         "Incorrect Analyze backup guidance: " + backup);
+                // Exercise the exact timer state machine deterministically:
+                // one, two, three dots, then repeat, and restore prior
+                // completed console text without replacing real diagnostics.
+                const string baseProgress = "Analyzing";
+                string prior = window.ResultsStatusText.Text;
+                long activity = window.BeginConsoleActivity(baseProgress);
+                if (window.ResultsStatusText.Text != "Analyzing.")
+                    throw new InvalidOperationException("Console spinner initial dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing..")
+                    throw new InvalidOperationException("Console spinner second dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing...")
+                    throw new InvalidOperationException("Console spinner third dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing.")
+                    throw new InvalidOperationException("Console spinner cycle failed.");
+                window.EndConsoleActivity(activity);
+                if (window.ResultsStatusText.Text != prior)
+                    throw new InvalidOperationException(
+                        "Console spinner damaged the prior status after work ended.");
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
