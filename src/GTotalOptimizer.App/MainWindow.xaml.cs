@@ -1821,7 +1821,7 @@ public partial class MainWindow : Window
                     "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
             AnalyzeButton.Content = "ANALYZED";
             ResultsStatusText.Text = redscriptPlanReady
-                ? "CET + REDscript analysis ready. GENERATE creates one SCC-verified Vortex overlay ZIP."
+                ? "CET + REDscript analysis ready. GENERATE creates one source-checked Vortex overlay ZIP."
                 : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.";
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
@@ -1863,12 +1863,12 @@ public partial class MainWindow : Window
         analysisCancellation?.Dispose();
         analysisCancellation = cancellation;
         GenerateButton.Content = "GENERATING...";
-        ResultsStatusText.Text = "Generating CET + REDscript source and validating official SCC 0.5.31...";
+        ResultsStatusText.Text = "Generating CET + REDscript source and validating source/ZIP safety...";
         try
         {
             // CET retains its owner generator; GCO-local REDscript stages
             // the canonical ordered plan. Only one game-relative ZIP is
-            // published, after source drift and SCC verification.
+            // published after source drift and ZIP ownership/integrity checks.
             var pass = await combinedPassGenerator.GenerateAsync(
                 packageRoot, game, session, cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
@@ -1878,8 +1878,8 @@ public partial class MainWindow : Window
                 " | CET transformations: " + pass.CetTransforms +
                 " | REDscript source edits: " + pass.RedscriptEdits +
                 " | REDscript rules applied: " + pass.AppliedRedscriptRules +
-                " | Official SCC: " + (pass.SccPassed ? "PASS" : "NOT_REQUIRED") +
-                ". Install as a winning Vortex overlay; gameplay remains untested.";
+                ". Compilation is checked in GitHub CI, not in the app. " +
+                "Install as a Vortex overlay; gameplay remains untested.";
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
