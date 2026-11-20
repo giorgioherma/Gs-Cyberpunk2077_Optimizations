@@ -645,7 +645,7 @@ __DIGEST__
 <span style="color:var(--yellow)"><i class="sw"></i>CET measured exclusive work / 50ms bucket</span>
 <span style="color:var(--magenta)"><i class="sw"></i>GRSP measured exclusive instrumented work / 50ms bucket</span>
 </div><div id="scaleNote"></div></div>
-<p class="muted">Combined view scales each source to its own visible peak to compare <strong>timing patterns</strong>, not CPU cost. Three-track mode shows each source in measured milliseconds with independent axes and verified native spike timestamps. GRSP uses absolute Unix F11 anchors; no frame-index lag fitting or CapFrameX substitution.</p>
+<p class="muted">Combined view scales each source to its own visible peak to compare <strong>timing patterns</strong>, not CPU cost. Three-track mode shows each source in measured milliseconds with independent axes and verified native spike timestamps. Short dashed colored connectors across missing 50 ms samples are <strong>unobserved time, not interpolated measurements</strong>; solid segments contain actual observations. GRSP uses absolute Unix F11 anchors; no frame-index lag fitting or CapFrameX substitution.</p>
 <h2>Full source-owned profiler reports</h2>
 <nav><a href="CET/CET_Report.html">Full CET report (native/GC/allocations/callbacks)</a>
 <a href="GRSP/GRSP_Report.html">Full REDscript report (functions/frames/spikes)</a>
@@ -668,7 +668,15 @@ const series=[
  {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented VM work',short:'REDscript',color:'#ef71c2'}
 ];
 const wPad=88,rPad=18,top=14,bottom=31;
-function visible(){return data.filter(p=>p.timeMs+50>=xmin&&p.timeMs<=xmax);}
+function visible(){
+ // Include one neighboring bucket beyond each side of the zoom viewport,
+ // so a zoom/focus does not accidentally cut a legitimate line segment.
+ let first=data.findIndex(p=>p.timeMs+50>=xmin);
+ if(first<0)return [];
+ let end=first;
+ while(end<data.length&&data[end].timeMs<=xmax)end++;
+ return data.slice(Math.max(0,first-1),Math.min(data.length,end+1));
+}
 function draw(){
  const ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight;
  ctx.clearRect(0,0,w,h);
@@ -699,14 +707,28 @@ function draw(){
    if(mode!=='combined'&&i!==j)continue;
    const s=series[j],max=mode==='combined'?Math.max(0.000001,peaks[j]):Math.max(1,peaks[j])*1.08;
    ctx.strokeStyle=s.color;ctx.lineWidth=mode==='combined'?1.8:1.4;
-   ctx.beginPath();let started=false;
+   // Null means no matched observation, not a measured zero. Zoom/focus
+   // must keep real samples continuous without painting invented readings.
+   // Bridge only visually with a distinctly dashed UNKNOWN interval.
+   ctx.save();ctx.beginPath();ctx.rect(wPad,y0,plotW,panelH-5);ctx.clip();
+   ctx.beginPath();let previous=null,hadUnobserved=false;
    for(const p of view){
     const v=p[s.key];
-    if(v==null){started=false;continue;}
+    if(v==null){hadUnobserved=true;continue;}
     const xx=x(p.timeMs),yy=yb-Math.min(1,Math.max(0,v/max))*box;
-    if(!started){ctx.moveTo(xx,yy);started=true;}else ctx.lineTo(xx,yy);
+    if(previous==null){ctx.moveTo(xx,yy);}
+    else if(hadUnobserved||p.timeMs-previous.timeMs>50.001){
+     // Solid only between two consecutive measured 50ms buckets.
+     ctx.stroke();
+     ctx.save();ctx.setLineDash([5,5]);ctx.globalAlpha=.65;
+     ctx.beginPath();ctx.moveTo(previous.x,previous.y);ctx.lineTo(xx,yy);
+     ctx.stroke();ctx.restore();
+     ctx.beginPath();ctx.moveTo(xx,yy);
+    }else ctx.lineTo(xx,yy);
+    previous={x:xx,y:yy,timeMs:p.timeMs};
+    hadUnobserved=false;
    }
-   ctx.stroke();
+   ctx.stroke();ctx.restore();
   }
  }
  if(mode==='tracks'){
@@ -726,8 +748,8 @@ function draw(){
   ctx.fillText((t/1000).toFixed(1)+'s',Math.max(2,Math.min(w-52,xx-17)),h-8);
  }
  scaleNote.textContent=mode==='combined'
-  ? 'Visible peaks (raw): '+series.map((s,i)=>s.short+' '+peaks[i].toFixed(2)+' ms').join('  ·  ')+' — each line scaled independently; compare timing, not total CPU.'
-  : 'Three independent millisecond axes. Dashed lines: top CET / REDscript recorded spike timestamps. Shared F11 origin and same horizontal zoom.';
+  ? 'Visible peaks (raw): '+series.map((s,i)=>s.short+' '+peaks[i].toFixed(2)+' ms').join('  ·  ')+' — short dashed connectors indicate unobserved intervals, NOT measured values.'
+  : 'Three independent millisecond axes. Short dashed color segments bridge UNOBSERVED measurement gaps (not zero); vertical dashed lines mark recorded spikes. Shared F11 origin.';
 }
 function resize(){
  canvas.style.height=mode==='combined'?'410px':'575px';
