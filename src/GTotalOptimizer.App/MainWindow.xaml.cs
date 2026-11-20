@@ -1791,7 +1791,8 @@ public partial class MainWindow : Window
                 packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
-            analyzedSessionId = saved.SessionId;
+            // Do not mark the session ANALYZED until both CET and the
+            // REDscript generation plan have completed successfully.
             // The Resolver's UnresolvedCount is a CALLBACK count, not
             // unresolved mods. The material portion is a subset; the rest
             // is below the owner's 3ms/s-or-stutter materiality rule.
@@ -1864,7 +1865,8 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("REDscript Resolver plan: " + ex);
             }
             RedReportText.Text = redPlanStatus;
-            AnalyzeButton.Content = "ANALYZED";
+            analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
+            AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
             ResultsStatusText.Text = redscriptPlanReady
                 ? "CET + REDscript analysis ready. GENERATE creates one source-checked Vortex overlay ZIP."
                 : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.";
