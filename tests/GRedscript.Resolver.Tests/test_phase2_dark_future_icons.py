@@ -138,6 +138,7 @@ class IconVisualCadenceTests(unittest.TestCase):
     def test_independent_missing_fields_guard_or_record_force_are_completed(self):
         _, complete = self.run_generator(SOURCE)
         for missing in (FIELD_INIT, FIELD_LAST, FIELD_NEXT,
+                        "let __gcoDfIconVisualDue: Bool = true;",
                         "__gcoDfIconRecordChanged = true;",
                         "__gcoDfIconRecordChanged = false;"):
             with self.subTest(missing=missing):
@@ -148,6 +149,32 @@ class IconVisualCadenceTests(unittest.TestCase):
                 again, absent = self.run_generator(resolved)
                 self.assertEqual(again["status"], "COMPLETE")
                 self.assertIsNone(absent)
+
+    def test_missing_due_and_record_flag_complete_together(self):
+        _, complete = self.run_generator(SOURCE)
+        partial = complete.replace(
+            "let __gcoDfIconVisualDue: Bool = true;", "").replace(
+            "let __gcoDfIconRecordChanged: Bool;", "")
+        report, restored = self.run_generator(partial)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.check_complete(partial, restored)
+        self.assertEqual(restored.count("let __gcoDfIconVisualDue: Bool = true;"), 1)
+        self.assertEqual(restored.count("let __gcoDfIconRecordChanged: Bool;"), 1)
+        repeat, duplicate = self.run_generator(restored)
+        self.assertEqual(repeat["status"], "COMPLETE", repeat)
+        self.assertIsNone(duplicate)
+
+    def test_missing_due_with_unproven_clock_refuses_only_icon_rule(self):
+        _, complete = self.run_generator(SOURCE)
+        altered = complete.replace(
+            "let __gcoDfIconVisualDue: Bool = true;", "").replace(
+            "if IsDefined(__gcoDfTimeSystem) {",
+            "if !IsDefined(__gcoDfTimeSystem) {")
+        report, staged = self.run_generator(altered)
+        self.assertEqual(report["status"], "REFUSED", report)
+        self.assertEqual(
+            report["reason"], "DF_ICON_PARTIAL_CLOCK_CONTROL_FLOW_UNPROVEN")
+        self.assertIsNone(staged)
 
     def test_compatible_custom_renamed_locals_and_moved_owner(self):
         variant = SOURCE.replace("currBuffLoc", "vCustomLogicController")
