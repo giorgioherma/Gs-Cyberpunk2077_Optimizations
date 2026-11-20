@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — FE historical pass 9 global minimap wrapper remainder
+
+- Semantic operation #15 `FLUSHING_ETIQUETTE_MINIMAP_UPDATE_DORMANCY_V1` is source-generated after the ten approved generics and four accepted semantics. Unlike the historical 62-file overlay, the owning pass removes only the FE-specific global `BaseMinimapMappinController.Update` wrapper after proving existing `MinimapPOIMappinController.UpdateIcon` + `FEApplyWashroomIcon` still serve the exact FE pin tint. No native REDscript location bridge, new listener or periodic poll; original source path preserved.
+- Source-state contracts: stock one-go, partial fallback already present, markerless complete, custom-moved/extra unrelated source, refusal on custom update effects or missing specific icon fallback, source drift/integrity and repeat-generation no-op. `test_phase2_fe_minimap.py` runs in the fast source-owned suite. Combined generator preserves all already-staged generic markers and independent semantics.
+- [Fast checkpoint #67 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44821395133): 45 semantic source-state tests, official SCC 0.5.31 compiled the real 2,331 post-generic source with four effective semantic owner overlays (43,483,194 bytes), no source mutation. Full integrated [CI #1021](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44821452000) pending at this record: independent reference composition, final ZIP, .NET10 app/owner restore and packaging must all pass before acceptance.
+- Still require minimap visual parity in-game, plus new matched GRSP/PresentMon before performance claims. Reinforcements RNG and geometry remain separate higher-risk work. No direct stable `main` merge.
+
 ## 2026-11-20 — current Dark Future Phase 2 checkpoint: partial-state compatibility
 
 - Two already-approved Dark Future semantics **exist**: `DARK_FUTURE_INFINITE_TAG_CACHE_V1` and `DARK_FUTURE_STATUS_ICON_400MS_V1`. They compose with `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` after all 10 generics in one GCO `Stage()`, without historical pass prerequisites, corrective layers or additional runtime components. Dark Future's 400 ms limitation applies only to the four tagged persistent need icons; animation/cooldown/UI callbacks remain at original cadence.
