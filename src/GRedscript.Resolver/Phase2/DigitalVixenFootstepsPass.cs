@@ -214,25 +214,31 @@ internal static class DigitalVixenFootstepsPass
         }
 
         var candidates = new HashSet<string>(StringComparer.Ordinal);
-        for (int i = f.Open + 1; i + 3 < f.Close; i++)
+        for (int i = f.Open + 1; i + 8 < f.Close; i++)
         {
-            if (Seq(t, i, "this", ".") && Ident(t[i + 2].Value) &&
-                classFields.Contains(t[i + 2].Value))
+            // A reference to another ReflectionClass field alone does NOT
+            // make that field the successful-result cache. Prove the cache
+            // guard's actual return or its write in the matched success arm.
+            if (Seq(t, i, "if", "IsDefined", "(", "this", ".") &&
+                Ident(t[i + 5].Value) && Is(t, i + 6, ")") &&
+                i < classesLet)
+            {
+                int k = i + 7;
+                if (Is(t, k, "{")) k++;
+                if (Seq(t, k, "return", "this", ".", t[i + 5].Value, ";"))
+                    candidates.Add(t[i + 5].Value);
+            }
+            if (i > hit.Open && i + 8 < hit.Close &&
+                Seq(t, i, "this", ".") && Ident(t[i + 2].Value) &&
+                Seq(t, i + 3, "=", classesVar, "[", hit.Index, "]", ";"))
                 candidates.Add(t[i + 2].Value);
         }
         if (candidates.Count > 1)
-            return new("REFUSED", "DVCORE_MULTIPLE_ACTIVE_REFLECTION_FIELDS",
+            return new("REFUSED", "DVCORE_MULTIPLE_ACTIVE_REFLECTION_CACHES",
                 null, null, null, null, null, null, null, 0);
+        // The canonical field is reusable even when it is the only already
+        // applied element of a partial optimization.
         string field = candidates.SingleOrDefault() ?? "m_audioClass";
-        // A malformed partial may already reference an undeclared field.
-        if (candidates.Count == 0)
-        {
-            for (int i = f.Open + 1; i + 3 < f.Close; i++)
-                if (Seq(t, i, "this", ".", field) &&
-                    (Is(t, i + 3, "=") || Is(t, i - 1, "(")))
-                    candidates.Add(field);
-        }
-        if (candidates.Count == 1) field = candidates.Single();
 
         bool fieldPresent = classFields.Contains(field);
         if (!fieldPresent && t.Skip(scope.Open + 1).Take(scope.Close - scope.Open - 1)
