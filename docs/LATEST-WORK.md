@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-20 — FE game-tested session pin composite: fast CI #76 green, full #1026 pending
+
+- **[Fast Phase 2 checkpoint #76 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44824725994)** on generator commit `173a633`: 44 active semantic source-state tests passed; the real **2,331 post-generic** sources plus **five effective semantic owner files** officially compiled under SCC 0.5.31 (43,485,167 bytes); source unchanged. The FE session pin operation independently applied as **one semantic edit across two current owner paths**. The multi-digit `PinCount` postcondition now composes from current source rather than assuming one numeric token; earlier #74/#75 were genuine generator-test diagnostics, corrected at source.
+- **[Full GCO CI #1026](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44825017762)** is running the independent source-bytes, combined game-relative ZIP, SCC, WPF and owner-provenance checks. Do not call it passed until verified. This implementation reuses the owner's game-tested handmade session-pins/pass-9 concept; the **new generated overlay still needs in-game verification** and comparable capture to claim savings.
+
 ## 2026-11-20 — FE historical handmade session pins and minimap hot-wrapper removal: owner clarification
 
 - **Owner decision supersedes earlier minimap reversal:** the archived handmade `G-RED_optimizatios_seperate_passes.zip` and final `G-REDruntime_Optimization_All_Mods.zip` were **game-tested together** and should be the intended behavior. Historical FE pass 7.2/7.2r1 adds `FEWashroomMappinService` session-owned registration, explicit `SetMappinActive(id,true)`, and transfers cleanup away from `FESystem.DropPlayer`; pass 9 then removes `BaseMinimapMappinController.Update` global per-pin tint reapplication while preserving FE-specific `MinimapPOIMappinController.UpdateIcon` styling. The user explicitly approved restoring this composite concept, not all tint removal and not copying old whole files.
