@@ -1,5 +1,11 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — console-only runtime status and real-operation loading dots
+
+The combined source optimizer's per-owner outcomes are **not** "TEST PASS" and GCO must never print a GitHub CI/compilation claim to the player after Generate. A generated ZIP may contain safe modifications while one or more source-specific candidates are deferred; retain the external detailed ownership report and accurately label counts as **not applied / needs review**. Defer investigation into the current single CET skipped item until user requests it. Do not remove source-owned skip auditing or CI source/ZIP correctness checks.
+
+Page 2's top area is exclusively restored-files verification and CET / REDscript / PresentMon capture status. Display *all* analysis, generation, error and skipped-entry messages in the existing WPF status control, placed in a **scrollable console below the action buttons**; no separate blue diagnostic lines at the top. Use the same activity tick for genuine pending work on either page: `.`, `..`, `...` at 350 ms per step, stop on completion/failure/close. Include profiling installation, source refresh, capture preparation, collection, native report generation, restoration, explicit Analyze and combined Generate; preserve final readable messages without inventing progress or changing underlying workflow.
+
 ## 2026-11-20 — Page 2 visual approval (current)
 
 Retain the Page 1 owner-approved artwork and fixed layout. Page 2 must reuse the **existing** cyan skyline that is already under both pages, rather than cover it with a black panel or duplicate/change artwork. Shift only the Page 2 results surface to the right to expose the original portrait/ink fade; keep bottom/right frame and scrolling valid at normal/minimum/maximized sizes. Restoration and CET/REDscript/PresentMon labels use yellow; **only verified `OK`** words are green. Panel headings are `CET mod Optimizations:` and `REDscript mod Optimizations:`. Keep pre-analysis explanations.
