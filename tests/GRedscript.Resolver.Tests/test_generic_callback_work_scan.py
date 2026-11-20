@@ -193,6 +193,25 @@ class GenericCallbackWorkTests(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(self.output.exists())
 
+    def test_direct_isaction_and_button_checks_are_not_unfiltered(self):
+        path = self.files["Gamma"]
+        path.write_text(DELEGATE.format(owner="Gamma").replace(
+            "service.HandleAction(action, consumer);",
+            'if ListenerAction.IsAction(action, n"TEST") && '
+            'ListenerAction.IsButtonJustPressed(action) { '
+            'service.PerformAction(); }'
+        ), encoding="utf-8")
+        self.write_analysis()
+        result = self.scan("Reserved")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rows = json.loads(self.output.read_text())["callbacks"]
+        gamma = next(x for x in rows
+                     if x["source"]["sourceOwnerFolder"] == "Gamma")
+        self.assertEqual(gamma["directActionPredicateSites"], 2)
+        self.assertNotIn("DELEGATES_WITHOUT_LOCAL_SELECTOR",
+                         gamma["observedPatterns"])
+        self.assertFalse(gamma["generationAuthorized"])
+
     def test_source_variation_only_affects_relevant_match(self):
         # A custom source edit changes one forwarder; no fixed mod identities.
         p = self.files["Gamma"]
