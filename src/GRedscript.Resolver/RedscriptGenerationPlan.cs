@@ -602,6 +602,52 @@ public static class RedscriptGenerationPlan
         else if (iconCadence.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("DF_ICON_UNKNOWN_STATUS");
 
+        // Owner-approved input-only FE gate: no native player state, site
+        // polling, listener registration or callback timing changes.
+        // Compose strictly after all generic and prior semantic passes.
+        string feInputRoot=Path.Combine(output,"_stages","14-fe-input");
+        var feInput=FlushingEtiquetteInputGatePass.Generate(game,feInputRoot,
+            Directory.Exists(final)?final:null);
+        if(feInput.Status=="APPLIED")
+        {
+            string rel=feInput.SourcePath ??
+                throw new InvalidDataException("FE_INPUT_STAGE_PATH_MISSING");
+            string original=Path.GetFullPath(Path.Combine(feInputRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string combined=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!IsInside(original,feInputRoot) ||
+                !IsInside(combined,final) ||
+                !rel.StartsWith("r6/scripts/",StringComparison.Ordinal) ||
+                !combined.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(original))
+                throw new InvalidDataException("FE_INPUT_STAGE_UNSAFE");
+            bool exists=File.Exists(combined);
+            if(exists)
+            {
+                string earlier=File.ReadAllText(combined);
+                string rewritten=File.ReadAllText(original);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    earlier,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!rewritten.Contains(m,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "FE_INPUT_DISCARDED_GENERIC_SOURCE");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(combined)!);
+            File.Copy(original,combined,overwrite:exists);
+            files+=exists?0:1;
+            expressions+=feInput.AppliedEdits;
+            results.Add(new(14,"flushing-etiquette-input",
+                feInput.AppliedEdits,exists?0:1,exists?1:0,[]));
+        }
+        else if(feInput.Status=="REFUSED")
+            skipped.Add(new(14,"flushing-etiquette-input",1,
+                feInput.Reason??"FE_INPUT_SOURCE_INCOMPATIBLE"));
+        else if(feInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("FE_INPUT_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
