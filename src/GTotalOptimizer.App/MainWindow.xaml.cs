@@ -49,7 +49,6 @@ public partial class MainWindow : Window
     private GameInspection inspection = GameInspector.Inspect(null);
     private LiveProfilerState? liveState;
     private CollectedCaptureIndex? savedCapture;
-    private string? resultsFolder;
     private string? completedSessionId;
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
@@ -1268,7 +1267,6 @@ public partial class MainWindow : Window
                 : processLaunchPending ? "STARTING CYBERPUNK"
                 : "START CYBERPUNK";
             CollectButton.Content = "COLLECT RESULTS";
-            resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
             // Gameplay status replaces stale event/exit pins, rather than
             // reporting "Game closed" while Cyberpunk is still running.
@@ -1645,7 +1643,6 @@ public partial class MainWindow : Window
             sealedSuccess = true;
             if (saved.Cet is not null && saved.Redscript is not null)
             {
-                resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
                 SetPortraitStage(PortraitStage.Collected);
                 UpdateResultTexts(saved);
             }
@@ -1891,10 +1888,8 @@ public partial class MainWindow : Window
             var saved = CollectedCaptureStore.ReadRestored(
                 packageRoot, completedGameRoot, completedSessionId);
             UpdateResultTexts(saved);
-            resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
                 SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
-            OpenResultsButton.IsEnabled = true;
             AnalyzeButton.IsEnabled = !analysisRunning && !generationRunning &&
                 analyzedSessionId != saved.SessionId;
             if (!analysisRunning)
@@ -1913,7 +1908,6 @@ public partial class MainWindow : Window
             SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon", "NOT VERIFIED");
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
-            OpenResultsButton.IsEnabled = false;
         }
     }
 
@@ -1935,8 +1929,7 @@ public partial class MainWindow : Window
             // Verify safety first, then retain the actual error in the
             // console if the captured workspace is still usable.
             RefreshCompletedWorkspace(); // disables actions if provenance failed
-            if (OpenResultsButton.IsEnabled)
-                SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
+            SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
             Trace.TraceWarning("Manual Analyze refused: " + ex);
         }
     }
@@ -2110,8 +2103,8 @@ public partial class MainWindow : Window
                 packageRoot, game, session, cancellation.Token,
                 hotscenesEnglishOnly);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
-            // OPEN RESULTS keeps opening profiler data. Generated ZIPs
-            // are reported as separate app-root passes in the console.
+            // OPEN FOLDER always opens the GCO root containing RESULTS
+            // and generated_optimizations; it does not depend on a pass.
             var refused = pass.CetSkipDetails.Where(row =>
                 row.Category is "GENERATION_FAILURE" or "LUA_LOCAL_LIMIT" or
                     "MOD_BLACKLIST").ToArray();
@@ -2149,7 +2142,6 @@ public partial class MainWindow : Window
                 "/ | Details: " + Path.GetFileName(pass.ZipPath) +
                 ".ownership.json");
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
-            OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -2255,7 +2247,6 @@ public partial class MainWindow : Window
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
         savedCapture = null;
-        resultsFolder = null;
         HotscenesEnglishOnlyCheckBox.IsChecked = false;
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
         CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
@@ -2264,7 +2255,6 @@ public partial class MainWindow : Window
         AnalyzeButton.IsEnabled = false;
         GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
         GenerateButton.IsEnabled = false;
-        OpenResultsButton.IsEnabled = false;
         CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
         ResultsScrollViewer.ScrollToTop();
@@ -2318,10 +2308,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OpenResults_Click(object sender, RoutedEventArgs e)
+    private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(resultsFolder) && Directory.Exists(resultsFolder))
-            Process.Start(new ProcessStartInfo(resultsFolder) { UseShellExecute = true });
+        try
+        {
+            Process.Start(new ProcessStartInfo(packageRoot) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not open the GCO folder: " + ex.Message, "Open folder");
+        }
     }
 
     // The pinned console is the one normal diagnostic channel. No modal popup
