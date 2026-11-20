@@ -1877,6 +1877,7 @@ public partial class MainWindow : Window
                 " | Files: " + pass.GeneratedFiles +
                 " | CET transformations: " + pass.CetTransforms +
                 " | REDscript source edits: " + pass.RedscriptEdits +
+                " | REDscript rules applied: " + pass.AppliedRedscriptRules +
                 " | Official SCC: " + (pass.SccPassed ? "PASS" : "NOT_REQUIRED") +
                 ". Install as a winning Vortex overlay; gameplay remains untested.";
             OpenResultsButton.IsEnabled = true;
