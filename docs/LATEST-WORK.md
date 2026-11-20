@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Separate fast Phase 2 checkpoint (current architecture)
+
+- Owner requested a fast **chronological Phase 2 checkpoint after generic output**, not an additional SCC scenario in the very long GCO app/capture workflow. Reverted the extra post-generic test path from `.github/workflows/build-windows.yml`, `Verify-RealGrspResolverReplay.ps1` and `Verify-RealStackCompile.ps1` on REDscript development; original generic validation remains.
+- Added independent `.github/workflows/redscript-phase2-checkpoint.yml` and `tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1`. Its stock input is existing private `original_cet_source/main/base_after_generic/r6/scripts`; checks framework, generic-first markers, source integrity, external plugin dependencies and one isolated official SCC 0.5.31 compile. No historical F11 replay, combined app packaging or game writes. The helper has an optional semantic overlay input for future actual generated-output SCC tests.
+- [Checkpoint #1 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776264193) on integration branch, and [checkpoint #2 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776660392) on `main`; **2,331 post-generic files** compiled, no source changes, no semantic outputs yet. Fast CI-only [PR #3 MERGED](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/3) to `main` as `271a4c5852897e79c8a64f951c0f73aebf328f04`. Same checkpoint has now been copied to `dev/redscript/resolver_handoff` so semantic development uses it without waiting for the old long workflow.
+- The broad [dev→main PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) is **not merged** and still requires preservation-safe conflict reconciliation and actual integrated CI. The dedicated checkpoint is independent of that blocker.
+
+
 ## 2026-11-20 — Phase 2 private post-generic SCC lane green, main merge conflicts identified
 
 - User's already-uploaded **private GitHub** `original_cet_source/main/base_after_generic/r6/scripts` now supplies a **distinct** Phase 2 source input through the existing single GCO `.github/workflows/build-windows.yml` (no new workflow or duplicated compiler). Historical `GCO-Capture-15112026_021913/r6/scripts` remains unchanged as the 2,319-file capture-correlated generic replay. The independent `phase2-postgeneric-stock` scenario compiles the actual **2,331** already-generic `.reds` sources in isolated official SCC 0.5.31 with verified plugin/effective-cache inputs; enforces source-hash integrity, generic-marker presence and installed framework shape. No phase-two semantic rewrite exists yet.
