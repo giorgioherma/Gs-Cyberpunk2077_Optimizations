@@ -589,6 +589,7 @@ internal static class Program
 
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
+                window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
                 // Restored/capture health stays at the top. Operational
                 // messages must be INSIDE the scrollable console BELOW actions.
