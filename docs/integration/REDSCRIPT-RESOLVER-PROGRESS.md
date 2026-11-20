@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Manual Quickslots optimization setting and final post-generic #104 proof
+
+- `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` is optional canonical stage #17, after generic and InputHub #16. GCO checkbox on Analyze page is saved to `UserSettings.OptimizeQuickslotsDpad`, defaults OFF, and remains editable on Back/reset. `CombinedOptimizationPassService.GenerateAsync(... optimizeQuickslotsDpad)` forwards it through `RedscriptGenerationPlan.Stage(... bool)`; OFF skips source rewrite, ON generates one owner-local cache. This is a **ZIP generation preference**, not a live in-game toggle or controller-presence detector.
+- Original `PlayerLastUsedPad()` predicate retained exactly for cached-state evaluation; no additional hardware/keyboard field can suppress legitimate pad actions. Held modifiers, SetModifiers and lifecycle invalidations are preserved. [Fast #104 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44833364205): 64 tests, real post-generic 2,331-file source, independent ON byte equality + explicit OFF no-op via canonical Stage, SCC 0.5.31 (43,490,071 bytes), source unchanged.
+- [Full #1041](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44834025055) pending exact .NET 10 WPF/combined packaged result. No in-game verification/performance claim; previous installed optimization overlays require user-managed rollback, not a silent source overwrite.
+
+
 ## 2026-11-20 — Opt-in Custom Quickslots D-pad derived-state stage #17
 
 - The user's controller is always plugged in. A **manual GCO Generate checkbox**, not hardware detection, controls whether rule #17 runs; saved preference defaults OFF. OFF leaves the four post-generic `IsNormalDpad*Prohibited()` getters unchanged, while the already-approved InputHub #16 still runs. ON emits one source-aware D-pad cache update in the same Quickslots owner file; its four derived results refresh on held modifiers, configuration and device switching, clearing all four in KBM mode. All original gamepad function, event order and fallback are intended to remain unchanged.
