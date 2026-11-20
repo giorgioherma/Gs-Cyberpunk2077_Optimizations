@@ -132,6 +132,14 @@ public sealed class CombinedOptimizationPassService
                         redscriptSourceStackSha256 = red.SourceStackSha256,
                         cetFiles, redscriptFiles = redFiles,
                         redscriptEdits = red.AppliedEdits,
+                        redscriptAppliedRules = red.Completed.Select(rule => new {
+                            order = rule.Order, id = rule.Id,
+                            rewrittenExpressions = rule.RewrittenExpressions,
+                            newFiles = rule.NewFiles,
+                            composedFiles = rule.ComposedFiles
+                        }).ToArray(),
+                        redscriptDeferredCollisions = red.DeferredCollisions,
+                        experimentalLocationGenerationIncluded = false,
                         officialScc031Passed = redFiles > 0,
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
