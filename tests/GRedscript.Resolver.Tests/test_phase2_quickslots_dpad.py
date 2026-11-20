@@ -146,7 +146,8 @@ class DpadSourceContracts(unittest.TestCase):
             self.assertIn(f"return this.{name};", content)
             self.assertIn(f"this.{name} = false;", content)
             self.assertIn(f"this.{name} = this.IsNormalDpadDirProhibited(", content)
-        self.assertIn("this.lastUsedKBM || !this.player.PlayerLastUsedPad()", content)
+        self.assertIn("!this.player.PlayerLastUsedPad()", content)
+        self.assertNotIn("this.lastUsedKBM || !this.player.PlayerLastUsedPad()", content)
         self.assertIn("public func SetDeviceMode(lastUsedKBM: Bool)", content)
         self.assertIn("this.RecomputeDpadProhibitions();", content)
         self.assertIn("this.modifiersForDpadLeft = modifiersForDpadLeft;", content)
@@ -169,7 +170,7 @@ class DpadSourceContracts(unittest.TestCase):
     def test_inactive_when_keyboard_no_controller_last_used(self):
         report, content = self.stage()
         self.assertEqual(report["status"], "APPLIED", report)
-        self.assertIn("this.lastUsedKBM || !this.player.PlayerLastUsedPad()", content)
+        self.assertIn("!this.player.PlayerLastUsedPad()", content)
         self.assertIn("this.normalDpadLeftProhibited = false;", content)
         self.assertIn("this.normalDpadRightProhibited = false;", content)
         self.assertIn("this.normalDpadUpProhibited = false;", content)
