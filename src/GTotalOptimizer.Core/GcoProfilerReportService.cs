@@ -36,6 +36,7 @@ public static class GcoProfilerReportService
         public double? CpuBusyMaxMs { get; set; }
         public double? GpuBusyMaxMs { get; set; }
         public double CetExclusiveMs { get; set; }
+        public int CetWindows { get; set; }
         public double RedscriptExclusiveMs { get; set; }
         public long RedscriptCalls { get; set; }
         public int RedscriptFrames { get; set; }
@@ -180,7 +181,9 @@ public static class GcoProfilerReportService
                     var start = Number(row, "BucketStartMs");
                     var exclusive = Number(row, "ExclusiveMs");
                     if (start is null || exclusive is null || exclusive < 0) return;
-                    At(start.Value).CetExclusiveMs += exclusive.Value;
+                    var bucket = At(start.Value);
+                    bucket.CetExclusiveMs += exclusive.Value;
+                    bucket.CetWindows++;
                     cetWindows++;
                 }, cancellationToken);
 
@@ -236,7 +239,9 @@ public static class GcoProfilerReportService
                 presentFrames = pair.Value.PresentCount,
                 cpuBusyMaxMs = pair.Value.CpuBusyMaxMs,
                 gpuBusyMaxMs = pair.Value.GpuBusyMaxMs,
-                cetExclusiveMeasuredMs = pair.Value.CetExclusiveMs,
+                // A bucket without a CET measurement is unknown, not zero.
+                cetExclusiveMeasuredMs = pair.Value.CetWindows == 0
+                    ? (double?)null : pair.Value.CetExclusiveMs,
                 // No GRSP frame anchored in this 50ms window means
                 // NO OBSERVATION, not proof of zero REDscript execution.
                 redscriptExclusiveInstrumentedMs = mon is null ||
