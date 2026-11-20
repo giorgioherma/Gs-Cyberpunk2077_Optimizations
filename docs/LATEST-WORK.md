@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Fast independent Phase 2 REDscript post-generic checkpoint
+
+- **New source:** private `giorgioherma/original_cet_source/main/base_after_generic/r6/scripts` (2,331 already-generic .reds) is the starting point for semantic work, *not* an input to repeat generics. New dedicated `.github/workflows/redscript-phase2-checkpoint.yml` and `tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1` compile the effective input once using .NET 10 + official SCC 0.5.31 with live plugin dependencies; verify private source bytes unchanged and clean up fixtures. No CET capture replay, original generic generation, WPF packaging, private file artifact, or game source writes.
+- **Chronological checkpoint:** generic source generation precedes Phase 2; Phase 2 independently checks the already-generic baseline without waiting for the much longer product build. Future semantic passes must extend the same checkpoint to validate real composed output and untouched/partial/complete/custom/incompatible states. This current gate compiles stock only, not semantic output.
+- **CI Phase 2 #1 SUCCESS** on isolated branch (2,331 files, official SCC compiled 43,481,820 bytes, source unchanged), [run](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776264193). Clean [PR #3](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/3) **merged to `main`** as `271a4c5852897e79c8a64f951c0f73aebf328f04`. Independent main run [#2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776660392) revalidates it; check current outcome separately.
+- Removed the extra Phase 2 compilation scenario from the old long **development-branch** integration workflow; historical generic and capture tests remain available there. **The broad development→main PR #2 remains conflicted and unmerged**; no force update of either branch. Next semantic rule: source-safe DVCore Footsteps with one-run/partial/idempotent and actual combined SCC gates.
+
+
 ## 2026-11-16 — 13:22 live F11 callback reuse results and native exporter fix
 
 - **Actual user capture:** `GCO-Capture-16112026_132224.zip` completed **384.516822 s** F11, GRSP 12/12 shards merged, quality GOOD, zero dropped spikes/hotpaths, restored managers and 11,823 aligned PresentMon frames. New `RSP_CallbackReuse.csv` contains **81 target rows / 4,710,077 observed read-like outgoing edges**. These do not prove callback entries, same arguments, stable receiver, safe caching or saved execution.
