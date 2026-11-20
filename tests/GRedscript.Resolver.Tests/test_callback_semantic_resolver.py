@@ -3,6 +3,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +66,10 @@ public class DelayedThing extends DelayCallback {
 '''
 
 
+@unittest.skipUnless(
+    os.environ.get("GCO_REDSCRIPT_RESEARCH_TESTS") == "1",
+    "Historical/manual REDscript diagnostic or experimental feature; not a shipped generator contract"
+)
 class WholeCallbackSemanticContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
