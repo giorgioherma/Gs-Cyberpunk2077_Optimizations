@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — explicit Capture footer removal and Hotscenes generation status (Windows CI pending)
+
+- Screenshot showed stale `Saved ... Click CONTINUE` behind Analyze and the disabled CONTINUE control at bottom-right. The Capture page body and its sibling footer require identical page navigation ownership: all three Analyze entry paths now explicitly collapse `CaptureFooterHost`; reset to Capture explicitly restores it. Existing Page 1 functionality is retained, not duplicated on Page 2. WPF smoke models those same state changes and tests both directions.
+- The generation output console now receives the full available row above CLOSE, with a compact three-line success report. CLOSE remains hidden until successful output; no heading/artwork/optimization-panel relocation.
+- A checked Hotscenes ENG-only switch is an independent CET-owned generation stage, **not** a normal read-only generic/semantic candidate. After a verified generation result the CET panel reports actual `HotscenesEnglishOnlyEdits` as applied/not-applied, without inflating candidate counts or assuming an older generated ZIP was installed.
+- Source checkpoints: `13c6eee`, `2ae5341`, `d71dca3`, `3f6775f`, `4e7dcd2`; the full-width footer source/test checkpoints immediately precede them. Windows CI and installed-player visual validation are not yet verified.
+
+
 ## 2026-11-20 — Capture footer bleed-through on Analyze fixed (awaiting Windows verification)
 
 - User screenshot showed the disabled CONTINUE control and stale Page 1 `Saved ... Click CONTINUE` status beneath the new Analyze bottom-console message. The original Capture page scroll was hidden but its sibling footer remained visible behind transparent ResultsPage.
