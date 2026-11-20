@@ -57,6 +57,8 @@ public static class Program
                 return RunPhase2DarkFuture(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-dark-future-icons")
                 return RunPhase2DarkFutureIcons(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-fe-input")
+                return RunPhase2FeInput(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
                 return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
@@ -618,6 +620,23 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2FeInput(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Phase 2 FE input needs --game and --out [--base-overlay]");
+        var result = FlushingEtiquetteInputGatePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 FlushingEtiquette input: " +
+            "status=" + result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 
