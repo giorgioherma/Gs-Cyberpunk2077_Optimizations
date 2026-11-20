@@ -164,6 +164,18 @@ class IconVisualCadenceTests(unittest.TestCase):
         self.assertEqual(repeat["status"], "COMPLETE", repeat)
         self.assertIsNone(duplicate)
 
+    def test_complete_custom_clock_guard_whitespace_is_accepted(self):
+        _, complete = self.run_generator(SOURCE)
+        custom = complete.replace(
+            "if IsDefined(__gcoDfTimeSystem) {",
+            "if  IsDefined ( __gcoDfTimeSystem ) {")
+        custom = custom.replace(
+            "if IsDefined(__gcoDfPlayer) {",
+            "if ( IsDefined ( __gcoDfPlayer ) ) {")
+        result, staged = self.run_generator(custom)
+        self.assertEqual(result["status"], "COMPLETE", result)
+        self.assertIsNone(staged)
+
     def test_complete_semantic_with_invalid_clock_guard_is_not_accepted(self):
         _, complete = self.run_generator(SOURCE)
         unsafe = complete.replace(
