@@ -1846,6 +1846,64 @@ try {
         $dfIconReport.status+' edits='+[int]$dfIconReport.appliedEdits+
         ' existingTagCachePreserved=true')
 
+    # The fourth semantic operation must also be independently generated
+    # from the effective composition, not just accepted because Stage()
+    # reports a count. This proves FE's source-level generic helper, the
+    # original wrappedMethod and all earlier source changes survive.
+    $feReference = Join-Path $work 'gco-phase2-fe-input-reference'
+    $feReferenceLog = Join-Path $work 'gco-phase2-fe-input-reference.log'
+    & dotnet $dll phase2-fe-input --game $game --base-overlay $callbackFolder --out $feReference *> $feReferenceLog
+    if ($LASTEXITCODE -ne 0) {
+      $diagnostic = if (Test-Path -LiteralPath $feReferenceLog -PathType Leaf) {
+        Get-Content -LiteralPath $feReferenceLog -Raw
+      } else { '' }
+      $m=[regex]::Match([string]$diagnostic,'FE_INPUT_[A-Z0-9_]+')
+      $safe=if ($m.Success) { $m.Value } else { 'NO_SAFE_SOURCE_ERROR_CODE' }
+      throw ('GCO_FE_INPUT_REFERENCE_GENERATOR_FAILED: '+$safe)
+    }
+    $feReport = Get-Content -LiteralPath (Join-Path $feReference 'phase2-result.json') -Raw | ConvertFrom-Json
+    if ($feReport.ruleId -ne 'FLUSHING_ETIQUETTE_UNRELATED_INPUT_GATE_V1' -or
+        $feReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+      throw 'GCO_FE_INPUT_REFERENCE_RESULT_INVALID'
+    }
+    if ($feReport.status -eq 'APPLIED') {
+      $feScripts = Join-Path $feReference 'r6/scripts'
+      $feFiles = @(Get-ChildItem -LiteralPath $feScripts -Filter '*.reds' -File -Recurse)
+      if ($feFiles.Count -ne 1 -or [int]$feReport.appliedEdits -ne 1) {
+        throw 'GCO_FE_INPUT_REFERENCE_EXPECTED_ONE_SOURCE'
+      }
+      foreach ($file in $feFiles) {
+        $rel=[IO.Path]::GetRelativePath($feScripts,$file.FullName)
+        if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+          throw 'GCO_FE_INPUT_REFERENCE_PATH_ESCAPE'
+        }
+        $dest=Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+        $new=Get-Content -LiteralPath $file.FullName -Raw
+        if (!$new.Contains('ListenerAction.GetName(action)') -or
+            !$new.Contains('ListenerAction.GetType(action)') -or
+            !$new.Contains('return wrappedMethod(action, consumer);')) {
+          throw 'GCO_FE_INPUT_REFERENCE_DROPPED_ORIGINAL_ACTION_FLOW'
+        }
+        if (Test-Path -LiteralPath $dest -PathType Leaf) {
+          $old=Get-Content -LiteralPath $dest -Raw
+          foreach ($marker in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+            if (!$new.Contains($marker,[StringComparison]::Ordinal)) {
+              throw 'GCO_FE_INPUT_REFERENCE_DROPPED_GENERIC_SOURCE'
+            }
+          }
+        }
+        else {
+          New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+      }
+    }
+    Write-Host ('PASS Phase 2 FE input reference: status=' + $feReport.status +
+        ' edits=' + [int]$feReport.appliedEdits +
+        ' genericSourceAndOnActionFallbackPreserved=true')
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -1888,6 +1946,15 @@ try {
           [int]$iconFamily[0].rewrittenExpressions -ne 1 -or
           [int]$iconFamily[0].composedFiles -ne 1) {
         throw 'GCO_DF_ICON_CANONICAL_STAGING_NOT_CONNECTED'
+      }
+    }
+    if ($feReport.status -eq 'APPLIED') {
+      $feFamily=@($stageReport.completed |
+        Where-Object { $_.id -eq 'flushing-etiquette-input' })
+      if ($feFamily.Count -ne 1 -or
+          [int]$feFamily[0].order -ne 14 -or
+          [int]$feFamily[0].rewrittenExpressions -ne 1) {
+        throw 'GCO_FE_INPUT_CANONICAL_STAGING_NOT_CONNECTED'
       }
     }
     # Every ordered generated REDscript source must match the independent
