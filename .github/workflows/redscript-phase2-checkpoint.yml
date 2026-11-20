@@ -35,6 +35,7 @@ jobs:
       PHASE2_DARK_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture
       PHASE2_ICON_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture-icons
       PHASE2_FE_OUTPUT: ${{ github.workspace }}/.phase2-fe-input
+      PHASE2_FE_PINS_OUTPUT: ${{ github.workspace }}/.phase2-fe-pins
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -197,6 +198,62 @@ jobs:
           }
           Write-Host 'PASS four approved semantic operations compose after generic source'
 
+      - name: Generate game-tested FE session pins and minimize global UI work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-fe-pins --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_FE_PINS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_FE_PINS_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_FE_PINS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'FE_SESSION_WASHROOM_PINS_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -ne 1 -or
+              @($report.sourcePaths).Count -ne 2) {
+            throw ('PHASE2_FE_PINS_EXPECTED_TWO_FILES: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_FE_PINS_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 2) { throw 'PHASE2_FE_PINS_TWO_SOURCE_FILES_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_FE_PINS_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            if (Test-Path -LiteralPath $target) {
+              $before=Get-Content -LiteralPath $target -Raw
+              $after=Get-Content -LiteralPath $file.FullName -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$after.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_FE_PINS_DROPPED_GENERIC_SOURCE'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          $places=@(Get-ChildItem -LiteralPath $dst -Recurse -File -Filter 'FE_Places.reds')
+          $owner=@(Get-ChildItem -LiteralPath $dst -Recurse -File -Filter 'FlushingEtiquette.reds')
+          if ($places.Count -ne 1 -or $owner.Count -ne 1) {
+            throw 'PHASE2_FE_PINS_OWNER_OUTPUT_NOT_UNIQUE'
+          }
+          $pins=Get-Content -LiteralPath $places[0].FullName -Raw
+          $system=Get-Content -LiteralPath $owner[0].FullName -Raw
+          if (!$pins.Contains('class FEWashroomMappinService') -or
+              !$pins.Contains('mappins.SetMappinActive(id, true);') -or
+              !$pins.Contains('MinimapPOIMappinController') -or
+              $pins.Contains('@wrapMethod(BaseMinimapMappinController)') -or
+              !$system.Contains('FEWashroomMappinService.Get(this.GetGameInstance())') -or
+              $system.Contains('FEPlaces.UnregisterPins(gi, this.m_pins);')) {
+            throw 'PHASE2_FE_PINS_HANDMADE_LIFECYCLE_POSTCONDITION_FAILED'
+          }
+          Write-Host 'PASS FE session-owned pin lifecycle, explicit activation and targeted icon styling'
+
       - name: Checkpoint - compile post-generic plus real semantic overlay
         shell: pwsh
         run: |
@@ -208,7 +265,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
