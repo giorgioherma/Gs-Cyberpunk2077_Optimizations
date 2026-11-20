@@ -1016,26 +1016,27 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
-                    <!-- Full-width console above the separate end-of-pass CLOSE.
-                         Move it slightly higher to align its text vertically
-                         with the cyan slash; never narrow output for CLOSE. -->
-                    <Grid Grid.Row="1" Margin="18,0,8,21">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <ScrollViewer x:Name="ResultsConsoleScroll" Grid.Row="0"
+                    <!-- Analyze console and CLOSE share a single footer row.
+                         Hidden CLOSE releases its Auto column to the console;
+                         visible CLOSE stays to the right without lifting text. -->
+                    <Grid Grid.Row="1" Margin="18,0,8,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer x:Name="ResultsConsoleScroll" Grid.Column="0"
                                       FocusVisualStyle="{x:Null}" HorizontalAlignment="Stretch"
-                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                      MaxHeight="68" MinHeight="34" Margin="0,0,0,2">
+                                      VerticalAlignment="Center" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      MaxHeight="68" MinHeight="34" Margin="0,0,12,0">
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        Width="{Binding ViewportWidth, ElementName=ResultsConsoleScroll}"
                                        TextWrapping="Wrap" FontSize="12.5" LineHeight="17"
                                        Text="Capture verified. Click ANALYZE to find optimizations."/>
                         </ScrollViewer>
-                        <Button x:Name="CloseAfterGenerationButton" Grid.Row="1"
+                        <Button x:Name="CloseAfterGenerationButton" Grid.Column="1"
                                 Content="CLOSE" Width="160" Height="49" Visibility="Collapsed"
-                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
                                 Style="{StaticResource ContinueStyle}"
                                 Click="CloseAfterGeneration_Click"/>
                     </Grid>
