@@ -1,5 +1,10 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Experimental location restored as optional, out of standard generation
+
+The user requested **available but disabled from workflow ZIP generation**, not deleted/retired. GCO restored the original experimental source generator, native staging helper, associated tests and manual CLI; the optional G-REDruntime bridge remains a packaged component asset. The automatic nine-rule REDscript plan and combined CET + REDscript ZIP do not invoke or stage those location transforms. CET-owned native code is unchanged. The unapproved global legacy-marker/adapter/bridge refusal was withdrawn. Previously generated source compatibility remains an open decision; only existing general source admission and drift checks apply. CI pending.
+
+
 ## 2026-11-20 — REDscript location experiment retired from default generation
 
 - User-approved default scope is now **9 source-ordered generic rule families**. Removed experimental native subscriber, fixed FAR/group matcher, bridge/data staging and obsolete specialized GCO generator/test files. Read-only `scan-player-position` remains for future source research; no location-specific semantic port or alternative runtime service was introduced.
