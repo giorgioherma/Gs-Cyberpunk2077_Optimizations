@@ -19,6 +19,8 @@ namespace GTotalOptimizer.App;
 public partial class MainWindow : Window
 {
     private enum PortraitStage { Black, Capturing, Collecting, Collected }
+    private static readonly Brush AnalyzeYellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
+    private static readonly Brush AnalyzeOkGreen = new SolidColorBrush(Color.FromRgb(101, 220, 162));
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private readonly DispatcherTimer glitchTimer = new();
     // Windows start notifications and process-handle exit events are idle
@@ -1606,31 +1608,41 @@ public partial class MainWindow : Window
         finally { profilerReportRunning = false; }
     }
 
+    // Domain and separators always use yellow. The verified word OK alone
+    // is green; absent/unaligned/unknown evidence never looks successful.
+    private static void SetAnalyzeCaptureStatus(
+        TextBlock label, string domain, string status)
+    {
+        label.Inlines.Clear();
+        label.Foreground = AnalyzeYellow;
+        label.Inlines.Add(new System.Windows.Documents.Run(domain + " · ")
+        {
+            Foreground = AnalyzeYellow
+        });
+        label.Inlines.Add(new System.Windows.Documents.Run(status)
+        {
+            Foreground = status == "OK" ? AnalyzeOkGreen : AnalyzeYellow
+        });
+    }
+
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
-        // Report restoration and the three independently collected domains
-        // above both analysis boxes, even before ANALYZE is clicked.
+        // Page 2 shows owner restoration and independently verified capture
+        // domains above both optimization cards. Only OK is green.
         ResultsRestoreStatusText.Text = saved.Restored
             ? "Both profilers uninstalled. All game files are restored."
             : "Profiler restoration has not yet been verified.";
-        ResultsRestoreStatusText.Foreground = saved.Restored
-            ? Brushes.LightGreen : Brushes.Orange;
+        ResultsRestoreStatusText.Foreground = AnalyzeYellow;
 
-        CetCaptureStatusText.Text = saved.Cet is null
-            ? "CET · MISSING" : "CET · OK";
-        CetCaptureStatusText.Foreground = saved.Cet is null
-            ? Brushes.Orange : Brushes.LightGreen;
-        RedCaptureStatusText.Text = saved.Redscript is null
-            ? "REDscript · MISSING" : "REDscript · OK";
-        RedCaptureStatusText.Foreground = saved.Redscript is null
-            ? Brushes.Orange : Brushes.LightGreen;
+        SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET",
+            saved.Cet is null ? "MISSING" : "OK");
+        SetAnalyzeCaptureStatus(RedCaptureStatusText, "REDscript",
+            saved.Redscript is null ? "MISSING" : "OK");
         bool presentRecorded = saved.FrameTimeEvidence is not null;
         bool presentReady = presentRecorded && saved.PresentMonAlignedFrames > 0;
-        PresentCaptureStatusText.Text = presentReady ? "PresentMon · OK"
-            : presentRecorded ? "PresentMon · NOT ALIGNED"
-            : "PresentMon · NOT CAPTURED";
-        PresentCaptureStatusText.Foreground = presentReady
-            ? Brushes.LightGreen : Brushes.Orange;
+        SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon",
+            presentReady ? "OK" :
+            presentRecorded ? "NOT ALIGNED" : "NOT CAPTURED");
 
         // A normal refresh must not erase a completed analysis or replace
         // it with capture paths, compiler details, or development diagnostics.
@@ -1733,13 +1745,10 @@ public partial class MainWindow : Window
         {
             ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
             ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
-            ResultsRestoreStatusText.Foreground = Brushes.Orange;
-            CetCaptureStatusText.Text = "CET · NOT VERIFIED";
-            RedCaptureStatusText.Text = "REDscript · NOT VERIFIED";
-            PresentCaptureStatusText.Text = "PresentMon · NOT VERIFIED";
-            CetCaptureStatusText.Foreground = Brushes.Orange;
-            RedCaptureStatusText.Foreground = Brushes.Orange;
-            PresentCaptureStatusText.Foreground = Brushes.Orange;
+            ResultsRestoreStatusText.Foreground = AnalyzeYellow;
+            SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET", "NOT VERIFIED");
+            SetAnalyzeCaptureStatus(RedCaptureStatusText, "REDscript", "NOT VERIFIED");
+            SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon", "NOT VERIFIED");
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
             OpenResultsButton.IsEnabled = false;
