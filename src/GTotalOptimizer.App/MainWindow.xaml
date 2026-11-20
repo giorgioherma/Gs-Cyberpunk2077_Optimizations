@@ -914,6 +914,17 @@
                             <TextBlock Text="ANALYZE &amp; OPTIMIZE" Foreground="#FFF000"
                                        FontFamily="{StaticResource Oxanium}"
                                        FontSize="23" FontWeight="ExtraBold"/>
+                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="#65DCA2"
+                                       TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
+                                       Margin="0,7,0,0" Text="Restoration status pending."/>
+                            <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                <TextBlock x:Name="CetCaptureStatusText" Foreground="#65DCA2"
+                                           FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="CET · NOT VERIFIED"/>
+                                <TextBlock x:Name="RedCaptureStatusText" Foreground="#65DCA2"
+                                           FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="REDscript · NOT VERIFIED"/>
+                                <TextBlock x:Name="PresentCaptureStatusText" Foreground="#65DCA2"
+                                           FontWeight="Bold" FontSize="13" Text="PresentMon · NOT VERIFIED"/>
+                            </StackPanel>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        TextWrapping="Wrap" FontSize="13" Margin="0,6,0,0"/>
                             <Grid Margin="0,12,0,0">
@@ -936,7 +947,7 @@
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
-                                    <TextBlock Text="REDscript  /  CALLSITES  ·  COMPILATION"
+                                    <TextBlock Text="REDscript  /  GENERIC OPTIMIZATIONS"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
                                     <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
@@ -953,7 +964,8 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"/>
+                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"
+                                        Click="Analyze_Click"/>
                                 <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE OPTIMIZATION ZIP"
                                         Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
                                         Click="GenerateCetPass_Click"/>
@@ -961,7 +973,7 @@
                                         Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
-                            <TextBlock Text="CET + REDscript · one clean game-relative ZIP · SCC-checked · use Vortex overlay for reversible in-game testing."
+                            <TextBlock Text="CET + REDscript · one clean game-relative ZIP · source-checked · use Vortex overlay for reversible in-game testing."
                                        Foreground="#98A9B1" TextWrapping="Wrap" FontSize="12"
                                        Margin="3,9,0,0"/>
                         </StackPanel>
