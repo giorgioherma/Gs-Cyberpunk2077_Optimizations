@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Opt-in Custom Quickslots D-pad derived-state stage #17
+
+- The user's controller is always plugged in. A **manual GCO Generate checkbox**, not hardware detection, controls whether rule #17 runs; saved preference defaults OFF. OFF leaves the four post-generic `IsNormalDpad*Prohibited()` getters unchanged, while the already-approved InputHub #16 still runs. ON emits one source-aware D-pad cache update in the same Quickslots owner file; its four derived results refresh on held modifiers, configuration and device switching, clearing all four in KBM mode. All original gamepad function, event order and fallback are intended to remain unchanged.
+- [Fast CI #101 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44832751996): 64 source-state tests; 2,331 actual post-generic scripts, six semantic owner files; normal GCO Stage OFF had no rule #17; ON applied rule order 17 and matched independent generated file byte-for-byte; official SCC 0.5.31 PASS, source unchanged. This is **not** validation of modified historical whole-file ZIPs. First red tests corrected at their source: partial invalidation test normalized across LF/CRLF.
+- WPF checkbox `QuickslotsDpadCacheCheckBox`, `UserSettings.OptimizeQuickslotsDpad`, `CombinedOptimizationPassService.GenerateAsync(... optimizeQuickslotsDpad)` and `RedscriptGenerationPlan.Stage(... bool)` are connected; ownership sidecar records requested/applied, not emitted in game ZIP. [Full #1039](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44833064897) pending. In-game quickslot/controller/KBM transitions and performance remain for user capture.
+
+
 ## 2026-11-20 — Custom Quickslots #16: complete focused and full CI evidence
 
 - [Fast #91 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44830562006) (source `181a0957`): 56 semantic tests including current source, partial/historical-complete, custom moved/split framework API and narrow refusal; **2,331 post-generic** game source files, 6 effective semantic owner files, canonical GCO one-pass `Stage()` applied Quickslots at order 16 **without reapplying any generics** and matched independent Quickslots output byte-for-byte. Official SCC 0.5.31 succeeded (43,488,938 cache bytes), all original bytes unchanged.
