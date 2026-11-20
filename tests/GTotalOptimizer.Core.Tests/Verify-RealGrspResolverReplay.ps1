@@ -1824,7 +1824,12 @@ try {
         if (!$old.Contains('m_gcoDfInfiniteTagValid') -or
             !$new.Contains('m_gcoDfInfiniteTagValid') -or
             !$new.Contains('DarkFutureCanHideOnBuffBar') -or
-            !$new.Contains('now + 0.40')) {
+            !$new.Contains('now + 0.40') -or
+            !$new.Contains('this.GetPlayerControlledObject()') -or
+            !$new.Contains('GameInstance.GetTimeSystem(__gcoDfPlayer.GetGame())') -or
+            !$new.Contains('this.SendVisibilityUpdate(') -or
+            !$new.Contains('currBuffLoc.SetStatusEffectRecord(null);') -or
+            $new.Contains('GameInstance.GetTimeSystem(this.GetGameInstance())')) {
           throw 'GCO_DF_ICON_REFERENCE_DROPPED_TAG_CACHE_OR_CADENCE'
         }
         foreach ($m in @([regex]::Matches($old,
