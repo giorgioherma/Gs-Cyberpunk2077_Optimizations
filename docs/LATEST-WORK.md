@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Corrected decision: keep experimental REDscript native location available, but out of automatic ZIPs
+
+- **Scope explicitly confirmed by user:** preserve the implementation for future investigation, but do not schedule or ship it in the standard Analyze → Generate → combined CET/REDscript ZIP workflow. The nine non-location generic source-generation rules remain active. CET owner-native location services and the independent `SHARED_PLAYER_SIGNAL_V1` remain unchanged.
+- **Restored from green #839:** `GenericNativeLocationSubscriberPass.cs`, `RedscriptNativeLocations.cs`, `SharedNativeRuntimeStage.cs` and their two dedicated Python regression suites. Manual experimental CLI entrypoints `scan-native-location-subscribers`, `preview-native-location-subscribers` and `stage-shared-native` are available again. The optional native REDscript backend is bundled as a **GCO component asset**, not added to the generated optimization ZIP.
+- **Unapproved policy withdrawn:** removed `REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT` blanket rejection of installed old location markers, adapters or bridges. No alternate interpretation of previously generated/partial installations has been implemented. Existing generic source admission, source fingerprint/plan drift, collision and SCC checks remain. Compatibility with existing experimental overlays must be separately discussed and tested.
+- **Explicit invariant:** GCO default ordered REDscript plan contains nine families; its default generated ZIP cannot add experimental REDscript native FAR/subscriber adapters or bridge by itself. Standalone manual experimentation must remain isolated from this workflow.
+- **Validation:** dedicated code and test restoration plus source-only contract changes committed on `dev/redscript/resolver_handoff`; terminal CI result pending. No gameplay or performance claim. Older 'retire/delete/refuse' section immediately below is historical and superseded by this decision.
+
+
 ## 2026-11-20 — Retire experimental REDscript player-location generation (CI pending)
 
 - **Decision / user approval:** remove unsuccessful REDscript native FAR/subscriber experiments from automatic optimization. The canonical `RedscriptGenerationPlan` now contains **9** generic generation families instead of 10. Preserve `SHARED_PLAYER_SIGNAL_V1`, the separate read-only player-position provenance analyzer and CET owner native location services. Do not claim the old experimental FAR/near matcher produced broad cross-mod savings.
