@@ -149,6 +149,22 @@ internal static class DarkFutureInfiniteTagCachePass
             wrapped[0] > writes[0].Start)
             return Refuse("DARK_FUTURE_ACTIVATION_TAG_FLOW_UNPROVEN");
 
+        // Any other mutation, by-reference escape or unknown method
+        // consuming the array would make a per-activation cache stale.
+        // Allow only structurally proven non-escaping read-only operations.
+        for (int i = 0; i + 2 < t.Count; i++)
+        {
+            if (!Seq(t, i, "this", ".", "m_gameplayTags")) continue;
+            if (i == writes[0].Start) continue;
+            bool pureRead = i >= 2 &&
+                (Seq(t, i - 2, "ArrayContains", "(") &&
+                    Is(t, i + 3, ",") ||
+                 Seq(t, i - 2, "ArraySize", "(") &&
+                    Is(t, i + 3, ")"));
+            if (!pureRead)
+                return Refuse("DARK_FUTURE_TAG_ARRAY_MUTATION_OR_ESCAPE_UNPROVEN");
+        }
+
         // The original condition must be the precise negated membership
         // operation, or our exact equivalent cache/fallback expression.
         var tagCalls = new List<(int Start, int Close)>();
@@ -428,19 +444,27 @@ internal static class DarkFutureInfiniteTagCachePass
                 if (!other.Contains("m_gameplayTags",
                         StringComparison.Ordinal)) continue;
                 var tokens = SourceAdmission.ReadTokens(other);
-                bool otherWriter = false;
-                for (int i = 0; i + 3 < tokens.Count; i++)
-                    if (Seq(tokens, i, "this", ".", "m_gameplayTags", "="))
-                    {
-                        otherWriter = true;
+                bool unproven = false;
+                for (int i = 0; i + 2 < tokens.Count; i++)
+                {
+                    if (!Seq(tokens, i, "this", ".", "m_gameplayTags"))
+                        continue;
+                    bool pureRead = i >= 2 &&
+                        (Seq(tokens, i - 2, "ArrayContains", "(") &&
+                            Is(tokens, i + 3, ",") ||
+                         Seq(tokens, i - 2, "ArraySize", "(") &&
+                            Is(tokens, i + 3, ")"));
+                    if (!pureRead) {
+                        unproven = true;
                         break;
                     }
-                if (otherWriter)
+                }
+                if (unproven)
                 {
                     transformed = null;
                     result = new(Rule, "REFUSED", 0, 0,
                         result.SourcePath,
-                        "DARK_FUTURE_EXTERNAL_TAG_FIELD_WRITE_UNPROVEN",
+                        "DARK_FUTURE_EXTERNAL_TAG_MUTATION_OR_ESCAPE_UNPROVEN",
                         true, false);
                     break;
                 }
