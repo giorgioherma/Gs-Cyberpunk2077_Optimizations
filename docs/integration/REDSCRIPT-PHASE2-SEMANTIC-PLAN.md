@@ -53,6 +53,13 @@
 - **One Generate:** generics (1–10) → Footsteps (11) → DF tag cache (12) → DF status icons (13); the two Dark Future operations compose into the **same actual owner file**, preserving existing snapshots and output provenance.
 - **Verified:** [fast Phase 2 #42 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44807947104): **26 tests**, 2,331 real post-generic .reds plus two effective semantic owner files, official SCC 0.5.31 compiled (43,483,119 bytes), original sources untouched. A real integration GCO build/ZIP replay and matched gameplay performance A/B are separately required; do not infer FPS benefit from call reduction.
 
+## 2026-11-20 — Historical FE pass 9 per-minimap Update wrapper remainder (implementation pending CI)
+
+- **Operation:** `FLUSHING_ETIQUETTE_MINIMAP_UPDATE_DORMANCY_V1` removes the FE-owned `BaseMinimapMappinController.Update` wrapper only when the actual `MinimapPOIMappinController.UpdateIcon` callback and `BaseMappinBaseController.FEApplyWashroomIcon` still provide the FE-specific pin tint. This is **not** a native proximity change; the 15 static pins and all gameplay coordinate tests remain untouched.
+- **Source behavior:** preserves other map/world hooks, author identity/accessor and existing GENERIC markers, does not introduce replacement callbacks, timers or new framework dependencies. A custom wrapper with unrelated effects is refused narrowly, not deleted. A previously removed wrapper is recognized as complete.
+- **Source provenance:** old combined pass 9 reference versus current `scriptsliveAFTERgeneric.zip`, `FlushingEtiquette/FE_Places.reds`; the historical pass was a concept reference, not an overlay. CI and in-game tint parity are separate gates. This operation is independent from FE early-input guard #14.
+- **Integration:** new `FlushingEtiquetteMinimapDormancyPass.cs`, CLI `phase2-fe-minimap`, canonical Stage order 15, source-state regressions and independent real-source composition comparison. Exact CI results must be recorded after final runs.
+
 ## 1. Evidence and exact archive inventory
 
 Primary **current source**: uploaded `scriptsliveAFTERgeneric.zip`, SHA-256 `3d1aaff0327196350621dcc54bd99cf03433556602f09b3b572b926f05768c3b`; its `scripts/` root maps to game-relative `r6/scripts/`. It contains **2,331 .reds files**. The user's `original_cet_source/main/base_after_generic` is also a separately uploaded source snapshot; use current effective live source for every future Generate, not a permanent fixture/mod list.
