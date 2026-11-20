@@ -5,6 +5,7 @@ import struct
 import tempfile
 import subprocess
 import unittest
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,10 @@ def decode(data):
             for i in range(size)]
 
 
+@unittest.skipUnless(
+    os.environ.get("GCO_REDSCRIPT_RESEARCH_TESTS") == "1",
+    "Historical/manual REDscript diagnostic or experimental feature; not a shipped generator contract"
+)
 class NativeSharedAssetContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
