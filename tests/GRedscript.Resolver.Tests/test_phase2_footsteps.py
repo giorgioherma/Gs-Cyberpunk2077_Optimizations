@@ -177,10 +177,10 @@ class FootstepsSemanticContracts(unittest.TestCase):
 
     def test_unrelated_reflection_member_is_not_reused_as_cache(self):
         source = STOCK.replace("  private let m_warnedNoCooked: Bool;",
-            "  private let m_unrelatedClass: ref<ReflectionClass>;\\n"
+            "  private let m_unrelatedClass: ref<ReflectionClass>;\n"
             "  private let m_warnedNoCooked: Bool;")
         source = source.replace("    let classes = Reflection.GetClasses();",
-            "    let previous = this.m_unrelatedClass;\\n"
+            "    let previous = this.m_unrelatedClass;\n"
             "    let classes = Reflection.GetClasses();")
         result, staged = self.run_one(source)
         self.assertEqual(result["status"], "APPLIED")
