@@ -648,6 +648,52 @@ public static class RedscriptGenerationPlan
         else if(feInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("FE_INPUT_UNKNOWN_STATUS");
 
+        // Historical FE pass 9 remainder. Remove only the redundant FE-owned
+        // global minimap Update wrapper after source-proving the existing
+        // targeted MinimapPOIMappinController icon/tint fallback. No new
+        // callback or runtime; other owner wrappers are not changed.
+        string feMapRoot = Path.Combine(output, "_stages", "15-fe-minimap");
+        var feMap = FlushingEtiquetteMinimapDormancyPass.Generate(game,
+            feMapRoot, Directory.Exists(final) ? final : null);
+        if (feMap.Status == "APPLIED")
+        {
+            string rel = feMap.SourcePath ??
+                throw new InvalidDataException("FE_MINIMAP_STAGE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(feMapRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!IsInside(source, feMapRoot) || !IsInside(target, final) ||
+                !File.Exists(source) ||
+                !rel.StartsWith("r6/scripts/", StringComparison.Ordinal))
+                throw new InvalidDataException("FE_MINIMAP_STAGE_SOURCE_UNSAFE");
+            bool exists = File.Exists(target);
+            if (exists)
+            {
+                string prior = File.ReadAllText(target);
+                string updated = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    prior, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(m => !updated.Contains(m,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "FE_MINIMAP_DISCARDED_GENERIC_SOURCE");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: exists);
+            files += exists ? 0 : 1;
+            expressions += feMap.AppliedEdits;
+            results.Add(new(15, "flushing-etiquette-minimap-dormancy",
+                feMap.AppliedEdits, exists ? 0 : 1,
+                exists ? 1 : 0, []));
+        }
+        else if (feMap.Status == "REFUSED")
+            skipped.Add(new(15, "flushing-etiquette-minimap-dormancy",
+                1, feMap.Reason ?? "FE_MINIMAP_SOURCE_INCOMPATIBLE"));
+        else if (feMap.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("FE_MINIMAP_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
