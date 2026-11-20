@@ -1,5 +1,11 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — Manual controller preference is generation-time, not device detection
+
+- `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` is a manual default-OFF GCO Analyze/Generate checkbox. The controller can remain plugged in: hardware connection does not enable the rewrite. Off retains the installed post-generic D-pad getters and earlier InputHub #16; On applies stage #17. The current native `PlayerLastUsedPad()` predicate remains untouched within cached recomputation, exactly matching source ownership; recalculation occurs on proven state/configuration/mode transitions. The GCO preference persists between sessions and returns to an enabled control after Back/reset.
+- [Fast CI #104 GREEN](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44833364205) validates both opt-out and opt-in canonical one-go generation plus independent byte parity, 64 tests and official SCC on 2,331 post-generic files. [Full GCO #1041](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44834025055) in progress. This is not a runtime Mod Settings toggle; changing already-installed optimization ZIPs remains an explicit user action, not automated removal.
+
+
 ## 2026-11-20 — Manual opt-in Quickslots D-pad cache after generic and InputHub
 
 - User-approved historical handmade pass-8 D-pad cache is `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1`, canonical semantic #17 after ten generic passes and existing InputHub #16. The source baseline remains **current post-generic** `base_after_generic`; old combined archives are behavioral references only. Cache uses four original scan-helper results and source-proven invalidation through modifier hold/release, SetModifiers, player and input mode. Keyboard/mouse mode clears and bypasses the cache; physical controller connection does not automatically select generation.
