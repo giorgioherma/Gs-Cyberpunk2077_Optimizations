@@ -8,6 +8,8 @@
     <AssemblyName>GRedscript.Resolver</AssemblyName>
     <RootNamespace>GRedscript.Resolver</RootNamespace>
     <SelfContained>false</SelfContained>
+    <!-- Hosted in GCO's single .NET 10 process; CLI entry remains accessible via dotnet DLL. -->
+    <UseAppHost>false</UseAppHost>
     <IsPublishable>true</IsPublishable>
   </PropertyGroup>
 </Project>
