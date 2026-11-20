@@ -21,7 +21,7 @@ preliminary optimization, not the complete historical Dark Future speedup.
 21 semantic tests, full 2,331-source post-generic stack plus both source-owned
 semantic overlays compiled with official SCC 0.5.31, original private source untouched.
 One GCO Generate stages generic first, then Footsteps, then Dark Future; still
-one game-relative CET+REDscript ZIP. Full GCO package CI is separately required.
+one game-relative CET+REDscript ZIP. [Full GCO CI #1009 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613): 80 actual generated REDscript files (ten generics + both semantic rules), independent source composition, official SCC, combined ZIP topology, full app/owner integration and packaging passed. No gameplay/FPS benefit is inferred. Later relocated-owner/alias source-state additions are verified by focused #31.
 
 
 ## 2026-11-20 — Phase 2 first accepted source-aware semantic pass (DigitalVixenCore Footsteps)
