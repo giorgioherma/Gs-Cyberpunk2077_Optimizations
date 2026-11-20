@@ -75,8 +75,12 @@ public sealed class CombinedOptimizationPassService
             {
                 string framework = Path.Combine(package, "components",
                     "redruntime", "owner");
+                // Resolve native dependencies from the generated source BEFORE
+                // adding base framework files. A framework declaration by
+                // itself must not activate an unused native service.
+                bool nativeRequired = RequiresNativeSubscriber(overlay);
                 int newFramework = CopyMissingFramework(game, overlay, framework, owners);
-                if (RequiresNativeSubscriber(overlay))
+                if (nativeRequired)
                 {
                     string cetOwner = Path.Combine(package, "components",
                         "cet-resolver", "app");
@@ -349,7 +353,13 @@ public sealed class CombinedOptimizationPassService
         return Directory.Exists(scripts) &&
             Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
                 .Any(path => Path.GetFileName(path).StartsWith("GCO_NativeLocation_",
-                    StringComparison.Ordinal));
+                        StringComparison.Ordinal) ||
+                    File.ReadAllText(path).Contains(
+                        "GCETNativeLocationGuard.DefinitelyFarPlayer(",
+                        StringComparison.Ordinal) ||
+                    File.ReadAllText(path).Contains(
+                        "new GCETNativeLocationBackend(",
+                        StringComparison.Ordinal));
     }
 
     private static bool Inside(string path, string root)
