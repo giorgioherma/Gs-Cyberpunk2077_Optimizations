@@ -215,25 +215,8 @@ public sealed class CombinedOptimizationPassService
         return files.OrderBy(x => x.Path, StringComparer.Ordinal).ToList();
     }
 
-    private static bool SafeGamePath(string path)
-    {
-        if (string.IsNullOrEmpty(path) || path.StartsWith('/') ||
-            path.Contains(':') || path.Contains('\\') ||
-            path.Split('/').Any(x => x is "" or "." or ".."))
-            return false;
-        return (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
-                StringComparison.OrdinalIgnoreCase) &&
-                !path.Contains("/CETProfiler", StringComparison.OrdinalIgnoreCase) &&
-                !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                !path.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) &&
-                !path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) ||
-            (path.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
-                StringComparison.OrdinalIgnoreCase) &&
-                (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                 path.EndsWith(".locations", StringComparison.OrdinalIgnoreCase))) ||
-            (path.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) &&
-                path.EndsWith(".reds", StringComparison.OrdinalIgnoreCase));
-    }
+    private static bool SafeGamePath(string path) =>
+        CombinedPassOutputInspector.AllowedRuntimePath(path);
 
     private static int CopyOwnerZip(string archivePath, string overlay,
         Dictionary<string, string> owners)
