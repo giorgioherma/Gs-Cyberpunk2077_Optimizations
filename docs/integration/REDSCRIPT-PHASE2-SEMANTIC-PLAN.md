@@ -138,6 +138,16 @@ The existing **CET-native** `GCETNativeLocationHost.lua` supports immutable, per
 
 ## 2. The seven measured, separately planned owners (post-generic review)
 
+### FlushingEtiquette implementation status — 2026-11-20
+
+**Native location decision:** skipped by owner approval. The fifteen minimap markers have no recurring proximity scan; REDscript cannot currently subscribe to the existing CET Lua native location host through a proven transition API. Retain the original static coordinates and gameplay checks.
+
+**Approved source edit implemented:** `FLUSHING_ETIQUETTE_UNRELATED_INPUT_GATE_V1` detects the actual `FEInput.Handle` and pure `IndexOfModifier` CName membership, derives all active explicit FE input/modifier names, and performs the negative name test immediately after `ListenerAction.GetName`, before `ListenerAction.GetType` or FE game/system/config lookups. All FE action types and modifier transitions retain their original logic, including `PlayerPuppet.OnAction` and `wrappedMethod` fallback. Source variations with unproven new name consumers narrowly refuse; no version locks, markers as sole proof or additional runtime components. This rule follows existing generics and three approved semantics as source-aware stage **#14**; the combined optimized ZIP keeps the already-staged generic FE modifier-index rewrite.
+
+[**Fast Phase 2 #61 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44815562762): **36 tests**, actual postgeneric **2,331** sources plus three generated owner files official SCC 0.5.31, **43,483,403 bytes**, unchanged private source. The historical FlushingEtiquette report had substantial unresolved minimap proxy cost; this input guard has no measured FPS/CPU credit and must not be presented as resolving the minimap hotspot. Full GCO one-ZIP integration must be checked separately.
+
+
+
 Measured scores below are the owner's supplied **historical instrumented work rates**, **not** predicted savings after the ten generic transformations. Interpret the rate and recorded exclusive time independently; never sum overlapping CET/GRSP values.
 
 | Owner | Historical rate (ms/s) | Generic coverage / legacy overlap | Post-generic semantic decision |
