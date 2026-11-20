@@ -1855,6 +1855,12 @@ public partial class MainWindow : Window
                     " | Eligible edits: " + planned.EligibleSourceEdits +
                     " | Already optimized: " + alreadyComplete + Environment.NewLine +
                     "Ready to generate a combined CET + REDscript optimization ZIP.";
+                var sourceRefused = planned.Rules.Where(rule =>
+                    rule.Status == "SOURCE_REFUSED").ToArray();
+                if (sourceRefused.Length > 0)
+                    redPlanStatus += Environment.NewLine +
+                        "Source-specific rules skipped: " + sourceRefused.Length +
+                        " (" + string.Join(", ", sourceRefused.Select(x => x.Id)) + ").";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
