@@ -138,7 +138,11 @@ class FootstepsSemanticContracts(unittest.TestCase):
         self.assertIsNone(transformed)
 
     def test_newer_custom_reordered_method_renamed_locals_preserved(self):
-        source = STOCK.replace("let classes = Reflection.GetClasses();",
+        source = STOCK.replace("module DigitalVixenCore",
+            "module /* custom layout */\n  DigitalVixenCore")
+        source = source.replace("class DVFootstepsService",
+            "class\n  DVFootstepsService")
+        source = source.replace("let classes = Reflection.GetClasses();",
             "let available = Reflection.GetClasses();")
         source = source.replace("ArraySize(classes)", "ArraySize(available)")
         source = source.replace("classes[i]", "available[i]")
@@ -164,6 +168,12 @@ class FootstepsSemanticContracts(unittest.TestCase):
         again, changed = self.run_one(staged, "Footsteps_2027.reds")
         self.assertEqual(again["status"], "COMPLETE")
         self.assertIsNone(changed)
+
+    def test_fully_optimized_markerless_custom_cache_field_name(self):
+        complete = HISTORICAL.replace("m_audioClass", "m_footwearReflection")
+        report, staged = self.run_one(complete)
+        self.assertEqual(report["status"], "COMPLETE")
+        self.assertIsNone(staged)
 
     def test_incompatible_target_refuses_only_footsteps(self):
         bad = STOCK.replace('n"EquipNewFootwearByPlayer"',
