@@ -38,6 +38,8 @@ public static class Program
                 return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-shared-work")
                 return RunSharedWorkScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-callback-work")
+                return RunGenericCallbackWorkScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-ui-outputs")
                 return RunUiOutputScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-quest-facts")
@@ -460,6 +462,34 @@ public static class Program
         return 0;
     }
 
+    // R5 source/callsite work analysis: no new profiler or generator
+    // admission. Ranking exclusions are supplied by the caller, not
+    // embedded as a hardcoded list in any generic source rule.
+    private static int RunGenericCallbackWorkScan(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+                "--out" or "--exclude-ranking-owners")))
+            throw new ArgumentException(
+                "Callback work scan accepts --game, --analysis, --out and optional --exclude-ranking-owners.");
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (options.TryGetValue("--exclude-ranking-owners", out string? owners))
+            foreach (var item in owners.Split(';', StringSplitOptions.TrimEntries |
+                StringSplitOptions.RemoveEmptyEntries))
+                excluded.Add(item);
+        var result = CallbackSemanticResolver.ScanGenericCallbackWork(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")), excluded);
+        Console.WriteLine("GCO generic callback work: files=" +
+            result.SourceFiles + " OnAction=" + result.OnActionMethods +
+            " ranked=" + result.RankedMethods +
+            " multiOwnerPatterns=" + result.CrossOwnerPatterns +
+            " measured=" + result.MeasuredMethods +
+            " generationAuthorized=false");
+        return 0;
+    }
+
     // R5 high-value work elimination: read-only source-wide evidence with
     // explicit first failed prerequisite. Uses the existing callback owner
     // parser and verified F11 callsite join; NEVER authorizes a UI skip.
@@ -866,7 +896,7 @@ public static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha" or "--exclude-ranking-owners"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);
