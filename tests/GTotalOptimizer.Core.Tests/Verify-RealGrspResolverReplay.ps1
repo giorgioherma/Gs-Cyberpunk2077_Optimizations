@@ -1576,71 +1576,7 @@ try {
         $rel = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
         $manual = Join-Path $manualScripts $rel
         $text = Get-Content -LiteralPath $f.FullName -Raw
-        if ($f.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds -or
-            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
-            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
-            $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
-            throw 'GCO_RETIRED_LOCATION_RULE_EMITTED_SOURCE'
-        }
-        if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
-            (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
-            (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
-            throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_SOURCE_DIFF'
-        }
-    }
-    Write-Host ('PASS GCO REDscript Resolver-to-generator order: rules=' +
-        $scheduled.Count + ' ready=' + $orderedPlan.readyRuleCount +
-        ' eligible=' + $planEligible + ' generatedFiles=' +
-        $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
-        ' realSourceOutputMatchesExistingCI=true productionZip=false')
-
-    # Publish the ACTUAL independently source-verified ordered REDscript
-    # output to a temporary game-relative archive. Validate with the same
-    # GCO shipping inspector used by the combined CET+REDscript product.
-    # Never include stage-result.json, profiler binaries or test evidence.
-    $gameOnlyStage = Join-Path $orderedStage 'effective-preview'
-    $realGameZip = Join-Path $work 'gco-ordered-real-source-game-pass.zip'
-    [IO.Compression.ZipFile]::CreateFromDirectory($gameOnlyStage, $realGameZip)
-    & dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --verify-combined-archive $realGameZip $stageFiles.Count
-    if ($LASTEXITCODE -ne 0) {
-        throw 'GCO_REDSCRIPT_REAL_SOURCE_GAME_ZIP_INVALID'
-    }
-
-    # Retired REDscript native FAR/subscriber experiments must not be present
-    # in either generated overlay or the independent composed source. CET's
-    # native player/location contract is tested only by its source owner.
-    if ($stageFiles.Count -ne $manualFiles.Count) {
-        throw 'GCO_RETIRED_NATIVE_LOCATION_EXTRA_STAGED_FILE'
-    }
-    Write-Host 'PASS default REDscript ZIP excludes native FAR groups, adapters and optional RTTI bridge'
-
-    # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
-    # The GCO harness must not duplicate its compiler logic or publish output.
-    $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
-    $extra = @{}
-    if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
-        $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
-    }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
-        $extra.CallbackPreviewRoot = $legacyCallbackFolder
-        $extra.FrameworkPreviewRoot = $callbackFolder
-    }
-    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
-    if ($LASTEXITCODE -ne 0) {
-        throw 'GRSP_OWNER_R6_SCC_FULL_SOURCE_COMPILATION_FAILED'
-    }
-
-    if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $zipBefore) {
-        throw 'GRSP_REAL_CAPTURE_ARCHIVE_MUTATED'
-    }
-}
-finally {
-    if (Test-Path -LiteralPath $work) {
-        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop
-    }
-}
-$global:LASTEXITCODE = 0
- -or
+        if ($f.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' -or
             $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
             $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
             $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
