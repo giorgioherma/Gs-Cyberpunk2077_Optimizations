@@ -271,8 +271,7 @@ public class FEWashroomMappinService extends ScriptableSystem {
             string[][] proof = method switch
             {
                 "Get" => [["GetScriptableSystemsContainer"], ["FEWashroomMappinService"]],
-                "OnAttach" => [["RegisterCallback"],
-                    ["OnSessionReady"], ["OnSessionBeforeEnd"], ["SetLifetime"]],
+                "OnAttach" => [["RegisterCallback"], ["SetLifetime"]],
                 "OnSessionReady" => [["IsPreGame"], ["m_sessionReady", "=", "true"],
                     ["this", ".", "EnsurePins", "("]],
                 "OnSessionBeforeEnd" => [["IsPreGame"], ["m_sessionReady", "=", "false"],
@@ -290,7 +289,11 @@ public class FEWashroomMappinService extends ScriptableSystem {
                  (!source[t[own.Open].Start..t[own.Close].End]
                       .Contains("Session/Ready", StringComparison.Ordinal) ||
                   !source[t[own.Open].Start..t[own.Close].End]
-                      .Contains("Session/BeforeEnd", StringComparison.Ordinal))))
+                      .Contains("Session/BeforeEnd", StringComparison.Ordinal) ||
+                  !source[t[own.Open].Start..t[own.Close].End]
+                      .Contains("n\"OnSessionReady\"", StringComparison.Ordinal) ||
+                  !source[t[own.Open].Start..t[own.Close].End]
+                      .Contains("n\"OnSessionBeforeEnd\"", StringComparison.Ordinal))))
                 throw new Unsafe("FE_PIN_EXISTING_SERVICE_METHOD_INCOMPLETE_" +
                     method.ToUpperInvariant());
         }
