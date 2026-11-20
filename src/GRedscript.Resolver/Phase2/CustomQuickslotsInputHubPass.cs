@@ -681,31 +681,70 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
     private static bool FrameworkAvailable(string game)
     {
         string scripts = Path.Combine(game, "r6", "scripts");
-        // Framework APIs are owned by G-REDruntime, not copied into mod
-        // output. Do not guess compatibility from an old framework ZIP.
-        string[] inputs = Directory.EnumerateFiles(scripts, "*.reds",
-            SearchOption.AllDirectories)
-            .Where(x => x.Replace('\\', '/')
-                .Contains("/G-RedRuntime/", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        return inputs.Any(x =>
+        // Discover the installed G-REDruntime module and verify the actual
+        // owning declarations. Do not require a historical folder or assume
+        // InputHub, listener, event and Runtime live in the same file.
+        string[] types = ["InputHub", "InputListener",
+            "InputDeviceListener", "InputEvent", "Runtime"];
+        var found = new Dictionary<string,
+            (IReadOnlyList<SourceAdmission.Token> Tokens, Block Scope)>(
+            StringComparer.Ordinal);
+        foreach (string path in Directory.EnumerateFiles(scripts, "*.reds",
+            SearchOption.AllDirectories))
         {
-            string s = File.ReadAllText(x);
-            return s.Contains("class InputHub", StringComparison.Ordinal) &&
-                s.Contains("func Subscribe(", StringComparison.Ordinal) &&
-                s.Contains("func SubscribeDevice(", StringComparison.Ordinal) &&
-                s.Contains("func UnsubscribeDevice(", StringComparison.Ordinal) &&
-                s.Contains("func Unsubscribe(", StringComparison.Ordinal) &&
-                s.Contains("class InputDeviceListener", StringComparison.Ordinal) &&
-                s.Contains("class InputListener", StringComparison.Ordinal);
-        }) && inputs.Any(x =>
+            string source = File.ReadAllText(path, Encoding.UTF8);
+            if (!source.Contains("GRedRuntime", StringComparison.Ordinal))
+                continue;
+            var tokens = SourceAdmission.ReadTokens(source);
+            if (!Contains(tokens, 0, tokens.Count, "module", "GRedRuntime"))
+                continue;
+            foreach (string typeName in types)
+            {
+                Block? declaration;
+                try { declaration = Type(tokens, typeName); }
+                catch (Refused) { return false; }
+                if (declaration is null) continue;
+                if (!found.TryAdd(typeName, (tokens, declaration)))
+                    return false;
+            }
+        }
+        if (found.Count != types.Length) return false;
+        bool HasMethod(string type, string method)
         {
-            string s = File.ReadAllText(x);
-            return s.Contains("class Runtime extends ScriptableSystem",
-                       StringComparison.Ordinal) &&
-                s.Contains("func GetInputHub(", StringComparison.Ordinal) &&
-                s.Contains("func IsReady(", StringComparison.Ordinal);
-        });
+            var (t, scope) = found[type];
+            return Contains(t, scope.Open + 1, scope.Close,
+                "func", method, "(");
+        }
+        bool HasField(string type, string field, string fieldType)
+        {
+            var (t, scope) = found[type];
+            return Contains(t, scope.Open + 1, scope.Close,
+                "let", field, ":", fieldType);
+        }
+        bool HasBase(string type, string requiredBase)
+        {
+            var (t, scope) = found[type];
+            int declaration = -1;
+            for (int i = 0; i + 1 < scope.Open; i++)
+                if (t[i].Start == scope.Start &&
+                    Seq(t, i, "class", type)) declaration = i;
+            return declaration >= 0 &&
+                Contains(t, declaration + 2, scope.Open,
+                    "extends", requiredBase);
+        }
+        return
+            HasMethod("InputHub", "Subscribe") &&
+            HasMethod("InputHub", "SubscribeDevice") &&
+            HasMethod("InputHub", "Unsubscribe") &&
+            HasMethod("InputHub", "UnsubscribeDevice") &&
+            HasMethod("Runtime", "Get") &&
+            HasMethod("Runtime", "IsReady") &&
+            HasMethod("Runtime", "GetInputHub") &&
+            HasBase("Runtime", "ScriptableSystem") &&
+            HasMethod("InputListener", "OnGRedInput") &&
+            HasMethod("InputDeviceListener", "OnGRedInputDeviceChanged") &&
+            HasField("InputEvent", "actionName", "CName") &&
+            HasField("InputEvent", "actionType", "gameinputActionType");
     }
 
     internal static Result Generate(string gameRoot, string outputRoot,
