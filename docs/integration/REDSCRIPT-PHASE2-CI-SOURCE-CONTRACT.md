@@ -18,7 +18,7 @@ The canonical REDscript CI job sparse-checks out `base_after_generic/r6/scripts`
 4. Compares source hashes before/after to prove that all post-generic installed source remains byte-for-byte unchanged.
 5. Selects comparison scenarios by **explicit name**, not assumed last array position. The Phase 2 baseline is independent and must not be falsely treated as an unoptimized or callback preview.
 
-**Validation note:** The initial run [#988](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44769788675) compiled all six scenarios successfully, including the post-generic source, but then failed at an obsolete last-position assertion for the framework scenario. Fixed at source in commit `ea2844dd`; [#989](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44770961006) revalidates the corrected gate (record its final outcome before promoting).
+**Validation note:** The initial run [#988](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44769788675) compiled all six scenarios successfully, including the post-generic source, but then failed at an obsolete last-position assertion for the framework scenario. Fixed at source in commit `ea2844dd`; [#989 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44770961006) verifies all six SCC scenarios, the 2,331-file post-generic source (compiled 43,485,488 bytes), original 10 generic rules (173 eligible edits / 78 output files), no source writes, Windows/.NET10 packaging, CET/GRSP owner provenance and final artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run989-a1` (ID `14648431268`). The new lane compiles **post-generic stock only** until an approved semantic pass extends the output scenario.
 
 ## Semantic rule acceptance — extension to this SAME lane
 
@@ -34,3 +34,7 @@ Require real regression fixtures for:
 - complete combined output (including dependencies, cleanup and owner paths) → official SCC 0.5.31 in CI, full gameplay validation separately.
 
 Version numbers and historical whole-file hashes must never become production semantic admission allowlists. Preserve GCO's one ZIP, original installed mod source, native owner restore, and the single CI workflow. **Only verified output and integration safety can authorize merging Phase 2 implementation into the stable app.**
+
+## Integration status
+
+Draft [PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) proposes development→main integration, but GitHub reports `mergeable_state=dirty`: branches have conflicts across a broad development diff. **No direct merge or force update of main is authorized by green branch CI alone.** Resolve current main-only work without discarding either side, test the actual merged tree, then merge. The Phase 2 CI change itself is validated and retained on development.
