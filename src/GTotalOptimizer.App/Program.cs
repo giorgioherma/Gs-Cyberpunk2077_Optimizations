@@ -597,29 +597,37 @@ internal static class Program
                     window.CetCaptureStatusText.ActualWidth <= 0 ||
                     window.RedCaptureStatusText.ActualWidth <= 0 ||
                     window.PresentCaptureStatusText.ActualWidth <= 0 ||
-                    window.ResultsConsoleHost.ActualWidth <= 0 ||
+                    window.ResultsConsoleScroll.ActualWidth <= 0 ||
                     !ReferenceEquals(window.ResultsConsoleScroll.Content,
                         window.ResultsStatusText) ||
                     ReferenceEquals(window.ResultsRestoreStatusText.Parent,
                         window.ResultsStatusText.Parent) ||
-                    window.ResultsConsoleHost.TranslatePoint(
+                    window.ResultsConsoleScroll.TranslatePoint(
                         new System.Windows.Point(0, 0), window.ResultsPage).Y <=
                     window.AnalyzeButton.TranslatePoint(
                         new System.Windows.Point(0, 0), window.ResultsPage).Y)
                     throw new InvalidOperationException(
                         "Analyze console must be visible below buttons; restoration and capture indicators stay above panels.");
 
-                if (window.BackToCaptureButton.ActualWidth <= 0 ||
+                if (window.BackToCaptureButton.Visibility !=
+                        System.Windows.Visibility.Visible ||
+                    window.BackToCaptureButton.ActualHeight < 24 ||
                     window.BackToCaptureButton.Content?.ToString() != "← BACK" ||
+                    window.BackToCaptureButton.Style != window.RefreshButton.Style ||
+                    window.BackToCaptureButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.TopHeaderHost).X >=
+                    window.RefreshButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.TopHeaderHost).X ||
                     window.CloseAfterGenerationButton.Content?.ToString() != "CLOSE" ||
                     window.CloseAfterGenerationButton.Visibility !=
-                        System.Windows.Visibility.Collapsed ||
-                    window.BackToCaptureButton.TranslatePoint(
-                        new System.Windows.Point(0, 0), window.ResultsPage).Y <=
-                    window.ResultsConsoleHost.TranslatePoint(
-                        new System.Windows.Point(0, 0), window.ResultsPage).Y)
+                        System.Windows.Visibility.Collapsed)
                     throw new InvalidOperationException(
-                        "Page 2 must show bottom BACK and initially hidden CLOSE beneath console.");
+                        "Analyze BACK must match REFRESH on its left; CLOSE must be fully hidden before a successful ZIP.");
+
+                if (window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
+                        System.Windows.Visibility.Visible)
+                    throw new InvalidOperationException(
+                        "Default Analyze layout requires vertical scrolling before any expanded analysis results.");
 
                 // The Page 2 overlay must not hide the original shared
                 // skyline and V art; Capture layout must remain unchanged.
