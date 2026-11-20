@@ -902,9 +902,14 @@
                             IsEnabled="False"/>
                 </Grid>
 
+                <!-- Page 2 only: reveal the full V fade at left. Keep this
+                     overlay transparent so the already-loaded shared cyan
+                     SkylineHost remains visible behind its heading. Do not
+                     shift Page 1's capture cards or duplicate portrait art. -->
                 <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
-                      Background="#000000" Margin="0,3,0,3">
+                      Background="Transparent" Margin="40,3,0,3">
                     <ScrollViewer x:Name="ResultsScrollViewer" FocusVisualStyle="{x:Null}"
+                                  Background="Transparent"
                                   VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="{x:Type ScrollBar}"
@@ -914,15 +919,15 @@
                             <TextBlock Text="ANALYZE &amp; OPTIMIZE" Foreground="#FFF000"
                                        FontFamily="{StaticResource Oxanium}"
                                        FontSize="23" FontWeight="ExtraBold"/>
-                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="#65DCA2"
+                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="#FFF000"
                                        TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
                                        Margin="0,7,0,0" Text="Restoration status pending."/>
                             <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                                <TextBlock x:Name="CetCaptureStatusText" Foreground="#65DCA2"
+                                <TextBlock x:Name="CetCaptureStatusText" Foreground="#FFF000"
                                            FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="CET · NOT VERIFIED"/>
-                                <TextBlock x:Name="RedCaptureStatusText" Foreground="#65DCA2"
+                                <TextBlock x:Name="RedCaptureStatusText" Foreground="#FFF000"
                                            FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="REDscript · NOT VERIFIED"/>
-                                <TextBlock x:Name="PresentCaptureStatusText" Foreground="#65DCA2"
+                                <TextBlock x:Name="PresentCaptureStatusText" Foreground="#FFF000"
                                            FontWeight="Bold" FontSize="13" Text="PresentMon · NOT VERIFIED"/>
                             </StackPanel>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
@@ -932,7 +937,7 @@
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
-                                    <TextBlock Text="CET   /   LUA  ·  NATIVE  ·  G-GC"
+                                    <TextBlock Text="CET mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
                                     <TextBox x:Name="CetReportText" Text="No verified CET capture analyzed."
@@ -947,7 +952,7 @@
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
-                                    <TextBlock Text="REDscript  /  GENERIC OPTIMIZATIONS"
+                                    <TextBlock Text="REDscript mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
                                     <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
@@ -973,9 +978,19 @@
                                         Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
-                            <TextBlock Text="CET + REDscript · one clean game-relative ZIP · source-checked · use Vortex overlay for reversible in-game testing."
-                                       Foreground="#98A9B1" TextWrapping="Wrap" FontSize="12"
-                                       Margin="3,9,0,0"/>
+                            <StackPanel Margin="3,10,0,0">
+                                <TextBlock Text="CET + REDscript  One clean zip with optimized files."
+                                           Foreground="#98A9B1" FontSize="12.5" TextWrapping="Wrap"/>
+                                <TextBlock Text="Use Vortex for easy file management"
+                                           Foreground="#98A9B1" FontSize="12.5"
+                                           Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Foreground="#98A9B1" FontSize="12.5"
+                                           Margin="0,3,0,0" TextWrapping="Wrap">
+                                    <Run Text="For manual install "/>
+                                    <Run Text="BACKUP YOUR " Foreground="#FFF000" FontWeight="Bold"/>
+                                    <Run Text="&quot;\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods&quot; and &quot;\Cyberpunk 2077\r6\scripts&quot;"/>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
