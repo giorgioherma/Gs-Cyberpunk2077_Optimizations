@@ -43,6 +43,16 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
         !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
         !html.Contains("redscriptExclusiveInstrumentedMs", StringComparison.Ordinal))
         throw new InvalidDataException("Consolidated report is missing source-owned report links or real graph series.");
+    // Clicking a ranking zooms an 8-second slice: real observations must not
+    // be clipped at the slice boundary, and missing 50ms buckets must be
+    // indicated as unknown rather than silently connected or plotted as zero.
+    if (!html.Contains("data.slice(Math.max(0,first-1)", StringComparison.Ordinal) ||
+        !html.Contains("hadUnobserved||p.timeMs-previous.timeMs>50.001", StringComparison.Ordinal) ||
+        !html.Contains("ctx.setLineDash([5,5])", StringComparison.Ordinal) ||
+        !html.Contains("unobserved time, not interpolated measurements", StringComparison.Ordinal))
+        throw new InvalidDataException(
+            "ZOOMED_GRAPH_MUST_PRESERVE_EDGES_AND_DISTINGUISH_UNOBSERVED_BUCKETS");
+
     // One authoritative hash-sealed native capture: the report must not
     // duplicate byte-identical profiler CSVs. Native report download links
     // remain functional by resolving to the same existing original files.
