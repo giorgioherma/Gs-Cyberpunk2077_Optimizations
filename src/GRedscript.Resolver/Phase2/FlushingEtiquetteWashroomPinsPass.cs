@@ -271,7 +271,7 @@ public class FEWashroomMappinService extends ScriptableSystem {
             string[][] proof = method switch
             {
                 "Get" => [["GetScriptableSystemsContainer"], ["FEWashroomMappinService"]],
-                "OnAttach" => [["RegisterCallback"], ["Session/Ready"], ["Session/BeforeEnd"],
+                "OnAttach" => [["RegisterCallback"],
                     ["OnSessionReady"], ["OnSessionBeforeEnd"], ["SetLifetime"]],
                 "OnSessionReady" => [["IsPreGame"], ["m_sessionReady", "=", "true"],
                     ["this", ".", "EnsurePins", "("]],
@@ -285,7 +285,12 @@ public class FEWashroomMappinService extends ScriptableSystem {
                     ["ArrayClear", "("], ["this", ".", "m_ids"]],
                 _ => []
             };
-            if (proof.Any(pat => !Has(t, own.Open + 1, own.Close, pat)))
+            if (proof.Any(pat => !Has(t, own.Open + 1, own.Close, pat)) ||
+                (method == "OnAttach" &&
+                 (!source[t[own.Open].Start..t[own.Close].End]
+                      .Contains("Session/Ready", StringComparison.Ordinal) ||
+                  !source[t[own.Open].Start..t[own.Close].End]
+                      .Contains("Session/BeforeEnd", StringComparison.Ordinal))))
                 throw new Unsafe("FE_PIN_EXISTING_SERVICE_METHOD_INCOMPLETE_" +
                     method.ToUpperInvariant());
         }
@@ -350,20 +355,18 @@ public class FEWashroomMappinService extends ScriptableSystem {
         // Count actual currently installed immutable pin sites; avoid the
         // historical fixed count as a mod-version allowlist.
         int count = CountPinSites(t, register);
-        var pinCount = Method(t, places, "PinCount");
-        if (pinCount is null)
+        bool pinCountPresent = Has(t, places.Open + 1, places.Close,
+            "func", "PinCount", "(", ")", "-", ">", "Int32", "=",
+            count.ToString());
+        bool pinCountOther = Has(t, places.Open + 1, places.Close,
+            "func", "PinCount", "(");
+        if (!pinCountPresent)
         {
+            if (pinCountOther)
+                throw new Unsafe("FE_PIN_COUNT_CUSTOM_IMPLEMENTATION_UNPROVEN");
             edits.Add(new(t[places.Open].End, t[places.Open].End,
                 Newline(source) + "  public static func PinCount() -> Int32 = " +
                 count + Newline(source)));
-        }
-        else
-        {
-            if (!Has(t, pinCount.Open + 1, pinCount.Close, "return",
-                count.ToString(), ";") &&
-                !source.Contains("func PinCount() -> Int32 = " +
-                    count, StringComparison.Ordinal))
-                throw new Unsafe("FE_PIN_COUNT_CUSTOM_IMPLEMENTATION_UNPROVEN");
         }
 
         // A successful registration is explicitly activated. Preserve
@@ -378,13 +381,12 @@ public class FEWashroomMappinService extends ScriptableSystem {
         {
             // Explicit debugCaption provides the same owner identity that
             // the game-tested handmade pin implementation recorded.
-            if (!Has(t, register.Open + 1, register.Close,
-                "pin", ".", "debugCaption", "="))
-                edits.Add(new(t[old].Start, t[old].Start,
-                    "pin.debugCaption = \"FE_Washroom|\" + NameToString(keys[i]);" +
-                    Newline(source) + "      "));
+            string caption = Has(t, register.Open + 1, register.Close,
+                "pin", ".", "debugCaption", "=") ? "" :
+                "pin.debugCaption = \"FE_Washroom|\" + NameToString(keys[i]);" +
+                Newline(source) + "      ";
             Add(edits, t, old, old + original.Length - 1,
-                "let id = mappins.RegisterMappin(pin, spots[i]);" +
+                caption + "let id = mappins.RegisterMappin(pin, spots[i]);" +
                 Newline(source) + "      mappins.SetMappinActive(id, true);" +
                 Newline(source) + "      ArrayPush(ids, id);");
         }
