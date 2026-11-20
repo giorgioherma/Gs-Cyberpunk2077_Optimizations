@@ -158,7 +158,9 @@ try
         ("binary", "r6/scripts/Owner/scc_lib.dll"),
         ("report", "r6/scripts/Owner/RSP_CallSites.csv"),
         ("compiler", "components/redscript-compiler/scc_lib.dll"),
-        ("docs", "r6/scripts/Owner/README.md")
+        ("docs", "r6/scripts/Owner/README.md"),
+        ("experimental-adapter", "r6/scripts/DrugDealer/GCO_NativeLocation_DrugDealer.reds"),
+        ("experimental-backend", "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds")
     })
     {
         string bad = CreateGamePassZip(id, path);
