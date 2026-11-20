@@ -1,5 +1,11 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-21 — Quickslots D-pad pass-8: automatic, no UI preference
+
+- **Final owner choice supersedes earlier checkbox/default-off directions below:** no additional GCO Analyze-page checkbox or persisted configuration. `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` (stage #17) follows approved InputHub #16 automatically in one source-aware generation, beginning with effective **post-generic** Quickslots source; no whole-file historical pass transplant. Runtime input-mode state is observed from existing listener transitions; original `PlayerLastUsedPad()` predicate determines whether the D-pad modifier results are needed. A physically connected controller does not alter keyboard/mouse mode or disable any input. Recalculation is driven by state/config/device transitions, without a timer or new adapter; only missing compatible work is generated. Incompatible pass-8 state is a narrowly scoped refusal.
+- [Fast #107](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44835578685) validating canonical automatic one-pass post-generic source and SCC; [full #1047](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44835517027) validating application/combined ZIP. Neither test guarantees gameplay equivalence; must test keyboard, gamepad, held modifiers and switching in game.
+
+
 ## 2026-11-20 — Manual controller preference is generation-time, not device detection
 
 - `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` is a manual default-OFF GCO Analyze/Generate checkbox. The controller can remain plugged in: hardware connection does not enable the rewrite. Off retains the installed post-generic D-pad getters and earlier InputHub #16; On applies stage #17. The current native `PlayerLastUsedPad()` predicate remains untouched within cached recomputation, exactly matching source ownership; recalculation occurs on proven state/configuration/mode transitions. The GCO preference persists between sessions and returns to an enabled control after Back/reset.
