@@ -1,5 +1,16 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## 2026-11-20 — approved-only default Actions, package and combined generator
+
+**Current precedence over stale nine-rule, retirement and research milestones below:** GCO's automatic REDscript generation consists of **10 approved generic source passes** in the one `RedscriptGenerationPlan` order. `STABLE_ARRAY_BOUND_V1` is tenth. The Generate UI calls `CombinedOptimizationPassService`, which stages the complete approved REDscript plan against the current live source alongside CET's authoritative owner output; only the game-relative combined ZIP is deployable. The external ownership sidecar records actually applied REDscript rule IDs/order/counts, and the UI reports applied rule count. All source admission, composition, idempotence, official SCC and package tests remain mandatory.
+
+Experimental native REDscript location adapters remain in GitHub for manual isolated development, **not** the default ten-pass plan. The optional `GCETNativeLocationBackend.reds` is excluded from published GCO component assets and forbidden from generated optimization ZIPs, as are `GCO_NativeLocation_*.reds` adapters. CET's **active native location output** is separate and still permitted; framework owner core `NativeLocationSignals.reds` remains a referenced part of `G-REDruntime` and is not forked or edited here.
+
+Previous read-only R5 callback/position/quest/UI/shared-work investigations and native REDscript adapter unit tests are retained but are **manual opt-in only** (`workflow_dispatch: research_diagnostics` and `GCO_REDSCRIPT_RESEARCH_TESTS=1`). Standard Actions continue verifying current-source admission, accepted generator output and ordering, real-source SCC/rollback/idempotence, real captured results, one .NET 10 runtime and the actual published ZIP/package. Never remove a correctness contract for an approved shipping rule merely to shorten CI.
+
+**Validation status for this cleanup:** GitHub Actions runs initiated by code changes; record the exact completed result in `docs/LATEST-WORK.md`. No game performance or gameplay approval is implied.
+
+
 ## 2026-11-20 — Current owner decision: experimental location available but opt-out of automatic generation
 
 User corrected the earlier retirement scope. Preserve GCO's experimental REDscript native location generator, native stage, tests, and optional framework-owned backend assets for **manual isolated use**. Exclude it from the default ordered GCO REDscript Analyze → Generate → ZIP workflow (nine non-location source rules). CET's native location optimizer and the generic shared-player signal remain independent and active.
