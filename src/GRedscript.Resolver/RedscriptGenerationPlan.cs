@@ -745,6 +745,58 @@ public static class RedscriptGenerationPlan
         else if (quickslots.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_INPUT_UNKNOWN_STATUS");
 
+        // Handmade pass-8 Quickslots derived D-pad state. Always stage
+        // after the current post-generic InputHub source (#16). Normal
+        // keyboard/mouse use clears all four caches; only real pad mode
+        // recomputes the original source-owned modifier predicates.
+        string dpadRoot = Path.Combine(output, "_stages",
+            "17-custom-quickslots-dpad");
+        var dpad = CustomQuickslotsDpadCachePass.Generate(game, dpadRoot,
+            Directory.Exists(final) ? final : null);
+        if (dpad.Status == "APPLIED")
+        {
+            string rel = dpad.SourcePath ??
+                throw new InvalidDataException("CQ_DPAD_STAGE_PATH_MISSING");
+            string src = Path.GetFullPath(Path.Combine(dpadRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string dest = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !IsInside(src, dpadRoot) || !IsInside(dest, final) ||
+                !File.Exists(src) ||
+                !dest.EndsWith(".reds", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("CQ_DPAD_STAGE_UNSAFE");
+            bool exists = File.Exists(dest);
+            if (exists)
+            {
+                string earlier = File.ReadAllText(dest);
+                string rewritten = File.ReadAllText(src);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    earlier, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(m => !rewritten.Contains(m,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException("CQ_DPAD_GENERIC_LOST");
+                if (earlier.Contains("customQuickslotsInputHub.Subscribe(",
+                    StringComparison.Ordinal) &&
+                    !rewritten.Contains("customQuickslotsInputHub.Subscribe(",
+                    StringComparison.Ordinal))
+                    throw new InvalidDataException("CQ_DPAD_INPUT_HUB_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src, dest, overwrite: exists);
+            files += exists ? 0 : 1;
+            expressions += dpad.AppliedEdits;
+            results.Add(new(17, "custom-quickslots-dpad",
+                dpad.AppliedEdits, exists ? 0 : 1,
+                exists ? 1 : 0, []));
+        }
+        else if (dpad.Status == "REFUSED")
+            skipped.Add(new(17, "custom-quickslots-dpad", 1,
+                dpad.Reason ?? "CQ_DPAD_SOURCE_INCOMPATIBLE"));
+        else if (dpad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("CQ_DPAD_STATUS_UNRECOGNIZED");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
