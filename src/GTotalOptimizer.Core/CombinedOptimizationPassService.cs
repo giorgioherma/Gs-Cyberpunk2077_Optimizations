@@ -35,7 +35,8 @@ public sealed class CombinedOptimizationPassService
 
     public async Task<CombinedPassOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken token = default, bool hotscenesEnglishOnly = false)
+        CancellationToken token = default, bool hotscenesEnglishOnly = false,
+        bool optimizeQuickslotsDpad = false)
     {
         string package = Path.GetFullPath(packageRoot);
         string game = Path.GetFullPath(gameRoot);
@@ -69,7 +70,8 @@ public sealed class CombinedOptimizationPassService
 
             string planOutput = Path.Combine(temp, "redscript-stage");
             var red = await Task.Run(() =>
-                RedscriptGenerationPlan.Stage(game, plan, analysis, planOutput),
+                RedscriptGenerationPlan.Stage(game, plan, analysis, planOutput,
+                    optimizeQuickslotsDpad),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
@@ -164,6 +166,12 @@ public sealed class CombinedOptimizationPassService
                         {
                             requested = hotscenesEnglishOnly,
                             appliedEdits = cetResult.HotscenesEnglishOnlyEdits
+                        },
+                        customQuickslotsDpad = new
+                        {
+                            requested = optimizeQuickslotsDpad,
+                            applied = red.Completed.Any(rule =>
+                                rule.Id == "custom-quickslots-dpad")
                         },
                         cetSkipDetails = cetResult.SkipDetails.Select(item => new {
                             category = item.Category, type = item.Type,
