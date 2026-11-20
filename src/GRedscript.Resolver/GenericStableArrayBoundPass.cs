@@ -282,7 +282,7 @@ internal static class GenericStableArrayBoundPass
         {
             string v = t[j].Value;
             if (v is "while" or "for" or "foreach" or "switch" or "new" or
-                "out" or "ref" or "goto" or "asm" or "ArrayPush" or "ArrayPop" or
+                "goto" or "asm" or "ArrayPush" or "ArrayPop" or
                 "ArrayClear" or "ArrayResize" or "ArrayErase" or "ArrayInsert")
                 return false;
             // Even an apparently pure call can mutate a captured collection,
