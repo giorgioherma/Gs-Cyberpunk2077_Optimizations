@@ -1,5 +1,10 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-20 — Updated policy: location experimental code retained, default output excluded
+
+Preserve optional/manual REDscript native location implementation and tests (restore from green #839); remove its entry only from the nine-rule **default** ordered plan and automatic combined optimization ZIP. Manual source scan/preview/native stage are callable; their output remains isolated and is not implicitly game-deployable. CET's native location owner continues independently. **Do not blanket-refuse existing generated location sources** using a new special policy: that refusal was unapproved and removed. Previously generated overlays require separate compatibility decisions, while generic source drift and safety checks remain. Earlier deletion/retirement prose below is historical, superseded.
+
+
 ## 2026-11-20 — experimental REDscript location source generator removed
 
 The broad generic location experiment did not achieve useful source coverage and has no measured in-game benefit. Per user approval, GCO removes `native-player-location-predicate` from default `RedscriptGenerationPlan` and deletes the experimental REDscript location generator/native asset-stage implementation and tests. **Nine ordered generic families remain.** `SHARED_PLAYER_SIGNAL_V1` is independent and preserved. Read-only player-position provenance is preserved. CET's native location player service and the framework's public opt-in services stay source-owner managed. Refuse existing old location-generated overlays with a restore instruction, rather than interpreting those files as pristine author sources. See `docs/LATEST-WORK.md`; CI pending.
