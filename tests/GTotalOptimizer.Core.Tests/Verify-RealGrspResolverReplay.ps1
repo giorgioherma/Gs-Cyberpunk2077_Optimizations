@@ -1510,7 +1510,7 @@ try {
     if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
-        [int]$orderedPlan.implementedRuleCount -ne 9 -or
+        [int]$orderedPlan.implementedRuleCount -ne 10 -or
         [int]$orderedPlan.captureGatedExistingRules -ne 0 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
@@ -1522,13 +1522,18 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 9 -or $deferred.Count -ne 5 -or
+    if ($scheduled.Count -ne 10 -or $deferred.Count -ne 5 -or
         $gated.Count -ne 0 -or
         @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' }).Count -ne 1) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
     if (@($scheduled | Where-Object { $_.id -eq 'native-player-location-predicate' }).Count -ne 0) {
         throw 'GCO_RETIRED_LOCATION_RULE_STILL_SCHEDULED'
+    }
+    $stableRow = @($scheduled | Where-Object { $_.id -eq 'stable-array-bound' })
+    if ($stableRow.Count -ne 1 -or $stableRow[0].order -ne 10 -or
+        $stableRow[0].rule -ne 'STABLE_ARRAY_BOUND_V1') {
+        throw 'GCO_STABLE_ARRAY_BOUND_MISSING_OR_WRONG_ORDER'
     }
     $membershipRow = @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' })
     $membershipPlanned = [int]$membershipRow[0].eligible
@@ -1543,11 +1548,46 @@ try {
         $memberReport.sourceStackSha256 -ne $expectedSourceHash) {
         throw 'GCO_CNAME_MEMBERSHIP_PLAN_SOURCE_SCAN_MISMATCH'
     }
+    # Inspect the original installed sources with the authoritative token
+    # reader; neither mod names nor captured frequencies gate eligibility.
+    $stableScanPath = Join-Path $work 'gco-stable-array-bound-scan.json'
+    & dotnet $dll scan-stable-array-bound --game $game --out $stableScanPath
+    if ($LASTEXITCODE -ne 0 -or
+        !(Test-Path -LiteralPath $stableScanPath -PathType Leaf)) {
+        throw 'GCO_STABLE_ARRAY_BOUND_REAL_SOURCE_SCAN_FAILED'
+    }
+    $stableReport = Get-Content -LiteralPath $stableScanPath -Raw | ConvertFrom-Json
+    $stablePlanned = [int]$stableRow[0].eligible
+    $stableAdmitted = @($stableReport.candidates | Where-Object {
+        $_.state -eq 'PRISTINE_APPLICABLE'
+    })
+    $semanticReserved = @('ReinforcementsSystem','Dark Future','FlushingEtiquette',
+        'Crowd Voice Unlocked','custom_quickslots','MuchBetterContracts','DigitalVixenCore')
+    $genericOwners = @($stableAdmitted | ForEach-Object {
+        $segments = $_.path.Split('/')
+        if ($segments.Count -ge 4 -and $segments[2] -notin $semanticReserved) {
+            $segments[2]
+        }
+    } | Sort-Object -Unique)
+    if ($stableReport.schemaVersion -ne 'gco.redscript.array-bound.scan.v1' -or
+        $stableReport.sourceStackSha256 -ne $expectedSourceHash -or
+        [int]$stableReport.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
+        [int]$stableReport.eligible -ne $stablePlanned -or
+        $stableAdmitted.Count -ne $stablePlanned -or
+        $genericOwners.Count -lt 3 -or
+        $stableReport.generationAuthorized -ne $false -or
+        $stableReport.originalSourcesModified -ne $false) {
+        throw 'GCO_STABLE_ARRAY_BOUND_REAL_SOURCE_ADMISSION_FAILED'
+    }
+    Write-Host ('PASS GCO stable ArraySize-bound source scan: eligible=' +
+        $stablePlanned + ' distinctNonSemanticOwners=' + $genericOwners.Count +
+        ' sourceUnchanged=true noModRule=true')
+
     $planEligible = [int](($scheduled | Measure-Object -Property eligible -Sum).Sum)
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
             $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount +
-            $membershipPlanned)) {
+            $membershipPlanned + $stablePlanned)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
     }
     # Independently produce the same source-admitted membership edits on the
@@ -1591,6 +1631,47 @@ try {
             Copy-Item -LiteralPath $memberFile.FullName -Destination $destination -Force
         }
     }
+    # Generate the new generic pass on the already-composed source, then
+    # independently compare the complete output against the canonical
+    # ordered-plan Stage() result. Never patch older generated files afterward.
+    if ($stablePlanned -gt 0) {
+        $stableManual = Join-Path $work 'gco-manual-array-bound-composed'
+        & dotnet $dll preview-stable-array-bound --game $game --analysis $result --out $stableManual --base-preview $callbackFolder
+        if ($LASTEXITCODE -ne 0) {
+            throw 'GCO_STABLE_ARRAY_BOUND_MANUAL_COMPOSITION_FAILED'
+        }
+        $stableScripts = Join-Path $stableManual 'r6/scripts'
+        $stableFiles = @(Get-ChildItem -LiteralPath $stableScripts -Filter *.reds -File -Recurse)
+        if ($stableFiles.Count -lt 1 -or $stableFiles.Count -gt $stablePlanned) {
+            throw 'GCO_STABLE_ARRAY_BOUND_MANUAL_FILE_COUNT_INVALID'
+        }
+        foreach ($stableFile in $stableFiles) {
+            $rel = [IO.Path]::GetRelativePath($stableScripts, $stableFile.FullName)
+            $destination = Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+            $after = Get-Content -LiteralPath $stableFile.FullName -Raw
+            if ($rel.StartsWith('..') -or $rel.Contains(':') -or
+                !$after.Contains('GCO-GENERIC:STABLE_ARRAY_BOUND_V1',
+                                 [StringComparison]::Ordinal)) {
+                throw 'GCO_STABLE_ARRAY_BOUND_MANUAL_SOURCE_INVALID'
+            }
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                $previous = Get-Content -LiteralPath $destination -Raw
+                $priorMarkers = @([regex]::Matches($previous,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object { $_.Value } | Select-Object -Unique)
+                foreach ($priorMarker in $priorMarkers) {
+                    if (!$after.Contains($priorMarker, [StringComparison]::Ordinal)) {
+                        throw 'GCO_STABLE_ARRAY_BOUND_MANUAL_LOST_EARLIER_RULE'
+                    }
+                }
+            }
+            else {
+                New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $stableFile.FullName -Destination $destination -Force
+        }
+    }
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
