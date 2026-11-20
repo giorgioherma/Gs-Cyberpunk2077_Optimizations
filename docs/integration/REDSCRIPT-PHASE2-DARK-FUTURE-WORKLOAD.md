@@ -29,7 +29,7 @@ not the full S1 repeated-outro or animation suppression:
 - [Fast Phase 2 checkpoint #27 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44790973090):
   19 source-state tests, post-generic 2,331-file source + both Footsteps/Dark Future
   semantic outputs compiled with official SCC 0.5.31 (43,482,205 bytes).
-  Later source-alias safety refinement is revalidated in subsequent checkpoint.
+  The final relocated-owner and alias safety refinements passed [focused Phase 2 #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848): 21 tests, same two-file combined SCC output. [Full GCO CI #1009 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613) independently verified **80** game-relative generated `.reds` files from ten generic rules plus Footsteps/Dark Future, official SCC, ZIP topology and Windows app packaging. In-game parity and measured savings remain unverified.
 - The GRSP capture did **not isolate a timing cost for the specific `ArrayContains`**.
   No FPS, CPU, allocation or frame-time savings are claimed. The expensive
   repeated outro starts and pooled-widget writes remain deliberately untouched.
