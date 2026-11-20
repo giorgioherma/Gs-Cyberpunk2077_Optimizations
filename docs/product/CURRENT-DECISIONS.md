@@ -1,5 +1,11 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — SCC belongs to CI; no third-party runtime compiler redistribution
+
+User explicitly rejected an SCC compiler requirement or staging emulation as a **player-side Generate blocker**. The application must generate one safe game-relative CET + REDscript optimization ZIP from the currently installed source after read-only Analyze and source-drift/ownership checks. Official SCC 0.5.31 compilation remains a high-value **GitHub CI/development acceptance gate**, not a runtime prerequisite or a claim of game behavior equivalence. Do not bundle `scc_lib.dll` in the downloadable GCO app; redistribution authorization has not been established. Do not replace official SCC with a custom compiler or silently declare generated files compiler-verified. The runtime output sidecar must truthfully state CI-only SCC status.
+
+The original CET+REDscript native capture remains authoritative. GCO report publication must not duplicate byte-identical sealed profiler CSVs under `Reports`; preserve complete readable owner HTML/JSON and redirect download links to sealed originals. Graph zoom may visually connect across missing observations only using a clearly marked **unobserved** style; never substitute zero or fabricate interpolated values. These changes do not modify a captured session or source-owner profiler behavior.
+
 ## 2026-11-20 — source-aware stable array-length generic before semantics
 
 - User approved implementing `STABLE_ARRAY_BOUND_V1` as a genuinely mod-independent structural REDscript optimization, with no change to the existing two blackboard-definition rules. The source-only generator runs after the existing nine R5 generic families within GCO's one canonical order, before any future R7 semantic work. Earlier CET generation order remains unchanged.
