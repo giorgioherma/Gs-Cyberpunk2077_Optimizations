@@ -156,7 +156,9 @@ public sealed class CetReadOnlyAnalysisService
             // Combined GCO generation can still publish REDscript changes
             // without asking CET to synthesize an empty optimization ZIP.
             if (generatePass && stagedOutput is not null &&
-                Nonnegative(cli, "MaterialRemainingCount") == 0)
+                Nonnegative(cli, "MaterialRemainingCount") == 0 &&
+                Nonnegative(cli, "GenericResolvedCount") == 0 &&
+                Nonnegative(cli, "SemanticReadyRuleCount") == 0)
             {
                 generatedPass = new CetPassOutcome("", 0, 0, 0);
             }
