@@ -465,11 +465,21 @@ internal static class DigitalVixenFootstepsPass
             if ((File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidDataException("DVCORE_LINKED_SOURCE_REFUSED");
             string contents = File.ReadAllText(full, Encoding.UTF8);
-            if (!contents.Contains("class DVFootstepsService", StringComparison.Ordinal) &&
-                !contents.Contains("class  DVFootstepsService", StringComparison.Ordinal))
+            if (!contents.Contains(TargetClass, StringComparison.Ordinal) ||
+                !contents.Contains(Owner, StringComparison.Ordinal))
                 continue;
-            if (!contents.Contains("module DigitalVixenCore", StringComparison.Ordinal))
-                continue;
+            // Whitespace/comments/layout/version variations must not become
+            // a false NOT_APPLICABLE. Admit by tokens, not source text bytes.
+            var tokens = SourceAdmission.ReadTokens(contents);
+            bool ownerModule = false;
+            bool serviceDeclaration = false;
+            for (int i = 0; i + 1 < tokens.Count; i++)
+            {
+                if (Seq(tokens, i, "module", Owner)) ownerModule = true;
+                if (Seq(tokens, i, "class", TargetClass))
+                    serviceDeclaration = true;
+            }
+            if (!ownerModule || !serviceDeclaration) continue;
             owners.Add((Path.GetRelativePath(scripts, full), contents));
         }
         Result result;
