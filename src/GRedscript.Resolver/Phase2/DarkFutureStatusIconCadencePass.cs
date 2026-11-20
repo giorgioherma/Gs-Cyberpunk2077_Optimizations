@@ -151,7 +151,8 @@ internal static class DarkFutureStatusIconCadencePass
         const string marker="let "+Due+": Bool = true;";
         bool hasPrelude=body.Contains(marker,StringComparison.Ordinal);
         string[] proof=[
-            "GameInstance.GetTimeSystem(this.GetGameInstance())",
+            "GetPlayerControlledObject()",
+            "GameInstance.GetTimeSystem(__gcoDfPlayer.GetGame())",
             "EngineTime.ToFloat",
             ".GetSimTime()",
             "now + 0.40",
@@ -169,16 +170,19 @@ internal static class DarkFutureStatusIconCadencePass
         {
             string prelude=string.Join(nl,[
                 "", "    let "+Due+": Bool = true;",
-                "    let __gcoDfTimeSystem: ref<TimeSystem> = "+
-                    "GameInstance.GetTimeSystem(this.GetGameInstance());",
-                "    if IsDefined(__gcoDfTimeSystem) {",
-                "        let now: Float = EngineTime.ToFloat(__gcoDfTimeSystem.GetSimTime());",
-                "        "+Due+" = !this."+Flag+
+                "    let __gcoDfPlayer = this.GetPlayerControlledObject();",
+                "    if IsDefined(__gcoDfPlayer) {",
+                "        let __gcoDfTimeSystem: ref<TimeSystem> = "+
+                    "GameInstance.GetTimeSystem(__gcoDfPlayer.GetGame());",
+                "        if IsDefined(__gcoDfTimeSystem) {",
+                "            let now: Float = EngineTime.ToFloat(__gcoDfTimeSystem.GetSimTime());",
+                "            "+Due+" = !this."+Flag+
                     " || now < this."+Last+" || now >= this."+Next+";",
-                "        if "+Due+" {",
-                "            this."+Flag+" = true;",
-                "            this."+Last+" = now;",
-                "            this."+Next+" = now + 0.40;",
+                "            if "+Due+" {",
+                "                this."+Flag+" = true;",
+                "                this."+Last+" = now;",
+                "                this."+Next+" = now + 0.40;",
+                "            };",
                 "        };",
                 "    };",
                 "    let "+Force+": Bool;",
