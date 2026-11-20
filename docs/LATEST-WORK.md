@@ -1,5 +1,18 @@
 # Latest work / evidence status
 
+## 2026-11-20 — approved-only standard generation and test/artifact cleanup (verification pending)
+
+**User instruction:** preserve unfinished/previous experimental work in Git history and allow isolated manual testing, but do not spend default GitHub Actions on dormant investigations or bundle optional unused source with the application. Connect all accepted optimizations to the one combined CET+REDscript generated optimization pass.
+
+**Implemented, GCO `dev/redscript/resolver_handoff`:** The existing `RedscriptGenerationPlan` already orders **all ten verified generic REDscript generators**, ending in `STABLE_ARRAY_BOUND_V1`. No new parallel runner or rewrite system was added. `CombinedOptimizationPassService.GenerateAsync` already calls this plan after analysis, merges staged original-owner CET output and source-owned REDscript effective files, runs official SCC and writes one game-only ZIP. The **external ownership sidecar now records each actually applied REDscript rule's order, ID, edit and composition counts**, and the Generate page reports the number of applied rules. Deferred A–E systems and experimental REDscript native-location transforms remain outside the ordered plan.
+
+**Removed from standard output:** `integrations/three-profiler-test/Build-Test.ps1` now packages the owner's authoritative `r6/scripts/G-RedRuntime` framework tree only, not `optional-native/GCETNativeLocationBackend.reds`. The framework manifest validator and final bundled-package test reject optional native entries. The game ZIP inspector refuses `GCO_NativeLocation_*.reds` and `GCETNativeLocationBackend.reds`, while preserving actual CET owner native DLL/location output. The core framework still has its source-owned `NativeLocationSignals.reds` dependency; no framework code was modified. The standard ZIP continues to reject documentation, profiler binaries/reports and build/test files.
+
+**Actions cleanup:** Eight historical/manual-only REDscript tests are skipped by default (native subscriber, shared native stage, callback-work scan, player-position dependency, shared-work scan, UI output slice, quest fact graph, callback semantic classifier). They remain runnable explicitly with `GCO_REDSCRIPT_RESEARCH_TESTS=1`; `workflow_dispatch` adds a separate `research_diagnostics` checkbox. The full private replay now gates its obsolete no-generator read-only research block behind `-IncludeResearchDiagnostics`, while keeping all accepted source-generator staging, full SCC, second-pass/partial validation and output contracts. The fresh-stack workflow no longer runs a duplicate inactive callback classifier; the historical callback-only step is manual. The source-owned QuestFactSignals research contract is manual; active player lifetime safety stays enforced.
+
+**Verification:** prior baseline [CI #880 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44670023624): 10 generic passes, 19 stable-bound edits across 12 independent non-semantic owners, 173 total eligible REDscript source edits / 78 generated files, official SCC passed. **The post-cleanup code CI is in progress**; do not mark current package or native opt-out green until the latest completed run proves it. Gameplay A/B and measured gains remain pending.
+
+
 ## 2026-11-20 — R5 stable ArraySize-bound source generator (verified)
 
 **Owner instruction:** implement one additional genuinely broad source-only generic REDscript optimization, not a mod-specific semantic recipe. Leave `GenericBlackboardDefinitionPass` and both existing blackboard rules unchanged.
