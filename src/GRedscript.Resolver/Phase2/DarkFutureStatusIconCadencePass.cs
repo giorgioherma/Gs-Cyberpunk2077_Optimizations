@@ -161,12 +161,33 @@ internal static class DarkFutureStatusIconCadencePass
             Next+" = now + 0.40",
             Due+" = !this."+Flag
         ];
-        if(hasPrelude && proof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
-            return Refuse("DF_ICON_CUSTOM_CADENCE_BLOCK_UNPROVEN");
-        if(!hasPrelude && (body.Contains(Due,StringComparison.Ordinal) ||
-           body.Contains("m_gcoDfIconCadence",StringComparison.Ordinal)))
+        bool partialCadence=!hasPrelude &&
+            (body.Contains(Due,StringComparison.Ordinal) ||
+             body.Contains("m_gcoDfIconCadence",StringComparison.Ordinal));
+        if((hasPrelude || partialCadence) &&
+            proof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
             return Refuse("DF_ICON_PARTIAL_CADENCE_BLOCK_UNPROVEN");
-        if(!hasPrelude)
+        // A source can contain the entire already-proven cadence block but
+        // have its due flag declaration missing (manual/partial optimization).
+        // Restore that declaration only; do NOT inject a second clock or
+        // duplicate a state update. Retain the existing fallback and ordering.
+        if(partialCadence)
+        {
+            string[] clockProof=[
+                "let __gcoDfPlayer = this.GetPlayerControlledObject();",
+                "if IsDefined(__gcoDfPlayer) {",
+                "if IsDefined(__gcoDfTimeSystem) {",
+                "if "+Due+" {",
+                "this."+Flag+" = true;",
+                "this."+Last+" = now;",
+                "this."+Next+" = now + 0.40;"
+            ];
+            if(clockProof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
+                return Refuse("DF_ICON_PARTIAL_CLOCK_CONTROL_FLOW_UNPROVEN");
+            edits.Add(new(t[method.Body].End,t[method.Body].End,
+                nl+"    let "+Due+": Bool = true;"));
+        }
+        if(!hasPrelude && !partialCadence)
         {
             string prelude=string.Join(nl,[
                 "", "    let "+Due+": Bool = true;",
@@ -190,7 +211,8 @@ internal static class DarkFutureStatusIconCadencePass
             ]);
             edits.Add(new(t[method.Body].End,t[method.Body].End,prelude));
         }
-        else if(!body.Contains("let "+Force+": Bool;",StringComparison.Ordinal))
+        if((hasPrelude || partialCadence) &&
+            !body.Contains("let "+Force+": Bool;",StringComparison.Ordinal))
         {
             // Independent partial: existing cadence, missing per-record flag.
             edits.Add(new(t[method.Body].End,t[method.Body].End,
