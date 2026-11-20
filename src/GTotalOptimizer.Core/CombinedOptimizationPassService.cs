@@ -164,7 +164,13 @@ public sealed class CombinedOptimizationPassService
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
                         installRecommendation = "Vortex overlay after originals; manually back up before direct installation",
-                        excludedOwners = Array.Empty<string>(),
+                        excludedOwners = cetResult.SkipDetails
+                            .Where(item => item.Category == "MOD_BLACKLIST" &&
+                                !string.IsNullOrWhiteSpace(item.Owner))
+                            .Select(item => item.Owner!)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(owner => owner, StringComparer.OrdinalIgnoreCase)
+                            .ToArray(),
                         files = indexed.Select(e => new {
                             path = e.Path, owner = e.Owner,
                             optimizedSha256 = Sha(e.FullName),
