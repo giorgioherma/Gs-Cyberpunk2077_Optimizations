@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-20 — correct offscreen WPF footer regression (CI still unverified)
+
+- The new WPF harness called `IsVisible` for Capture/Analyze footer elements while `VerifyAtSize` only measured/arranged an **unshown** `MainWindow`. WPF `IsVisible` depends on presentation in an actual visible window, so these checks could fail independently of intended page state. Source regression `24f56af` now asserts explicit `Visibility` and measured footer layout, without weakening the real separation of Capture/Analyze controls.
+- Source commits for the user-requested footer isolation and full-width Analyze console remain in place; the user reported red Actions. Do **not** claim Windows CI green until exact failed job logs and a succeeding run have been verified. Other failures may remain.
+
 ## 2026-11-20 — explicit Capture footer removal and Hotscenes generation status (Windows CI pending)
 
 - Screenshot showed stale `Saved ... Click CONTINUE` behind Analyze and the disabled CONTINUE control at bottom-right. The Capture page body and its sibling footer require identical page navigation ownership: all three Analyze entry paths now explicitly collapse `CaptureFooterHost`; reset to Capture explicitly restores it. Existing Page 1 functionality is retained, not duplicated on Page 2. WPF smoke models those same state changes and tests both directions.
