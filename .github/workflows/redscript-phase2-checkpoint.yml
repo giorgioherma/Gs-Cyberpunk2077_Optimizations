@@ -36,6 +36,7 @@ jobs:
       PHASE2_ICON_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture-icons
       PHASE2_FE_OUTPUT: ${{ github.workspace }}/.phase2-fe-input
       PHASE2_FE_PINS_OUTPUT: ${{ github.workspace }}/.phase2-fe-pins
+      PHASE2_QUICKSLOTS_OUTPUT: ${{ github.workspace }}/.phase2-cq-input
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -254,6 +255,55 @@ jobs:
           }
           Write-Host 'PASS FE session-owned pin lifecycle, explicit activation and targeted icon styling'
 
+      - name: Generate source-aware Quickslots specific input bridge with engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-quickslots-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_QUICKSLOTS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_INPUT_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_CQ_INPUT_EXPECTED_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_CQ_ONE_OWNER_FILE_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_CQ_INPUT_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            $updated=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$updated.Contains('class CustomQuickslotsGlobalInputListener extends InputListener') -or
+                !$updated.Contains('class CustomQuickslotsDeviceListener extends InputDeviceListener') -or
+                !$updated.Contains('this.customQuickslotsInputHub.Subscribe(') -or
+                !$updated.Contains('this.customQuickslotsInputHub.SubscribeDevice(') -or
+                !$updated.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(') -or
+                !$updated.Contains('this.customQuickslotsFallbackRegistered = true;') -or
+                !$updated.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+                !$updated.Contains('this.player.m_customHotkeyPlayerButtonData.ObserveAction(')) {
+              throw 'PHASE2_CQ_INPUT_GENERIC_OR_FALLBACK_DROPPED'
+            }
+            if (Test-Path -LiteralPath $target) {
+              $old=Get-Content -LiteralPath $target -Raw
+              foreach($marker in @([regex]::Matches($old,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$updated.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_CQ_INPUT_LOST_GENERIC'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          Write-Host 'PASS Quickslots InputHub action-specific bridge and fallback preserve existing generic membership'
+
       - name: Checkpoint - compile post-generic plus real semantic overlay
         shell: pwsh
         run: |
@@ -265,7 +315,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
