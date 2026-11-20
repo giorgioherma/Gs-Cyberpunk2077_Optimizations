@@ -1,4 +1,28 @@
 # Product decisions and explicit delta to the October 16 design
+## 2026-11-20 — Dark Future semantic optimization: safe classification only
+
+Approved source-scoped operation 2: `DARK_FUTURE_INFINITE_TAG_CACHE_V1` in the unified GCO
+REDscript Resolver. Cache the `DarkFutureInfiniteDurationEffect` membership on each
+`SingleCooldownManager.ActivateCooldown` after its original tag assignment; invalidate
+before calling the wrapped activation, and retain a live fallback if `Update` runs
+before initialization. Recognize post-generic stock, partial, markerless complete,
+compatible relocated/modified sources and safe read-only tag access. Unknown tag-array
+writes or escapes refuse only this operation. Original timers, root visibility,
+stack, icon, `SetTimeRemaining`, `FillOutroAnimationStart`, status effect identity
+and every original Update invocation remain unchanged.
+
+Do **not** port historical Dark Future 6/10-frame UI cadence or skip repeated
+outro animations until their lifecycle/side effects can be proven safe. Do not
+claim measured CPU/FPS improvement: the previous GRSP capture did not separately
+measure this membership operation. The source-level cache is a safe narrow
+preliminary optimization, not the complete historical Dark Future speedup.
+
+[Fast Phase 2 checkpoint #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848):
+21 semantic tests, full 2,331-source post-generic stack plus both source-owned
+semantic overlays compiled with official SCC 0.5.31, original private source untouched.
+One GCO Generate stages generic first, then Footsteps, then Dark Future; still
+one game-relative CET+REDscript ZIP. Full GCO package CI is separately required.
+
 
 ## 2026-11-20 — Phase 2 first accepted source-aware semantic pass (DigitalVixenCore Footsteps)
 
