@@ -63,7 +63,7 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
             {
                 string link = "../../" + Path.GetFileName(originals) + "/" +
                     relative.Replace('\\', '/');
-                if (ownerHtml.Contains("href=\\\"" + link + "\\\"", StringComparison.Ordinal))
+                if (ownerHtml.Contains("href=\"" + link + "\"", StringComparison.Ordinal))
                     redirected++;
             }
             else if (new FileInfo(original).Length == new FileInfo(duplicated).Length &&
