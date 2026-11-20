@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — generated output separate from profilers, confirmed BACK and end-of-pass CLOSE
+
+- **Folder policy:** One game-relative optimized ZIP plus its external ownership sidecar now publishes under application root `generated_optimizations/pass-YYYYMMDD_HHMMSS/`. `RESULTS` is for immutable profiler captures and derived reports only; OPEN RESULTS still navigates there. The temporary pass directory is published by a same-volume atomic move after both files and ZIP integrity checks complete. No half-published pass, timestamp overwrites, migration/deletion of existing captures, or changes to game source.
+- **Page 2:** BACK is visible at bottom; its Yes/No modal asks exactly whether to reset captures and return to page one. No makes no changes. Yes clears only active workflow state plus `GCO-last-restored-session.json` navigation bookmark, restores Capture page and permits a fresh profiler run. CLOSE appears at the bottom-right only after successfully publishing ZIP + ownership JSON, uses the same bookmark/state reset, and fully closes the application. Reopening after CLOSE starts on Capture rather than silently reopening Analyze. Refuse resets if workflow busy or profiler owner journal needs recovery.
+- **Safety contracts:** Core test probes the actual generator's dated folder path and verifies bookmark clearing retains archived RESULTS. WPF smoke checks bottom navigation controls and initially hidden CLOSE. Default-off Hotscenes resets with active workspace. Preserve owner source-drift admission and all real CI source/output contracts. Windows CI result pending.
+
+
+
 ## 2026-11-20 — optional Hotscenes ENG-only in GCO CET panel
 
 - **Owner decision / user request:** an explicit, initially **unchecked** `Hotscenes ENG only` checkbox belongs directly inside the CET optimization panel on Page 2, with concise explanation: check only when English UI is used; the generated overlay may then remove Hotscenes localization to free Lua-local capacity for optimizations. The default generated ZIP retains author localization; never auto-detect a game language and silently opt in. GCO does not persist this opt-in between launches or different captured sessions.

@@ -908,7 +908,11 @@
                      shift Page 1's capture cards or duplicate portrait art. -->
                 <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
                       Background="Transparent" Margin="40,3,0,3">
-                    <ScrollViewer x:Name="ResultsScrollViewer" FocusVisualStyle="{x:Null}"
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer x:Name="ResultsScrollViewer" Grid.Row="0" FocusVisualStyle="{x:Null}"
                                   Background="Transparent"
                                   VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
@@ -1020,6 +1024,19 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
+                    <!-- At the original Continue bottom-right position. BACK
+                         requires confirmation; CLOSE is shown after generation. -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal"
+                                HorizontalAlignment="Right" Margin="0,4,8,16">
+                        <Button x:Name="BackToCaptureButton" Content="← BACK"
+                                Width="160" Height="49" Margin="0,0,10,0"
+                                Style="{StaticResource ContinueStyle}"
+                                Click="BackToCapture_Click"/>
+                        <Button x:Name="CloseAfterGenerationButton" Content="CLOSE"
+                                Width="160" Height="49" Visibility="Collapsed"
+                                Style="{StaticResource ContinueStyle}"
+                                Click="CloseAfterGeneration_Click"/>
+                    </StackPanel>
                 </Grid>
             </Grid>
         </Grid>

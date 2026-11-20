@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -27,6 +28,10 @@ public sealed record CombinedPassOutcome(
 public sealed class CombinedOptimizationPassService
 {
     private readonly CetReadOnlyAnalysisService cet = new();
+    // Distinct from immutable profiler RESULTS; date and time name a pass.
+    internal static string GeneratedPassFolder(string packageRoot, DateTime when) =>
+        Path.Combine(Path.GetFullPath(packageRoot), "generated_optimizations",
+            "pass-" + when.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
 
     public async Task<CombinedPassOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
@@ -103,14 +108,22 @@ public sealed class CombinedOptimizationPassService
                     string.Join(" | ", red.Skipped.Select(x =>
                         x.Id + ": " + x.Reason)));
 
-            string results = Path.Combine(package, "RESULTS");
-            Directory.CreateDirectory(results);
-            string name = "G-Cyberpunk2077-" +
-                DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_Optimization_Pass.zip";
-            string final = Path.Combine(results, name);
-            if (File.Exists(final))
+            string finalFolder = GeneratedPassFolder(package, DateTime.Now);
+            string outputRoot = Path.GetDirectoryName(finalFolder)!;
+            Directory.CreateDirectory(outputRoot);
+            if ((File.GetAttributes(outputRoot) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked generated_optimizations directory refused.");
+            if (Directory.Exists(finalFolder) || File.Exists(finalFolder))
                 throw new IOException("An optimization pass already has this timestamp.");
-            string pending = final + ".partial-" + Guid.NewGuid().ToString("N");
+
+            // Publish only after both ZIP and external owner report are
+            // complete. A same-volume folder move exposes them together.
+            string stagedFolder = Path.Combine(outputRoot,
+                ".pass-pending-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(stagedFolder);
+            const string zipName = "G-Cyberpunk2077_Optimization_Pass.zip";
+            string pending = Path.Combine(stagedFolder, zipName);
+            string final = Path.Combine(finalFolder, zipName);
             try
             {
                 var indexed = CollectOutput(overlay, owners, game, token);
@@ -133,11 +146,8 @@ public sealed class CombinedOptimizationPassService
                     throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
                 // All sidecars, source hashes and exclusions stay outside the
                 // game-only ZIP. Record original hashes for Vortex rollback.
-                string manifest = final + ".ownership.json";
-                string draft = manifest + ".partial-" + Guid.NewGuid().ToString("N");
-                try
-                {
-                    File.WriteAllText(draft, JsonSerializer.Serialize(new {
+                string manifest = pending + ".ownership.json";
+                File.WriteAllText(manifest, JsonSerializer.Serialize(new {
                         schemaVersion = "gco.combined-pass.v1",
                         captureSession = sessionId,
                         redscriptSourceStackSha256 = red.SourceStackSha256,
@@ -186,16 +196,11 @@ public sealed class CombinedOptimizationPassService
                                 ? Sha(e.LivePath) : null
                         }).ToArray()
                     }, new JsonSerializerOptions { WriteIndented = true }),
-                        new UTF8Encoding(false));
-                    File.Move(pending, final, overwrite: false);
-                    try { File.Move(draft, manifest, overwrite: false); }
-                    catch
-                    {
-                        if (File.Exists(final)) File.Delete(final);
-                        throw;
-                    }
-                }
-                finally { if (File.Exists(draft)) File.Delete(draft); }
+                    new UTF8Encoding(false));
+                token.ThrowIfCancellationRequested();
+                if (Directory.Exists(finalFolder) || File.Exists(finalFolder))
+                    throw new IOException("An optimization pass already has this timestamp.");
+                Directory.Move(stagedFolder, finalFolder);
                 return new(final, cetFiles, redFiles, indexed.Count,
                     cetResult.TransformCount, red.AppliedEdits)
                 {
@@ -207,7 +212,11 @@ public sealed class CombinedOptimizationPassService
                     HotscenesEnglishOnlyEdits = cetResult.HotscenesEnglishOnlyEdits
                 };
             }
-            finally { if (File.Exists(pending)) File.Delete(pending); }
+            finally
+            {
+                if (Directory.Exists(stagedFolder))
+                    Directory.Delete(stagedFolder, recursive: true);
+            }
         }
         finally
         {

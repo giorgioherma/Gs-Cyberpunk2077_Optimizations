@@ -199,6 +199,39 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
             "CET_HOTSCENES_ENG_ONLY_MUST_BE_EXPLICIT_GENERATION_OPT_IN");
 }
 
+// The shipping generator's actual output path is outside profiler RESULTS.
+{
+    var method = typeof(CombinedOptimizationPassService).GetMethod(
+        "GeneratedPassFolder",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_GENERATED_PASS_OUTPUT_LAYOUT_MISSING");
+    string package = Path.Combine(Path.GetTempPath(), "gco-output-contract");
+    var fixedTime = new DateTime(2026, 11, 20, 10, 33, 0);
+    string actual = (string?)method.Invoke(null, [package, fixedTime]) ??
+        throw new InvalidDataException("Generated pass folder missing.");
+    if (actual != Path.Combine(Path.GetFullPath(package),
+            "generated_optimizations", "pass-20261120_103300"))
+        throw new InvalidDataException(
+            "GCO_GENERATED_PASS_MUST_BE_TIMESTAMPED_OUTSIDE_PROFILER_RESULTS");
+    // BACK/CLOSE must forget only the last-workspace navigation pointer.
+    string scratch = Path.Combine(Path.GetTempPath(),
+        "gco-reset-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string results = Path.Combine(scratch, "RESULTS");
+        Directory.CreateDirectory(results);
+        string pointer = Path.Combine(results, "GCO-last-restored-session.json");
+        string evidence = Path.Combine(results, "GCO-Capture-retained-evidence.txt");
+        File.WriteAllText(pointer, "navigation pointer");
+        File.WriteAllText(evidence, "sealed capture retained");
+        CollectedCaptureStore.ForgetLastRestored(scratch);
+        if (File.Exists(pointer) || !File.Exists(evidence))
+            throw new InvalidDataException("GCO_RESET_DELETED_PROFILER_RESULTS");
+    }
+    finally { if (Directory.Exists(scratch)) Directory.Delete(scratch, true); }
+}
+
 var checks = 0;
 void Require(bool valid, string message)
 {

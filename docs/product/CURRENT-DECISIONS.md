@@ -1,5 +1,11 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — generated optimization folder and Capture return
+
+The app root has `generated_optimizations/pass-YYYYMMDD_HHMMSS/` for each completed pass (ZIP and external ownership JSON). Profiler `RESULTS` remains separate. Publish the directory only after its safe generation completes; no partial or overwritten pass. Page 2 BACK prompts Yes/No: "Return to page one. This will reset your captures and return you to the first page. Do you want to continue?" Yes discards the active capture/analysis navigation state and returns to Capture; No is inert. After a successful ZIP, show CLOSE at the bottom-right Continue-equivalent position. CLOSE clears that same active state and navigation bookmark and exits, so reopening starts on Page 1. Preserve every sealed prior capture and generated pass on disk; resets cannot interrupt active work or bypass owner journals.
+
+
+
 ## 2026-11-20 — personal Hotscenes English-only checkbox (CET, opt-in)
 
 Add one **default-unchecked** checkbox under CET mod Optimizations: `Hotscenes ENG only`, explaining that it is for players using English and that it removes Hotscenes localization from the **generated ZIP** to make room for optimizations. The switch must not silently infer English from OS/game locale, mutate installed Hotscenes, or affect Analyze. Do not add an alternative localization rewriter; use CET's existing author-owned `--hotscenes-english-only` pass flag, applied before generic generation with line-map and local-budget checks. Keep original CET skip outcomes and source-drift refusal. Report whether checked and whether the CET-owned pass really applied it; unchecked default leaves all languages intact. One clean game-relative ZIP with external ownership audit, no extra tool or compiler binaries.

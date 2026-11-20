@@ -1,5 +1,11 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## 2026-11-20 — current output isolation and Page 2 navigation
+
+Combined generated game-only ZIP plus external ownership sidecar publish as one atomic completed folder under app root `generated_optimizations/pass-YYYYMMDD_HHMMSS/`; `RESULTS` remains sealed profiler evidence/reports. Page 2 BACK asks Yes/No before clearing the active capture and restored-session pointer and returning to Page 1. CLOSE appears bottom-right only after successful generation, performs the same reset, then completely shuts down; reopen starts with profiler Capture. Preserve all historical capture files, output passes and game source; refuse navigation resets during active work or unresolved owner restoration. Verify actual output structure and WPF behavior in CI.
+
+
+
 ## 2026-11-20 — CET Hotscenes ENG-only is optional and owned by CET
 
 GCO Page 2 contains one **default-unchecked** `Hotscenes ENG only` checkbox INSIDE the CET optimization panel. Only when explicitly checked for the current Generate invocation, forward `--hotscenes-english-only` to the **existing** CET-owned Resolver CLI. Do not infer the user's language, alter installed Hotscenes, duplicate the CET translation rewrite in GCO, or enable this during ANALYZE. The source-owner stage runs before generic passes to recover Lua local capacity, refuses unknown source drift only for affected mod, retains English UI and idempotence, and records applied count in its existing manifest. GCO records the *verified requested/applied* numbers in the external combined ownership sidecar and may still generate unrelated safe CET/REDscript output. The GCO-pinned CET source commit `08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44` already implements the switch and stage counters. No game performance or gameplay result is assumed.

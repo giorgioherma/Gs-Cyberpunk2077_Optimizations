@@ -2049,6 +2049,7 @@ public partial class MainWindow : Window
         analysisCancellation?.Dispose();
         analysisCancellation = cancellation;
         GenerateButton.Content = "GENERATING...";
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         long generateActivity = BeginConsoleActivity("Generating CET and REDscript optimizations");
         try
         {
@@ -2059,7 +2060,8 @@ public partial class MainWindow : Window
                 packageRoot, game, session, cancellation.Token,
                 hotscenesEnglishOnly);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
-            resultsFolder = Path.GetDirectoryName(pass.ZipPath);
+            // OPEN RESULTS keeps opening profiler data. Generated ZIPs
+            // are reported as separate app-root passes in the console.
             var refused = pass.CetSkipDetails.Where(row =>
                 row.Category is "GENERATION_FAILURE" or "LUA_LOCAL_LIMIT" or
                     "MOD_BLACKLIST").ToArray();
@@ -2081,8 +2083,12 @@ public partial class MainWindow : Window
                           ? "applied" : "not applied; check skip details") +
                       Environment.NewLine
                     : "") +
+                "Saved to: generated_optimizations/" +
+                Path.GetFileName(Path.GetDirectoryName(pass.ZipPath)!) + "/" +
+                Environment.NewLine +
                 "Skip details: " + Path.GetFileName(pass.ZipPath) +
                 ".ownership.json (beside the ZIP).");
+            CloseAfterGenerationButton.Visibility = Visibility.Visible;
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
@@ -2172,6 +2178,82 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
         finally { EndConsoleActivity(restoreActivity); SetBusy(false); await RefreshSourceAsync(); }
+    }
+
+    // Reset only the active workflow and resume bookmark, never the
+    // hash-sealed RESULTS or previously published game-only ZIPs.
+    internal bool ResetCompletedWorkflowForNextCapture()
+    {
+        if (busy || analysisRunning || generationRunning || profilerReportRunning ||
+            Workflow.HasRecoveryJournal || ResultsPage.Visibility != Visibility.Visible)
+            return false;
+
+        CollectedCaptureStore.ForgetLastRestored(packageRoot);
+        analyzedSessionId = null;
+        completedSessionId = null;
+        completedGameRoot = null;
+        captureAndRestoreVerified = false;
+        redscriptPlanReady = false;
+        savedCapture = null;
+        resultsFolder = null;
+        HotscenesEnglishOnlyCheckBox.IsChecked = false;
+        HotscenesEnglishOnlyCheckBox.IsEnabled = true;
+        CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
+        RedReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
+        AnalyzeButton.Content = "ANALYZE";
+        AnalyzeButton.IsEnabled = false;
+        GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
+        GenerateButton.IsEnabled = false;
+        OpenResultsButton.IsEnabled = false;
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
+        SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
+        ResultsScrollViewer.ScrollToTop();
+        ClearStatusPin();
+        SetPortraitStage(PortraitStage.Black);
+        ResultsPage.Visibility = Visibility.Collapsed;
+        CapturePage.Visibility = Visibility.Visible;
+        SetActiveTab(false);
+        SetStatus("Ready for a new profiler capture.");
+        return true;
+    }
+
+    private async void BackToCapture_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || analysisRunning || generationRunning || profilerReportRunning)
+        {
+            Warn("Finish the current operation before returning to Capture.", "Back");
+            return;
+        }
+        if (MessageBox.Show(this,
+                "Return to page one. This will reset your captures and return you to the first page." +
+                Environment.NewLine + Environment.NewLine +
+                "Do you want to continue?",
+                "Return to Capture", MessageBoxButton.YesNo,
+                MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            if (ResetCompletedWorkflowForNextCapture())
+                await RefreshSourceAsync();
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not reset the active workflow: " + ex.Message, "Back");
+        }
+    }
+
+    private void CloseAfterGeneration_Click(object sender, RoutedEventArgs e)
+    {
+        if (CloseAfterGenerationButton.Visibility != Visibility.Visible) return;
+        try
+        {
+            if (ResetCompletedWorkflowForNextCapture())
+                Close(); // full exit, not capture-hibernation tray
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not reset the active workflow: " + ex.Message, "Close");
+        }
     }
 
     private void OpenResults_Click(object sender, RoutedEventArgs e)

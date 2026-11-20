@@ -609,6 +609,18 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Analyze console must be visible below buttons; restoration and capture indicators stay above panels.");
 
+                if (window.BackToCaptureButton.ActualWidth <= 0 ||
+                    window.BackToCaptureButton.Content?.ToString() != "← BACK" ||
+                    window.CloseAfterGenerationButton.Content?.ToString() != "CLOSE" ||
+                    window.CloseAfterGenerationButton.Visibility !=
+                        System.Windows.Visibility.Collapsed ||
+                    window.BackToCaptureButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y <=
+                    window.ResultsConsoleHost.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y)
+                    throw new InvalidOperationException(
+                        "Page 2 must show bottom BACK and initially hidden CLOSE beneath console.");
+
                 // The Page 2 overlay must not hide the original shared
                 // skyline and V art; Capture layout must remain unchanged.
                 static bool Transparent(System.Windows.Media.Brush? value) =>
