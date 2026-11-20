@@ -1685,6 +1685,49 @@ try {
         }
     }
 
+    # Reference composition: apply the approved Phase 2 rule directly to the
+    # already-composed ten-generic EFFECTIVE source. It must match the same
+    # result that Stage() emits in a single GCO Generate invocation.
+    $semanticReference = Join-Path $work 'gco-phase2-dvcore-reference'
+    $semanticReferenceLog = Join-Path $work 'gco-phase2-dvcore-reference.log'
+    & dotnet $dll phase2-footsteps --game $game --base-overlay $callbackFolder --out $semanticReference *> $semanticReferenceLog
+    if ($LASTEXITCODE -ne 0) { throw 'GCO_DVCORE_REFERENCE_GENERATOR_FAILED' }
+    $semanticReport = Get-Content -LiteralPath (Join-Path $semanticReference 'phase2-result.json') -Raw | ConvertFrom-Json
+    if ($semanticReport.ruleId -ne 'DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1' -or
+        $semanticReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+      throw 'GCO_DVCORE_REFERENCE_RESULT_INVALID'
+    }
+    if ($semanticReport.status -eq 'APPLIED') {
+      $semanticScripts = Join-Path $semanticReference 'r6/scripts'
+      $semanticFiles = @(Get-ChildItem -LiteralPath $semanticScripts -Filter *.reds -File -Recurse)
+      if ($semanticFiles.Count -ne 1 -or [int]$semanticReport.appliedEdits -ne 1) {
+        throw 'GCO_DVCORE_REFERENCE_EXPECTED_SINGLE_FILE'
+      }
+      foreach ($file in $semanticFiles) {
+        $relative = [IO.Path]::GetRelativePath($semanticScripts, $file.FullName)
+        if ($relative.StartsWith('..') -or [IO.Path]::IsPathRooted($relative)) {
+          throw 'GCO_DVCORE_REFERENCE_PATH_ESCAPE'
+        }
+        $dest = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
+        if (Test-Path -LiteralPath $dest -PathType Leaf) {
+          $old = Get-Content -LiteralPath $dest -Raw
+          $now = Get-Content -LiteralPath $file.FullName -Raw
+          foreach ($m in @([regex]::Matches($old,
+                   '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value |
+                   Sort-Object -Unique)) {
+            if (!$now.Contains($m, [StringComparison]::Ordinal)) {
+              throw 'GCO_DVCORE_REFERENCE_DISCARDED_GENERIC_SOURCE'
+            }
+          }
+        }
+        else { New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null }
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+      }
+    }
+    Write-Host ('PASS Phase 2 DVCore reference composition: status=' +
+        $semanticReport.status + ' edits=' + [int]$semanticReport.appliedEdits +
+        ' originalTenGenericRulesPreserved=true')
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
