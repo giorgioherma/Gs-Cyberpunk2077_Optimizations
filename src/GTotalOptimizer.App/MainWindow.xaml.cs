@@ -1624,10 +1624,11 @@ public partial class MainWindow : Window
             ? "REDscript · MISSING" : "REDscript · OK";
         RedCaptureStatusText.Foreground = saved.Redscript is null
             ? Brushes.Orange : Brushes.LightGreen;
-        bool presentReady = saved.FrameTimeEvidence is not null &&
-            saved.PresentMonAlignedFrames > 0;
-        PresentCaptureStatusText.Text = presentReady
-            ? "PresentMon · OK" : "PresentMon · NOT CAPTURED";
+        bool presentRecorded = saved.FrameTimeEvidence is not null;
+        bool presentReady = presentRecorded && saved.PresentMonAlignedFrames > 0;
+        PresentCaptureStatusText.Text = presentReady ? "PresentMon · OK"
+            : presentRecorded ? "PresentMon · NOT ALIGNED"
+            : "PresentMon · NOT CAPTURED";
         PresentCaptureStatusText.Foreground = presentReady
             ? Brushes.LightGreen : Brushes.Orange;
 
