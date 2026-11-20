@@ -1010,7 +1010,7 @@
                                            Margin="0,3,0,0" TextWrapping="Wrap">
                                     <Run Text="For manual install "/>
                                     <Run Text="BACKUP YOUR " Foreground="#FFF000" FontWeight="Bold"/>
-                                    <Run Text="&quot;\\Cyberpunk 2077\\bin\\x64\\plugins\\cyber_engine_tweaks\\mods&quot; and &quot;\\Cyberpunk 2077\\r6\\scripts&quot;"/>
+                                    <Run Text="&quot;\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods&quot; and &quot;\Cyberpunk 2077\r6\scripts&quot;"/>
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>
