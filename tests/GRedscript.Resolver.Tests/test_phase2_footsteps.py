@@ -175,6 +175,44 @@ class FootstepsSemanticContracts(unittest.TestCase):
         self.assertEqual(report["status"], "COMPLETE")
         self.assertIsNone(staged)
 
+    def test_compatible_direct_return_variant_and_partial_completion(self):
+        source = """module DigitalVixenCore
+public class DVFootstepsService extends ScriptableService {
+  private let m_warnedNoCooked: Bool;
+  private func FindAudioClass() -> ref<ReflectionClass> {
+    let classes = Reflection.GetClasses();
+    let i: Int32 = 0;
+    while i < ArraySize(classes) {
+      if IsDefined(classes[i].GetFunction(n"EquipNewFootwearByPlayer")) {
+        return classes[i];
+      }
+      i += 1;
+    }
+    return null;
+  }
+}
+"""
+        report, generated = self.run_one(source, "NewerFootsteps.reds")
+        self.assertEqual(report["status"], "APPLIED")
+        self.assertIn("private let m_audioClass: ref<ReflectionClass>;", generated)
+        self.assertIn("if IsDefined(this.m_audioClass)", generated)
+        self.assertIn("this.m_audioClass = classes[i]; return classes[i];",
+                      generated)
+        again, next_source = self.run_one(generated, "NewerFootsteps.reds")
+        self.assertEqual(again["status"], "COMPLETE")
+        self.assertIsNone(next_source)
+        # A manually applied store+field should add only the guard.
+        partial = source.replace(
+            "  private let m_warnedNoCooked: Bool;",
+            "  private let m_audioClass: ref<ReflectionClass>;\n"
+            "  private let m_warnedNoCooked: Bool;")
+        partial = partial.replace("return classes[i];",
+                                  "this.m_audioClass = classes[i]; return classes[i];")
+        result, completed = self.run_one(partial, "PartialDirectReturn.reds")
+        self.assertEqual(result["status"], "APPLIED")
+        self.assertEqual(completed.count("this.m_audioClass = classes[i];"), 1)
+        self.assertEqual(completed.count("if IsDefined(this.m_audioClass)"), 1)
+
     def test_unrelated_reflection_member_is_not_reused_as_cache(self):
         source = STOCK.replace("  private let m_warnedNoCooked: Bool;",
             "  private let m_unrelatedClass: ref<ReflectionClass>;\n"
