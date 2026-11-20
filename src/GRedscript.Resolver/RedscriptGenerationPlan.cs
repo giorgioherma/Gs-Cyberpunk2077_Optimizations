@@ -224,8 +224,7 @@ public static class RedscriptGenerationPlan
     }
 
     public static StageResult Stage(string gameRoot,
-        string planFile, string analysisFile, string outputRoot,
-        bool optimizeQuickslotsDpad = false)
+        string planFile, string analysisFile, string outputRoot)
     {
         string game = Path.GetFullPath(gameRoot),
             planPath = Path.GetFullPath(planFile),
@@ -746,15 +745,10 @@ public static class RedscriptGenerationPlan
         else if (quickslots.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_INPUT_UNKNOWN_STATUS");
 
-        // Explicit GCO Generate preference. Never infer from connected
-        // hardware: a controller may stay plugged in while using KBM.
-        // If unchecked do not rewrite the four original D-pad getters.
-        if (optimizeQuickslotsDpad)
-        {
-        // Handmade pass-8 Quickslots derived D-pad state. Always stage
-        // after the current post-generic InputHub source (#16). Normal
-        // keyboard/mouse use clears all four caches; only real pad mode
-        // recomputes the original source-owned modifier predicates.
+        // Handmade pass-8 Quickslots cache follows InputHub (#16) from
+        // the post-generic source. No UI/manual option or hardware check:
+        // preserve the mod's PlayerLastUsedPad() last-input predicate.
+        // On KBM the original predicate clears caches and skips modifier scans.
         string dpadRoot = Path.Combine(output, "_stages",
             "17-custom-quickslots-dpad");
         var dpad = CustomQuickslotsDpadCachePass.Generate(game, dpadRoot,
@@ -802,8 +796,6 @@ public static class RedscriptGenerationPlan
                 dpad.Reason ?? "CQ_DPAD_SOURCE_INCOMPATIBLE"));
         else if (dpad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_DPAD_STATUS_UNRECOGNIZED");
-
-        }
 
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
