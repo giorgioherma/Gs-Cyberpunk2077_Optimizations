@@ -1,5 +1,9 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — personal Hotscenes English-only checkbox (CET, opt-in)
+
+Add one **default-unchecked** checkbox under CET mod Optimizations: `Hotscenes ENG only`, explaining that it is for players using English and that it removes Hotscenes localization from the **generated ZIP** to make room for optimizations. The switch must not silently infer English from OS/game locale, mutate installed Hotscenes, or affect Analyze. Do not add an alternative localization rewriter; use CET's existing author-owned `--hotscenes-english-only` pass flag, applied before generic generation with line-map and local-budget checks. Keep original CET skip outcomes and source-drift refusal. Report whether checked and whether the CET-owned pass really applied it; unchecked default leaves all languages intact. One clean game-relative ZIP with external ownership audit, no extra tool or compiler binaries.
+
 ## 2026-11-20 — console-only runtime status and real-operation loading dots
 
 The combined source optimizer's per-owner outcomes are **not** "TEST PASS" and GCO must never print a GitHub CI/compilation claim to the player after Generate. A generated ZIP may contain safe modifications while one or more source-specific candidates are deferred; retain the external detailed ownership report and accurately label counts as **not applied / needs review**. Defer investigation into the current single CET skipped item until user requests it. Do not remove source-owned skip auditing or CI source/ZIP correctness checks.
