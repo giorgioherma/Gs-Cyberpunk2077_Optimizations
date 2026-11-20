@@ -401,13 +401,14 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
-    $nativeBridgeAdded=0
-    $nativeSubscriberAdded=0
+    # Only already-installed author source files may be rewritten by the
+    # nine default generic rules. No generated location subscriber or optional
+    # native bridge is accepted as a new source file.
     if ($scenario -eq 'optimized-callback-preview' -or $scenario -eq 'framework-all-generics-preview') {
       $selected=if ($scenario -eq 'framework-all-generics-preview' -and
-                    $frameworkOverlay.Count -gt 0) { $frameworkOverlay } else { $callbackOverlay }
+                     $frameworkOverlay.Count -gt 0) { $frameworkOverlay } else { $callbackOverlay }
       $selectedRoot=if ($scenario -eq 'framework-all-generics-preview' -and
-                        $frameworkOverlay.Count -gt 0) { $frameworkOverlayRoot } else { $callbackOverlayRoot }
+                         $frameworkOverlay.Count -gt 0) { $frameworkOverlayRoot } else { $callbackOverlayRoot }
       foreach($file in $selected) {
         $relative=[System.IO.Path]::GetRelativePath($selectedRoot,$file.FullName)
         if ([System.IO.Path]::IsPathRooted($relative) -or
@@ -416,46 +417,16 @@ try {
         }
         $target=Join-Path $scripts $relative
         if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
-          # Only named native RTTI and source-derived subscriber additions.
-          $normal=$relative.Replace('\','/')
-          $isBridge=$normal -ceq 'G-RedRuntime/Native/GCETNativeLocationBackend.reds'
-          $isSubscriber=[regex]::IsMatch($normal,
-              '^(?!G-RedRuntime/).+/GCO_NativeLocation_[0-9]{9,10}\.reds$')
-          if ($scenario -ne 'framework-all-generics-preview' -or
-              (!$isBridge -and !$isSubscriber)) {
-            throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
-          }
-          $newText=Get-Content -LiteralPath $file.FullName -Raw
-          if ($isBridge) {
-            if ($nativeBridgeAdded -ne 0) { throw 'R6_SHARED_NATIVE_BRIDGE_DUPLICATE' }
-            foreach($capability in @('GCETNativeLocationBackend','NativeLocationBackend',
-                    'GCETStaticReady','GCETStaticOwnerCount','GCETStaticOwnerAnchor',
-                    'GCETStaticSubscribe','GCETStaticPoll','GCETStaticAckSnapshot')) {
-              if (!$newText.Contains($capability,[StringComparison]::Ordinal)) {
-                throw 'R6_SHARED_NATIVE_BRIDGE_CAPABILITY_DRIFT'
-              }
-            }
-            $nativeBridgeAdded++
-          } else {
-            $sourceDir=Split-Path $target -Parent
-            $originalModFiles=@(Get-ChildItem -LiteralPath $sourceDir -Filter '*.reds' -File -ErrorAction SilentlyContinue)
-            if ($originalModFiles.Count -eq 0 -or
-                !$newText.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
-                !$newText.Contains('extends NativeLocationListener',[StringComparison]::Ordinal) -or
-                !$newText.Contains('MayBeNear(index: Int32)',[StringComparison]::Ordinal) -or
-                $newText.Contains('SubscribeLocation(',[StringComparison]::Ordinal) -or
-                $newText.Contains('@wrapMethod(',[StringComparison]::Ordinal)) {
-              throw 'R6_NATIVE_SUBSCRIBER_OWNER_OR_CONTRACT_INVALID'
-            }
-            $nativeSubscriberAdded++
-          }
-          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+        }
+        $text=Get-Content -LiteralPath $file.FullName -Raw
+        if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
+          throw 'R6_RETIRED_NATIVE_LOCATION_OUTPUT_REFUSED'
         }
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
-      }
-      if ($scenario -eq 'framework-all-generics-preview' -and
-          $frameworkOverlay.Count -gt 0 -and $nativeBridgeAdded -ne 1) {
-        throw 'R6_SHARED_NATIVE_BRIDGE_NOT_UNIQUE'
       }
     }
     $addedFrameworkFiles=0
@@ -480,7 +451,7 @@ try {
       }
     }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$nativeBridgeAdded+$nativeSubscriberAdded)) {
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
@@ -489,53 +460,6 @@ try {
     # Same direct native API proven by empty-source smoke, now complete
     # installed source tree. Explicit output path protects the vanilla cache.
     $privateLog=Join-Path $work ($scenario + '-scc.log')
-    if ($scenario -eq 'framework-all-generics-preview' -and
-        $nativeSubscriberAdded -gt 0) {
-      # Narrow real-SCC stage before combined source: keep framework, native
-      # backend and generated consumer, but substitute the prior generated
-      # source version for the newly rewritten native predicate. This checks
-      # whether a failure is from native adapter declarations or source edit.
-      # All compiler errors stay private, only stage outcomes are public.
-      $diagnosticRoot=Join-Path $work 'native-adapter-without-predicate'
-      Copy-Item -LiteralPath $root -Destination $diagnosticRoot -Recurse -Force
-      $diagnosticScripts=Join-Path $diagnosticRoot 'r6/scripts'
-      $reverted=0
-      foreach($f in @(Get-ChildItem -LiteralPath $diagnosticScripts -Filter '*.reds' -File -Recurse)) {
-        if (!([IO.File]::ReadAllText($f.FullName)).Contains(
-            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
-            [StringComparison]::Ordinal)) { continue }
-        $relative=[IO.Path]::GetRelativePath($diagnosticScripts,$f.FullName)
-        $candidatePaths=@(
-          (Join-Path $callbackOverlayRoot $relative),
-          (Join-Path $overlayRoot $relative),
-          (Join-Path $liveSources $relative)
-        )
-        $original=@($candidatePaths | Where-Object {
-          (Test-Path -LiteralPath $_ -PathType Leaf) -and
-          !([IO.File]::ReadAllText($_)).Contains(
-            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
-            [StringComparison]::Ordinal)
-        } | Select-Object -First 1)
-        if ($original.Count -ne 1) {
-          throw 'R6_NATIVE_ADAPTER_DIAGNOSTIC_BASELINE_MISSING'
-        }
-        Copy-Item -LiteralPath $original[0] -Destination $f.FullName -Force
-        $reverted++
-      }
-      if ($reverted -ne $nativeSubscriberAdded) {
-        throw ('R6_NATIVE_ADAPTER_DIAGNOSTIC_REWRITE_COUNT: reverted='+
-          $reverted+' adapters='+$nativeSubscriberAdded)
-      }
-      try {
-        $null=Invoke-HeadlessScc -Phase 'native-adapter-without-predicate' -IsolatedRoot $diagnosticRoot -CompilerLib $libs[0].FullName -TimeoutSeconds 240
-        Write-Host ('PASS R6 native adapter-only SCC: ownerFiles='+$nativeSubscriberAdded+
-          ' originalPredicatesRestored='+$reverted)
-      } catch {
-        Write-Host ('FAIL R6 native adapter-only SCC: generatedAdapterOrNativeBinding=true'+
-          ' originalPredicatesRestored='+$reverted)
-        throw
-      }
-    }
     $fullStatus=Invoke-HeadlessScc -Phase $scenario -IsolatedRoot $root -CompilerLib $libs[0].FullName -TimeoutSeconds 240
     $compiled=$cache+'.modded'
     if (!(Test-Path -LiteralPath $compiled -PathType Leaf)) {
