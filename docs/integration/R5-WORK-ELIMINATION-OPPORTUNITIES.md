@@ -1,5 +1,12 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-20 — Cross-owner callback-work admission research, source-first and no new instrumentation
+
+Implemented `scan-callback-work` in the existing GCO `CallbackSemanticResolver` to combine its canonical parser and sealed GRSP source-joined callsites. Seven approved semantic owners are configurable *ranking exclusions only*, never parser/generator allowlists. The read-only report inventories action metadata repeated reads (overlaps existing `ACTION_EVENT_SNAPSHOT_V1`), local action predicates (`GetName`/`GetType`/`IsAction`/button state), system lookups before action selection, and action forwarding without a local selector. It reports exact files, source folder breadth, captured outgoing edges and callsite-exclusive time, with unknown callback entries, exhaustive action-set proof, callee effects and potential savings left NULL/unproven. No new native/GRSP instrumentation or generated source.
+
+A source-wide lexical probe *overcounted* forwarding by treating `IsAction` and wrapper passthrough as absent selectors. Real script review found `gt_8ug_apt` as the clear pre-lookup forwarding case, not proof of a broad equivalent multi-mod rewrite. Preserve the distinction: same engine method used by many owners != same eligible generic source transformation. Require three independent current-source owners with the same fully proven operation, then implement a single structural generator rule using the existing effective-source pass composition (all source states, SCC). CI private-source replay is in progress at the time of this entry; wait for exact run result before counting admitted work.
+
+
 ## 2026-11-20 — Updated policy: location experimental code retained, default output excluded
 
 Preserve optional/manual REDscript native location implementation and tests (restore from green #839); remove its entry only from the nine-rule **default** ordered plan and automatic combined optimization ZIP. Manual source scan/preview/native stage are callable; their output remains isolated and is not implicitly game-deployable. CET's native location owner continues independently. **Do not blanket-refuse existing generated location sources** using a new special policy: that refusal was unapproved and removed. Previously generated overlays require separate compatibility decisions, while generic source drift and safety checks remain. Earlier deletion/retirement prose below is historical, superseded.
