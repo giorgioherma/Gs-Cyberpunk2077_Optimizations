@@ -594,10 +594,10 @@ internal static class Program
                 window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
                 if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Collapsed ||
-                    window.CaptureFooterHost.IsVisible ||
-                    window.ContinueButton.IsVisible ||
-                    window.ConsoleTextHost.IsVisible ||
-                    !window.ResultsStatusText.IsVisible)
+                    window.ContinueButton.Visibility != System.Windows.Visibility.Visible ||
+                    window.ConsoleTextHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.ResultsStatusText.Visibility != System.Windows.Visibility.Visible ||
+                    window.CaptureFooterHost.ActualHeight > 0)
                     throw new InvalidOperationException(
                         "Analyze must hide the entire Capture footer, including stale status and CONTINUE, while retaining its own bottom console.");
                 // Restored/capture health stays at the top. Operational
@@ -798,9 +798,9 @@ internal static class Program
                 window.CaptureFooterHost.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
                 if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Visible ||
-                    !window.CaptureFooterHost.IsVisible ||
-                    !window.ConsoleTextHost.IsVisible ||
-                    !window.ContinueButton.IsVisible)
+                    window.ConsoleTextHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.ContinueButton.Visibility != System.Windows.Visibility.Visible ||
+                    window.CaptureFooterHost.ActualHeight <= 0)
                     throw new InvalidOperationException(
                         "Capture return must restore the original footer and CONTINUE control.");
 
