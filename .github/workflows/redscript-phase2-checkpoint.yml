@@ -1,0 +1,74 @@
+name: REDscript Phase 2 - Post-generic checkpoint
+
+# Chronological GCO generation checkpoints:
+# 1. Generic source optimization (existing owner CI).
+# 2. This focused Phase 2 checkpoint on already-generic source.
+# Future semantic generator changes extend this same checkpoint.
+# No CET capture replay, WPF packaging, second compiler or game writes.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - ci/redscript-phase2-postgeneric
+      - dev/redscript/resolver_handoff
+    paths:
+      - '.github/workflows/redscript-phase2-checkpoint.yml'
+      - 'tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1'
+      - 'src/GRedscript.Resolver/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redscript-phase2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  post-generic:
+    name: Phase 2 checkpoint - SCC
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout GCO REDscript resolver
+        uses: actions/checkout@v4
+
+      - name: Checkout already-generic private source and CI-only SCC inputs
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .phase2-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+
+      - name: Configure .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build the existing SCC owner CLI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RESOLVER_BUILD_FAILED' }
+
+      - name: Checkpoint - compile current post-generic stock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          if (!$?) { throw 'PHASE2_CHECKPOINT_FAILED' }
+
+      - name: Remove private source and compiler after validation
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath '.phase2-private') {
+            Remove-Item -LiteralPath '.phase2-private' -Force -Recurse
+          }
