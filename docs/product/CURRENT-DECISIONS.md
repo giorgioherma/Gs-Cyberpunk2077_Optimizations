@@ -1,5 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — one combined optimization ZIP in GCO's existing Page 2
+
+- User explicitly requests GCO itself to generate both CET and REDscript optimization output for in-game testing, as **one ZIP**, after the established combined capture, collect, restore and Analyze workflow. The former temporary CET-only Generate button is replaced by `GENERATE OPTIMIZATION ZIP`.
+- Keep the authoritative CET Lua/native generator and original fixed order unchanged. GCO owns REDscript source-rule execution, official SCC 0.5.31 isolation/compilation, merged game-relative ZIP, per-mod ownership/exclusion sidecar, and source-drift checks. No second resolver UI, no direct modification of installed mods, and no documentation or profiler binaries inside output ZIP.
+- The resulting output is a **test pass**, not a gameplay-certified or performance-proven release. Vortex installation above original mods is recommended and can be reversed. Exact standalone owner versions and app version remain unchanged. Development CI and in-game validation are separate gates.
+
+
 **Authority model.** The original [UNIFIED-TWO-PAGE-WORKFLOW](UNIFIED-TWO-PAGE-WORKFLOW.md) is copied **unchanged** from the accepted 2026-10-16 user/agent design. This file records **later explicit user decisions and implementation interpretation only**. If a suggestion here conflicts with original behavior without a direct user authorization, the original wins; ask the user before changing it.
 
 ## Latest explicit decision — 2026-11-16 (supersedes older REDscript managed ownership)
