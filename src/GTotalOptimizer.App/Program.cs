@@ -654,19 +654,33 @@ internal static class Program
 
                 var backup = string.Concat(window.OptimizationFooterBackup.Inlines
                     .OfType<System.Windows.Documents.Run>().Select(run => run.Text));
+                static string FlattenWhitespace(string value) =>
+                    System.Text.RegularExpressions.Regex.Replace(
+                        value, @"\s+", " ").Trim();
                 if (window.CetOptimizationHeading.Text != "CET mod Optimizations:" ||
-                    window.RedOptimizationHeading.Text != "REDscript mod Optimizations:" ||
-                    window.OptimizationFooterFirstLine.Text !=
-                        "CET + REDscript  One clean zip with optimized files." ||
-                    window.OptimizationFooterVortex.Text !=
-                        "Use Vortex for easy file management" ||
-                    !backup.Contains("For manual install BACKUP YOUR ", StringComparison.Ordinal) ||
+                    window.RedOptimizationHeading.Text != "REDscript mod Optimizations:")
+                    throw new InvalidOperationException("Incorrect Analyze headings: CET=" +
+                        window.CetOptimizationHeading.Text + " REDscript=" +
+                        window.RedOptimizationHeading.Text);
+                if (FlattenWhitespace(window.OptimizationFooterFirstLine.Text) !=
+                    "CET + REDscript One clean zip with optimized files." ||
+                    FlattenWhitespace(window.OptimizationFooterVortex.Text) !=
+                    "Use Vortex for easy file management")
+                    throw new InvalidOperationException(
+                        "Incorrect Analyze footer: first=" +
+                        window.OptimizationFooterFirstLine.Text + "; Vortex=" +
+                        window.OptimizationFooterVortex.Text);
+                // WPF adds optional whitespace-only inline runs around XAML
+                // Run elements. Validate visible words and both exact game
+                // paths, not parser-generated whitespace between those runs.
+                if (!FlattenWhitespace(backup).Contains(
+                        "For manual install BACKUP YOUR ", StringComparison.Ordinal) ||
                     !backup.Contains(@"\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods",
                         StringComparison.Ordinal) ||
                     !backup.Contains(@"\Cyberpunk 2077\r6\scripts",
                         StringComparison.Ordinal))
                     throw new InvalidOperationException(
-                        "Analyze headings or Vortex/manual backup instructions drifted.");
+                        "Incorrect Analyze backup guidance: " + backup);
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
