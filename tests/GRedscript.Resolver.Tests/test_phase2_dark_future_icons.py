@@ -110,8 +110,10 @@ class IconVisualCadenceTests(unittest.TestCase):
         self.assertIn("now + 0.40", transformed)
         self.assertIn("EngineTime.ToFloat", transformed)
         self.assertIn("GetSimTime()", transformed)
-        self.assertIn("if __gcoDfIconVisualDue || __gcoDfIconRecordChanged {",
-                      transformed)
+        self.assertIn("if __gcoDfIconVisualDue || __gcoDfIconRecordChanged || "
+                      "!ArrayContains(", transformed)
+        self.assertIn("n\"DarkFutureCanHideOnBuffBar\"", transformed)
+        self.assertIn("    };\n", transformed)
         self.assertIn("__gcoDfIconRecordChanged = true;", transformed)
         self.assertIn("__gcoDfIconRecordChanged = false;", transformed)
         for call in ("SetStatusEffectRecord(null);", "SetVisible(false);",
