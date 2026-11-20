@@ -39,9 +39,21 @@ public sealed class CetReadOnlyAnalysisService
             generatePass: true, cancellationToken).ConfigureAwait(false)).Pass
             ?? throw new InvalidOperationException("CET owner did not return a pass.");
 
+    // GCO's combined generator requests an isolated owner ZIP. The CET
+    // owner still performs every transformation and all source checks; only
+    // the publication destination differs.
+    public async Task<CetPassOutcome> GenerateCetStagedAsync(
+        string packageRoot, string gameRoot, string sessionId,
+        string externalZip, CancellationToken cancellationToken = default)
+        => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
+            generatePass: true, cancellationToken, externalZip)
+            .ConfigureAwait(false)).Pass
+            ?? throw new InvalidOperationException("CET did not return a staged pass.");
+
     private async Task<(CetAnalysisOutcome Analysis, CetPassOutcome? Pass)> ExecuteAsync(
         string packageRoot, string gameRoot, string sessionId,
-        bool generatePass, CancellationToken cancellationToken)
+        bool generatePass, CancellationToken cancellationToken,
+        string? stagedOutput = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         packageRoot = Path.GetFullPath(packageRoot);
@@ -166,7 +178,22 @@ public sealed class CetReadOnlyAnalysisService
                 // owner report/manifest, profiler binaries, or source files.
                 var results = Path.Combine(packageRoot, "RESULTS");
                 Directory.CreateDirectory(results);
-                var destination = Path.Combine(results, "G-CET_PASS_" + sessionId + ".zip");
+                var destination = stagedOutput is null
+                    ? Path.Combine(results, "G-CET_PASS_" + sessionId + ".zip")
+                    : Path.GetFullPath(stagedOutput);
+                if (stagedOutput is not null)
+                {
+                    var realGame = Path.GetFullPath(gameRoot).TrimEnd(
+                        Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    var realSession = Path.GetFullPath(sessionFolder).TrimEnd(
+                        Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (destination.StartsWith(realGame, StringComparison.OrdinalIgnoreCase) ||
+                        destination.StartsWith(realSession, StringComparison.OrdinalIgnoreCase) ||
+                        Directory.Exists(destination) ||
+                        !Directory.Exists(Path.GetDirectoryName(destination)))
+                        throw new InvalidDataException(
+                            "Combined CET intermediate must be an existing isolated directory.");
+                }
                 if (File.Exists(destination))
                     throw new IOException("A CET pass already exists for this capture; it was not overwritten.");
                 var publishing = destination + ".partial-" + Guid.NewGuid().ToString("N");
