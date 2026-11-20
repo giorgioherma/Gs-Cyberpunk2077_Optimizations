@@ -1,5 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-21 — Quickslots D-pad cache automatic; no extra GCO checkbox
+
+**Supersedes the short-lived Nov 20 manual Quickslots checkbox design.** The owner does **not** want another setting/check on the Analyze page; the CET Hotscenes ENG-only option required for Lua-local capacity remains untouched. Keep controller/gamepad functionality enabled. The REDscript `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` generator applies automatically after InputHub #16 to compatible already-generic Quickslots source, with no UI option, persisted preference or extra CLI flag. Incompatible Quickslots source refuses only stage #17. At runtime the cache follows the **existing last-used input-state signals and original `PlayerLastUsedPad()` predicate**, not physical controller connection. A permanently plugged-in controller does not force pad mode when KBM is used. Preserve source-owned modifier hold/release, configuration changes, event order and fallback, without replacing game state or introducing a fixed polling interval. No controller input is disabled.
+
+Acceptance: one Generate on post-generic stock; partial/complete/custom source; actual SCC compilation, independent staged source equivalence, UI/package CI and gameplay testing. The original handheld pass-8 ZIP is behavioral evidence only, not a source file to copy.
+
+
 ## 2026-11-20 — Dark Future 400 ms visual cadence: shared tagged effects approved
 
 **Latest owner clarification overrides the earlier four-needs-only restriction.** The current 400 ms visual update cadence is acceptable for **all Dark Future status effects carrying the existing `DarkFutureCanHideOnBuffBar` gameplay tag**, including other Dark Future effects such as addiction/injury icons. Do **not** replace the shared-tag predicate with an allowlist of only Nerve, Hydration, Nutrition and Energy. Keep the implemented source-owned broad-tag rule `DARK_FUTURE_STATUS_ICON_400MS_V1` and current gameplay/update behavior; normal Cyberpunk status effects lacking that tag retain their original cadence. This is **visual refresh only**, never a change to needs, penalties, effect timing, registration/removal, gameplay callbacks, animation or cooldown behavior.
