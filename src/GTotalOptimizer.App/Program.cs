@@ -590,6 +590,18 @@ internal static class Program
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                // Page 2 must expose capture/restoration verification before
+                // the user explicitly chooses ANALYZE, in a shared parent
+                // outside both detailed optimization panels.
+                if (window.AnalyzeButton.ActualWidth <= 0 ||
+                    window.ResultsRestoreStatusText.ActualWidth <= 0 ||
+                    window.CetCaptureStatusText.ActualWidth <= 0 ||
+                    window.RedCaptureStatusText.ActualWidth <= 0 ||
+                    window.PresentCaptureStatusText.ActualWidth <= 0 ||
+                    !ReferenceEquals(window.ResultsRestoreStatusText.Parent,
+                        window.ResultsStatusText.Parent))
+                    throw new InvalidOperationException(
+                        "Analyze page restoration or native capture status controls are missing.");
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
