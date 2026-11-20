@@ -197,24 +197,24 @@ if ($Integrated) {
   VerifyFile (Join-Path $sccDir 'scc_lib.dll') '49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100'
 
   $owner=Join-Path (Get-Location) 'vendor-redruntime'
-  if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container) -or
-      !(Test-Path -LiteralPath (Join-Path $owner 'optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds') -PathType Leaf)) {
+  if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container)) {
     throw 'Authoritative REDruntime owner source missing'
   }
   $frameworkDir=Join-Path $components 'redruntime/owner'
   $meta=@()
-  # Retain the optional experimental REDscript location backend in GCO's
-  # component assets, NOT in the automatic game ZIP. Only an explicit
-  # standalone experimental stage may consume this owner file.
-  foreach ($part in @('r6/scripts/G-RedRuntime','optional-native/r6/scripts/G-RedRuntime')) {
-    $inputRoot=Join-Path $owner $part
-    foreach ($file in @(Get-ChildItem -LiteralPath $inputRoot -Filter *.reds -File -Recurse)) {
-      $rel=[IO.Path]::GetRelativePath($owner,$file.FullName).Replace('\','/')
-      $dest=Join-Path $frameworkDir $rel
-      New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
-      Copy-Item -LiteralPath $file.FullName -Destination $dest
-      $meta+=@{ path=$rel; sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash }
-    }
+  # Only the framework owner source tree is required by the approved
+  # generic passes. Experimental optional-native sources stay in GitHub for
+  # manual development; do not ship them in the normal GCO application.
+  $inputRoot=Join-Path $owner 'r6/scripts/G-RedRuntime'
+  foreach ($file in @(Get-ChildItem -LiteralPath $inputRoot -Filter *.reds -File -Recurse)) {
+    $rel=[IO.Path]::GetRelativePath($owner,$file.FullName).Replace('\','/')
+    $dest=Join-Path $frameworkDir $rel
+    New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+    Copy-Item -LiteralPath $file.FullName -Destination $dest
+    $meta+=@{ path=$rel; sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash }
+  }
+  if (Test-Path -LiteralPath (Join-Path $frameworkDir 'optional-native')) {
+    throw 'GCO_PACKAGE_EXPERIMENTAL_REDSCRIPT_NATIVE_BACKEND'
   }
   if ($meta.Count -lt 11) { throw "Framework owner bundle incomplete: $($meta.Count)" }
   $meta | Sort-Object path | ConvertTo-Json -Depth 4 |
