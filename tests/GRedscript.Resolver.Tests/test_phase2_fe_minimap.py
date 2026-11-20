@@ -104,7 +104,7 @@ class FlushingEtiquetteMinimapContracts(unittest.TestCase):
         report, output = self.generate(partial)
         self.assertEqual(report["status"], "APPLIED")
         self.assertIn("this.OtherCompatibleModChange();", output)
-        self.assertEqual(output.count("FEApplyWashroomIcon()"), 1)
+        self.assertEqual(output.count("FEApplyWashroomIcon()"), 3)
         self.assertNotIn("@wrapMethod(BaseMinimapMappinController)", output)
 
     def test_markerless_complete_custom_version_noop(self):
