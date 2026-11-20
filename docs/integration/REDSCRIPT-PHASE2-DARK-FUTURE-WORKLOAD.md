@@ -34,6 +34,16 @@ not the full S1 repeated-outro or animation suppression:
   No FPS, CPU, allocation or frame-time savings are claimed. The expensive
   repeated outro starts and pooled-widget writes remain deliberately untouched.
 
+## Approved visual cadence after owner-reviewed four persistent status icons
+
+The owner showed four Dark Future need-condition icons: **On Edge, Dehydrated, Hungry and Tired** and explicitly approved routine **400 ms / 2.5 Hz** visual refreshes, while leaving condition calculations and application/removal intact. The original expensive `buffListItemLogicController.SetData` call is the accepted narrow visual target. This is a **deliberate small display-cadence change**, not a proof of frame-for-frame parity, and replaces the earlier default assumption that all UI values must update every frame.
+
+The live `r6/tweaks/Dark Future` definitions identify needs penalty records with `DarkFutureNeedNerve`, `DarkFutureNeedHydration`, `DarkFutureNeedNutrition`, `DarkFutureNeedEnergy`, and a common author-owned `DarkFutureCanHideOnBuffBar` gameplay tag. The generated `DARK_FUTURE_STATUS_ICON_400MS_V1` rule uses that shared tag structurally; it does **not** infer a permanent installed mod version or throttle other Cyberpunk icons.
+
+The accepted generator preserves the complete `UpdateBuffDebuffList` loop, record/identity changes, invalid records, visibility updates, `SetStatusEffectRecord` writes and all gameplay/cooldown callbacks. Only unchanged, already-rendered Dark Future tagged records can avoid `SetData` until the next 400ms sample. It draws new records immediately and uses the original render behavior if the HUD player/time system is unavailable. No DelaySystem callback or new game observer is created.
+
+[Fast Phase 2 #42 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44807947104): 26 source-state tests; three semantic operations in two combined owner files; official SCC 0.5.31 compilation of the real 2,331 post-generic files and two overlays; 43,483,119 compiled bytes, original sources unmodified. The original expensive frame-by-frame empty-slot clear loop and cooldown outro animations are **not yet optimized**. This visual scheduling is expected to reduce SetData call frequency, but no measured change is claimed until a matched capture.
+
 ## 1. Provenance, versions, generic state
 
 - **Current post-generic fixture:** user's `scriptsliveAFTERgeneric.zip`, `scripts/Dark Future/` — **43** `.reds` source files. Original-game-relative directory is `r6/scripts/Dark Future/`.
