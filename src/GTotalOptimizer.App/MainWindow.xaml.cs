@@ -1780,18 +1780,19 @@ public partial class MainWindow : Window
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
             analyzedSessionId = saved.SessionId;
+            // The Resolver's UnresolvedCount is a CALLBACK count, not
+            // unresolved mods. The material portion is a subset; the rest
+            // is below the owner's 3ms/s-or-stutter materiality rule.
+            int lowImpact = Math.Max(0,
+                report.Unresolved - report.MaterialRemaining);
             CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
-                " | Measured callback families: " + report.MeasuredCallbackFamilies +
-                " | Ranked callbacks: " + report.RankedCallbacks + Environment.NewLine +
+                " | Callback families: " + report.MeasuredCallbackFamilies +
+                " | Measured callbacks: " + report.RankedCallbacks + Environment.NewLine +
                 "Generic candidates: " + report.GenericCandidates +
-                " | Semantic candidates: " + report.SemanticCandidates +
-                " | Already satisfied: " + report.AlreadySatisfied + Environment.NewLine +
-                "Remaining: " + report.MaterialRemaining +
-                " | Unresolved: " + report.Unresolved + Environment.NewLine +
-                "PresentMon: " + (report.HasPresentMon
-                    ? "QPC F11-aligned (" + report.PresentMonFrames + " intervals)"
-                    : "NOT_CAPTURED") + Environment.NewLine +
-                "Source: current installation verified read-only. Historical capture/source identity is unproven.";
+                " | Semantic rules: " + report.SemanticCandidates +
+                " | Already optimized: " + report.AlreadySatisfied + Environment.NewLine +
+                "Priority unresolved callbacks: " + report.MaterialRemaining +
+                " | Below-threshold callbacks: " + lowImpact;
             // REDscript is no longer reported as absent: use the actual
             // bundled GCO-local Resolver to decide source-specific passes and
             // their generation order. This is a plan, not an optimization ZIP.
@@ -1832,24 +1833,15 @@ public partial class MainWindow : Window
                     rule.Status == "READY_FOR_GENERATOR").ToArray();
                 var affected = ready.SelectMany(rule => rule.SourceFolders)
                     .Distinct(StringComparer.Ordinal).Count();
-                string order = ready.Length == 0 ? "No applicable source edits" :
-                    string.Join(" -> ", ready.Select(rule =>
-                        rule.Order + ":" + rule.Id + "(" +
-                        rule.Eligible + ")"));
-                redPlanStatus = "REDscript current source: " +
-                    planned.SourceFiles + " .reds files" +
-                    " | " + planned.EligibleSourceEdits +
-                    " eligible edits in " + affected + " source folders." +
-                    Environment.NewLine +
-                    "Existing REDscript generators: " + planned.ImplementedRuleCount +
-                    " | Source-ready: " + ready.Length +
-                    " | Capture-gated: " + planned.CaptureGatedExistingRules +
-                    " | Experimental systems awaiting generators: " +
-                    planned.DeferredExperimentalSystems + Environment.NewLine +
-                    "Generation order: " + order + Environment.NewLine +
-                    "Resolver plan: RESULTS / " + saved.SessionId +
-                    " / REDscript_GenerationPlan.json" + Environment.NewLine +
-                    "Ready for a single source-checked CET + REDscript optimization ZIP.";
+                int alreadyComplete = planned.Rules
+                    .Where(rule => rule.Order is not null)
+                    .Sum(rule => rule.AlreadyComplete ?? 0);
+                redPlanStatus = "REDscript source files: " + planned.SourceFiles +
+                    " | Source groups affected: " + affected + Environment.NewLine +
+                    "Generic rules ready: " + ready.Length +
+                    " | Eligible edits: " + planned.EligibleSourceEdits +
+                    " | Already optimized: " + alreadyComplete + Environment.NewLine +
+                    "Ready to generate a combined CET + REDscript optimization ZIP.";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -1860,9 +1852,6 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("REDscript Resolver plan: " + ex);
             }
             RedReportText.Text = redPlanStatus;
-            if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
-                RedReportText.Text += Environment.NewLine +
-                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
             AnalyzeButton.Content = "ANALYZED";
             ResultsStatusText.Text = redscriptPlanReady
                 ? "CET + REDscript analysis ready. GENERATE creates one source-checked Vortex overlay ZIP."
