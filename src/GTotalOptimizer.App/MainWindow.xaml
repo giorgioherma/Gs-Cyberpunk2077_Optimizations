@@ -992,7 +992,7 @@
                                               Unchecked="QuickslotsDpadPreference_Changed"/>
                                     <TextBlock Foreground="#98A9B1" FontSize="11.5"
                                                Margin="24,2,0,0" TextWrapping="Wrap"
-                                               Text="Optional for generated ZIPs. Enable for controller D-pad use; off preserves the original D-pad logic, even with a controller plugged in."/>
+                                               Text="Manual ZIP option, saved between launches. Unchecked leaves D-pad source unchanged, even if your controller stays plugged in."/>
                                 </StackPanel>
                             </Grid>
                             <Grid Margin="0,12,0,0">
