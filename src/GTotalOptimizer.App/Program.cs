@@ -623,6 +623,26 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Analyze page hides the existing skyline, covers V, or clips the shifted content.");
 
+                // Hotscenes English-only removes the language system from
+                // generated Lua, so it must always be an explicit default-OFF
+                // user choice inside the CET (not REDscript) summary.
+                var englishCheck = window.HotscenesEnglishOnlyCheckBox;
+                if (englishCheck.IsChecked != false ||
+                    englishCheck.IsThreeState ||
+                    englishCheck.Content?.ToString() != "Hotscenes ENG only" ||
+                    englishCheck.Parent is not System.Windows.Controls.StackPanel cetPanel ||
+                    !ReferenceEquals(window.CetReportText.Parent, cetPanel) ||
+                    window.HotscenesEnglishOnlyDescription.Parent != cetPanel ||
+                    !window.HotscenesEnglishOnlyDescription.Text.Contains(
+                        "Removes Hotscenes localization", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Hotscenes ENG-only must be clearly explained and unchecked in the CET box.");
+                englishCheck.IsChecked = true;
+                if (englishCheck.IsChecked != true)
+                    throw new InvalidOperationException(
+                        "Hotscenes ENG-only explicit opt-in could not be selected.");
+                englishCheck.IsChecked = false;
+
                 var yellow = System.Windows.Media.Color.FromRgb(255, 240, 0);
                 var green = System.Windows.Media.Color.FromRgb(101, 220, 162);
                 static bool ColorIs(System.Windows.Media.Brush? value,
