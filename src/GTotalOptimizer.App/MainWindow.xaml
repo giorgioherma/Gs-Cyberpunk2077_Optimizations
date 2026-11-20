@@ -953,7 +953,8 @@
                                               Foreground="#FFF000" FontSize="13"
                                               Margin="1,7,0,0" VerticalAlignment="Center"
                                               Content="Hotscenes ENG only"/>
-                                    <TextBlock Foreground="#98A9B1" FontSize="11.5"
+                                    <TextBlock x:Name="HotscenesEnglishOnlyDescription"
+                                               Foreground="#98A9B1" FontSize="11.5"
                                                Margin="24,2,0,0" TextWrapping="Wrap"
                                                Text="Check only if you use English. Removes Hotscenes localization from the generated ZIP to make room for optimizations."/>
                                 </StackPanel>
