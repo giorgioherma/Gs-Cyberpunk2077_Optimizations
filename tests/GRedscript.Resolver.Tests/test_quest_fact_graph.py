@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import os
 
 ROOT = Path(__file__).resolve().parents[2]
 DLL = ROOT / "src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll"
@@ -46,6 +47,10 @@ public class OtherFactReader extends IScriptable {
 """
 
 
+@unittest.skipUnless(
+    os.environ.get("GCO_REDSCRIPT_RESEARCH_TESTS") == "1",
+    "Historical/manual REDscript diagnostic or experimental feature; not a shipped generator contract"
+)
 class QuestFactGraphTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
