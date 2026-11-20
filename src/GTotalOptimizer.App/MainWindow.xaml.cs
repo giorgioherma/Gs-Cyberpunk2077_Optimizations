@@ -1896,7 +1896,8 @@ public partial class MainWindow : Window
                 AnalyzeButton.Content = analyzedSessionId == saved.SessionId
                     ? "ANALYZED" : "ANALYZE";
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
-                analyzedSessionId == saved.SessionId && redscriptPlanReady;
+                analyzedSessionId == saved.SessionId && redscriptPlanReady &&
+                CloseAfterGenerationButton.Visibility != Visibility.Visible;
         }
         catch (Exception ex)
         {
@@ -2064,14 +2065,17 @@ public partial class MainWindow : Window
             if (analyzedSessionId != saved.SessionId)
                 AnalyzeButton.Content = "ANALYZE";
             GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
-                redscriptPlanReady && !generationRunning;
+                redscriptPlanReady && !generationRunning &&
+                CloseAfterGenerationButton.Visibility != Visibility.Visible;
         }
     }
 
     private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
     {
-        if (generationRunning || analysisRunning || completedSessionId is null ||
-            completedGameRoot is null || analyzedSessionId != completedSessionId ||
+        if (generationRunning || analysisRunning ||
+            CloseAfterGenerationButton.Visibility == Visibility.Visible ||
+            completedSessionId is null || completedGameRoot is null ||
+            analyzedSessionId != completedSessionId ||
             !redscriptPlanReady || !captureAndRestoreVerified)
             return;
         if (GameRunning())
@@ -2105,42 +2109,25 @@ public partial class MainWindow : Window
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             // OPEN FOLDER always opens the GCO root containing RESULTS
             // and generated_optimizations; it does not depend on a pass.
-            var refused = pass.CetSkipDetails.Where(row =>
-                row.Category is "GENERATION_FAILURE" or "LUA_LOCAL_LIMIT" or
-                    "MOD_BLACKLIST").ToArray();
-            string[] redSkipIds = pass.RedscriptSkipped
-                .Select(item => item.Id).ToArray();
-            // The optional CET-owned Hotscenes generation stage is deliberately
-            // excluded from read-only generic/semantic candidate counts.
-            // Show the verified actual pass outcome in the CET panel as well,
-            // so zero ordinary candidates never hides an applied user choice.
+            // The CET/REDscript boxes keep detailed source information.
+            // Success console is deliberately just the two measured edit counts.
+            // Actual skip outcomes stay visible if any pass was refused.
             if (pass.HotscenesEnglishOnlyRequested)
                 CetReportText.Text += Environment.NewLine +
                     "Hotscenes ENG-only: " +
                     (pass.HotscenesEnglishOnlyEdits > 0
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
-                        : "not applied (see generation details)");
-            // Compact completed output: the full-width console stays a few
-            // readable rows rather than wrapping behind CLOSE or scrolling.
-            SetResultsConsoleStatus("Optimization ZIP: " +
-                Path.GetFileName(pass.ZipPath) +
-                " | Files: " + pass.GeneratedFiles +
-                " | CET transforms: " + pass.CetTransforms +
-                " | REDscript edits: " + pass.RedscriptEdits + Environment.NewLine +
-                "Not applied: CET " + pass.CetSkipped +
-                " (review " + refused.Length + ")" +
-                " | REDscript rules " + redSkipIds.Length +
-                (redSkipIds.Length == 0 ? "" :
-                    " (" + string.Join(", ", redSkipIds) + ")") +
-                (pass.HotscenesEnglishOnlyRequested
-                    ? " | Hotscenes ENG-only: " +
-                      (pass.HotscenesEnglishOnlyEdits > 0
-                          ? "applied" : "not applied")
-                    : "") + Environment.NewLine +
-                "Output: generated_optimizations/" +
-                Path.GetFileName(Path.GetDirectoryName(pass.ZipPath)!) +
-                "/ | Details: " + Path.GetFileName(pass.ZipPath) +
-                ".ownership.json");
+                        : "not applied (see pass details)");
+            string summary = "ZIP generated. CET: " + pass.CetTransforms +
+                " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
+            if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
+                summary += Environment.NewLine + "Skipped: CET " +
+                    pass.CetSkipped + " | REDscript rules " +
+                    pass.RedscriptSkipped.Length + ".";
+            if (pass.HotscenesEnglishOnlyRequested &&
+                pass.HotscenesEnglishOnlyEdits == 0)
+                summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
+            SetResultsConsoleStatus(summary);
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException) { }
@@ -2159,9 +2146,11 @@ public partial class MainWindow : Window
             generationRunning = false;
             if (IsLoaded)
             {
-                HotscenesEnglishOnlyCheckBox.IsEnabled = true;
-                GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
-                GenerateButton.IsEnabled = analyzedSessionId == session &&
+                bool generated = CloseAfterGenerationButton.Visibility == Visibility.Visible;
+                HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
+                GenerateButton.Content = generated ? "GENERATED" :
+                    "GENERATE OPTIMIZATION ZIP";
+                GenerateButton.IsEnabled = !generated && analyzedSessionId == session &&
                     redscriptPlanReady;
             }
         }
