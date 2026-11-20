@@ -15,7 +15,7 @@ internal static class GenericStableArrayBoundPass
     internal const string Rule = "STABLE_ARRAY_BOUND_V1";
     private const string Marker = "// GCO-GENERIC:" + Rule;
     private sealed record Candidate(string Relative, int Line, string Index,
-        string Array, string Alias, int Start, int End, string LoopText,
+        string Array, string Alias, int Start, int ConditionEnd, int End, string LoopText,
         string BodySha256);
     private sealed record Inspected(string Relative, string Text,
         IReadOnlyList<SourceAdmission.Token> Tokens);
@@ -142,8 +142,7 @@ internal static class GenericStableArrayBoundPass
                     indent + "let " + e.Alias + ": Int32 = ArraySize(" +
                     e.Array + ");" + newline + indent;
                 string rewrittenLoop = "while " + e.Index + " < " +
-                    e.Alias + result[(e.Start + ("while " + e.Index +
-                    " < ArraySize(" + e.Array + ")").Length)..e.End];
+                    e.Alias + result[e.ConditionEnd..e.End];
                 result = result[..e.Start] + declaration + rewrittenLoop +
                     result[e.End..];
                 edits++;
@@ -197,7 +196,8 @@ internal static class GenericStableArrayBoundPass
             if (file.Text.Contains(alias, StringComparison.Ordinal)) continue;
             string body = file.Text[t[k + 7].Start..t[end].End];
             candidates.Add(new(file.Relative, t[k].Line, index, array, alias,
-                t[k].Start, t[end].End, file.Text[t[k].Start..t[end].End],
+                t[k].Start, t[k + 6].End, t[end].End,
+                file.Text[t[k].Start..t[end].End],
                 Sha(body)));
         }
         return new(candidates, complete);
