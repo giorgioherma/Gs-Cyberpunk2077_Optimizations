@@ -430,6 +430,17 @@ public static class GcoProfilerReportService
         }
     }
 
+    private static bool SameBytesByHash(string first, string second)
+    {
+        if (new FileInfo(first).Length != new FileInfo(second).Length)
+            return false;
+        // Native raw captures can be hundreds of MB. Compare streams rather
+        // than allocating two complete CSV files into GCO's managed heap.
+        using var a = File.OpenRead(first);
+        using var b = File.OpenRead(second);
+        return SHA256.HashData(a).AsSpan().SequenceEqual(SHA256.HashData(b));
+    }
+
     private static void PublishOwnerReport(
         string source, string destination, string sealedOriginals,
         CancellationToken token)
@@ -456,9 +467,7 @@ public static class GcoProfilerReportService
             if (relative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) &&
                 File.Exists(original) &&
                 (File.GetAttributes(original) & FileAttributes.ReparsePoint) == 0 &&
-                new FileInfo(file).Length == new FileInfo(original).Length &&
-                SHA256.HashData(File.ReadAllBytes(file)).AsSpan().SequenceEqual(
-                    SHA256.HashData(File.ReadAllBytes(original))))
+                SameBytesByHash(file, original))
             {
                 links.Add(relative, "../../" + rawFolder + "/" + relative);
                 continue;
