@@ -937,7 +937,7 @@
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
-                                    <TextBlock Text="CET mod Optimizations:"
+                                    <TextBlock x:Name="CetOptimizationHeading" Text="CET mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
                                     <TextBox x:Name="CetReportText" Text="No verified CET capture analyzed."
@@ -952,7 +952,7 @@
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
-                                    <TextBlock Text="REDscript mod Optimizations:"
+                                    <TextBlock x:Name="RedOptimizationHeading" Text="REDscript mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
                                     <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
@@ -979,12 +979,12 @@
                                         Margin="4,0,0,0" Click="OpenResults_Click"/>
                             </Grid>
                             <StackPanel Margin="3,10,0,0">
-                                <TextBlock Text="CET + REDscript  One clean zip with optimized files."
+                                <TextBlock x:Name="OptimizationFooterFirstLine" Text="CET + REDscript  One clean zip with optimized files."
                                            Foreground="#98A9B1" FontSize="12.5" TextWrapping="Wrap"/>
-                                <TextBlock Text="Use Vortex for easy file management"
+                                <TextBlock x:Name="OptimizationFooterVortex" Text="Use Vortex for easy file management"
                                            Foreground="#98A9B1" FontSize="12.5"
                                            Margin="0,3,0,0" TextWrapping="Wrap"/>
-                                <TextBlock Foreground="#98A9B1" FontSize="12.5"
+                                <TextBlock x:Name="OptimizationFooterBackup" Foreground="#98A9B1" FontSize="12.5"
                                            Margin="0,3,0,0" TextWrapping="Wrap">
                                     <Run Text="For manual install "/>
                                     <Run Text="BACKUP YOUR " Foreground="#FFF000" FontWeight="Bold"/>
