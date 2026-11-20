@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — real GCO Page 2 combined generation
+
+- Development branch `dev/redscript/resolver_handoff` now connects the pre-existing source-ordered REDscript generator to the real WPF Generate workflow. CET owns Lua selection and first/second-pass source safety, GCO owns REDscript rule composition, SCC validation, game-relative packaging, provenance and per-owner output. GRSP remains native profiler-only; no owner profiler source was changed.
+- The runtime requires a verified restored F11 GCO capture and source-identical REDscript plan, using actual dated `G-RED` data. Hash-checked SCC 0.5.31 compiles a private effective installed-source copy, not the game. Optional existing CET shared native bridge/runtime gets staged only for source-proven generated consumers.
+- Experimental test ZIP: one optimized game-runtime ZIP + separate external ownership provenance; Vortex-winning overlay recommended. If nothing new is applicable, or compiler/source/admission fails, generation refuses. Original game/source/capture are unchanged; no performance or gameplay proof claimed. Integrated app CI **pending**, not yet green at this note.
+
+
 ## 2026-11-20 — same-block service reuse and generator composition
 
 `LOCAL_SYSTEM_HANDLE_REUSE_V1` extends the existing GCO-owned `GenericLateSystemReadPass`, reusing `SourceAdmission` structural tokens to cache an identical native `GameInstance.Get*System(local)` handle once across adjacent unconditional statements, while all downstream source calls and live values remain. The original `SYSTEM_READ_AFTER_ACTION_GUARD_V1` stays active. Canonical pass position #4 of 10 is unchanged. Existing analyzer fingerprint, mandatory sealed GRSP capture, idempotent/partial source handling and SCC staging are retained; no mod naming or gameplay producer subscription. [CI #804 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44636011168) established +7 eligible service source edits, 160 combined edits, 67 combined generated files, 181 managed tests, 7 SCC success lanes and 323 package contracts. Follow-up composition-evaluation hardening [CI #813](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44637349153) is pending at writing. See [source-valid gameplay A/B capture protocol](REDSCRIPT-GENERIC-AB-CAPTURE-PLAN.md). No runtime gains/gameplay acceptance or user-installation modification.
