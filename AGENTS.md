@@ -1,5 +1,12 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+
+## 2026-11-20 — owner SCC/redistribution and capture graph decision (CURRENT, overrides stale runtime compilation instructions)
+
+**Never invoke SCC during player-side Analyze or Generate.** Official redscript SCC 0.5.31 verifies current generated sources in GCO GitHub development/CI only; its failure remains a real CI/release blocker, but cannot prevent the shipped app from generating a source-checked ZIP. Do **not** package or redistribute `scc_lib.dll` or another third-party compiler in GCO without explicit licensing approval. Keep existing runtime structural proof, source-drift refusal, partial/idempotence, per-owner ZIP integrity and original game safety. Do not claim the user's freshly generated file was locally compiled, or that CI proves runtime/gameplay compatibility.
+
+GCO must retain the authoritative sealed native capture, **not** reproduce identical CET/GRSP raw CSVs inside report directories. Generated owner HTML/JSON remains available with valid links to canonical raw data. Graph zoom must distinguish missing/unaligned buckets (`null`) from measured zero; do not fake observations, and retain visible continuity across focus/zoom edges. Existing historical results remain immutable unless expressly reprocessed.
+
 ## 2026-11-20 — approved-only default Actions, package and combined generator
 
 **Current precedence over stale nine-rule, retirement and research milestones below:** GCO's automatic REDscript generation consists of **10 approved generic source passes** in the one `RedscriptGenerationPlan` order. `STABLE_ARRAY_BOUND_V1` is tenth. The Generate UI calls `CombinedOptimizationPassService`, which stages the complete approved REDscript plan against the current live source alongside CET's authoritative owner output; only the game-relative combined ZIP is deployable. The external ownership sidecar records actually applied REDscript rule IDs/order/counts, and the UI reports applied rule count. All source admission, composition, idempotence, official SCC and package tests remain mandatory.
