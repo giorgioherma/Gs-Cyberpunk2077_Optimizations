@@ -213,7 +213,12 @@ internal static class DarkFutureStatusIconCadencePass
         string setLineIndent;
         try{setLineIndent=LineIndent(text,t[setIndex].Start);}
         catch(InvalidDataException){return Refuse("DF_ICON_SETDATA_NOT_ALIGNED");}
-        string gate="if "+Due+" || "+Force+" {";
+        // Leave ordinary Cyberpunk combat/quickhack status icons fully live.
+        // DF needs penalties carry this author-owned gameplay tag in the
+        // installed TweakXL data; no fixed buffID or version is assumed.
+        string gate="if "+Due+" || "+Force+
+            " || !ArrayContains("+change.Groups["record"].Value+
+            ".GameplayTags(), n\"DarkFutureCanHideOnBuffBar\") {";
         bool guarded=text[..t[setIndex].Start].TrimEnd()
             .EndsWith(gate,StringComparison.Ordinal);
         if(!guarded)
