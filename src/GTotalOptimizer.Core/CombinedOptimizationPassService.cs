@@ -79,7 +79,8 @@ public sealed class CombinedOptimizationPassService
                 // adding base framework files. A framework declaration by
                 // itself must not activate an unused native service.
                 bool nativeRequired = RequiresNativeSubscriber(overlay);
-                int newFramework = CopyMissingFramework(game, overlay, framework, owners);
+                int newFramework = nativeRequired || RequiresGRedRuntime(overlay)
+                    ? CopyMissingFramework(game, overlay, framework, owners) : 0;
                 if (nativeRequired)
                 {
                     string cetOwner = Path.Combine(package, "components",
@@ -345,6 +346,15 @@ public sealed class CombinedOptimizationPassService
             added++;
         }
         return added;
+    }
+
+    private static bool RequiresGRedRuntime(string overlay)
+    {
+        string scripts = Path.Combine(overlay, "r6", "scripts");
+        return Directory.Exists(scripts) &&
+            Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
+                .Any(path => File.ReadAllText(path).Contains(
+                    "import GRedRuntime.*", StringComparison.Ordinal));
     }
 
     private static bool RequiresNativeSubscriber(string overlay)
