@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — current Dark Future Phase 2 checkpoint: partial-state compatibility
+
+- Two already-approved Dark Future semantics **exist**: `DARK_FUTURE_INFINITE_TAG_CACHE_V1` and `DARK_FUTURE_STATUS_ICON_400MS_V1`. They compose with `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` after all 10 generics in one GCO `Stage()`, without historical pass prerequisites, corrective layers or additional runtime components. Dark Future's 400 ms limitation applies only to the four tagged persistent need icons; animation/cooldown/UI callbacks remain at original cadence.
+- Confirmed [full GCO CI #1015 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44808200177): 173 source-eligible generic edits + 3 semantic operations generate **80 owner files**, compile with official SCC, preserve app/CET/GRSP dependencies and one-ZIP paths. In-game gameplay and residual time savings **not measured**.
+- Fixed the existing `DarkFutureStatusIconCadencePass` at its source to complete the missing due-flag declaration of a partially implemented 400 ms clock, and refuse a markerless/fully optimized clock whose null guard is incompatible. Lexer-based check retains equivalent whitespace/comment/parentheses formatting. [Fast CI #48 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44811616253): **30** tests, **2,331** post-generic sources plus **2** semantic owner files, SCC 0.5.31 output **43,483,119 bytes**, source unchanged. The accepted full-stock generated source bytes are unaffected; no extra long CI or new semantic pass was required.
+- Remaining old measured work is expensive but unproven safe to remove: repeated `FillOutroAnimationStart`, finite setter text, empty pool and live `ParseBuffList`. Re-measure with a matched post-semantic capture before selecting next DF work. [Workload ledger](REDSCRIPT-PHASE2-DARK-FUTURE-WORKLOAD.md). Main stays protected; PR #2 remains separate and conflicted.
+
+
 ## 2026-11-20 — Phase 2 post-generic source CI accepted; dev-to-main merge remains blocked
 
 - GCO canonical Windows CI `build-windows.yml` now compiles already-applied ten-generic source from `original_cet_source/main/base_after_generic/r6/scripts` as a **sixth isolated SCC lane**. It does not replace the original 2,319-file capture-matched source, overwrite live files, package private sources, or depend on historical sequential semantic passes. [Exact contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md).
