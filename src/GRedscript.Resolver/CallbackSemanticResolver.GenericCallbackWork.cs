@@ -57,7 +57,7 @@ internal static partial class CallbackSemanticResolver
                     t[i + 3].Value != "(" ||
                     t[i + 4].Value != "action") continue;
                 string operation = t[i + 2].Value;
-                if (operation is "GetName" or "GetType" &&
+                if ((operation is "GetName" or "GetType") &&
                     t[i + 5].Value == ")")
                 {
                     getters.Add((i, operation));
