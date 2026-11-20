@@ -1,6 +1,6 @@
 # Latest work / evidence status
 
-## 2026-11-20 — R5 stable ArraySize-bound source generator (in verification)
+## 2026-11-20 — R5 stable ArraySize-bound source generator (verified)
 
 **Owner instruction:** implement one additional genuinely broad source-only generic REDscript optimization, not a mod-specific semantic recipe. Leave `GenericBlackboardDefinitionPass` and both existing blackboard rules unchanged.
 
@@ -8,7 +8,7 @@
 
 **Test contracts:** independent mod-owner source fixtures, out/parameter variables, previous-pass composition, untouched/partially/fully optimized states, generated-body tamper, source drift, no direct installed-source writes, canonical plan order and whole-stack source/GRSP/SCC independent parity. The real-source CI requires at least three **non-seven-semantic** owner folders with admitted current-source edits; the seven remain universally eligible to the generator. No measured speedup claims: `ArraySize` was not separately timed by GRSP.
 
-**Validation:** awaiting final CI after an initial contract correction (one test variable named `out` was conservatively mistaken for an escaping modifier). Do not call the change gameplay-validated or measured faster until an A/B capture confirms it.
+**Verified:** [GCO CI #880 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44670023624), source `fa5844f0785a86273cbcc67e2e1e0208767544f6`. 196/196 managed tests, 7 player and 8 quest framework contracts; **2,319 private current sources**, **19 eligible stable-bound edits across 12 independent non-semantic owners**, 10 ordered generic rules/**173 total eligible edits**, **78 generated files**, independent manual-vs-ordered source parity, game-relative ZIP topology, six logged official REDscript SCC 0.5.31 phases (all exit 0), and integrated GCO .NET10 bundle complete. The earlier tests rejected a legitimate local variable named `out`; this was fixed in the generic source parser rather than weakening proof. Blackboards were left unchanged. **No measured in-game speedup or gameplay A/B proof yet.**
 
 
 
