@@ -359,7 +359,7 @@ public static class RedscriptGenerationPlan
                 if (Directory.Exists(next))
                     Directory.Delete(next, recursive: true);
                 skipped.Add(new SkippedRule(item.Order!.Value, item.Id,
-                    item.Eligible.Value, ex.Message));
+                    item.Eligible ?? 0, ex.Message));
                 continue;
             }
             if (edits <= 0 || edits > item.Eligible)
