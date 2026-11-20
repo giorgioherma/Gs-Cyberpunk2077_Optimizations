@@ -48,12 +48,13 @@ public static class Program
                 return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-redscript-plan")
                 return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
-            if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
-                return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
-            if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
-                return RunNativeSubscriberPreview(ParseArguments(args.Skip(1).ToArray()));
-            if (args.Length > 0 && args[0] == "stage-shared-native")
-                return RunSharedNativeStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] is
+                ("scan-native-location-subscribers" or
+                 "preview-native-location-subscribers" or "stage-shared-native"))
+                throw new InvalidDataException(
+                    "REDSCRIPT_NATIVE_LOCATION_GENERATOR_RETIRED: " +
+                    "Restore original author sources and disable the experimental " +
+                    "location optimization overlay before generating a new pass.");
             if (args.Length > 0 && args[0] == "scan-callbacks")
                 return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-pure-constants")
@@ -813,48 +814,6 @@ public static class Program
             options.GetValueOrDefault("--base-preview"));
         Console.WriteLine("GCO shared player preview: edits=" + edits +
             " productionZipAuthorized=false");
-        return 0;
-    }
-
-    private static int RunNativeSubscriberScan(Dictionary<string, string> options)
-    {
-        if (options.Keys.Any(key => key is not ("--game" or "--out")))
-            throw new ArgumentException("Native subscriber scan accepts --game and --out");
-        int count = GenericNativeLocationSubscriberPass.Scan(
-            Required(options, "--game"), Required(options, "--out"));
-        Console.WriteLine("GCO native location subscriber scan: eligible=" + count +
-            " deployable=false");
-        return 0;
-    }
-
-    private static int RunNativeSubscriberPreview(Dictionary<string, string> options)
-    {
-        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--source-sha" or "--base-preview")))
-            throw new ArgumentException(
-                "Native subscriber preview accepts --game, --out, --source-sha, --base-preview");
-        int count = GenericNativeLocationSubscriberPass.Preview(
-            Required(options, "--game"), Required(options, "--out"),
-            options.GetValueOrDefault("--source-sha"),
-            options.GetValueOrDefault("--base-preview"));
-        Console.WriteLine("GCO native location subscriber preview: adapters=" +
-            count + " originalModSourcesUnchanged=true nativeFarPredicateEdits=true deployable=false");
-        return 0;
-    }
-
-    private static int RunSharedNativeStage(
-        Dictionary<string, string> options)
-    {
-        if (options.Keys.Any(key => key is not (
-            "--cet-runtime" or "--framework" or "--game" or "--out" or "--red-locations")))
-            throw new ArgumentException(
-                "Shared native stage accepts --cet-runtime, --framework, --game, --out, --red-locations");
-        var result = SharedNativeRuntimeStage.Stage(
-            Required(options, "--cet-runtime"),
-            Required(options, "--game"),
-            Required(options, "--out"),
-            Required(options, "--framework"),
-            options.GetValueOrDefault("--red-locations"));
-        Console.WriteLine(JsonSerializer.Serialize(result));
         return 0;
     }
 
