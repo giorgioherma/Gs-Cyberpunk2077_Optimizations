@@ -1,5 +1,15 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Phase 2 semantic #1: DVCore Footsteps successfully generated and SCC-compiled
+
+- Implemented `src/GRedscript.Resolver/Phase2/DigitalVixenFootstepsPass.cs` rule `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` for a proven successful `DVFootstepsService.FindAudioClass()` / `EquipNewFootwearByPlayer` lookup. Preserve original RTTI miss retries, footwear/carrier and session behavior; add only missing field, guard and successful cached result. Recognizes unmarked existing complete/partial code, custom method/field names and source layouts, refuses incompatible target narrowly, and does not hardcode historical mod versions/hashes/line numbers or overwrite original source.
+- Real GCO `RedscriptGenerationPlan.Stage()` now composes the semantic once **after all 10 generics**, using the exact same source-aware generator as standalone Phase 2 `phase2-footsteps` CLI; one game-relative source overlay/ownership sidecar, no SCC on player's PC. Per-rule source-state and compositional tests are in `tests/GRedscript.Resolver.Tests/test_phase2_footsteps.py`.
+- [**Fast Phase 2 CI #17 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617316), source SHA `8f07bcf8` (subsequent source-only regression refinements stay on the same dedicated workflow): **9 passing semantic state tests**, one-call generic+semantic source generation, partial completion, markerless full no-op, custom/version drift, unrelated ReflectionClass member not misused, narrow refusal; private **2,331 post-generic .reds + 1 generated semantic file** official SCC 0.5.31 exit 0, compiled 43,481,923 bytes; original files unchanged. No in-game parity, benchmark or released ZIP claim.
+- Fixed the canonical CLI option allowlist to accept `--base-overlay` (required by one-pass composition); initial long full CI failed on that genuine argument-validation mismatch, not a compiler error. Focused tests caught it; corrected at source. The existing full app/capture/ZIP CI is a separate integration gate and must pass for this exact final source before release. Longer app CI is configured to exclude future `Phase2/**` and `test_phase2_*.py`-only changes from its push trigger; the dedicated checkpoint still runs them.
+- Phase 2 [plan](integration/REDSCRIPT-PHASE2-SEMANTIC-PLAN.md) and [fast CI contract](integration/REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md) updated. Next candidate remains the separately audited Dark Future stable infinite-cooldown optimization, only after precise animation, lifecycle and replacement invalidation proof.
+
+
+
 ## 2026-11-20 — Separate fast Phase 2 checkpoint (current architecture)
 
 - Owner requested a fast **chronological Phase 2 checkpoint after generic output**, not an additional SCC scenario in the very long GCO app/capture workflow. Reverted the extra post-generic test path from `.github/workflows/build-windows.yml`, `Verify-RealGrspResolverReplay.ps1` and `Verify-RealStackCompile.ps1` on REDscript development; original generic validation remains.
