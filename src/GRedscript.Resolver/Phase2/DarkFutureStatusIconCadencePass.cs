@@ -147,9 +147,11 @@ internal static class DarkFutureStatusIconCadencePass
            !body.Contains("SetStatusEffectRecord",StringComparison.Ordinal) ||
            !body.Contains("onScreenBuffsCount",StringComparison.Ordinal))
             return Refuse("DF_ICON_WIDGET_POOL_FLOW_UNPROVEN");
-        string recordPattern=@"\bif\s+(?<record>[a-zA-Z_]\w*)\s*!=\s*"+
+        // Parentheses around an unchanged record-identity comparison are
+        // source-layout drift, not a new callback or altered dataflow.
+        string recordPattern=@"\bif\s*\(?\s*(?<record>[a-zA-Z_]\w*)\s*!=\s*"+
             Regex.Escape(receiver)+
-            @"\s*\.\s*GetStatusEffectRecord\s*\(\s*\)\s*\{";
+            @"\s*\.\s*GetStatusEffectRecord\s*\(\s*\)\s*\)?\s*\{";
         var matches=Regex.Matches(body,recordPattern);
         if(matches.Count!=1)
             return Refuse("DF_ICON_RECORD_IDENTITY_FLOW_UNPROVEN");
@@ -366,8 +368,18 @@ internal static class DarkFutureStatusIconCadencePass
             string s=File.ReadAllText(p,Encoding.UTF8);
             bool owner=Path.GetRelativePath(scripts,p)
                 .Split(Path.DirectorySeparatorChar)
-                .Any(x=>x.Equals("Dark Future",StringComparison.OrdinalIgnoreCase))
-                || s.Contains("import DarkFuture.",StringComparison.Ordinal);
+                .Any(x=>x.Equals("Dark Future",StringComparison.OrdinalIgnoreCase));
+            if(!owner && s.Contains("DarkFuture",StringComparison.Ordinal))
+            {
+                // Match the declared module/import as code tokens, not a
+                // whitespace-specific substring. Relocated custom owners
+                // remain eligible even when comments separate import tokens.
+                var imports=SourceAdmission.ReadTokens(s);
+                for(int i=0;i+2<imports.Count;i++)
+                    if(Sequence(imports,i,"import","DarkFuture",".") ||
+                       Sequence(imports,i,"module","DarkFuture","."))
+                    {owner=true;break;}
+            }
             if(!owner)continue;
             ownerPresent=true;
             if(s.Contains("UpdateBuffDebuffList",StringComparison.Ordinal) &&
