@@ -1,6 +1,38 @@
 # REDscript Phase 2 — Dark Future workload-first semantic audit
 
-**Checkpoint:** 2026-11-20. **Status: reviewed sources, measured capture, and four historical pass revisions; no optimizer implementation.** Companion to [Phase 2 portfolio](REDSCRIPT-PHASE2-SEMANTIC-PLAN.md) and the [agreed candidate document](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). This focused investigation changes the initial implementation priority **within Dark Future**; it does not imply that an entire tested historical pass can be copied into a different source version.
+**Checkpoint:** 2026-11-20. **Status: source audit complete; first behavior-preserving infinite-tag-cache semantic generator implemented and compiled in Phase 2 CI; historical animation-throttling S1 remains deferred.** Companion to [Phase 2 portfolio](REDSCRIPT-PHASE2-SEMANTIC-PLAN.md) and the [agreed candidate document](REDSCRIPT-RESOLVER-AGREED-OPTIMIZATIONS.md). This focused investigation changes the initial implementation priority **within Dark Future**; it does not imply that an entire tested historical pass can be copied into a different source version.
+
+## Current verified safe suboperation — immutable infinite-duration tag membership
+
+The approved pilot is `DARK_FUTURE_INFINITE_TAG_CACHE_V1` in
+`src/GRedscript.Resolver/Phase2/DarkFutureInfiniteTagCachePass.cs`.
+This is a **narrow implementation of stable infinite-effect classification**,
+not the full S1 repeated-outro or animation suppression:
+
+- Structurally recognize the installed Dark Future `SingleCooldownManager`
+  `@addField(m_gameplayTags)`, `@wrapMethod ActivateCooldown`, and `@replaceMethod Update`
+  with the actual `DarkFutureInfiniteDurationEffect` membership test.
+  Follow the owning code if a compatible new version relocates the UI file/folder.
+  Refuse ambiguous methods or unproven tag-array mutation/alias escapes only for this operation.
+- Invalidate the cache **before wrapped activation**; after the original
+  gameplay-tags assignment, calculate the immutable membership once and mark valid.
+  A synchronous `Update` before tag load still executes the original membership
+  lookup. Reusing a cooldown controller invalidates and reinitializes state.
+- The `Update` condition retains the original fallback when validity is unknown.
+  Every other statement remains: root visibility, timers, stack count, gauge,
+  `SetTimeRemaining`, `FillOutroAnimationStart`, and activation alignment.
+  No phase counters, frame cadence, animation gate or effect-list throttling.
+- Detect and finish missing fields, invalidation, membership compute, valid flag
+  and `Update` condition individually. Complete markerless source is unchanged;
+  compatible custom layout, relocated owner file and harmless reads are admitted.
+  Incompatible operations refuse narrowly; staged output is owner-local only.
+- [Fast Phase 2 checkpoint #27 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44790973090):
+  19 source-state tests, post-generic 2,331-file source + both Footsteps/Dark Future
+  semantic outputs compiled with official SCC 0.5.31 (43,482,205 bytes).
+  Later source-alias safety refinement is revalidated in subsequent checkpoint.
+- The GRSP capture did **not isolate a timing cost for the specific `ArrayContains`**.
+  No FPS, CPU, allocation or frame-time savings are claimed. The expensive
+  repeated outro starts and pooled-widget writes remain deliberately untouched.
 
 ## 1. Provenance, versions, generic state
 
@@ -101,4 +133,4 @@ The historical `SingleCooldownManager` cache keys on `timeLeft == -1` and equal 
 
 **Decision for owner discussion:** Is exact frame-for-frame cooldown/buff UI behavior mandatory, or are deliberate changes to the display rate acceptable? This determines whether the old cadence-based 7.0 pass is allowed at all. The default proposed S1/S2/S3 design aims to preserve outputs, not impose new 6/10-frame refresh policies.
 
-**Next:** user discussion of S1 state/animation proof and S2 pool invalidation. No REDscript source rule, test or generated optimization artifact was changed during this audit.
+**Next:** validate this cache in the full combined ZIP and in-game save/reload, effect-pool recycling and UI animation parity. **S1 repeated-outro suppression, S2 pooled-slot skipping and historical 6/10-frame throttles remain deferred** until side effects and invalidation are proven. Source/SCC success is not gameplay or performance proof.
