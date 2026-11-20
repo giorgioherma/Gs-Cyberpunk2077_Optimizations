@@ -873,8 +873,11 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- Console and recovery never hide behind scrolling content. -->
-                <Grid Grid.Row="1" Margin="14,6,14,8">
+                <!-- Page 1 footer belongs to CapturePage, not the Analyze overlay.
+                     Bind visibility to the existing page state so CONTINUE and stale
+                     Capture status never show through the transparent ResultsPage. -->
+                <Grid x:Name="CaptureFooterHost" Grid.Row="1" Margin="14,6,14,8"
+                      Visibility="{Binding Visibility, ElementName=CapturePage}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="188"/>
