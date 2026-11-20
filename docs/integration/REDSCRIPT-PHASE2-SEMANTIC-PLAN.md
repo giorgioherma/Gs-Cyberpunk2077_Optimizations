@@ -1,5 +1,12 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — FE handmade pass 7.2r1 + 9 approved as one dependent operation
+
+Owner clarified that the **complete handmade file set** in the uploaded historical archives was played and verified, including the washroom pin lifecycle. The previously isolated pass-9 wrapper deletion was insufficient. Implement `FE_SESSION_WASHROOM_PINS_V1` as one coherent REDscript source operation: session-owned `FEWashroomMappinService` (`Session/Ready`, `Session/BeforeEnd`, player attach), site-count integrity, original map pin registration plus `SetMappinActive`, `PinData` source-aware identity, transfer FESystem attach/detach pin ownership, then remove only the FE-owned global `BaseMinimapMappinController.Update` wrapper while keeping targeted `UpdateIcon` styling and all other mod behavior. Source state may be untouched, partly hand-optimized or already complete. No historical whole-file transplant, no fixed 15-location version constraint, no new native runtime bridge or gameplay-code rewrite.
+
+Full current-source SCC and source/ZIP CI remain mandatory; the new generated overlay is not independently validated in the game yet. Historical FE InputHub is a separate future semantic and must not be inferred from this operation.
+
+
 ## 2026-11-20 — FE minimap pass 9 residual intentionally not admitted
 
 - **Required behavior:** washroom minimap presentation and update behavior remain identical. The historical pass-9 idea removes `BaseMinimapMappinController.Update`, but that wrapper forces pin tint on **every** Update. The existing `MinimapPOIMappinController.UpdateIcon` does not prove that an intervening Update cannot reset/recompute tint without another UpdateIcon. This means compile/source tests alone cannot prove full visual equivalence.
