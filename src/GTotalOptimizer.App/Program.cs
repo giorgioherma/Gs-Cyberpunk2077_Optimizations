@@ -589,6 +589,7 @@ internal static class Program
 
                 Render();
                 window.CapturePage.Visibility = System.Windows.Visibility.Collapsed;
+                window.CaptureFooterHost.Visibility = System.Windows.Visibility.Collapsed;
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
                 window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
@@ -794,6 +795,7 @@ internal static class Program
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 window.CapturePage.Visibility = System.Windows.Visibility.Visible;
+                window.CaptureFooterHost.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
                 if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Visible ||
                     !window.CaptureFooterHost.IsVisible ||
