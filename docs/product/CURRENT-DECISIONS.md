@@ -1,4 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
+## 2026-11-20 — Owner approves 400 ms Dark Future status icon visual cadence
+
+The four persistent Dark Future status icons the owner showed are **On Edge, Dehydrated, Hungry and Tired**. Their conditions evolve slowly enough that **routine icon data drawing may run at 2.5 Hz (one visual update every 400 ms)**. This is explicitly a visual cadence choice, not a permission to throttle needs/nerve gameplay, penalties, status-effect registration/removal or other Cyberpunk status icons.
+
+Dark Future's actual TweakXL needs penalty definitions use the author-owned `DarkFutureCanHideOnBuffBar` gameplay tag. Restrict the reduction to routine `buffListItemLogicController.SetData` calls on records with that tag. The first render or a changed record is immediate; all other records render at the original cadence. Preserve the source's per-callback record identity, visibility, removal, stack/time source values, cooldown wheel methods and animation lifecycle. Use a monotonic timestamp with a reset/unknown-time fallback, no new callback timer, and no player-side compiler.
+
+The new source-aware operation `DARK_FUTURE_STATUS_ICON_400MS_V1` follows the current ten generics, DVCore Footsteps and DF immutable tag cache in the single GCO Generate. Partially optimized/current/custom versions must converge in one generation; stock, partial, complete and incompatible paths require tests, official SCC CI and actual combined ZIP parity. This does not claim measured FPS improvements; require matched gameplay A/B before reporting savings.
+
 ## 2026-11-20 — Dark Future semantic optimization: safe classification only
 
 Approved source-scoped operation 2: `DARK_FUTURE_INFINITE_TAG_CACHE_V1` in the unified GCO
