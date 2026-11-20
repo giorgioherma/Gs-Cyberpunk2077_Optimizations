@@ -491,8 +491,72 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
             "customQuickslotsFallbackRegistered", "=", "true");
         if (bridgeAttach)
         {
-            if (!deviceAttach || (legacyAttach >= 0 && !fallback))
-                throw new Refused("CQ_INPUT_PARTIAL_ATTACH_ROUTE_UNPROVEN");
+            if (legacyAttach >= 0 && !fallback)
+                throw new Refused("CQ_INPUT_DUPLICATE_ENGINE_ROUTE_UNPROVEN");
+
+            // A hand-applied action route can have its device bridge
+            // missing. Complete only missing constructor, Init and
+            // SubscribeDevice operations at the existing subscription
+            // site; never emit a second action subscription or wrapper.
+            bool constructor = Contains(t, attached.Open + 1,
+                attached.Close, "customQuickslotsDeviceListener",
+                "=", "new", "CustomQuickslotsDeviceListener", "(");
+            int initDevice = Find(t, attached.Open + 1,
+                attached.Close, "this", ".", "customQuickslotsDeviceListener",
+                ".", "Init", "(");
+            int subscribeDevice = Find(t, attached.Open + 1,
+                attached.Close, "this", ".", "customQuickslotsDeviceSubscription",
+                "=", "this", ".", "customQuickslotsInputHub", ".",
+                "SubscribeDevice", "(");
+            if (!deviceAttach || !constructor || initDevice < 0)
+            {
+                int insertion = -1;
+                if (subscribeDevice >= 0)
+                    insertion = t[subscribeDevice].Start;
+                else if (initDevice >= 0)
+                {
+                    int end = initDevice;
+                    while (end < attached.Close && !Is(t, end, ";")) end++;
+                    if (end >= attached.Close)
+                        throw new Refused("CQ_INPUT_PARTIAL_DEVICE_INIT_UNBALANCED");
+                    insertion = t[end].End;
+                }
+                else
+                {
+                    int closingLoop = -1;
+                    for (int i = attached.Open + 1; i < attached.Close; i++)
+                    {
+                        if (!Is(t, i, "for")) continue;
+                        int open = i + 1;
+                        while (open < attached.Close &&
+                               !Is(t, open, "{") && !Is(t, open, ";")) open++;
+                        int close = Close(t, open, "{", "}");
+                        if (close < 0) continue;
+                        if (Contains(t, open + 1, close, "this", ".",
+                            "customQuickslotsInputHub", ".", "Subscribe", "("))
+                        {
+                            if (closingLoop >= 0)
+                                throw new Refused("CQ_INPUT_ACTION_ROUTE_AMBIGUOUS");
+                            closingLoop = close;
+                        }
+                    }
+                    if (closingLoop < 0)
+                        throw new Refused("CQ_INPUT_DEVICE_INSERTION_UNPROVEN");
+                    insertion = t[closingLoop].End;
+                }
+                string extra = "";
+                string nl = Eol(source);
+                if (!constructor)
+                    extra += nl +
+                        "  this.customQuickslotsDeviceListener = new CustomQuickslotsDeviceListener();";
+                if (initDevice < 0)
+                    extra += nl +
+                        "  this.customQuickslotsDeviceListener.Init(this.customQuickslotsInputListener);";
+                if (!deviceAttach)
+                    extra += nl +
+                        "  this.customQuickslotsDeviceSubscription = this.customQuickslotsInputHub.SubscribeDevice(this.customQuickslotsDeviceListener);";
+                changes.Add(new(insertion, insertion, extra));
+            }
         }
         else if (legacyAttach >= 0)
             changes.Add(new(t[legacyAttach].Start,
@@ -510,7 +574,61 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         if (unsub || unsubDevice)
         {
             if (!unsub || !unsubDevice)
-                throw new Refused("CQ_INPUT_PARTIAL_DETACH_ROUTE_UNPROVEN");
+            {
+                int guardEnd = -1;
+                for (int i = detached.Open + 1; i < detached.Close; i++)
+                {
+                    if (!Seq(t, i, "if", "IsDefined", "(", "this",
+                            ".", "customQuickslotsInputHub", ")", "{"))
+                        continue;
+                    int close = Close(t, i + 7, "{", "}");
+                    if (close >= 0 &&
+                        (Contains(t, i + 8, close, "Unsubscribe", "(") ||
+                         Contains(t, i + 8, close, "UnsubscribeDevice", "(")))
+                    {
+                        if (guardEnd >= 0)
+                            throw new Refused("CQ_INPUT_DETACH_HUB_GUARD_AMBIGUOUS");
+                        guardEnd = close;
+                    }
+                }
+                if (guardEnd < 0)
+                    throw new Refused("CQ_INPUT_DETACH_HUB_GUARD_UNPROVEN");
+                string nl = Eol(source);
+                string addition = !unsub ?
+                    nl + "    for cqId in this.customQuickslotsInputSubscriptions {" +
+                    nl + "      if cqId > 0 { this.customQuickslotsInputHub.Unsubscribe(cqId); }" +
+                    nl + "    }" :
+                    nl + "    if this.customQuickslotsDeviceSubscription > 0 {" +
+                    nl + "      this.customQuickslotsInputHub.UnsubscribeDevice(this.customQuickslotsDeviceSubscription);" +
+                    nl + "    }";
+                changes.Add(new(t[guardEnd].Start,
+                    t[guardEnd].Start, addition + nl));
+            }
+            int ownerClear = Find(t, detached.Open + 1, detached.Close,
+                "this", ".", "customQuickslotsInputListener", "=", "null", ";");
+            if (ownerClear < 0)
+                throw new Refused("CQ_INPUT_DETACH_LISTENER_CLEAR_MISSING");
+            string reset = "";
+            string nl2 = Eol(source);
+            if (!Contains(t, detached.Open + 1, detached.Close,
+                    "ArrayClear", "(", "this", ".",
+                    "customQuickslotsInputSubscriptions", ")"))
+                reset += "  ArrayClear(this.customQuickslotsInputSubscriptions);" + nl2;
+            if (!Contains(t, detached.Open + 1, detached.Close,
+                    "this", ".", "customQuickslotsDeviceSubscription",
+                    "=", "0", ";"))
+                reset += "  this.customQuickslotsDeviceSubscription = 0;" + nl2;
+            if (!Contains(t, detached.Open + 1, detached.Close,
+                    "this", ".", "customQuickslotsDeviceListener",
+                    "=", "null", ";"))
+                reset += "  this.customQuickslotsDeviceListener = null;" + nl2;
+            if (!Contains(t, detached.Open + 1, detached.Close,
+                    "this", ".", "customQuickslotsInputHub",
+                    "=", "null", ";"))
+                reset += "  this.customQuickslotsInputHub = null;" + nl2;
+            if (reset.Length > 0)
+                changes.Add(new(t[ownerClear].Start,
+                    t[ownerClear].Start, reset));
         }
         else if (legacyDetach >= 0)
             changes.Add(new(t[legacyDetach].Start,
