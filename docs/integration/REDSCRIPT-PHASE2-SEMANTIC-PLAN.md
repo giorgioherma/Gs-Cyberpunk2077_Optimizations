@@ -1,5 +1,12 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — FE session pins source-safe implementation: CI accepted
+
+- `FE_SESSION_WASHROOM_PINS_V1` reconstructs historical handmade 7.2r1+9 operation in GCO on the installed post-generic source: FE washroom pins become session-owned with callback lifecycle, explicit activation, source-derived count and stable PinData identity; FESystem loses player-detach pin cleanup; the global BaseMinimapMappinController.Update wrapper is removed while existing targeted MinimapPOIMappinController.UpdateIcon tint survives. One atomic two-file semantic after existing FE input #14.
+- [Fast #76](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44824725994) passed 44 source-state tests and official SCC 0.5.31 on real 2,331 post-generic files. [Full GCO #1026](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44825017762) passed 82 generated REDscript files, independent byte-for-byte canonical source composition, SCC, one ZIP, app packaging and ownership contracts. This is compiler/source/ZIP acceptance only; no measured gain or new in-game parity proof.
+- No version locks, whole-old-file overwrites, duplication of prior generic/semantic changes, or REDscript native spatial adapter. Future FE InputHub work has separate independent behavior and dependency proof.
+
+
 ## 2026-11-20 — FE handmade pass 7.2r1 + 9 approved as one dependent operation
 
 Owner clarified that the **complete handmade file set** in the uploaded historical archives was played and verified, including the washroom pin lifecycle. The previously isolated pass-9 wrapper deletion was insufficient. Implement `FE_SESSION_WASHROOM_PINS_V1` as one coherent REDscript source operation: session-owned `FEWashroomMappinService` (`Session/Ready`, `Session/BeforeEnd`, player attach), site-count integrity, original map pin registration plus `SetMappinActive`, `PinData` source-aware identity, transfer FESystem attach/detach pin ownership, then remove only the FE-owned global `BaseMinimapMappinController.Update` wrapper while keeping targeted `UpdateIcon` styling and all other mod behavior. Source state may be untouched, partly hand-optimized or already complete. No historical whole-file transplant, no fixed 15-location version constraint, no new native runtime bridge or gameplay-code rewrite.
