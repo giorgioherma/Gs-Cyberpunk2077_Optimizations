@@ -1979,6 +1979,68 @@ try {
         $pinReport.status+' ownerFiles='+@($pinReport.sourcePaths).Count+
         ' sessionOwnershipAndSpecificIconPreserved=true')
 
+    # Source-proven independent reference for Quickslots' specific InputHub
+    # route. Compare real bytes, not just Stage's edit count: the inherited
+    # OnAction, generics and fallback must survive the composed one ZIP.
+    $cqReference=Join-Path $work 'gco-phase2-quickslots-reference'
+    $cqReferenceLog=Join-Path $work 'gco-phase2-quickslots-reference.log'
+    & dotnet $dll phase2-quickslots-input --game $game --base-overlay $callbackFolder --out $cqReference *> $cqReferenceLog
+    if ($LASTEXITCODE -ne 0) {
+      $diagnostic=if(Test-Path -LiteralPath $cqReferenceLog -PathType Leaf) {
+        Get-Content -LiteralPath $cqReferenceLog -Raw
+      } else { '' }
+      $m=[regex]::Match([string]$diagnostic,'CQ_INPUT_[A-Z0-9_]+')
+      $safe=if($m.Success){$m.Value}else{'NO_SAFE_SOURCE_ERROR_CODE'}
+      throw ('GCO_CQ_INPUT_REFERENCE_FAILED: '+$safe)
+    }
+    $cqReport=Get-Content -LiteralPath (Join-Path $cqReference 'phase2-result.json') -Raw | ConvertFrom-Json
+    if ($cqReport.ruleId -ne 'CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1' -or
+        $cqReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+      throw 'GCO_CQ_INPUT_REFERENCE_RESULT_INVALID'
+    }
+    if ($cqReport.status -eq 'APPLIED') {
+      $cqScripts=Join-Path $cqReference 'r6/scripts'
+      $cqFiles=@(Get-ChildItem -LiteralPath $cqScripts -File -Recurse -Filter '*.reds')
+      if ($cqFiles.Count -ne 1 -or [int]$cqReport.appliedEdits -ne 1) {
+        throw 'GCO_CQ_INPUT_REFERENCE_EXPECTED_ONE_FILE'
+      }
+      foreach($file in $cqFiles) {
+        $rel=[IO.Path]::GetRelativePath($cqScripts,$file.FullName)
+        if([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+          throw 'GCO_CQ_INPUT_REFERENCE_PATH_ESCAPE'
+        }
+        $dest=Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+        $now=Get-Content -LiteralPath $file.FullName -Raw
+        if(!$now.Contains('class CustomQuickslotsGlobalInputListener extends InputListener') -or
+           !$now.Contains('class CustomQuickslotsDeviceListener extends InputDeviceListener') -or
+           !$now.Contains('this.customQuickslotsInputHub.Subscribe(') -or
+           !$now.Contains('this.customQuickslotsInputHub.SubscribeDevice(') -or
+           !$now.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(') -or
+           !$now.Contains('this.customQuickslotsFallbackRegistered = true;') -or
+           !$now.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+           !$now.Contains('gamepadQuickslotInput = ArrayContains(this.gamepadActions, actionName)') -or
+           !$now.Contains('this.customQuickslotsInputListener.SyncGraceState();')) {
+          throw 'GCO_CQ_INPUT_REFERENCE_DISCARDED_GENERIC_OR_FALLBACK'
+        }
+        if(Test-Path -LiteralPath $dest -PathType Leaf) {
+          $old=Get-Content -LiteralPath $dest -Raw
+          foreach($marker in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+            if(!$now.Contains($marker,[StringComparison]::Ordinal)) {
+              throw 'GCO_CQ_INPUT_REFERENCE_DISCARDED_GENERIC'
+            }
+          }
+        } else {
+          New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+      }
+    }
+    Write-Host ('PASS Phase 2 Quickslots specific input reference: status='+
+        $cqReport.status+' edits='+[int]$cqReport.appliedEdits+
+        ' legacyEngineFallbackAndGenericPreserved=true')
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -2039,6 +2101,15 @@ try {
           [int]$pinFamily[0].order -ne 15 -or
           [int]$pinFamily[0].rewrittenExpressions -ne 1) {
         throw 'GCO_FE_SESSION_PIN_CANONICAL_STAGING_NOT_CONNECTED'
+      }
+    }
+    if ($cqReport.status -eq 'APPLIED') {
+      $cqFamily=@($stageReport.completed |
+        Where-Object { $_.id -eq 'custom-quickslots-input' })
+      if($cqFamily.Count -ne 1 -or
+          [int]$cqFamily[0].order -ne 16 -or
+          [int]$cqFamily[0].rewrittenExpressions -ne 1) {
+        throw 'GCO_CQ_INPUT_CANONICAL_GENERATION_NOT_CONNECTED'
       }
     }
     # Every ordered generated REDscript source must match the independent
