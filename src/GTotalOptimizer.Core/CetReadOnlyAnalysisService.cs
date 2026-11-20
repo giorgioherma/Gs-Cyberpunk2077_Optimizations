@@ -152,7 +152,15 @@ public sealed class CetReadOnlyAnalysisService
             // The source owner already recomposes the current installed tree
             // during generation. Never publish if that tree drifted mid-pass.
             CetPassOutcome? generatedPass = null;
-            if (generatePass)
+            // A completed CET installation may have zero remaining work.
+            // Combined GCO generation can still publish REDscript changes
+            // without asking CET to synthesize an empty optimization ZIP.
+            if (generatePass && stagedOutput is not null &&
+                Nonnegative(cli, "MaterialRemainingCount") == 0)
+            {
+                generatedPass = new CetPassOutcome("", 0, 0, 0);
+            }
+            else if (generatePass)
             {
                 var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
                 using var generation = await RunOwnerAsync(executable,
