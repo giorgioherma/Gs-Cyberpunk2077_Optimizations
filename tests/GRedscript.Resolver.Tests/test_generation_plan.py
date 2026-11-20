@@ -76,19 +76,18 @@ public class IndependentAuthor extends IScriptable {
         self.assertEqual(doc["schemaVersion"],
                          "gco.redscript.generation-plan.v1")
         self.assertEqual(doc["sourceFiles"], 2)
-        self.assertEqual(doc["implementedRuleCount"], 10)
+        self.assertEqual(doc["implementedRuleCount"], 9)
         self.assertEqual(doc["captureGatedExistingRules"], 0)
         self.assertEqual(doc["deferredExperimentalSystems"], 5)
         self.assertFalse(doc["productionZipAuthorized"])
         self.assertFalse(doc["gameplayValidated"])
-        active = doc["rules"][:10]
-        self.assertEqual([r["order"] for r in active], list(range(1, 11)))
+        active = doc["rules"][:9]
+        self.assertEqual([r["order"] for r in active], list(range(1, 10)))
         self.assertEqual([r["id"] for r in active], [
             "fixed-cname-index", "literal-action-filter",
             "angle-sort", "late-system-read",
             "source-cname-membership", "blackboard-definitions", "pure-constant-slices",
-            "immutable-action-event-snapshot", "shared-player-signal",
-            "native-player-location-predicate"
+            "immutable-action-event-snapshot", "shared-player-signal"
         ])
         self.assertEqual(doc["readyRuleCount"], sum(
             r["status"] == "READY_FOR_GENERATOR" for r in active))
@@ -101,12 +100,12 @@ public class IndependentAuthor extends IScriptable {
         self.assertEqual(source_membership["generator"], "preview-cname-membership")
         self.assertEqual(source_membership["scanCommand"], "scan-cname-membership")
         self.assertIsNotNone(source_membership["eligible"])
-        for rule in doc["rules"][10:]:
+        for rule in doc["rules"][9:]:
             self.assertEqual(rule["status"], "NO_GENERATOR_YET")
             self.assertIsNone(rule["order"])
             self.assertIsNone(rule["generator"])
             self.assertIsNone(rule["eligible"])
-        self.assertEqual([r["system"] for r in doc["rules"][10:]],
+        self.assertEqual([r["system"] for r in doc["rules"][9:]],
                          ["A", "B", "C", "D", "E"])
         self.assertEqual(len(list(self.game.rglob("*.reds"))), 2)
 
@@ -204,6 +203,45 @@ public class C extends IScriptable {
         self.assertEqual(doc["rules"][4]["eligible"], 0)
         # No output rewrites for the source-unsafe case.
         self.assertFalse(doc["rules"][4]["status"] == "READY_FOR_GENERATOR")
+
+    def test_retired_location_marker_requires_restoring_original_mod_source(self):
+        self.consumer.write_text(
+            self.consumer.read_text(encoding="utf8") +
+            "\n/* GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:123456789 */\n",
+            encoding="utf8")
+        original = self.consumer.read_bytes()
+        run = self.cli("plan-redscript", "--game", self.game,
+                       "--out", self.plan)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT",
+                      run.stderr + run.stdout)
+        self.assertFalse(self.plan.exists())
+        self.assertEqual(self.consumer.read_bytes(), original)
+
+    def test_retired_generated_native_adapter_not_treated_as_normal_source(self):
+        adapter = self.game / "r6/scripts/Consumer/GCO_NativeLocation_123456789.reds"
+        adapter.write_text("module GenericConsumer\n", encoding="utf8")
+        run = self.cli("plan-redscript", "--game", self.game,
+                       "--out", self.plan)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT",
+                      run.stderr + run.stdout)
+        self.assertFalse(self.plan.exists())
+        self.assertEqual(adapter.read_text(encoding="utf8"),
+                         "module GenericConsumer\n")
+
+    def test_retired_location_source_drift_after_plan_is_refused(self):
+        doc = self.make_plan()
+        self.make_analysis(doc["sourceStackSha256"])
+        self.consumer.write_text(
+            self.consumer.read_text(encoding="utf8") +
+            "\n/* GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1 */\n",
+            encoding="utf8")
+        result = self.cli("stage-redscript-plan", "--game", self.game,
+                          "--plan", self.plan, "--analysis", self.analysis,
+                          "--out", self.staged)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.staged.exists())
 
     def test_plan_order_cannot_be_modified_by_caller(self):
         doc = self.make_plan()
