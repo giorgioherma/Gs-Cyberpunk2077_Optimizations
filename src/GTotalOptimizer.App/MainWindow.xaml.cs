@@ -1594,11 +1594,8 @@ public partial class MainWindow : Window
                 GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
-            if (IsLoaded && completedSessionId == sessionId &&
-                completedGameRoot == game &&
-                !RedReportText.Text.Contains("Combined profiler report:", StringComparison.Ordinal))
-                RedReportText.Text += Environment.NewLine +
-                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
+            // The complete profiler report remains available via OPEN RESULTS.
+            // Do not inject its storage path into the REDscript summary.
         }
         catch (Exception ex)
         {
@@ -1611,18 +1608,40 @@ public partial class MainWindow : Window
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
-        CetReportText.Text = saved.Cet is null
-            ? "CET native capture not available."
-            : "CET capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "CET");
-        RedReportText.Text = saved.Redscript is null
-            ? "REDscript native capture not available."
-            : "REDscript capture verified: " + CollectedCaptureStore.DomainFolder(packageRoot, saved.SessionId, "REDscript");
-        RedReportText.Text += saved.FrameTimeCsv is null
-            ? Environment.NewLine + "PresentMon: NOT_CAPTURED."
-            : Environment.NewLine + "PresentMon CSV: " + saved.FrameTimeCsv;
-        if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
-            RedReportText.Text += Environment.NewLine +
-                "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
+        // Report restoration and the three independently collected domains
+        // above both analysis boxes, even before ANALYZE is clicked.
+        ResultsRestoreStatusText.Text = saved.Restored
+            ? "Both profilers uninstalled. All game files are restored."
+            : "Profiler restoration has not yet been verified.";
+        ResultsRestoreStatusText.Foreground = saved.Restored
+            ? Brushes.LightGreen : Brushes.Orange;
+
+        CetCaptureStatusText.Text = saved.Cet is null
+            ? "CET · MISSING" : "CET · OK";
+        CetCaptureStatusText.Foreground = saved.Cet is null
+            ? Brushes.Orange : Brushes.LightGreen;
+        RedCaptureStatusText.Text = saved.Redscript is null
+            ? "REDscript · MISSING" : "REDscript · OK";
+        RedCaptureStatusText.Foreground = saved.Redscript is null
+            ? Brushes.Orange : Brushes.LightGreen;
+        bool presentReady = saved.FrameTimeEvidence is not null &&
+            saved.PresentMonAlignedFrames > 0;
+        PresentCaptureStatusText.Text = presentReady
+            ? "PresentMon · OK" : "PresentMon · NOT CAPTURED";
+        PresentCaptureStatusText.Foreground = presentReady
+            ? Brushes.LightGreen : Brushes.Orange;
+
+        // A normal refresh must not erase a completed analysis or replace
+        // it with capture paths, compiler details, or development diagnostics.
+        if (analyzedSessionId != saved.SessionId)
+        {
+            CetReportText.Text = saved.Cet is null
+                ? "CET capture unavailable."
+                : "Capture verified. Click ANALYZE for optimization candidates.";
+            RedReportText.Text = saved.Redscript is null
+                ? "REDscript capture unavailable."
+                : "Capture verified. Click ANALYZE for optimization candidates.";
+        }
     }
 
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
