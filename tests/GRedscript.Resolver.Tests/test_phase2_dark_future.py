@@ -239,6 +239,111 @@ class DarkFutureSemanticContracts(unittest.TestCase):
                          "DARK_FUTURE_COOLDOWN_TARGET_UNRECOGNIZED")
         self.assertIsNone(out)
 
+    def test_one_generate_composes_generic_footsteps_and_dark_future(self):
+        from test_phase2_footsteps import STOCK as dv_stock
+        from test_phase2_footsteps import TARGET as dv_target
+
+        game = self.root / "combined-game"
+        footstep = game / dv_target
+        dark = game / TARGET
+        footstep.parent.mkdir(parents=True)
+        dark.parent.mkdir(parents=True)
+        footstep.write_text(dv_stock, encoding="utf8")
+        dark.write_text(STOCK, encoding="utf8")
+        provider = game / "r6/scripts/Settings/Flags.reds"
+        consumer = game / "r6/scripts/Consumer/Example.reds"
+        provider.parent.mkdir(parents=True)
+        consumer.parent.mkdir(parents=True)
+        provider.write_text("""module TestSettings
+public class Settings {
+  public final static func Active() -> Bool { return true; }
+  public final static func Verbose() -> Bool { return false; }
+}
+""", encoding="utf8")
+        consumer.write_text("""module Example
+import TestSettings.*
+public class Consumer extends IScriptable {
+  public func Check() -> Bool {
+    return Settings.Active() && Settings.Verbose();
+  }
+}
+""", encoding="utf8")
+        plan = self.root / "full-plan.json"
+        capture = self.root / "full-analysis.json"
+        output = self.root / "full-pass"
+        p = subprocess.run(["dotnet", str(DLL), "plan-redscript",
+                            "--game", str(game), "--out", str(plan)],
+                           text=True, capture_output=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        manifest = json.loads(plan.read_text("utf8"))
+        self.assertEqual(manifest["implementedRuleCount"], 10)
+        capture.write_text(json.dumps({
+            "schemaVersion": "grsp.resolver.input.v1",
+            "generationAuthorized": False,
+            "capture": {
+                "collectionProvenance": "GCO_INDEXED_COLLECTED_BYTES_VERIFIED"
+            },
+            "source": {
+                "sourceStackSha256": manifest["sourceStackSha256"]
+            }
+        }), encoding="utf8")
+        p = subprocess.run(["dotnet", str(DLL), "stage-redscript-plan",
+                            "--game", str(game), "--plan", str(plan),
+                            "--analysis", str(capture), "--out", str(output)],
+                           text=True, capture_output=True, timeout=80)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        report = json.loads((output / "stage-result.json").read_text("utf8"))
+        rule_ids = [item["id"] for item in report["completed"]]
+        self.assertIn("pure-constant-slices", rule_ids)
+        self.assertIn("dvcore-footsteps", rule_ids)
+        self.assertIn("dark-future-infinite-tag", rule_ids)
+        self.assertEqual(11, report["completed"][-2]["order"])
+        self.assertEqual(12, report["completed"][-1]["order"])
+        self.assertEqual(1, report["completed"][-1]["rewrittenExpressions"])
+        generated = output / "effective-preview"
+        self.complete((generated / TARGET).read_text("utf8"))
+        dv_text = (generated / dv_target).read_text("utf8")
+        self.assertIn("this.m_audioClass = hit;", dv_text)
+        generic_text = (
+            generated / "r6/scripts/Consumer/Example.reds"
+        ).read_text("utf8")
+        self.assertIn("GCO-GENERIC:", generic_text)
+        self.assertEqual(STOCK, dark.read_text("utf8"))
+        self.assertEqual(dv_stock, footstep.read_text("utf8"))
+
+        # Reuse a source with just the Dark Future cache fields present.
+        partial = STOCK.replace(
+            "private let m_gameplayTags: array<CName>;",
+            "private let m_gameplayTags: array<CName>;\n" +
+            F_VALID + F_CACHED)
+        dark.write_text(partial, encoding="utf8")
+        next_plan = self.root / "partial-plan.json"
+        next_analysis = self.root / "partial-analysis.json"
+        next_stage = self.root / "partial-pass"
+        q = subprocess.run(["dotnet", str(DLL), "plan-redscript",
+                            "--game", str(game), "--out", str(next_plan)],
+                           text=True, capture_output=True, timeout=60)
+        self.assertEqual(q.returncode, 0, q.stderr)
+        m = json.loads(next_plan.read_text("utf8"))
+        next_analysis.write_text(json.dumps({
+            "schemaVersion": "grsp.resolver.input.v1",
+            "generationAuthorized": False,
+            "capture": {
+                "collectionProvenance": "GCO_INDEXED_COLLECTED_BYTES_VERIFIED"
+            },
+            "source": {
+                "sourceStackSha256": m["sourceStackSha256"]
+            }
+        }), encoding="utf8")
+        q = subprocess.run(["dotnet", str(DLL), "stage-redscript-plan",
+                            "--game", str(game), "--plan", str(next_plan),
+                            "--analysis", str(next_analysis),
+                            "--out", str(next_stage)],
+                           text=True, capture_output=True, timeout=80)
+        self.assertEqual(q.returncode, 0, q.stdout + q.stderr)
+        self.complete((next_stage / "effective-preview" /
+                       TARGET).read_text("utf8"), partial)
+
     def test_missing_mod_is_not_applicable(self):
         result, out = self.call(
             "public class UnrelatedMod {}\n",
