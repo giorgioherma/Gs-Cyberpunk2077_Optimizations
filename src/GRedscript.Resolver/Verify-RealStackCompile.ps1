@@ -9,8 +9,7 @@ param(
   [Parameter(Mandatory=$true)][string]$ResolverDll,
   [string]$CallbackPreviewRoot = '',
   [string]$FrameworkPreviewRoot = '',
-  [string]$FrameworkRoot = '',
-  [string]$PostGenericSourceRoot = ''
+  [string]$FrameworkRoot = ''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -203,43 +202,6 @@ try {
     throw 'R6 baseline candidate too small to contain a valid game script bundle.'
   }
   $baseSha=(Get-FileHash -Algorithm SHA256 -LiteralPath $baseFile.FullName).Hash
-  # Phase 2: a separate already-generic source baseline. The historical
-  # capture-matched source above remains the generic regression authority.
-  $postGenericSources=''
-  $postGenericCount=0
-  $postGenericBefore=@{}
-  if (![string]::IsNullOrWhiteSpace($PostGenericSourceRoot)) {
-    $postGenericGame=(Resolve-Path -LiteralPath $PostGenericSourceRoot -ErrorAction Stop).Path
-    if ($postGenericGame.Equals($game,[StringComparison]::OrdinalIgnoreCase) -or
-        $postGenericGame.StartsWith($game+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or
-        $game.StartsWith($postGenericGame+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
-      throw 'R6_PHASE2_SOURCE_MUST_BE_DISTINCT_FROM_HISTORICAL'
-    }
-    $postGenericSources=Join-Path $postGenericGame 'r6/scripts'
-    if (!(Test-Path -LiteralPath $postGenericSources -PathType Container)) {
-      throw 'R6_PHASE2_SOURCE_DIRECTORY_MISSING'
-    }
-    $phase2Files=@(Get-ChildItem -LiteralPath $postGenericSources -File -Recurse -Filter '*.reds')
-    $postGenericCount=$phase2Files.Count
-    if ($postGenericCount -lt 1000) { throw 'R6_PHASE2_SOURCE_INVENTORY_INCOMPLETE' }
-    $hasGenericMarker=$false
-    foreach ($file in $phase2Files) {
-      if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'R6_PHASE2_SYMLINK_REFUSED' }
-      $relative=[IO.Path]::GetRelativePath($postGenericSources,$file.FullName)
-      if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
-          $postGenericBefore.ContainsKey($relative)) { throw 'R6_PHASE2_SOURCE_PATH_INVALID' }
-      $postGenericBefore[$relative]=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
-      if (!$hasGenericMarker -and (Select-String -LiteralPath $file.FullName -SimpleMatch -Pattern 'GCO-GENERIC:' -Quiet -ErrorAction Stop)) {
-        $hasGenericMarker=$true
-      }
-    }
-    if (!$hasGenericMarker) { throw 'R6_PHASE2_POST_GENERIC_MARKERS_MISSING' }
-    if (!(Test-Path -LiteralPath (Join-Path $postGenericSources 'G-RedRuntime') -PathType Container)) {
-      throw 'R6_PHASE2_INSTALLED_FRAMEWORK_SOURCE_MISSING'
-    }
-    Write-Host ('R6 Phase 2 post-generic source admitted: files='+$postGenericCount+
-      ' genericMarkersPresent=true originalSourceUntouched=true')
-  }
   $liveSources=Join-Path $game 'r6/scripts'
   $liveCount=@(Get-ChildItem -LiteralPath $liveSources -Filter '*.reds' -Recurse -File).Count
   if ($liveCount -lt 100 -or $liveCount -ne [int]$plan.sourceCount) {
@@ -398,19 +360,13 @@ try {
   if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
     $scenarios+=@('framework-all-generics-preview')
   }
-  # Validate the exact post-generic source independently of the sealed
-  # pre-generic capture/preview. Future semantics will extend this lane.
-  if ($postGenericCount -gt 0) { $scenarios+=@('phase2-postgeneric-stock') }
   foreach($scenario in $scenarios) {
-    $isPhase2=($scenario -eq 'phase2-postgeneric-stock')
-    $selectedScripts=if ($isPhase2) { $postGenericSources } else { $liveSources }
-    $selectedCount=if ($isPhase2) { $postGenericCount } else { $liveCount }
     $root=Join-Path $work $scenario
     $scripts=Join-Path $root 'r6/scripts'
     $cache=Join-Path $root 'r6/cache/final.redscripts'
     New-Item -ItemType Directory -Path $scripts -Force | Out-Null
     New-Item -ItemType Directory -Path (Split-Path $cache -Parent) -Force | Out-Null
-    foreach($item in @(Get-ChildItem -LiteralPath $selectedScripts -Force)) {
+    foreach($item in @(Get-ChildItem -LiteralPath $liveSources -Force)) {
       Copy-Item -LiteralPath $item.FullName -Destination $scripts -Recurse -Force
     }
     $pluginStage=Join-Path $root 'red4ext/plugins'
@@ -495,7 +451,7 @@ try {
       }
     }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne ($selectedCount+$addedFrameworkFiles)) {
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
@@ -519,7 +475,6 @@ try {
   $expectedScenarios=if($callbackOverlay.Count -gt 0){3}else{2}
   if ($frameworkFiles.Count -gt 0) { $expectedScenarios++ }
   if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) { $expectedScenarios++ }
-  if ($postGenericCount -gt 0) { $expectedScenarios++ }
   if ($outputs.Count -ne $expectedScenarios -or
       $outputs[0].Sha256 -eq $outputs[1].Sha256) {
     throw 'R6 compiled baseline and optimized-preview caches are indistinguishable.'
@@ -536,37 +491,17 @@ try {
     }
   }
   if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
-    # The framework-composed preview is a named mandatory scenario, not
-    # necessarily the last one when independent Phase 2 inputs are compiled.
-    $combined=@($outputs | Where-Object { $_.Scenario -eq 'framework-all-generics-preview' })
-    if ($combined.Count -ne 1) {
+    # The fifth scenario combines ALL currently staged generic passes with
+    # authoritative framework source. Refuse empty/no-op integration output.
+    if ($outputs[$outputs.Count-1].Scenario -ne 'framework-all-generics-preview') {
       throw 'R6_FRAMEWORK_COMBINED_SCENARIO_MISSING'
     }
-    $combinedHash=$combined[0].Sha256
-    foreach($earlier in @($outputs | Where-Object {
-      $_.Scenario -ne 'framework-all-generics-preview' -and
-      $_.Scenario -ne 'phase2-postgeneric-stock'
-    })) {
+    $combinedHash=$outputs[$outputs.Count-1].Sha256
+    foreach($earlier in $outputs[0..($outputs.Count-2)]) {
       if ($combinedHash -eq $earlier.Sha256) {
         throw 'R6_FRAMEWORK_COMBINED_GENERIC_OUTPUT_INDISTINGUISHABLE'
       }
     }
-  }
-  if ($postGenericCount -gt 0) {
-    $phase2Compiled=@($outputs | Where-Object { $_.Scenario -eq 'phase2-postgeneric-stock' })
-    if ($phase2Compiled.Count -ne 1) { throw 'R6_PHASE2_COMPILED_OUTPUT_MISSING' }
-    $afterFiles=@(Get-ChildItem -LiteralPath $postGenericSources -File -Recurse -Filter '*.reds')
-    if ($afterFiles.Count -ne $postGenericCount) { throw 'R6_PHASE2_SOURCE_COUNT_MUTATED' }
-    foreach ($file in $afterFiles) {
-      $relative=[IO.Path]::GetRelativePath($postGenericSources,$file.FullName)
-      if (!$postGenericBefore.ContainsKey($relative) -or
-          (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne $postGenericBefore[$relative]) {
-        throw 'R6_PHASE2_SOURCE_BYTES_MUTATED'
-      }
-    }
-    Write-Host ('PASS REDscript Phase 2 separate post-generic baseline SCC: files='+
-      $postGenericCount+' compiledBytes='+$phase2Compiled[0].Bytes+
-      ' preservedGenericSource=true userSourceUntouched=true semanticRulesPending=true')
   }
   $audit=Join-Path $work 'verify-source.json'
   $auditLog=Join-Path $work 'verify-source.log'
