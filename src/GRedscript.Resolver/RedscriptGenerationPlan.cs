@@ -224,7 +224,8 @@ public static class RedscriptGenerationPlan
     }
 
     public static StageResult Stage(string gameRoot,
-        string planFile, string analysisFile, string outputRoot)
+        string planFile, string analysisFile, string outputRoot,
+        bool optimizeQuickslotsDpad = false)
     {
         string game = Path.GetFullPath(gameRoot),
             planPath = Path.GetFullPath(planFile),
@@ -745,6 +746,11 @@ public static class RedscriptGenerationPlan
         else if (quickslots.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_INPUT_UNKNOWN_STATUS");
 
+        // Explicit GCO Generate preference. Never infer from connected
+        // hardware: a controller may stay plugged in while using KBM.
+        // If unchecked do not rewrite the four original D-pad getters.
+        if (optimizeQuickslotsDpad)
+        {
         // Handmade pass-8 Quickslots derived D-pad state. Always stage
         // after the current post-generic InputHub source (#16). Normal
         // keyboard/mouse use clears all four caches; only real pad mode
@@ -796,6 +802,8 @@ public static class RedscriptGenerationPlan
                 dpad.Reason ?? "CQ_DPAD_SOURCE_INCOMPATIBLE"));
         else if (dpad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_DPAD_STATUS_UNRECOGNIZED");
+
+        }
 
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
