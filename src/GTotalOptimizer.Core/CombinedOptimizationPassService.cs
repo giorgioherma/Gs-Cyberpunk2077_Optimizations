@@ -14,7 +14,10 @@ namespace GTotalOptimizer.Core;
 /// </summary>
 public sealed record CombinedPassOutcome(
     string ZipPath, int CetFiles, int RedscriptFiles, int GeneratedFiles,
-    int CetTransforms, int RedscriptEdits, bool SccPassed);
+    int CetTransforms, int RedscriptEdits, bool SccPassed)
+{
+    public int AppliedRedscriptRules { get; init; }
+}
 
 public sealed class CombinedOptimizationPassService
 {
@@ -163,7 +166,10 @@ public sealed class CombinedOptimizationPassService
                 }
                 finally { if (File.Exists(draft)) File.Delete(draft); }
                 return new(final, cetFiles, redFiles, indexed.Count,
-                    cetResult.TransformCount, red.AppliedEdits, redFiles > 0);
+                    cetResult.TransformCount, red.AppliedEdits, redFiles > 0)
+                {
+                    AppliedRedscriptRules = red.Completed.Length
+                };
             }
             finally { if (File.Exists(pending)) File.Delete(pending); }
         }
