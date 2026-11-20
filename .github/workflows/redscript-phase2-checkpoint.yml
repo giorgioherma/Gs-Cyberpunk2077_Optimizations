@@ -37,6 +37,7 @@ jobs:
       PHASE2_FE_OUTPUT: ${{ github.workspace }}/.phase2-fe-input
       PHASE2_FE_PINS_OUTPUT: ${{ github.workspace }}/.phase2-fe-pins
       PHASE2_QUICKSLOTS_OUTPUT: ${{ github.workspace }}/.phase2-cq-input
+      PHASE2_DPAD_OUTPUT: ${{ github.workspace }}/.phase2-cq-dpad
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -304,6 +305,34 @@ jobs:
           }
           Write-Host 'PASS Quickslots InputHub action-specific bridge and fallback preserve existing generic membership'
 
+      - name: Generate opt-in Quickslots D-pad cache from post-generic InputHub bridge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-quickslots-dpad --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_QUICKSLOTS_OUTPUT --out $env:PHASE2_DPAD_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_DPAD_GENERATION_FAILED' }
+          $result=Get-Content -LiteralPath (Join-Path $env:PHASE2_DPAD_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($result.ruleId -ne 'CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1' -or
+              $result.status -ne 'APPLIED' -or [int]$result.appliedEdits -ne 1) {
+            throw ('PHASE2_CQ_DPAD_MUST_APPLY: '+$result.status+' '+$result.reason)
+          }
+          $relative='r6/scripts/custom_quickslots/player_puppet.reds'
+          $generated=Join-Path $env:PHASE2_DPAD_OUTPUT $relative
+          if (!(Test-Path -LiteralPath $generated -PathType Leaf)) {
+            throw 'PHASE2_CQ_DPAD_OUTPUT_MISSING'
+          }
+          $text=Get-Content -LiteralPath $generated -Raw
+          if (!$text.Contains('this.lastUsedKBM || !this.player.PlayerLastUsedPad()') -or
+              !$text.Contains('this.RecomputeDpadProhibitions();') -or
+              !$text.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+              !$text.Contains('this.customQuickslotsInputHub.Subscribe(') -or
+              !$text.Contains('this.customQuickslotsFallbackRegistered = true;')) {
+            throw 'PHASE2_CQ_DPAD_GENERIC_OR_INPUT_FALLBACK_LOST'
+          }
+          Copy-Item -LiteralPath $generated -Destination (Join-Path $env:PHASE2_OUTPUT $relative) -Force
+          Write-Host 'PASS Quickslots D-pad cache opt-in: cached getters, KBM mode off, generic and InputHub preserved'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -380,7 +409,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
