@@ -1,5 +1,10 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — Mandatory REDscript Phase 2 semantic source compatibility (owner decision)
+
+[Authoritative agent rules](../integration/IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md): Recognize and complete **partial** implementations without duplicates; produce the entire compatible semantic result in **one Generate from post-generic stock**; treat compatible newer, older and custom-modified source as eligible by **actual required structure and behavior**, preserving unrelated code and prior generic work. No fixed version gates, historical whole-file hashes, mandatory separate-pass ordering or broad refusals solely due to user edits. Skip only an actually incompatible/missing optimization target or an unprovable critical safety property, **as narrowly as possible**, with a clear reason and other safe operations proceeding. Keep full source and gameplay safety, idempotence, CI SCC (not bundled), ownership and rollback contracts. These are required implementation properties, not an approval to copy legacy optimized ZIP files or change gameplay behavior.
+
+
 ## 2026-11-20 — Analyze console and completion controls (current UI correction)
 
 Use plain user-facing Analyze text: "GENERATE creates one ZIP containing all optimizations" (the newly generated pass, **not** a cumulative historical package). Keep console output concise: after success only CET transform count and REDscript edit count, plus brief skip/failure notice when required. Do not print the ownership JSON name, output paths or report storage metadata in ordinary success messages. The actual ownership sidecar must still be written and verified.
