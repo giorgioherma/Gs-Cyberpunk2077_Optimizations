@@ -1790,6 +1790,57 @@ try {
         ' edits='+[int]$dfReport.appliedEdits+
         ' originalUpdateAndAnimationsPreserved=true')
 
+    # Third semantic operation is independently generated from the same
+    # effective source that already contains the Dark Future tag cache.
+    # It must not slow other ordinary Cyberpunk effect icons.
+    $dfIconReference = Join-Path $work 'gco-phase2-df-icons-reference'
+    $dfIconLog = Join-Path $work 'gco-phase2-df-icons-reference.log'
+    & dotnet $dll phase2-dark-future-icons --game $game --base-overlay $callbackFolder --out $dfIconReference *> $dfIconLog
+    if ($LASTEXITCODE -ne 0) {
+      throw 'GCO_DF_ICON_REFERENCE_GENERATOR_FAILED'
+    }
+    $dfIconReport = Get-Content -LiteralPath (Join-Path $dfIconReference 'phase2-result.json') -Raw | ConvertFrom-Json
+    if ($dfIconReport.ruleId -ne 'DARK_FUTURE_STATUS_ICON_400MS_V1' -or
+        $dfIconReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+      throw 'GCO_DF_ICON_REFERENCE_RESULT_INVALID'
+    }
+    if ($dfIconReport.status -eq 'APPLIED') {
+      $dfIconScripts = Join-Path $dfIconReference 'r6/scripts'
+      $dfIconFiles = @(Get-ChildItem -LiteralPath $dfIconScripts -Filter '*.reds' -File -Recurse)
+      if ($dfIconFiles.Count -ne 1 -or [int]$dfIconReport.appliedEdits -ne 1) {
+        throw 'GCO_DF_ICON_REFERENCE_SINGLE_FILE_REQUIRED'
+      }
+      foreach ($file in $dfIconFiles) {
+        $rel=[IO.Path]::GetRelativePath($dfIconScripts,$file.FullName)
+        if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+          throw 'GCO_DF_ICON_REFERENCE_PATH_ESCAPE'
+        }
+        $dest=Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+        if (!(Test-Path -LiteralPath $dest -PathType Leaf)) {
+          throw 'GCO_DF_ICON_REFERENCE_DID_NOT_COMPOSE'
+        }
+        $old=Get-Content -LiteralPath $dest -Raw
+        $new=Get-Content -LiteralPath $file.FullName -Raw
+        if (!$old.Contains('m_gcoDfInfiniteTagValid') -or
+            !$new.Contains('m_gcoDfInfiniteTagValid') -or
+            !$new.Contains('DarkFutureCanHideOnBuffBar') -or
+            !$new.Contains('now + 0.40')) {
+          throw 'GCO_DF_ICON_REFERENCE_DROPPED_TAG_CACHE_OR_CADENCE'
+        }
+        foreach ($m in @([regex]::Matches($old,
+                   '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                   ForEach-Object Value | Sort-Object -Unique)) {
+          if (!$new.Contains($m,[StringComparison]::Ordinal)) {
+            throw 'GCO_DF_ICON_REFERENCE_DROPPED_GENERIC_SOURCE'
+          }
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+      }
+    }
+    Write-Host ('PASS Phase 2 Dark Future 400ms icon reference: status='+
+        $dfIconReport.status+' edits='+[int]$dfIconReport.appliedEdits+
+        ' existingTagCachePreserved=true')
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -1822,6 +1873,16 @@ try {
           $darkFamily[0].order -ne 12 -or
           [int]$darkFamily[0].rewrittenExpressions -ne 1) {
         throw 'GCO_DARK_FUTURE_CANONICAL_GENERATION_NOT_CONNECTED'
+      }
+    }
+    if ($dfIconReport.status -eq 'APPLIED') {
+      $iconFamily=@($stageReport.completed |
+        Where-Object { $_.id -eq 'dark-future-status-icons' })
+      if ($iconFamily.Count -ne 1 -or
+          $iconFamily[0].order -ne 13 -or
+          [int]$iconFamily[0].rewrittenExpressions -ne 1 -or
+          [int]$iconFamily[0].composedFiles -ne 1) {
+        throw 'GCO_DF_ICON_CANONICAL_STAGING_NOT_CONNECTED'
       }
     }
     # Every ordered generated REDscript source must match the independent
