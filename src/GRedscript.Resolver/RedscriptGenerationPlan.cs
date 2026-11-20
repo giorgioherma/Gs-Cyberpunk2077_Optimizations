@@ -115,9 +115,11 @@ public static class RedscriptGenerationPlan
             Directory.Exists(output))
             throw new InvalidDataException("REDSCRIPT_PLAN_OUTPUT_COLLISION");
 
+        // Detect obsolete generated files before parsing their potentially
+        // incomplete/partial source, so the refusal stays actionable.
+        VerifyNoRetiredLocationSources(game);
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
-        VerifyNoRetiredLocationSources(game);
         string sourceHash = admission.SourceStackSha256 ??
             throw new InvalidDataException("REDSCRIPT_PLAN_NO_SOURCE_HASH");
         var temp = Path.Combine(Path.GetTempPath(),
@@ -232,9 +234,11 @@ public static class RedscriptGenerationPlan
         var document = JsonSerializer.Deserialize<Document>(
             File.ReadAllText(planPath), JsonOptions)
             ?? throw new InvalidDataException("REDSCRIPT_PLAN_INVALID_DOCUMENT");
+        // Detect obsolete generated files before parsing their potentially
+        // incomplete/partial source, so the refusal stays actionable.
+        VerifyNoRetiredLocationSources(game);
         var admission = new SourceAdmission(game);
         _ = admission.AuditAll();
-        VerifyNoRetiredLocationSources(game);
         if (document.SchemaVersion != Schema ||
             !document.BasedOnCurrentInstalledSource ||
             document.ProductionZipAuthorized ||
