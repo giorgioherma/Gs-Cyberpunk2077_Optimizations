@@ -671,6 +671,10 @@ internal static class Program
                 // CLOSE shares a row with the left-aligned console. Hidden
                 // CLOSE grants its entire Auto column back to the message.
                 var originalConsoleWidth = window.ResultsConsoleScroll.ActualWidth;
+                var originalConsoleTop = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                var originalConsoleCenter = originalConsoleTop +
+                    window.ResultsConsoleScroll.ActualHeight / 2;
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Visible;
                 root.UpdateLayout();
@@ -681,12 +685,13 @@ internal static class Program
                 var closeCenter = closeTop + window.CloseAfterGenerationButton.ActualHeight / 2;
                 var consoleCenter = consoleTop + window.ResultsConsoleScroll.ActualHeight / 2;
                 if (Math.Abs(closeCenter - consoleCenter) > 5 ||
+                    Math.Abs(consoleCenter - originalConsoleCenter) > 1 ||
                     originalConsoleWidth - window.ResultsConsoleScroll.ActualWidth < 150 ||
                     window.CloseAfterGenerationButton.ActualWidth < 150 ||
                     window.OpenFolderButton.Content?.ToString() != "OPEN FOLDER" ||
                     !window.OpenFolderButton.IsEnabled)
                     throw new InvalidOperationException(
-                        "Analyze console and CLOSE must share a centered row, with OPEN FOLDER always available.");
+                        "CLOSE must not move the centered console; OPEN FOLDER remains available.");
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
