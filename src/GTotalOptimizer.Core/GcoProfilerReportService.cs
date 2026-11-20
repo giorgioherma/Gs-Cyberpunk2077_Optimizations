@@ -299,11 +299,15 @@ public static class GcoProfilerReportService
                     timelineJson, grspFrames, cetWindows,
                     digest.Html, JsonSerializer.Serialize(digest.SpikeMarkers, Json)),
                 new UTF8Encoding(false));
-            // Keep the full original CET and GRSP reports and their data links
-            // accessible beneath the consolidated report. This is RESULTS
-            // only, never part of the optimizer pass ZIP.
-            CopyTree(cet, Path.Combine(publishing, "CET"), cancellationToken);
-            CopyTree(red, Path.Combine(publishing, "GRSP"), cancellationToken);
+            // Keep the owner reports and all derived files. Byte-identical
+            // raw CSVs already exist in the hash-sealed owner capture, so link
+            // to that canonical copy instead of multiplying results storage.
+            PublishOwnerReport(cet, Path.Combine(publishing, "CET"),
+                CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "CET"),
+                cancellationToken);
+            PublishOwnerReport(red, Path.Combine(publishing, "GRSP"),
+                CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "REDscript"),
+                cancellationToken);
             if (Directory.Exists(outputFolder))
                 throw new IOException("Another report already exists for this capture; no overwrite.");
             Directory.Move(publishing, outputFolder);
@@ -421,20 +425,76 @@ public static class GcoProfilerReportService
         }
     }
 
-    private static void CopyTree(string source, string dest, CancellationToken token)
+    private static void PublishOwnerReport(
+        string source, string destination, string sealedOriginals,
+        CancellationToken token)
     {
-        Directory.CreateDirectory(dest);
-        foreach (var folder in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        // Report writers operate only on temporary, verified copies. Preserve
+        // every derived file, including summary JSON and original HTML.
+        // Only omit a CSV when its path AND contents match its sealed original.
+        // The HTML's downloadable CSV links then resolve back to the source
+        // capture, whose hash-indexed inventory remains unchanged.
+        string rawFolder = Path.GetFileName(
+            sealedOriginals.TrimEnd(Path.DirectorySeparatorChar));
+        var links = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(source, "*",
+                     SearchOption.AllDirectories))
         {
             token.ThrowIfCancellationRequested();
-            Directory.CreateDirectory(Path.Combine(dest, Path.GetRelativePath(source, folder)));
-        }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            token.ThrowIfCancellationRequested();
-            var target = Path.Combine(dest, Path.GetRelativePath(source, file));
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked report output refused.");
+            string relative = Path.GetRelativePath(source, file).Replace('\\', '/');
+            if (relative.Split('/').Any(part => part is "" or "." or ".."))
+                throw new InvalidDataException("Unsafe report output path.");
+            string original = Path.Combine(sealedOriginals,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            if (relative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(original) &&
+                (File.GetAttributes(original) & FileAttributes.ReparsePoint) == 0 &&
+                new FileInfo(file).Length == new FileInfo(original).Length &&
+                SHA256.HashData(File.ReadAllBytes(file)).AsSpan().SequenceEqual(
+                    SHA256.HashData(File.ReadAllBytes(original))))
+            {
+                links.Add(relative, "../../" + rawFolder + "/" + relative);
+                continue;
+            }
+
+            string target = Path.Combine(destination,
+                relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, overwrite: false);
+        }
+
+        // Owner HTML reports provide raw CSV download hyperlinks. Repoint
+        // only exact href targets, never rewrite source reports, measurements,
+        // embedded chart data, or an unrelated relative URL.
+        foreach (var html in Directory.EnumerateFiles(
+                     destination, "*.html", SearchOption.AllDirectories))
+        {
+            token.ThrowIfCancellationRequested();
+            string document = File.ReadAllText(html);
+            string localFolder = Path.GetRelativePath(destination,
+                Path.GetDirectoryName(html)!).Replace('\\', '/');
+            foreach (var (relative, originalLink) in links)
+            {
+                string localLink = localFolder == "." ? relative :
+                    Path.GetRelativePath(Path.GetDirectoryName(html)!,
+                        Path.Combine(destination,
+                            relative.Replace('/', Path.DirectorySeparatorChar)))
+                        .Replace('\\', '/');
+                string href = originalLink;
+                if (localFolder != ".")
+                {
+                    // Each ancestor below the report root needs one more "../".
+                    int depth = localFolder.Split('/').Length;
+                    href = string.Concat(Enumerable.Repeat("../", depth)) + originalLink;
+                }
+                document = document.Replace("href=\"" + localLink + "\"",
+                    "href=\"" + href + "\"", StringComparison.Ordinal);
+                document = document.Replace("href='" + localLink + "'",
+                    "href='" + href + "'", StringComparison.Ordinal);
+            }
+            File.WriteAllText(html, document, new UTF8Encoding(false));
         }
     }
 
