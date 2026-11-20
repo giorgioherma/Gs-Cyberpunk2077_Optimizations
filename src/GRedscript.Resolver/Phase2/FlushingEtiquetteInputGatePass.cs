@@ -187,10 +187,12 @@ internal static class FlushingEtiquetteInputGatePass
             // A custom use of name beyond proven Equals() or the pure
             // modifier lookup may handle an unrelated action: narrow refusal.
             if (Is(t, i, nameVar) &&
-                !(i >= 3 && Is(t, i - 3, "Equals")) &&
-                !(i >= 4 && Is(t, i - 4, "Equals")) &&
-                !(i >= 4 && Seq(t, i - 4, "FEInput", ".",
-                  "IndexOfModifier", "(")))
+                !Seq(t, i - 2, "Equals", "(", nameVar, ",") &&
+                !(Seq(t, i - 5, "Equals", "(") &&
+                  IsNameLiteral(source, t, i - 3) &&
+                  Seq(t, i - 1, ",", nameVar, ")")) &&
+                !Seq(t, i - 4, "FEInput", ".", "IndexOfModifier",
+                    "(", nameVar, ")"))
                 return new("REFUSED", "FE_CUSTOM_ACTION_CONSUMER_UNPROVEN",
                     0, 0, null);
         }
@@ -227,10 +229,17 @@ internal static class FlushingEtiquetteInputGatePass
 
         int start = t[getNameEnd].End;
         int next = getNameEnd + 1;
-        if (next >= getType) return new("REFUSED",
-            "FE_INPUT_EARLY_GUARD_AMBIGUOUS", 0, 0, null);
-        int beforeType = t[getType].Start;
-        var inBetween = t.Skip(next).Take(getType - next).ToArray();
+        int typeDeclaration = getType - 3;
+        if (typeDeclaration <= next ||
+            !Seq(t, typeDeclaration, "let") ||
+            !Is(t, typeDeclaration + 2, "="))
+        {
+            if (typeDeclaration != next || !Seq(t, typeDeclaration, "let") ||
+                !Is(t, typeDeclaration + 2, "="))
+                return new("REFUSED",
+                    "FE_INPUT_TYPE_DECLARATION_UNPROVEN", 0, 0, null);
+        }
+        var inBetween = t.Skip(next).Take(typeDeclaration - next).ToArray();
         if (inBetween.Length == 0)
             return new("ELIGIBLE", null, start, start, nl+guard);
 
@@ -241,13 +250,13 @@ internal static class FlushingEtiquetteInputGatePass
             return new("REFUSED", "FE_PRE_TYPE_CUSTOM_CONTROL_FLOW",
                 0, 0, null);
         int brace = ifPos + 1;
-        while (brace < getType && !Is(t, brace, "{")) brace++;
-        if (brace >= getType || !Seq(t, brace, "{", "return",
+        while (brace < typeDeclaration && !Is(t, brace, "{")) brace++;
+        if (brace >= typeDeclaration || !Seq(t, brace, "{", "return",
             "false", ";", "}"))
             return new("REFUSED", "FE_EARLY_GUARD_BODY_UNPROVEN",
                 0, 0, null);
         int endIndex = brace + 4;
-        if (endIndex + 1 != getType)
+        if (endIndex + 1 != typeDeclaration)
             return new("REFUSED", "FE_EXTRA_PRE_TYPE_EFFECTS_UNPROVEN",
                 0, 0, null);
         var existing = new HashSet<string>(StringComparer.Ordinal);
