@@ -338,28 +338,48 @@ internal static class DarkFutureInfiniteTagCachePass
         string hash = admission.SourceStackSha256 ??
             throw new InvalidDataException("DARK_FUTURE_SOURCE_HASH_UNAVAILABLE");
         var candidates = new List<(string Rel, string Text)>();
-        // Owner selection follows installed source, not the historical
-        // filename/version. Other mods with conditional class replacements
-        // are never turned into Dark Future owners.
-        string owner = Path.Combine(scripts, "Dark Future");
-        if (Directory.Exists(owner))
-            foreach (string path in Directory.EnumerateFiles(owner, "*.reds",
-                SearchOption.AllDirectories))
+        // Discover actual installed owning methods from current source;
+        // a different version may move or rename the Dark Future directory
+        // or the UI file. Do not select DVCore's compile-time conditional
+        // replacement (which has a distinct module and gameplay tag).
+        bool ownerInstalled = Directory.Exists(
+            Path.Combine(scripts, "Dark Future"));
+        foreach (string path in Directory.EnumerateFiles(scripts, "*.reds",
+            SearchOption.AllDirectories))
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("DARK_FUTURE_LINKED_SOURCE_REFUSED");
+            string text = File.ReadAllText(path, Encoding.UTF8);
+            if (text.Contains("module DarkFuture.", StringComparison.Ordinal))
+                ownerInstalled = true;
+            if (!text.Contains("DarkFutureInfiniteDurationEffect",
+                    StringComparison.Ordinal) ||
+                !text.Contains("SingleCooldownManager", StringComparison.Ordinal))
+                continue;
+            bool ownedFolder = Path.GetRelativePath(scripts, path)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(part => part.Equals("Dark Future",
+                    StringComparison.OrdinalIgnoreCase));
+            var tokens = SourceAdmission.ReadTokens(text);
+            bool ownedImport = false, targetHook = false;
+            for (int i = 0; i + 4 < tokens.Count; i++)
             {
-                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                    throw new InvalidDataException("DARK_FUTURE_LINKED_SOURCE_REFUSED");
-                string text = File.ReadAllText(path, Encoding.UTF8);
-                if (!text.Contains("DarkFutureInfiniteDurationEffect",
-                        StringComparison.Ordinal) ||
-                    !text.Contains("SingleCooldownManager", StringComparison.Ordinal))
-                    continue;
-                candidates.Add((Path.GetRelativePath(scripts, path), text));
+                if (Seq(tokens, i, "import", "DarkFuture", "."))
+                    ownedImport = true;
+                if (Seq(tokens, i, "@", "replaceMethod", "(",
+                    "SingleCooldownManager", ")"))
+                    targetHook = true;
             }
+            if (!targetHook || !(ownedFolder || ownedImport))
+                continue;
+            ownerInstalled = true;
+            candidates.Add((Path.GetRelativePath(scripts, path), text));
+        }
 
         Result result;
         string? effective = null, transformed = null, relative = null;
         if (candidates.Count == 0)
-            result = Directory.Exists(owner)
+            result = ownerInstalled
                 ? new(Rule, "REFUSED", 0, 0, null,
                     "DARK_FUTURE_COOLDOWN_TARGET_UNRECOGNIZED", true, false)
                 : new(Rule, "NOT_APPLICABLE", 0, 0, null,
