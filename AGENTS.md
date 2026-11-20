@@ -1,5 +1,12 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## 2026-11-20 — Current owner decision: experimental location available but opt-out of automatic generation
+
+User corrected the earlier retirement scope. Preserve GCO's experimental REDscript native location generator, native stage, tests, and optional framework-owned backend assets for **manual isolated use**. Exclude it from the default ordered GCO REDscript Analyze → Generate → ZIP workflow (nine non-location source rules). CET's native location optimizer and the generic shared-player signal remain independent and active.
+
+The previously introduced `REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT` blanket refusal was **not approved** and has been removed. Do not impose a new policy for already-generated or partially optimized location sources without an explicit discussion. Retain existing general source admission, fingerprint/drift refusal and safety contracts. Historical deletion/refusal statements below are superseded by this section. No gameplay benefit claimed.
+
+
 ## 2026-11-20 — active REDscript location cleanup decision
 
 **Current generation policy overrides older nine/tenth-location notes below:** after owner-approved retirement, GCO's default REDscript source generator has **9 ordered families**. The former experimental `NATIVE_PLAYER_LOCATION_PREDICATE_V1` / `LOCATION_DEPENDENCY_FAR_V1` generator and REDscript native bridge staging were removed. Keep CET-owned native location/player code and G-REDruntime's separate framework API unchanged. Read-only player-position dependency analysis and generic `SHARED_PLAYER_SIGNAL_V1` are separate and retained. Old generated location overlays must be restored/disabled before Generate, never silently edited or assimilated. Real-source SCC, ZIP content, partial/source-drift refusal and gameplay A/B remain required. Check `docs/LATEST-WORK.md` and final CI status, not historical rule counts below.
