@@ -18,3 +18,21 @@ This is a **logical chronological checkpoint after generic output**, not a requi
 The actual one-invocation GCO `RedscriptGenerationPlan.Stage` first composes ten generic rules, then `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` against the **effective sources**, without historical passes or repair passes. The same generator runs in fast CI with `phase2-footsteps --game <post-generic-root> --out <isolated-stage> [--base-overlay <existing-generic-stage>]`; compatible partial/full/custom/direct-return cases are in `test_phase2_footsteps.py`. The client includes accepted semantic files in the game-relative ZIP and ownership sidecar without running SCC locally.
 
 [Full GCO CI #1006 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617357): ten generic rules yielded 173 eligible original edits; one Footsteps semantic edit makes **79 composed generated `.reds` files**. Actual canonical output matched independent generic-plus-semantic composition. Official SCC compiled complete source, native plugin dependencies and 12 authoritative framework files. ZIP topology and packaged Windows .NET10 app passed. This is build/integration evidence, **not gameplay or FPS proof**. Latest structural variant tests passed in focused #19. Conflicted dev-to-main PR #2 has **not** merged.
+
+## Second semantic stage accepted on the fast checkpoint
+
+`phase2-dark-future` follows `phase2-footsteps` and consumes the same
+already-generic `base_after_generic` source with the prior Footsteps output
+as an isolated base overlay. Its only accepted output is the current installed
+Dark Future UI owner `.reds` file; the CI joins that file to Footsteps and
+compiles both in **one** official SCC 0.5.31 invocation. The main GCO
+`RedscriptGenerationPlan.Stage` independently composes the ten generic rules,
+then Footsteps (order 11), then Dark Future immutable tag cache (order 12),
+inside the existing combined ZIP path. No legacy pass, repair or player-side SCC.
+
+[Phase 2 #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848):
+21 semantic state tests; original 2,331 post-generic files + 2 semantic output
+files; 43,482,205-byte compiled output; original sources unchanged.
+Version-fluid tests include relocated owner path, partial implementation,
+repeat no-op, independent source composition and safe alias/mutation refusal.
+Do not treat SCC as proof of game behavior or measured frame-time benefit.
