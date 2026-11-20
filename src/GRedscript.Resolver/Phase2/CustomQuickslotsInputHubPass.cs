@@ -283,13 +283,18 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
             "OnDeviceChanged" =>
                 method.Contains("SetLastUsedKBM(", StringComparison.Ordinal) &&
                 method.Contains("QueueEvent(", StringComparison.Ordinal) &&
+                method.Contains("IsDefined(this.player)", StringComparison.Ordinal) &&
                 method.Contains("lastUsedKBM", StringComparison.Ordinal),
             "SyncGraceState" =>
                 method.Contains("PlayerLastUsedKBM()", StringComparison.Ordinal) &&
-                method.Contains("SetLastUsedKBM(", StringComparison.Ordinal),
+                method.Contains("SetLastUsedKBM(", StringComparison.Ordinal) &&
+                method.Contains("this.lastUsedKBM =", StringComparison.Ordinal),
             "OnGRedInput" =>
                 method.Contains("QueueEvent(", StringComparison.Ordinal) &&
                 method.Contains("ObserveAction(", StringComparison.Ordinal) &&
+                method.Contains("PlayerLastUsedKBM()", StringComparison.Ordinal) &&
+                method.Contains("SetLastUsedKBM(", StringComparison.Ordinal) &&
+                method.Contains("IsDefined(this.player)", StringComparison.Ordinal) &&
                 method.Contains("evt.actionName", StringComparison.Ordinal) &&
                 method.Contains("evt.actionType", StringComparison.Ordinal) &&
                 method.Contains("gamepadQuickslotInput", StringComparison.Ordinal),
