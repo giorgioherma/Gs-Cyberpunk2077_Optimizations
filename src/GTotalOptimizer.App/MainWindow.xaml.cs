@@ -605,6 +605,7 @@ public partial class MainWindow : Window
             SetPortraitStage(PortraitStage.Collected);
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
             RefreshCompletedWorkspace();
         }
@@ -1775,6 +1776,7 @@ public partial class MainWindow : Window
             RefreshCompletedWorkspace();
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
             return;
         }
@@ -1822,6 +1824,7 @@ public partial class MainWindow : Window
             UpdateResultTexts(saved);
             CapturePage.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
             RefreshCompletedWorkspace();
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
@@ -2211,6 +2214,7 @@ public partial class MainWindow : Window
         ClearStatusPin();
         SetPortraitStage(PortraitStage.Black);
         ResultsPage.Visibility = Visibility.Collapsed;
+        BackToCaptureButton.Visibility = Visibility.Collapsed;
         CapturePage.Visibility = Visibility.Visible;
         SetActiveTab(false);
         SetStatus("Ready for a new profiler capture.");
