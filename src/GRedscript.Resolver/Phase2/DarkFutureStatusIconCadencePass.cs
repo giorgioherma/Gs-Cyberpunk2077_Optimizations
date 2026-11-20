@@ -167,11 +167,10 @@ internal static class DarkFutureStatusIconCadencePass
         if((hasPrelude || partialCadence) &&
             proof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
             return Refuse("DF_ICON_PARTIAL_CADENCE_BLOCK_UNPROVEN");
-        // A source can contain the entire already-proven cadence block but
-        // have its due flag declaration missing (manual/partial optimization).
-        // Restore that declaration only; do NOT inject a second clock or
-        // duplicate a state update. Retain the existing fallback and ordering.
-        if(partialCadence)
+        // Validate clock fallback not only while repairing a partial
+        // cadence, but also before declaring a custom source COMPLETE.
+        // A reversed null guard would otherwise silently pass admission.
+        if(hasPrelude || partialCadence)
         {
             string[] clockProof=[
                 "let __gcoDfPlayer = this.GetPlayerControlledObject();",
@@ -184,9 +183,12 @@ internal static class DarkFutureStatusIconCadencePass
             ];
             if(clockProof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
                 return Refuse("DF_ICON_PARTIAL_CLOCK_CONTROL_FLOW_UNPROVEN");
+        }
+        // A partial source can retain the entire proven clock, yet lack
+        // only the cadence declaration. Add exactly that missing statement.
+        if(partialCadence)
             edits.Add(new(t[method.Body].End,t[method.Body].End,
                 nl+"    let "+Due+": Bool = true;"));
-        }
         if(!hasPrelude && !partialCadence)
         {
             string prelude=string.Join(nl,[
