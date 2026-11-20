@@ -995,9 +995,9 @@
                                 <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE OPTIMIZATION ZIP"
                                         Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
                                         Click="GenerateCetPass_Click"/>
-                                <Button x:Name="OpenResultsButton" Grid.Column="2" Content="OPEN RESULTS"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False"
-                                        Margin="4,0,0,0" Click="OpenResults_Click"/>
+                                <Button x:Name="OpenFolderButton" Grid.Column="2" Content="OPEN FOLDER"
+                                        Style="{StaticResource ActionButton}" IsEnabled="True"
+                                        Margin="4,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
                             <!-- Short installation guidance remains in two rows. -->
                             <StackPanel Margin="3,8,0,0">
@@ -1017,9 +1017,9 @@
                         </StackPanel>
                     </ScrollViewer>
                     <!-- Full-width console above the separate end-of-pass CLOSE.
-                         The button must never narrow diagnostic text or induce
-                         artificial line wraps in the output report. -->
-                    <Grid Grid.Row="1" Margin="18,0,8,12">
+                         Move it slightly higher to align its text vertically
+                         with the cyan slash; never narrow output for CLOSE. -->
+                    <Grid Grid.Row="1" Margin="18,0,8,21">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
