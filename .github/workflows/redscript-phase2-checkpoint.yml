@@ -304,6 +304,89 @@ jobs:
           }
           Write-Host 'PASS Quickslots InputHub action-specific bridge and fallback preserve existing generic membership'
 
+      - name: Verify actual one-pass GCO Stage applies Quickslots to post-generic stock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $game='.phase2-private/base_after_generic'
+          $work=Join-Path $env:RUNNER_TEMP ('gco-cq-postgeneric-onepass-'+[guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          try {
+            $plan=Join-Path $work 'plan.json'
+            $analysis=Join-Path $work 'analysis.json'
+            $stage=Join-Path $work 'stage'
+            & dotnet $dll plan-redscript --game $game --out $plan
+            if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $plan -PathType Leaf)) {
+              throw 'PHASE2_CQ_POST_GENERIC_PLAN_FAILED'
+            }
+            $manifest=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+            if ([int]$manifest.implementedRuleCount -ne 10 -or
+                $manifest.sourceStackSha256 -notmatch '^[0-9a-fA-F]{64}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot $env:PHASE2_OUTPUT
+          if (!$?) { throw 'PHASE2_CHECKPOINT_FAILED' }
+
+      - name: Remove private source and compiler after validation
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT)) {
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Force -Recurse
+            }
+          }
+) {
+              throw 'PHASE2_CQ_POST_GENERIC_PLAN_INVALID'
+            }
+            @{
+              schemaVersion='grsp.resolver.input.v1'
+              generationAuthorized=$false
+              capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+              source=@{ sourceStackSha256=$manifest.sourceStackSha256 }
+            } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+            & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $stage
+            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_POST_GENERIC_STAGE_FAILED' }
+            $resultPath=Join-Path $stage 'stage-result.json'
+            if (!(Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+              throw 'PHASE2_CQ_POST_GENERIC_STAGE_RESULT_MISSING'
+            }
+            $result=Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+            $cq=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-input' })
+            if ($result.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+                $result.productionZipAuthorized -ne $false -or
+                $cq.Count -ne 1 -or
+                [int]$cq[0].order -ne 16 -or
+                [int]$cq[0].rewrittenExpressions -ne 1) {
+              throw 'PHASE2_CQ_POST_GENERIC_CANONICAL_STAGE_NOT_APPLIED'
+            }
+            $standalone=Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
+            $combined=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
+            if (!(Test-Path -LiteralPath $combined -PathType Leaf) -or
+                !(Test-Path -LiteralPath $standalone -PathType Leaf)) {
+              throw 'PHASE2_CQ_POST_GENERIC_STAGED_SOURCE_MISSING'
+            }
+            $canonicalHash=(Get-FileHash -LiteralPath $combined -Algorithm SHA256).Hash
+            $referenceHash=(Get-FileHash -LiteralPath $standalone -Algorithm SHA256).Hash
+            if ($canonicalHash -ne $referenceHash) {
+              throw 'PHASE2_CQ_POST_GENERIC_ORDERED_SOURCE_DIFF'
+            }
+            $text=Get-Content -LiteralPath $combined -Raw
+            if (!$text.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+                !$text.Contains('this.customQuickslotsFallbackRegistered = true;') -or
+                !$text.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(')) {
+              throw 'PHASE2_CQ_POST_GENERIC_GENERIC_OR_FALLBACK_LOST'
+            }
+            Write-Host ('PASS GCO one-pass post-generic Quickslots: ruleOrder=16 applied=1 bytesEqualIndependent=true genericPreserved=true sourceFiles='+[int]$manifest.sourceFileCount)
+          }
+          finally {
+            if (Test-Path -LiteralPath $work) {
+              Remove-Item -LiteralPath $work -Recurse -Force
+            }
+          }
+
       - name: Checkpoint - compile post-generic plus real semantic overlay
         shell: pwsh
         run: |
