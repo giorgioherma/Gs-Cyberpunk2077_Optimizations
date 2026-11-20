@@ -26,6 +26,7 @@ public sealed record CetSkipDetail(
 public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
 {
     public CetSkipDetail[] SkipDetails { get; init; } = [];
+    public int HotscenesEnglishOnlyEdits { get; init; }
 }
 
 public sealed class CetReadOnlyAnalysisService
@@ -41,9 +42,11 @@ public sealed class CetReadOnlyAnalysisService
 
     public async Task<CetPassOutcome> GenerateCetPassAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool hotscenesEnglishOnly = false)
         => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
-            generatePass: true, cancellationToken).ConfigureAwait(false)).Pass
+            generatePass: true, cancellationToken,
+            hotscenesEnglishOnly: hotscenesEnglishOnly).ConfigureAwait(false)).Pass
             ?? throw new InvalidOperationException("CET owner did not return a pass.");
 
     // GCO's combined generator requests an isolated owner ZIP. The CET
@@ -51,16 +54,17 @@ public sealed class CetReadOnlyAnalysisService
     // the publication destination differs.
     public async Task<CetPassOutcome> GenerateCetStagedAsync(
         string packageRoot, string gameRoot, string sessionId,
-        string externalZip, CancellationToken cancellationToken = default)
+        string externalZip, CancellationToken cancellationToken = default,
+        bool hotscenesEnglishOnly = false)
         => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
-            generatePass: true, cancellationToken, externalZip)
+            generatePass: true, cancellationToken, externalZip, hotscenesEnglishOnly)
             .ConfigureAwait(false)).Pass
             ?? throw new InvalidOperationException("CET did not return a staged pass.");
 
     private async Task<(CetAnalysisOutcome Analysis, CetPassOutcome? Pass)> ExecuteAsync(
         string packageRoot, string gameRoot, string sessionId,
         bool generatePass, CancellationToken cancellationToken,
-        string? stagedOutput = null)
+        string? stagedOutput = null, bool hotscenesEnglishOnly = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         packageRoot = Path.GetFullPath(packageRoot);
@@ -165,17 +169,29 @@ public sealed class CetReadOnlyAnalysisService
             if (generatePass && stagedOutput is not null &&
                 Nonnegative(cli, "MaterialRemainingCount") == 0 &&
                 Nonnegative(cli, "GenericResolvedCount") == 0 &&
-                Nonnegative(cli, "SemanticReadyRuleCount") == 0)
+                Nonnegative(cli, "SemanticReadyRuleCount") == 0 &&
+                (!hotscenesEnglishOnly || !File.Exists(Path.Combine(
+                    source, "hotscenes", "init.lua"))))
             {
                 generatedPass = new CetPassOutcome("", 0, 0, 0);
             }
             else if (generatePass)
             {
                 var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
+                // CET already owns this personal source transform. Explicit
+                // checkbox opt-in selects its existing CLI switch at GENERATE
+                // only; analysis and the default pass never request it.
+                var generationArgs = new List<string>
+                {
+                    "--capture", stagedCapture, "--game", gameRoot,
+                    "--generate-pass", "--pass-output", temporaryZip
+                };
+                if (hotscenesEnglishOnly)
+                    generationArgs.Add("--hotscenes-english-only");
+                generationArgs.Add("--json");
                 using var generation = await RunOwnerAsync(executable,
-                    ["--capture", stagedCapture, "--game", gameRoot,
-                     "--generate-pass", "--pass-output", temporaryZip, "--json"],
-                    packageRoot, cancellationToken).ConfigureAwait(false);
+                    generationArgs, packageRoot, cancellationToken)
+                    .ConfigureAwait(false);
                 var cliPass = generation.RootElement;
                 RequireOk(cliPass, "CET pass generator");
                 if (!cliPass.TryGetProperty("pass", out var pass) ||
@@ -223,7 +239,9 @@ public sealed class CetReadOnlyAnalysisService
                 generatedPass = new CetPassOutcome(destination, expectedFiles,
                     Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"))
                 {
-                    SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip)
+                    SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip),
+                    HotscenesEnglishOnlyEdits = ReadOwnerEnglishOnlyEdits(
+                        pass, temporaryZip, hotscenesEnglishOnly)
                 };
             }
 
@@ -259,6 +277,33 @@ public sealed class CetReadOnlyAnalysisService
                 catch (UnauthorizedAccessException e) { Trace.TraceWarning("Temporary CET analysis cleanup: " + e.Message); }
             }
         }
+    }
+
+    private static int ReadOwnerEnglishOnlyEdits(
+        JsonElement pass, string zipPath, bool requested)
+    {
+        // Read the authoritative CET manifest, not an inferred Hotscenes
+        // source marker or the presence of unrelated generated Lua.
+        string manifestPath = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var output) ||
+            output.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(output.GetString() ?? ""),
+                Path.GetFullPath(manifestPath), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(manifestPath))
+            throw new InvalidDataException(
+                "CET owner did not provide its English-only opt-in audit manifest.");
+
+        using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var policy = manifest.RootElement.GetProperty("policy");
+        bool actualRequest = policy.GetProperty(
+            "personalEnglishOnlyHotscenesRequested").GetBoolean();
+        int applied = policy.GetProperty(
+            "personalEnglishOnlyHotscenesStages").GetInt32();
+        if (actualRequest != requested || applied is < 0 or > 1 ||
+            (!actualRequest && applied != 0))
+            throw new InvalidDataException(
+                "CET Hotscenes English-only opt-in differs from the owner output.");
+        return applied;
     }
 
     private static CetSkipDetail[] ReadOwnerSkipDetails(JsonElement pass, string zipPath)
