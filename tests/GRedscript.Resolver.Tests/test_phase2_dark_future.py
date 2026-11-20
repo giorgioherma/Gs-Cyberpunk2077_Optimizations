@@ -225,20 +225,31 @@ class DarkFutureSemanticContracts(unittest.TestCase):
         })
         self.assertEqual(result["status"], "REFUSED")
         self.assertEqual(result["reason"],
-                         "DARK_FUTURE_EXTERNAL_TAG_FIELD_WRITE_UNPROVEN")
+                         "DARK_FUTURE_EXTERNAL_TAG_MUTATION_OR_ESCAPE_UNPROVEN")
         self.assertIsNone(out)
 
     def test_external_reader_is_not_a_refusal(self):
         unrelated = (
             "@wrapMethod(SingleCooldownManager)\n"
             "public final func OtherMethod() -> Void {\n"
-            "    let names = this.m_gameplayTags;\n}\n"
+            "    let size = ArraySize(this.m_gameplayTags);\n}\n"
         )
         report, out = self.call(STOCK, extra_files={
             "r6/scripts/SomeOtherMod/Custom.reds": unrelated
         })
         self.assertEqual(report["status"], "APPLIED")
         self.complete(out)
+
+    def test_custom_tag_array_alias_escape_refuses_safely(self):
+        unproven = STOCK.replace(
+            "    let fraction: Float;",
+            "    let externalAlias = this.m_gameplayTags;\n"
+            "    let fraction: Float;")
+        result, staged = self.call(unproven)
+        self.assertEqual(result["status"], "REFUSED")
+        self.assertEqual(result["reason"],
+                         "DARK_FUTURE_TAG_ARRAY_MUTATION_OR_ESCAPE_UNPROVEN")
+        self.assertIsNone(staged)
 
     def test_changed_infinite_literal_refused_without_touching(self):
         changed = STOCK.replace('"DarkFutureInfiniteDurationEffect"',
