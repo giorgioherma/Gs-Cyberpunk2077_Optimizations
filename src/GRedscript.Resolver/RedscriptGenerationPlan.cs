@@ -88,7 +88,11 @@ public static class RedscriptGenerationPlan
         ("shared-player-signal", "C", "SHARED_PLAYER_SIGNAL_V1",
             "scan-shared-player", "preview-shared-player",
             "eligible", "alreadyComplete", "candidates",
-            "Player attach generation or cached handle may differ from live getter")
+            "Player attach generation or cached handle may differ from live getter"),
+        ("stable-array-bound", "D", "STABLE_ARRAY_BOUND_V1",
+            "scan-stable-array-bound", "preview-stable-array-bound",
+            "eligible", "alreadyComplete", "candidates",
+            "Array length may change through an unproven alias or call")
     ];
 
     // Explicit inventory for the approved A-E experimental systems.
@@ -149,6 +153,8 @@ public static class RedscriptGenerationPlan
                         CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
                     case "shared-player-signal":
                         GenericSharedPlayerSignalPass.Scan(game, report); break;
+                    case "stable-array-bound":
+                        GenericStableArrayBoundPass.Scan(game, report); break;
                     default: throw new InvalidOperationException(
                         "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
                 }
@@ -327,6 +333,9 @@ public static class RedscriptGenerationPlan
                 "shared-player-signal" =>
                     GenericSharedPlayerSignalPass.Preview(game,
                         analysis, next, basePreview),
+                "stable-array-bound" =>
+                    GenericStableArrayBoundPass.Preview(game,
+                        analysis, next, basePreview),
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
@@ -357,7 +366,7 @@ public static class RedscriptGenerationPlan
                         "source-cname-membership" or
                         "blackboard-definitions" or
                         "pure-constant-slices" or "immutable-action-event-snapshot" or
-                        "shared-player-signal"))
+                        "shared-player-signal" or "stable-array-bound"))
                     throw new InvalidDataException(
                         "REDSCRIPT_PLAN_UNCOMPOSABLE_SOURCE_COLLISION: " +
                         item.Id + " " + rel);
