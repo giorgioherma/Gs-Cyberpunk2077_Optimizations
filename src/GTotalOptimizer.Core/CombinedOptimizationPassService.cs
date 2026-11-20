@@ -129,6 +129,8 @@ public sealed class CombinedOptimizationPassService
                     }
                 }
                 token.ThrowIfCancellationRequested();
+                if (CombinedPassOutputInspector.Validate(pending) != indexed.Count)
+                    throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
                 // All sidecars, source hashes and exclusions stay outside the
                 // game-only ZIP. Record original hashes for Vortex rollback.
                 string manifest = final + ".ownership.json";
@@ -155,7 +157,12 @@ public sealed class CombinedOptimizationPassService
                     }, new JsonSerializerOptions { WriteIndented = true }),
                         new UTF8Encoding(false));
                     File.Move(pending, final, overwrite: false);
-                    File.Move(draft, manifest, overwrite: false);
+                    try { File.Move(draft, manifest, overwrite: false); }
+                    catch
+                    {
+                        if (File.Exists(final)) File.Delete(final);
+                        throw;
+                    }
                 }
                 finally { if (File.Exists(draft)) File.Delete(draft); }
                 return new(final, cetFiles, redFiles, indexed.Count,
