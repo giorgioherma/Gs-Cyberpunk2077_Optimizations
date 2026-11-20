@@ -1711,17 +1711,22 @@ public partial class MainWindow : Window
             return;
         try
         {
-            var saved = CollectedCaptureStore.Read(packageRoot, completedGameRoot, completedSessionId);
-            if (!HasNative(saved))
-                throw new InvalidDataException("The restored capture has no CET or REDscript native evidence.");
+            // Verify the sealed native evidence AND the recorded owner
+            // restoration before presenting Page 2 as ready.
+            var saved = CollectedCaptureStore.ReadRestored(
+                packageRoot, completedGameRoot, completedSessionId);
             UpdateResultTexts(saved);
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            ResultsStatusText.Text = "CET Resolver will use the collected data and current installed source.";
+            if (analyzedSessionId != saved.SessionId && !analysisRunning)
+                ResultsStatusText.Text = "Capture verified. Click ANALYZE to find optimizations.";
             OpenResultsButton.IsEnabled = true;
+            AnalyzeButton.IsEnabled = !analysisRunning && !generationRunning &&
+                analyzedSessionId != saved.SessionId;
+            if (!analysisRunning)
+                AnalyzeButton.Content = analyzedSessionId == saved.SessionId
+                    ? "ANALYZED" : "ANALYZE";
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
                 analyzedSessionId == saved.SessionId && redscriptPlanReady;
-            if (!analysisRunning && analyzedSessionId != saved.SessionId)
-                _ = RunReadOnlyAnalysisAsync(saved);
         }
         catch (Exception ex)
         {
@@ -1730,10 +1735,30 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void Analyze_Click(object sender, RoutedEventArgs e)
+    {
+        if (analysisRunning || generationRunning || !captureAndRestoreVerified ||
+            completedSessionId is null || completedGameRoot is null ||
+            analyzedSessionId == completedSessionId) return;
+        try
+        {
+            // Manual user decision. CONTINUE and reopening never launch a
+            // Resolver. The original captures remain hash-sealed.
+            var saved = CollectedCaptureStore.ReadRestored(
+                packageRoot, completedGameRoot, completedSessionId);
+            await RunReadOnlyAnalysisAsync(saved);
+        }
+        catch (Exception ex)
+        {
+            ResultsStatusText.Text = "Cannot analyze: " + ex.Message;
+            Trace.TraceWarning("Manual Analyze refused: " + ex);
+        }
+    }
+
     private async Task RunReadOnlyAnalysisAsync(CollectedCaptureIndex saved)
     {
-        // Automatically launched by CONTINUE and by reopening a previously
-        // verified, restored workspace. No new mandatory Analyze action.
+        // Explicit ANALYZE click only; CONTINUE solely restores profilers
+        // and displays verified capture readiness.
         if (analysisRunning ||
             completedGameRoot is null || completedSessionId != saved.SessionId ||
             ResultsPage.Visibility != Visibility.Visible)
@@ -1857,6 +1882,10 @@ public partial class MainWindow : Window
         finally
         {
             analysisRunning = false;
+            AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
+                !generationRunning;
+            if (analyzedSessionId != saved.SessionId)
+                AnalyzeButton.Content = "ANALYZE";
             GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
                 redscriptPlanReady && !generationRunning;
         }
