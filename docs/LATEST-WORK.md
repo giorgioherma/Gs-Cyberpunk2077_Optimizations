@@ -6,7 +6,7 @@
 - Collect now **awaits** the existing source-owned profiler report stage before clearing busy and refreshing CONTINUE. No parallel report implementation and no changes to sealed capture integrity or owner installation/restore.
 - Both the normal button-refresh path and direct `ContinueToAnalyticsAsync` require a session-matching, non-empty HTML and valid JSON report pair. Report generation holds CONTINUE disabled. If the report fails, keep saved capture intact, show a retryable error and retain RESTORE; REFRESH and reopening attempt report recovery from the sealed session. If a report is already completed, generation reuses it.
 - Packaged WPF verification exercises missing HTML+JSON, HTML-only, wrong session, complete pair and corrupted JSON; CI still needs validation against the actual Windows build and real report generation.
-- Source commits: `5b2d1ab`, `8fe445c`, `876be5e`. No measured performance or gameplay result.
+- Source commits: `5b2d1ab`, `8fe445c`, `876be5e`, `bcb5af4` (corrected WPF fixture to valid 32-hex session ID required by `CollectedCaptureStore.CheckId`). No measured performance or gameplay result.
 
 
 ## 2026-11-20 — correct offscreen WPF footer regression (CI still unverified)
