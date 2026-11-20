@@ -1,5 +1,12 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — Implemented Custom Quickslots source-aware InputHub stage #16
+
+- **Source input:** current 2,331-file `base_after_generic` script tree, after generic optimizations; not historical full-pass replacement. `CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1` composes after five existing Phase 2 semantics in canonical `RedscriptGenerationPlan.Stage`. It changes current owner-local `custom_quickslots/player_puppet.reds` only, preserving original `OnAction` and generic `CNAME_ARRAY_MEMBERSHIP_V1` fallback, player spawn grace, device sync and CET Lua `SetLastUsedKBM`. Uses installed G-REDruntime action-specific InputHub and device notifier with synchronous attach rollback and complete detach cleanup. Requires actual matching framework method/field ABI, discovered from module rather than fixed paths. No unrelated D-pad cache from historical pass 8 and no imported old whole source.
+- **Source states:** post-generic stock → full one-run; partial field/method/device subscription/detach → missing work only; fully hand-optimized no-engine-listener → no-op; compatible owner/framework layout drift → apply; missing/incompatible module/API → narrow refusal; repeat → zero. All generated changes are game-relative source files with unchanged source originals.
+- **Validation:** [fast #89](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44830079620) SUCCESS: 54 tests, real post-generic one-pass canonical Stage 6 semantics/6 owner files (Quickslots order #16 applied) and independent source bytes equal, official SCC 0.5.31 on 2,331-file real stack. Relocated/split framework ABI test pending #91. Historical 2,319-file full #1029 yielded `REFUSED` for Quickslots and must not be reported as applied. Runtime/gameplay and CPU claims require user test/capture.
+
+
 ## 2026-11-20 — FE session pins source-safe implementation: CI accepted
 
 - `FE_SESSION_WASHROOM_PINS_V1` reconstructs historical handmade 7.2r1+9 operation in GCO on the installed post-generic source: FE washroom pins become session-owned with callback lifecycle, explicit activation, source-derived count and stable PinData identity; FESystem loses player-detach pin cleanup; the global BaseMinimapMappinController.Update wrapper is removed while existing targeted MinimapPOIMappinController.UpdateIcon tint survives. One atomic two-file semantic after existing FE input #14.
