@@ -86,6 +86,14 @@ jobs:
           ref: ${{ steps.grsp_native_source.outputs.sha }}
           path: unified/vendor-grsp
           persist-credentials: false
+      # Bundle only authoritative, deployable G-REDruntime source assets.
+      # The game ZIP never contains this checkout, documentation or build files.
+      - uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/G-REDruntime_Framework
+          ref: main
+          path: unified/vendor-redruntime
+          persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
       # portable product or the generated optimization ZIP.
       - name: Verify private CET source fixture access
