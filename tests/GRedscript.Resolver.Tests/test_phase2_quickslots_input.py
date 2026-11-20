@@ -261,6 +261,77 @@ class QuickslotsInputContracts(unittest.TestCase):
         self.assertEqual(r["reason"], "CQ_INPUT_ACTION_ARRAY_MUTABLE_UNPROVEN")
         self.assertIsNone(s)
 
+    def test_partial_device_subscription_and_detach_cleanup_converges(self):
+        _, optimized = self.run_one()
+        # Simulate a hand-applied route where only the device subscription
+        # and its paired cleanup are missing; actions must not resubscribe.
+        line = ("  this.customQuickslotsDeviceSubscription = "
+                "this.customQuickslotsInputHub.SubscribeDevice("
+                "this.customQuickslotsDeviceListener);")
+        self.assertIn(line, optimized)
+        partial = optimized.replace(line, "", 1)
+        end = partial.rindex(
+            "this.customQuickslotsInputHub.UnsubscribeDevice("
+            "this.customQuickslotsDeviceSubscription);")
+        first = partial.rfind("if this.customQuickslotsDeviceSubscription > 0 {", 0, end)
+        after = partial.index("}", end)
+        partial = partial[:first] + partial[after + 1:]
+        report, restored = self.run_one(partial)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.verify(restored)
+        self.assertEqual(restored.count(
+            "this.customQuickslotsInputHub.Subscribe(cqActionName,"), 1)
+        self.assertEqual(restored.count("func OnGRedInput("), 1)
+        again, noop = self.run_one(restored)
+        self.assertEqual(again["status"], "COMPLETE", again)
+        self.assertIsNone(noop)
+
+    def test_game_tested_historical_specific_route_is_complete_without_fallback(self):
+        _, current = self.run_one()
+        # The game-tested 2.0/8.0 source removes OnAction and its
+        # gamepadActions array; it subscribes from a locally declared
+        # action list, and has no legacy engine fallback flag. Recognize
+        # that coherent markerless implementation as already complete.
+        method = current.index("  protected cb func OnAction(")
+        brace = current.index("{", method)
+        depth = 1
+        p = brace + 1
+        while depth:
+            if current[p] == "{":
+                depth += 1
+            elif current[p] == "}":
+                depth -= 1
+            p += 1
+        old = current[:method] + current[p:]
+        old = old.replace("  public let gamepadActions: array<CName>;", "")
+        begin = old.index("    this.gamepadActions = [")
+        end = old.index("    ];", begin) + len("    ];")
+        old = old[:begin] + old[end:]
+        old = old.replace(
+            "@addField(PlayerPuppet)\n"
+            "private let customQuickslotsFallbackRegistered: Bool;", "")
+        old = old.replace(
+            "let cqActions: array<CName> = "
+            "this.customQuickslotsInputListener.gamepadActions;",
+            'let cqActions: array<CName> = [n"dpad_up", '
+            'n"dpad_left", n"QuickMelee_CQ_0"];')
+        old = old.replace("  this.customQuickslotsFallbackRegistered = false;", "")
+        block = ("  if !IsDefined(this.customQuickslotsInputHub) {\n"
+                 "    this.RegisterInputListener(this.customQuickslotsInputListener);\n"
+                 "    this.customQuickslotsFallbackRegistered = true;\n"
+                 "  }")
+        self.assertIn(block, old)
+        old = old.replace(block, "")
+        block = ("  if this.customQuickslotsFallbackRegistered {\n"
+                 "    this.UnregisterInputListener(this.customQuickslotsInputListener);\n"
+                 "  }")
+        self.assertIn(block, old)
+        old = old.replace(block, "")
+        report, staged = self.run_one(old)
+        self.assertEqual(report["status"], "COMPLETE", report)
+        self.assertEqual(report["appliedEdits"], 0)
+        self.assertIsNone(staged)
+
     def test_uninstalled_owner_not_added(self):
         r, s = self.run_one("module Other\npublic class OtherClass {}")
         self.assertEqual(r["status"], "NOT_APPLICABLE", r)
