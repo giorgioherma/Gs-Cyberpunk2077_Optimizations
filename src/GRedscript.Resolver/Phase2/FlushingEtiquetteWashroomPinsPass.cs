@@ -358,9 +358,23 @@ public class FEWashroomMappinService extends ScriptableSystem {
         // Count actual currently installed immutable pin sites; avoid the
         // historical fixed count as a mod-version allowlist.
         int count = CountPinSites(t, register);
-        bool pinCountPresent = Has(t, places.Open + 1, places.Close,
-            "func", "PinCount", "(", ")", "-", ">", "Int32", "=",
-            count.ToString());
+        int pinCountStart = Find(t, places.Open + 1, places.Close,
+            "func", "PinCount", "(", ")", "-", ">", "Int32", "=");
+        bool pinCountPresent = false;
+        if (pinCountStart >= 0)
+        {
+            int valueStart = pinCountStart + 8;
+            int valueEnd = valueStart;
+            while (valueEnd < places.Close &&
+                   t[valueEnd].Value.Length == 1 &&
+                   char.IsAsciiDigit(t[valueEnd].Value[0]))
+                valueEnd++;
+            string literal = string.Concat(t.Skip(valueStart)
+                .Take(valueEnd - valueStart).Select(x => x.Value));
+            pinCountPresent = literal == count.ToString() &&
+                (valueEnd == places.Close ||
+                 !char.IsAsciiDigit(t[valueEnd].Value[0]));
+        }
         bool pinCountOther = Has(t, places.Open + 1, places.Close,
             "func", "PinCount", "(");
         if (!pinCountPresent)
