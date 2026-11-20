@@ -1,5 +1,17 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## MANDATORY FOR AGENTS — REDscript Phase 2 semantic optimization rules (2026-11-20)
+
+**READ FIRST for every REDscript semantic optimization:** [IMPORTANT FOR AGENTS — REDscript Optimization Rules](docs/integration/IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md). Explicit current user decision; it supersedes any historical exact-file/version policy or broad refusal for harmless source changes.
+
+1. **Complete partial implementations:** detect already-applied semantic behavior structurally (not markers alone), preserve it, and generate only missing compatible pieces; no duplicate adapters, registrations, helpers or wrappers.
+2. **One-pass from post-generic stock:** the existing ten generic rules execute first; **one Generate** must produce all applicable semantic operations directly from that source. No historical sequential pass prerequisites, and no corrective repair passes.
+3. **Version-fluid matching:** recognize the actual function/dataflow/lifecycle invariants in the current installed source. Newer/older and **custom-modified** sources must remain eligible if the optimization's essential behavior is compatible; preserve unrelated original edits and existing generic work.
+4. **Narrow incompatibility-only skip:** reject an **affected operation**, not the whole mod, only when its essential target is truly absent/incompatible or a safety-critical invariant cannot be proved. Record the precise reason; continue independent safe work. Changed file hash, line layout or version number alone never disqualify.
+
+Every accepted semantic rule must prove post-generic stock → complete, partial → completed, complete → no-op, compatible version/custom changes → applied, incompatible operation → narrow skip, repeat generation → no-op, and merged output/SCC **in CI**. Do not ship SCC to players or loosen ownership/rollback/gameplay safety.
+
+
 ## 2026-11-20 — current output isolation and Page 2 navigation
 
 Combined generated game-only ZIP plus external ownership sidecar publish as one atomic completed folder under app root `generated_optimizations/pass-YYYYMMDD_HHMMSS/`; `RESULTS` remains sealed profiler evidence/reports. Page 2 BACK asks Yes/No before clearing the active capture and restored-session pointer and returning to Page 1. CLOSE appears bottom-right only after successful generation, performs the same reset, then completely shuts down; reopen starts with profiler Capture. Preserve all historical capture files, output passes and game source; refuse navigation resets during active work or unresolved owner restoration. Verify actual output structure and WPF behavior in CI.
