@@ -17,6 +17,8 @@ public sealed record CombinedPassOutcome(
     int CetTransforms, int RedscriptEdits)
 {
     public int AppliedRedscriptRules { get; init; }
+    public int CetSkipped { get; init; }
+    public RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped { get; init; } = [];
 }
 
 public sealed class CombinedOptimizationPassService
@@ -91,7 +93,11 @@ public sealed class CombinedOptimizationPassService
 
             if (cetFiles == 0 && redFiles == 0)
                 throw new InvalidOperationException(
-                    "No missing CET or REDscript optimizations were generated.");
+                    "No safe source changes remain. CET skipped " +
+                    cetResult.SkippedCount + "; REDscript skipped " +
+                    red.Skipped.Length + " rule(s). " +
+                    string.Join(" | ", red.Skipped.Select(x =>
+                        x.Id + ": " + x.Reason)));
 
             string results = Path.Combine(package, "RESULTS");
             Directory.CreateDirectory(results);
@@ -139,6 +145,12 @@ public sealed class CombinedOptimizationPassService
                             newFiles = rule.NewFiles,
                             composedFiles = rule.ComposedFiles
                         }).ToArray(),
+                        cetSkippedCount = cetResult.SkippedCount,
+                        redscriptSkippedRules = red.Skipped.Select(item => new {
+                            order = item.Order, id = item.Id,
+                            eligibleCandidates = item.EligibleCandidates,
+                            reason = item.Reason
+                        }).ToArray(),
                         redscriptDeferredCollisions = red.DeferredCollisions,
                         experimentalLocationGenerationIncluded = false,
                         officialScc031Passed = false,
@@ -167,7 +179,9 @@ public sealed class CombinedOptimizationPassService
                 return new(final, cetFiles, redFiles, indexed.Count,
                     cetResult.TransformCount, red.AppliedEdits)
                 {
-                    AppliedRedscriptRules = red.Completed.Length
+                    AppliedRedscriptRules = red.Completed.Length,
+                    CetSkipped = cetResult.SkippedCount,
+                    RedscriptSkipped = red.Skipped
                 };
             }
             finally { if (File.Exists(pending)) File.Delete(pending); }
