@@ -1,5 +1,11 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — Page 2 visual approval (current)
+
+Retain the Page 1 owner-approved artwork and fixed layout. Page 2 must reuse the **existing** cyan skyline that is already under both pages, rather than cover it with a black panel or duplicate/change artwork. Shift only the Page 2 results surface to the right to expose the original portrait/ink fade; keep bottom/right frame and scrolling valid at normal/minimum/maximized sizes. Restoration and CET/REDscript/PresentMon labels use yellow; **only verified `OK`** words are green. Panel headings are `CET mod Optimizations:` and `REDscript mod Optimizations:`. Keep pre-analysis explanations.
+
+The three-line footer reads `CET + REDscript  One clean zip with optimized files.`, `Use Vortex for easy file management`, and `For manual install BACKUP YOUR "\\Cyberpunk 2077\\bin\\x64\\plugins\\cyber_engine_tweaks\\mods" and "\\Cyberpunk 2077\\r6\\scripts"`. Preserve source-authority, backup/reversible overlay guidance, explicit ANALYZE click, and one clean game-relative ZIP. No new player-side compiler dependency.
+
 ## 2026-11-20 — CONTINUE restores; ANALYZE requires its own click; source-local skips must be visible
 
 Owner explicitly wants no automatic Analyze on CONTINUE, Page 2 refresh or reopen. The second page immediately states restoration verified and displays CET, REDscript and PresentMon capture health independently **above/outside** both optimizer panels. A verified restored collection enables an explicit `ANALYZE` button. Its CET summary must distinguish material unresolved callback registrations from non-material unmatched callbacks (the latter are not unresolved mods). The REDscript panel should use a brief user-facing optimization summary, not generator order, internal JSON paths, developer research counts or compiler claims.
