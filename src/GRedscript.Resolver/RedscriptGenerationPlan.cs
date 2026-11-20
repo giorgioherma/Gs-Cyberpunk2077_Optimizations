@@ -548,6 +548,60 @@ public static class RedscriptGenerationPlan
             throw new InvalidDataException(
                 "DARK_FUTURE_UNKNOWN_GENERATOR_STATUS");
 
+
+        // Approved visual-only 400 ms cadence follows the existing tag cache.
+        // This operation composes into the SAME Dark Future owner file, never
+        // replacing the previously staged source or modifying gameplay.
+        string darkFutureIconsRoot = Path.Combine(output, "_stages",
+            "13-dark-future-status-icons");
+        var iconCadence = DarkFutureStatusIconCadencePass.Generate(game,
+            darkFutureIconsRoot, Directory.Exists(final) ? final : null);
+        if (iconCadence.Status == "APPLIED")
+        {
+            string rel = iconCadence.SourcePath ??
+                throw new InvalidDataException("DF_ICON_STAGE_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(darkFutureIconsRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!IsInside(source, darkFutureIconsRoot) ||
+                !IsInside(target, final) || !File.Exists(source) ||
+                !rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !target.EndsWith(".reds", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("DF_ICON_STAGE_OUTPUT_UNSAFE");
+            bool existing = File.Exists(target);
+            if (existing)
+            {
+                string earlier = File.ReadAllText(target);
+                string rewritten = File.ReadAllText(source);
+                var genericMarkers = System.Text.RegularExpressions.Regex.Matches(
+                    earlier, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (genericMarkers.Any(m =>
+                    !rewritten.Contains(m, StringComparison.Ordinal)))
+                    throw new InvalidDataException("DF_ICON_LOST_GENERIC_SOURCE");
+                // The earlier Dark Future tag cache must survive composition,
+                // not be reconstructed by a corrective semantic pass.
+                if (earlier.Contains("m_gcoDfInfiniteTagValid",
+                    StringComparison.Ordinal) &&
+                    !rewritten.Contains("m_gcoDfInfiniteTagValid",
+                    StringComparison.Ordinal))
+                    throw new InvalidDataException("DF_ICON_LOST_TAG_CACHE");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: existing);
+            files += existing ? 0 : 1;
+            expressions += iconCadence.AppliedEdits;
+            results.Add(new(13, "dark-future-status-icons",
+                iconCadence.AppliedEdits, existing ? 0 : 1,
+                existing ? 1 : 0, []));
+        }
+        else if (iconCadence.Status == "REFUSED")
+            skipped.Add(new(13, "dark-future-status-icons", 1,
+                iconCadence.Reason ?? "DF_ICON_SOURCE_INCOMPATIBLE"));
+        else if (iconCadence.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("DF_ICON_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
