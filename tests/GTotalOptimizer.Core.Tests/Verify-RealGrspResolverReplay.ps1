@@ -1567,7 +1567,7 @@ try {
     $stageFiles = @(Get-ChildItem -LiteralPath $stageScripts -Recurse -Filter *.reds -File)
     $manualFiles = @(Get-ChildItem -LiteralPath $manualScripts -Recurse -Filter *.reds -File)
     if ($stageFiles.Count -ne [int]$stageReport.generatedFiles -or
-        $stageFiles.Count -lt $manualFiles.Count) {
+        $stageFiles.Count -ne $manualFiles.Count) {
         throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
     }
     # Every ordered generated REDscript source must match the independent
@@ -1576,7 +1576,7 @@ try {
         $rel = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
         $manual = Join-Path $manualScripts $rel
         $text = Get-Content -LiteralPath $f.FullName -Raw
-        if ($f.Name -match '^GCO_NativeLocation_[0-9]{9,10}\\.reds$' -or
+        if ($f.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds -or
             $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
             $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
             $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
@@ -1606,69 +1606,77 @@ try {
         throw 'GCO_REDSCRIPT_REAL_SOURCE_GAME_ZIP_INVALID'
     }
 
-    # Compile the REDscript native RTTI declarations from the REAL CET
-    # test DLL, separate from all source-only generic passes. The owner
-    # compiler then catches bad @addMethod native signatures/syntax.
-    $nativeZip = Join-Path (Get-Location) '.gco-ci-native-fixture/tests/G-CETtoNATIVEplayer_state_machine/G-CET_TO_C++_PLAYER_STATE_MACHINE.zip'
-    if (!(Test-Path -LiteralPath $nativeZip -PathType Leaf)) {
-        throw 'GCO_SHARED_NATIVE_REAL_DLL_FIXTURE_MISSING'
+    # Retired REDscript native FAR/subscriber experiments must not be present
+    # in either generated overlay or the independent composed source. CET's
+    # native player/location contract is tested only by its source owner.
+    if ($stageFiles.Count -ne $manualFiles.Count) {
+        throw 'GCO_RETIRED_NATIVE_LOCATION_EXTRA_STAGED_FILE'
     }
-    $nativeExtract = Join-Path $work 'gco-native-cet-fixture'
-    Expand-Archive -LiteralPath $nativeZip -DestinationPath $nativeExtract -Force
-    $nativeFixtureDll = Join-Path $nativeExtract 'red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
-    if (!(Test-Path -LiteralPath $nativeFixtureDll -PathType Leaf)) {
-        throw 'GCO_SHARED_NATIVE_REAL_DLL_MISSING'
-    }
-    $nativeOwnerRoot = Join-Path $work 'gco-native-runtime-owner'
-    $nativeOwnerDir = Join-Path $nativeOwnerRoot 'runtime/native'
-    New-Item -ItemType Directory -Force -Path $nativeOwnerDir | Out-Null
-    Copy-Item -LiteralPath $nativeFixtureDll -Destination (Join-Path $nativeOwnerDir 'GCETStaticLocations.dll')
-    $nativeStage = Join-Path $work 'gco-shared-native-stage'
-    $nativeStageLog = Join-Path $work 'gco-shared-native-stage.log'
-    if ([string]::IsNullOrWhiteSpace($FrameworkRoot)) { throw 'GCO_SHARED_NATIVE_FRAMEWORK_OWNER_MISSING' }
-    & dotnet $dll stage-shared-native --game $game --cet-runtime $nativeOwnerRoot --framework $FrameworkRoot --out $nativeStage *> $nativeStageLog
-    if ($LASTEXITCODE -ne 0) {
-        # Keep private source paths off public CI. Report only controlled
-        # stage codes and a small, known non-identifying diagnostic family.
-        $stageText = if (Test-Path -LiteralPath $nativeStageLog -PathType Leaf) {
-            Get-Content -LiteralPath $nativeStageLog -Raw
-        } else { '' }
-        $code = [regex]::Match($stageText, 'SHARED_NATIVE_[A-Z0-9_]+')
-        $kind = if ($code.Success) { $code.Value }
-            elseif ($stageText -match 'Unclosed block comment') { 'SOURCE_TOKEN_COMMENT' }
-            elseif ($stageText -match 'Unclosed string literal') { 'SOURCE_TOKEN_LITERAL' }
-            elseif ($stageText -match 'not found|not exist') { 'RESOURCE_MISSING' }
-            else { 'UNCLASSIFIED_STAGE_FAILURE' }
-        throw ('GCO_SHARED_NATIVE_REAL_DLL_DISPATCH_FAILED reason=' + $kind)
-    }
-    $nativeBridge = Join-Path $nativeStage 'r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds'
-    if (!(Test-Path -LiteralPath $nativeBridge -PathType Leaf)) {
-        throw 'GCO_SHARED_NATIVE_REDSCRIPT_BRIDGE_MISSING'
-    }
-    $nativeScriptDestination = Join-Path $callbackFolder 'r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds'
-    New-Item -ItemType Directory -Force -Path (Split-Path $nativeScriptDestination -Parent) | Out-Null
-    Copy-Item -LiteralPath $nativeBridge -Destination $nativeScriptDestination -ErrorAction Stop
-    Write-Host 'PASS GCO real CET native DLL first-writer dispatch + REDscript RTTI bridge staged for official SCC'
+    Write-Host 'PASS default REDscript ZIP excludes native FAR groups, adapters and optional RTTI bridge'
 
-    # Native ABI remains a separately checked CET/framework capability, but
-    # no REDscript experimental location consumer/guard may be generated.
-    # The automatic ordered preview must remain identical to the independently
-    # composed source-only pass (except the optional native RTTI bridge).
-    $manualAfterNative = @(Get-ChildItem -LiteralPath (Join-Path $callbackFolder 'r6/scripts') -Recurse -Filter '*.reds' -File |
-        Where-Object { $_.Name -ne 'GCETNativeLocationBackend.reds' })
-    if ($manualAfterNative.Count -ne $stageFiles.Count) {
-        throw 'GCO_RETIRED_LOCATION_DEFAULT_SOURCE_FILE_COUNT_DIFF'
+    # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
+    # The GCO harness must not duplicate its compiler logic or publish output.
+    $ownerScript = (Resolve-Path -LiteralPath $OwnerCompilerScript -ErrorAction Stop).Path
+    $extra = @{}
+    if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+        $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    foreach ($f in $stageFiles) {
-        $relative = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
-        $actual = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
-        if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
-            (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
+        $extra.CallbackPreviewRoot = $legacyCallbackFolder
+        $extra.FrameworkPreviewRoot = $callbackFolder
+    }
+    & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GRSP_OWNER_R6_SCC_FULL_SOURCE_COMPILATION_FAILED'
+    }
+
+    if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $zipBefore) {
+        throw 'GRSP_REAL_CAPTURE_ARCHIVE_MUTATED'
+    }
+}
+finally {
+    if (Test-Path -LiteralPath $work) {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop
+    }
+}
+$global:LASTEXITCODE = 0
+ -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
+            throw 'GCO_RETIRED_LOCATION_RULE_EMITTED_SOURCE'
+        }
+        if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
             (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
-            throw 'GCO_RETIRED_LOCATION_DEFAULT_SOURCE_PARITY_FAILED'
+            throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_SOURCE_DIFF'
         }
     }
-    Write-Host 'PASS GCO default REDscript generation omits old native FAR, subscribers and location groups; CET native bridge separately checked'
+    Write-Host ('PASS GCO REDscript Resolver-to-generator order: rules=' +
+        $scheduled.Count + ' ready=' + $orderedPlan.readyRuleCount +
+        ' eligible=' + $planEligible + ' generatedFiles=' +
+        $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
+        ' realSourceOutputMatchesExistingCI=true productionZip=false')
+
+    # Publish the ACTUAL independently source-verified ordered REDscript
+    # output to a temporary game-relative archive. Validate with the same
+    # GCO shipping inspector used by the combined CET+REDscript product.
+    # Never include stage-result.json, profiler binaries or test evidence.
+    $gameOnlyStage = Join-Path $orderedStage 'effective-preview'
+    $realGameZip = Join-Path $work 'gco-ordered-real-source-game-pass.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory($gameOnlyStage, $realGameZip)
+    & dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --verify-combined-archive $realGameZip $stageFiles.Count
+    if ($LASTEXITCODE -ne 0) {
+        throw 'GCO_REDSCRIPT_REAL_SOURCE_GAME_ZIP_INVALID'
+    }
+
+    # Retired REDscript native FAR/subscriber experiments must not be present
+    # in either generated overlay or the independent composed source. CET's
+    # native player/location contract is tested only by its source owner.
+    if ($stageFiles.Count -ne $manualFiles.Count) {
+        throw 'GCO_RETIRED_NATIVE_LOCATION_EXTRA_STAGED_FILE'
+    }
+    Write-Host 'PASS default REDscript ZIP excludes native FAR groups, adapters and optional RTTI bridge'
 
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
