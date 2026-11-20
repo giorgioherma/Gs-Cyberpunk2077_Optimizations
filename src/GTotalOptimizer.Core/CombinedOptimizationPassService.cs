@@ -20,6 +20,8 @@ public sealed record CombinedPassOutcome(
     public int CetSkipped { get; init; }
     public CetSkipDetail[] CetSkipDetails { get; init; } = [];
     public RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped { get; init; } = [];
+    public bool HotscenesEnglishOnlyRequested { get; init; }
+    public int HotscenesEnglishOnlyEdits { get; init; }
 }
 
 public sealed class CombinedOptimizationPassService
@@ -28,7 +30,7 @@ public sealed class CombinedOptimizationPassService
 
     public async Task<CombinedPassOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken token = default)
+        CancellationToken token = default, bool hotscenesEnglishOnly = false)
     {
         string package = Path.GetFullPath(packageRoot);
         string game = Path.GetFullPath(gameRoot);
@@ -50,7 +52,8 @@ public sealed class CombinedOptimizationPassService
         {
             string cetZip = Path.Combine(temp, "cet-owner.zip");
             var cetResult = await cet.GenerateCetStagedAsync(
-                package, game, sessionId, cetZip, token).ConfigureAwait(false);
+                package, game, sessionId, cetZip, token,
+                hotscenesEnglishOnly).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             string analysis = Path.Combine(temp, "redscript-analysis.json");
             await Task.Run(() =>
@@ -147,6 +150,11 @@ public sealed class CombinedOptimizationPassService
                             composedFiles = rule.ComposedFiles
                         }).ToArray(),
                         cetSkippedCount = cetResult.SkippedCount,
+                        hotscenesEnglishOnly = new
+                        {
+                            requested = hotscenesEnglishOnly,
+                            appliedEdits = cetResult.HotscenesEnglishOnlyEdits
+                        },
                         cetSkipDetails = cetResult.SkipDetails.Select(item => new {
                             category = item.Category, type = item.Type,
                             owner = item.Owner, ruleId = item.RuleId,
@@ -194,7 +202,9 @@ public sealed class CombinedOptimizationPassService
                     AppliedRedscriptRules = red.Completed.Length,
                     CetSkipped = cetResult.SkippedCount,
                     CetSkipDetails = cetResult.SkipDetails,
-                    RedscriptSkipped = red.Skipped
+                    RedscriptSkipped = red.Skipped,
+                    HotscenesEnglishOnlyRequested = hotscenesEnglishOnly,
+                    HotscenesEnglishOnlyEdits = cetResult.HotscenesEnglishOnlyEdits
                 };
             }
             finally { if (File.Exists(pending)) File.Delete(pending); }
