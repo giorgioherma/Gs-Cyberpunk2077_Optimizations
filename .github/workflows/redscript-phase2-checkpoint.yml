@@ -368,13 +368,16 @@ jobs:
             }
             $result=Get-Content -LiteralPath $stageReport -Raw | ConvertFrom-Json
             $cq=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-input' })
+            $dpad=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
             if ($result.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
                 $result.productionZipAuthorized -ne $false -or
                 $cq.Count -ne 1 -or [int]$cq[0].order -ne 16 -or
-                [int]$cq[0].rewrittenExpressions -ne 1) {
-              throw 'PHASE2_CQ_POSTGENERIC_ONEPASS_NOT_APPLIED'
+                [int]$cq[0].rewrittenExpressions -ne 1 -or
+                $dpad.Count -ne 1 -or [int]$dpad[0].order -ne 17 -or
+                [int]$dpad[0].rewrittenExpressions -ne 1) {
+              throw 'PHASE2_CQ_AUTOMATIC_INPUT_AND_DPAD_STAGES_MISSING'
             }
-            $reference=Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
+            $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
                 !(Test-Path -LiteralPath $reference -PathType Leaf)) {
@@ -387,30 +390,12 @@ jobs:
             $contents=Get-Content -LiteralPath $output -Raw
             if (!$contents.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
                 !$contents.Contains('this.customQuickslotsFallbackRegistered = true;') -or
-                !$contents.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(')) {
-              throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_FALLBACK_LOST'
+                !$contents.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(') -or
+                !$contents.Contains('!this.player.PlayerLastUsedPad()') -or
+                !$contents.Contains('this.RecomputeDpadProhibitions();')) {
+              throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_INPUT_STATE_LOST'
             }
-            Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots #16 APPLIED, independent bytes equal, generic intact'
-            $off=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
-            if ($off.Count -ne 0) { throw 'PHASE2_CQ_DPAD_USER_OFF_REWROTE_GAME_CODE' }
-            $enabled=Join-Path $work 'stage-controller-opt-in'
-            & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $enabled --quickslots-dpad true
-            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_DPAD_USER_ON_STAGE_FAILED' }
-            $enabledResult=Get-Content -LiteralPath (Join-Path $enabled 'stage-result.json') -Raw | ConvertFrom-Json
-            $dpad=@($enabledResult.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
-            if ($dpad.Count -ne 1 -or [int]$dpad[0].order -ne 17 -or
-                [int]$dpad[0].rewrittenExpressions -ne 1) {
-              throw 'PHASE2_CQ_DPAD_USER_ON_NOT_APPLIED'
-            }
-            $dpadReference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
-            $dpadCanonical=Join-Path $enabled 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
-            if (!(Test-Path -LiteralPath $dpadReference -PathType Leaf) -or
-                !(Test-Path -LiteralPath $dpadCanonical -PathType Leaf) -or
-                (Get-FileHash -LiteralPath $dpadReference -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $dpadCanonical -Algorithm SHA256).Hash) {
-              throw 'PHASE2_CQ_DPAD_USER_ON_INDEPENDENT_SOURCE_MISMATCH'
-            }
-            Write-Host 'PASS GCO real post-generic one-pass D-pad: user OFF unchanged, user ON order=17 applied and independent bytes equal'
+            Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots InputHub #16 and D-pad #17 applied automatically; original PlayerLastUsedPad and generic preserved; independent bytes equal'
 
           }
           finally {
