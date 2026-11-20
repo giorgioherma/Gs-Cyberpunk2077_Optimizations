@@ -29,7 +29,10 @@ internal static class DigitalVixenFootstepsPass
         string? Field, int? FieldInsert, string? FieldIndent,
         int? GuardInsert, string? GuardIndent,
         int? AssignmentInsert, string? AssignmentIndent,
-        int ExistingCount);
+        int ExistingCount)
+    {
+        internal string? DirectReturnExpression { get; init; }
+    }
 
     private static bool Is(IReadOnlyList<SourceAdmission.Token> t, int index, string value) =>
         index >= 0 && index < t.Count && t[index].Value == value;
@@ -294,6 +297,16 @@ internal static class DigitalVixenFootstepsPass
                     break;
                 }
         }
+        // Equivalent newer sources may return the successful class directly
+        // instead of storing it in a temporary local. Preserve that return.
+        int directReturn = -1;
+        for (int i = hit.Open + 1; i + 5 < hit.Close; i++)
+            if (Seq(t, i, "return", classesVar, "[", hit.Index, "]", ";"))
+            {
+                directReturn = i;
+                break;
+            }
+
         bool localAssignment = false;
         if (resultVariable is not null && resultReturn >= 0)
         {
@@ -310,7 +323,8 @@ internal static class DigitalVixenFootstepsPass
             }
         }
         bool assignment = directAssignment || localAssignment;
-        if (!assignment && (resultVariable is null || resultReturn < 0))
+        if (!assignment && (resultVariable is null || resultReturn < 0) &&
+            directReturn < 0)
             return new("REFUSED", "DVCORE_SUCCESS_RESULT_FLOW_CHANGED",
                 null, null, null, null, null, null, null, 0);
 
@@ -326,7 +340,7 @@ internal static class DigitalVixenFootstepsPass
         // return shape instead remains unchanged.
         if (directAssignment)
         {
-            bool successReturnsCache = false;
+            bool successReturnsCache = directReturn >= 0;
             for (int i = hit.Open + 1; i + 4 < hit.Close; i++)
                 if (Seq(t, i, "return", "this", ".", field, ";"))
                     successReturnsCache = true;
@@ -383,25 +397,37 @@ internal static class DigitalVixenFootstepsPass
         string? assignIndent = null;
         if (!assignment)
         {
-            if (resultReturn < 0)
-                return new("REFUSED", "DVCORE_RESULT_RETURN_MISSING",
-                    null, null, null, null, null, null, null, 0);
-            // Preserve pre-return effects by writing the cache immediately
-            // before the original result return.
-            assignAt = StartOfLine(text, t[resultReturn].Start);
-            try { assignIndent = Indent(text, t[resultReturn].Start); }
-            catch (InvalidDataException)
+            if (resultReturn >= 0)
             {
-                return new("REFUSED", "DVCORE_RETURN_LINE_NOT_STANDALONE",
-                    null, null, null, null, null, null, null, 0);
+                // Preserve pre-return effects by writing the cache just
+                // before the original local result return.
+                assignAt = StartOfLine(text, t[resultReturn].Start);
+                try { assignIndent = Indent(text, t[resultReturn].Start); }
+                catch (InvalidDataException)
+                {
+                    return new("REFUSED", "DVCORE_RETURN_LINE_NOT_STANDALONE",
+                        null, null, null, null, null, null, null, 0);
+                }
             }
+            else if (directReturn >= 0)
+            {
+                // A direct successful return is an equally safe source
+                // shape; cache the same expression immediately beforehand.
+                assignAt = t[directReturn].Start;
+            }
+            else return new("REFUSED", "DVCORE_RESULT_RETURN_MISSING",
+                null, null, null, null, null, null, null, 0);
         }
         int existing = (fieldPresent ? 1 : 0) + (guard ? 1 : 0) +
             (assignment ? 1 : 0);
         return new(existing == 3 ? "COMPLETE" : "ELIGIBLE", null,
             field, fieldInsert, fieldIndent,
             guard ? null : guardAt, guardIndent,
-            assignAt, assignIndent, existing);
+            assignAt, assignIndent, existing)
+        {
+            DirectReturnExpression = !assignment && resultReturn < 0 &&
+                directReturn >= 0 ? classesVar + "[" + hit.Index + "]" : null
+        };
     }
 
     private static string Apply(string text, Shape shape)
@@ -420,6 +446,10 @@ internal static class DigitalVixenFootstepsPass
                 shape.GuardIndent + "}" + nl + nl));
         if (shape.AssignmentInsert is int at)
         {
+            if (shape.DirectReturnExpression is string direct)
+                edits.Add(new(at, "this." + shape.Field + " = " + direct + "; "));
+            else
+            {
             // Preserve the original return value and retry-on-lookup-miss.
             var t = SourceAdmission.ReadTokens(text);
             int resultAt = t.ToList().FindIndex(token => token.Start >= at &&
@@ -432,6 +462,7 @@ internal static class DigitalVixenFootstepsPass
                 "if IsDefined(" + result + ") {" + nl +
                 shape.AssignmentIndent + "  this." + shape.Field + " = " +
                 result + ";" + nl + shape.AssignmentIndent + "}" + nl));
+            }
         }
         foreach (var edit in edits.OrderByDescending(e => e.Start))
             text = text[..edit.Start] + edit.Insert + text[edit.Start..];
