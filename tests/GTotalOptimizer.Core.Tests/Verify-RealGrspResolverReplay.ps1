@@ -1940,7 +1940,15 @@ try {
         if ($file.Name -eq 'FE_Places.reds') {
           if (!$now.Contains('class FEWashroomMappinService') -or
               !$now.Contains('mappins.SetMappinActive(id, true);') -or
+              !$now.Contains('callbacks.RegisterCallback(n"Session/Ready"') -or
+              !$now.Contains('callbacks.RegisterCallback(n"Session/BeforeEnd"') -or
+              !$now.Contains('FEPlaces.UnregisterPins(this.GetGameInstance(), this.m_ids);') -or
+              !$now.Contains('FEPlaces.PinCount();') -or
+              !$now.Contains('return mappin.GetScriptData() as FEWashroomPinData;') -or
+              $now.Contains('NotEquals(mappin.GetVariant(), gamedataMappinVariant.SitVariant)') -or
               !$now.Contains('@wrapMethod(MinimapPOIMappinController)') -or
+              !$now.Contains('this.FEApplyWashroomIcon();') -or
+              !$now.Contains('inkWidgetRef.SetTintColor(this.iconWidget, FEPlaces.PinTint());') -or
               $now.Contains('@wrapMethod(BaseMinimapMappinController)')) {
             throw 'GCO_FE_PIN_REFERENCE_MISSING_SESSION_OR_ICON_PROOF'
           }
