@@ -604,6 +604,7 @@ public partial class MainWindow : Window
             UpdateResultTexts(saved);
             SetPortraitStage(PortraitStage.Collected);
             CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
@@ -1775,6 +1776,7 @@ public partial class MainWindow : Window
         {
             RefreshCompletedWorkspace();
             CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
@@ -1823,6 +1825,7 @@ public partial class MainWindow : Window
             }
             UpdateResultTexts(saved);
             CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
             SetActiveTab(true);
@@ -2216,6 +2219,7 @@ public partial class MainWindow : Window
         ResultsPage.Visibility = Visibility.Collapsed;
         BackToCaptureButton.Visibility = Visibility.Collapsed;
         CapturePage.Visibility = Visibility.Visible;
+        CaptureFooterHost.Visibility = Visibility.Visible;
         SetActiveTab(false);
         SetStatus("Ready for a new profiler capture.");
         return true;
