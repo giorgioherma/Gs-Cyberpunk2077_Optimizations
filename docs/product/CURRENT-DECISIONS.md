@@ -1,4 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
+
+## 2026-11-20 — Dark Future 400 ms visual cadence: shared tagged effects approved
+
+**Latest owner clarification overrides the earlier four-needs-only restriction.** The current 400 ms visual update cadence is acceptable for **all Dark Future status effects carrying the existing `DarkFutureCanHideOnBuffBar` gameplay tag**, including other Dark Future effects such as addiction/injury icons. Do **not** replace the shared-tag predicate with an allowlist of only Nerve, Hydration, Nutrition and Energy. Keep the implemented source-owned broad-tag rule `DARK_FUTURE_STATUS_ICON_400MS_V1` and current gameplay/update behavior; normal Cyberpunk status effects lacking that tag retain their original cadence. This is **visual refresh only**, never a change to needs, penalties, effect timing, registration/removal, gameplay callbacks, animation or cooldown behavior.
+
+The previous short-lived four-needs narrowing was explicitly rolled back in the same branch before release. No additional source-variation expansion is required to move to the next owner; the mandatory version-fluid structural/partial/complete acceptance rules remain in force.
+
+
 ## 2026-11-20 — Owner approves 400 ms Dark Future status icon visual cadence
 
 The four persistent Dark Future status icons the owner showed are **On Edge, Dehydrated, Hungry and Tired**. Their conditions evolve slowly enough that **routine icon data drawing may run at 2.5 Hz (one visual update every 400 ms)**. This is explicitly a visual cadence choice, not a permission to throttle needs/nerve gameplay, penalties, status-effect registration/removal or other Cyberpunk status icons.
