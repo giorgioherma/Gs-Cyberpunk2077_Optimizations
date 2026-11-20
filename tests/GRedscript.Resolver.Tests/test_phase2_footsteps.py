@@ -259,6 +259,26 @@ public class IndependentAuthor extends IScriptable {
         self.assertTrue(consumerOutput.exists())
         self.assertIn("GCO-GENERIC:", consumerOutput.read_text("utf8"))
 
+        # Source-aware Phase 2 must compose from an existing generic
+        # preview even when its target file has not been staged yet.
+        genericBase = self.root / "generic-only-preview"
+        genericFile = genericBase / "r6/scripts/Consumer/Example.reds"
+        genericFile.parent.mkdir(parents=True)
+        genericFile.write_bytes(consumerOutput.read_bytes())
+        baseOutput = self.root / "with-generic-base"
+        baseRun = subprocess.run(
+            ["dotnet", str(DLL), "phase2-footsteps",
+             "--game", str(game), "--base-overlay", str(genericBase),
+             "--out", str(baseOutput)], text=True,
+             capture_output=True, timeout=60)
+        self.assertEqual(baseRun.returncode, 0,
+                         baseRun.stderr + baseRun.stdout)
+        baseResult = json.loads(
+            (baseOutput / "phase2-result.json").read_text("utf8"))
+        self.assertEqual(baseResult["status"], "APPLIED")
+        self.assert_complete(
+            (baseOutput / TARGET).read_text("utf8"))
+
         # A partial real owner file must complete in the same Generate,
         # rather than requiring a historical pass before GCO stage.
         partial = STOCK.replace("  private let m_warnedNoCooked: Bool;",
