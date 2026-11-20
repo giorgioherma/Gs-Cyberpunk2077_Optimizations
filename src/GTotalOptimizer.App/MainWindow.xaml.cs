@@ -2252,6 +2252,9 @@ public partial class MainWindow : Window
         savedCapture = null;
         HotscenesEnglishOnlyCheckBox.IsChecked = false;
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
+        // User's Quickslots preference persists across captures and return
+        // to Page 1; only unlock the control, do not reset the selection.
+        QuickslotsDpadCacheCheckBox.IsEnabled = true;
         CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
         RedReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
         AnalyzeButton.Content = "ANALYZE";
