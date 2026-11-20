@@ -184,18 +184,12 @@ Copy-Item -LiteralPath $nativeResolverDll -Destination (Join-Path $nativeResolve
 VerifyFile (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll') $nativeResolverHash
 Write-Host 'PASS pinned CET Resolver recompiled for one shared .NET10 runtime with unmodified owner assets'
 
-# Both owners' RUNTIME data are distinct from profiler binaries and the game
-# ZIP. The official 0.5.31 compiler is part of GCO itself so no external .NET
-# or unverified compiler installation is needed to generate a testable pass.
+# Official SCC is checked only in the existing GitHub CI lanes.
+# Do not redistribute the third-party compiler in the GCO application.
 if ($Integrated) {
-  $official=Join-Path $env:RUNNER_TEMP 'redscript-0.5.31-reference'
-  $matched=@(Get-ChildItem -LiteralPath $official -Filter scc_lib.dll -Recurse -File)
-  if ($matched.Count -ne 1) { throw 'Official SCC 0.5.31 native library missing for GCO generator' }
-  $sccDir=Join-Path $components 'redscript-compiler'
-  New-Item -ItemType Directory -Force $sccDir | Out-Null
-  Copy-Item -LiteralPath $matched[0].FullName -Destination (Join-Path $sccDir 'scc_lib.dll')
-  VerifyFile (Join-Path $sccDir 'scc_lib.dll') '49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100'
-
+  if (Test-Path -LiteralPath (Join-Path $components 'redscript-compiler')) {
+    throw 'GCO_PACKAGE_THIRD_PARTY_SCC_COMPILER_FORBIDDEN'
+  }
   $owner=Join-Path (Get-Location) 'vendor-redruntime'
   if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container)) {
     throw 'Authoritative REDruntime owner source missing'
@@ -219,7 +213,7 @@ if ($Integrated) {
   if ($meta.Count -lt 11) { throw "Framework owner bundle incomplete: $($meta.Count)" }
   $meta | Sort-Object path | ConvertTo-Json -Depth 4 |
     Set-Content -LiteralPath (Join-Path $components 'redruntime/source-sha256.json') -Encoding UTF8
-  Write-Host "PASS bundled SCC0.5.31 and $($meta.Count) authoritative REDruntime files for one-ZIP generator"
+  Write-Host "PASS bundled $($meta.Count) authoritative REDruntime files; official SCC remains CI-only"
 }
 
 
