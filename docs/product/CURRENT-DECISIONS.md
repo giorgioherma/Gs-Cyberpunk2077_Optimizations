@@ -1,5 +1,12 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — Analyze console and completion controls (current UI correction)
+
+Use plain user-facing Analyze text: "GENERATE creates one ZIP containing all optimizations" (the newly generated pass, **not** a cumulative historical package). Keep console output concise: after success only CET transform count and REDscript edit count, plus brief skip/failure notice when required. Do not print the ownership JSON name, output paths or report storage metadata in ordinary success messages. The actual ownership sidecar must still be written and verified.
+
+At the bottom of Page 2, the console is left and CLOSE right **on the same row**, vertically centered; hidden CLOSE must not reserve width and must not push console upward. `OPEN FOLDER` opens the GCO application root at any time on Page 2, rather than `RESULTS` or the current pass specifically. After successfully generating a ZIP, disable GENERATE and label it GENERATED until the user resets the workflow; keep failure retries available. Preserve profiler, source admission, ZIP publication and navigation safety.
+
+
 ## 2026-11-20 — Collect must finish combined reporting before CONTINUE
 
 After COLLECT verifies and seals the CET and GRSP captures, GCO must finish source-owned reporting and publish the session-matching combined HTML/JSON before enabling CONTINUE. No background fire-and-forget reporting after the UI becomes navigable. A failed report keeps captured evidence and RESTORE available, leaves CONTINUE disabled, and reports a retryable failure; REFRESH/reopen may retry from the sealed capture. This corrects the early-Continue skip observed by the owner. The separate Page 2 ANALYZE button still triggers Resolver analysis only on explicit click.
