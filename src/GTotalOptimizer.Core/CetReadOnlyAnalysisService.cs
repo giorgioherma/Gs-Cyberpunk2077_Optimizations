@@ -178,20 +178,12 @@ public sealed class CetReadOnlyAnalysisService
             else if (generatePass)
             {
                 var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
-                // CET already owns this personal source transform. Explicit
-                // checkbox opt-in selects its existing CLI switch at GENERATE
-                // only; analysis and the default pass never request it.
-                var generationArgs = new List<string>
-                {
-                    "--capture", stagedCapture, "--game", gameRoot,
-                    "--generate-pass", "--pass-output", temporaryZip
-                };
-                if (hotscenesEnglishOnly)
-                    generationArgs.Add("--hotscenes-english-only");
-                generationArgs.Add("--json");
+                // CET owns the source rewrite; only opt-in forwarding is
+                // performed here. The flag is never sent during ANALYZE.
                 using var generation = await RunOwnerAsync(executable,
-                    generationArgs, packageRoot, cancellationToken)
-                    .ConfigureAwait(false);
+                    BuildGenerateOwnerArguments(stagedCapture, gameRoot,
+                        temporaryZip, hotscenesEnglishOnly),
+                    packageRoot, cancellationToken).ConfigureAwait(false);
                 var cliPass = generation.RootElement;
                 RequireOk(cliPass, "CET pass generator");
                 if (!cliPass.TryGetProperty("pass", out var pass) ||
@@ -277,6 +269,22 @@ public sealed class CetReadOnlyAnalysisService
                 catch (UnauthorizedAccessException e) { Trace.TraceWarning("Temporary CET analysis cleanup: " + e.Message); }
             }
         }
+    }
+
+    // The production CLI argument builder is also used by the integration
+    // contract to prove the localization cut is never enabled by default.
+    internal static IReadOnlyList<string> BuildGenerateOwnerArguments(
+        string capture, string game, string zip, bool hotscenesEnglishOnly)
+    {
+        var args = new List<string>
+        {
+            "--capture", capture, "--game", game,
+            "--generate-pass", "--pass-output", zip
+        };
+        if (hotscenesEnglishOnly)
+            args.Add("--hotscenes-english-only");
+        args.Add("--json");
+        return args;
     }
 
     private static int ReadOwnerEnglishOnlyEdits(
