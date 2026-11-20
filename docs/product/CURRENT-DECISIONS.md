@@ -1,5 +1,10 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — Collect must finish combined reporting before CONTINUE
+
+After COLLECT verifies and seals the CET and GRSP captures, GCO must finish source-owned reporting and publish the session-matching combined HTML/JSON before enabling CONTINUE. No background fire-and-forget reporting after the UI becomes navigable. A failed report keeps captured evidence and RESTORE available, leaves CONTINUE disabled, and reports a retryable failure; REFRESH/reopen may retry from the sealed capture. This corrects the early-Continue skip observed by the owner. The separate Page 2 ANALYZE button still triggers Resolver analysis only on explicit click.
+
+
 ## 2026-11-20 — Page 2 compact visual layout (current)
 
 Keep the original Analyze heading and portrait position. Show BACK in the header immediately to the left of REFRESH with the same compact button style; keep the existing Yes/No reset confirmation. Do not display CLOSE at all until a combined optimization ZIP is successfully published; CLOSE then stays at the bottom-right and resets before exiting. The Analyze runtime console is the fixed bottom status strip, not a second cyan box inside the scrolling content or the stale Capture message. Place CET + REDscript ZIP guidance and Vortex guidance together on the first footer row, with manual backup guidance below. At regular 1280×760, the initial Analyze state should fit without scrolling; longer analysis text may scroll inside its respective report/console region. No changes to heading placement, capture/profiler logic or generator.
