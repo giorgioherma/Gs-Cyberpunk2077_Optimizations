@@ -633,6 +633,27 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Analyze BACK must match REFRESH on its left; CLOSE must be fully hidden before a successful ZIP.");
 
+                // Post-generation CLOSE must not squeeze the diagnostic
+                // viewport; it sits in its own row below full-width output.
+                var originalConsoleWidth = window.ResultsConsoleScroll.ActualWidth;
+                window.CloseAfterGenerationButton.Visibility =
+                    System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var closeTop = window.CloseAfterGenerationButton.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                var consoleBottom = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, window.ResultsConsoleScroll.ActualHeight),
+                    window.ResultsPage).Y;
+                if (Math.Abs(window.ResultsConsoleScroll.ActualWidth - originalConsoleWidth) > 1 ||
+                    closeTop < consoleBottom - 1 ||
+                    window.ResultsConsoleScroll.ActualWidth <
+                        window.ResultsPage.ActualWidth - 100)
+                    throw new InvalidOperationException(
+                        "CLOSE must occupy a separate lower row; Analyze console must remain full width.");
+                window.CloseAfterGenerationButton.Visibility =
+                    System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
+
                 if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1 &&
                     window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
                         System.Windows.Visibility.Visible)
