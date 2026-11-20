@@ -19,7 +19,14 @@ public sealed record CetAnalysisOutcome(
     string FrameEvidence, string RuntimeInterpretation, string SourceVerification,
     string[] BlacklistedMods);
 
-public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount);
+public sealed record CetSkipDetail(
+    string Category, string Type, string? Owner, string? RuleId,
+    string? File, string Reason);
+
+public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
+{
+    public CetSkipDetail[] SkipDetails { get; init; } = [];
+}
 
 public sealed class CetReadOnlyAnalysisService
 {
@@ -214,7 +221,10 @@ public sealed class CetReadOnlyAnalysisService
                 }
                 finally { if (File.Exists(publishing)) File.Delete(publishing); }
                 generatedPass = new CetPassOutcome(destination, expectedFiles,
-                    Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"));
+                    Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"))
+                {
+                    SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip)
+                };
             }
 
             var grspCount = saved.Redscript.Files.Count;
@@ -249,6 +259,41 @@ public sealed class CetReadOnlyAnalysisService
                 catch (UnauthorizedAccessException e) { Trace.TraceWarning("Temporary CET analysis cleanup: " + e.Message); }
             }
         }
+    }
+
+    private static CetSkipDetail[] ReadOwnerSkipDetails(JsonElement pass, string zipPath)
+    {
+        // The CET source owner already emits an authoritative companion
+        // manifest with categorized skip reasons. Read that report as-is;
+        // never infer refused mods from callback counts or regenerate rules.
+        // Older owner packages may omit this companion: preserve the owner's
+        // numeric skipped count rather than blocking safe output.
+        string expected = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var location) ||
+            location.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(location.GetString() ?? ""),
+                Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(expected))
+            return [];
+        using var manifest = JsonDocument.Parse(File.ReadAllText(expected));
+        var root = manifest.RootElement;
+        if (!root.TryGetProperty("skipOutcomes", out var outcomes) ||
+            !outcomes.TryGetProperty("entries", out var rows) ||
+            rows.ValueKind != JsonValueKind.Array)
+            return [];
+
+        static string? Field(JsonElement row, string key) =>
+            row.TryGetProperty(key, out var value) &&
+            value.ValueKind == JsonValueKind.String
+                ? value.GetString() : null;
+        return rows.EnumerateArray()
+            .Where(row => row.ValueKind == JsonValueKind.Object)
+            .Select(row => new CetSkipDetail(
+                Field(row, "category") ?? "GENERATION_FAILURE",
+                Field(row, "type") ?? "UNKNOWN",
+                Field(row, "owner"), Field(row, "ruleId"),
+                Field(row, "file"), Field(row, "reason") ?? "No reason supplied"))
+            .ToArray();
     }
 
     private static void VerifyCetOverlay(string path, int expectedFiles)
