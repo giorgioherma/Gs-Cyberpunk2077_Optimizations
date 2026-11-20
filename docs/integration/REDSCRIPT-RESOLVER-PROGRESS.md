@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — REDscript location experiment retired from default generation
+
+- User-approved default scope is now **9 source-ordered generic rule families**. Removed experimental native subscriber, fixed FAR/group matcher, bridge/data staging and obsolete specialized GCO generator/test files. Read-only `scan-player-position` remains for future source research; no location-specific semantic port or alternative runtime service was introduced.
+- CET's native C++ player and location optimization remains CET-owned and unchanged. G-REDruntime's framework services and original shared player lifecycle cache remain untouched.
+- Already generated native location markers or `GCO_NativeLocation_*.reds` cause a clear source-state refusal before Analyze/Generate; restore the previous experimental overlay in Vortex first. No force-overwrite or silent rollback.
+- CI expected: nine-rule source-plan contract, real-source output parity with no native FAR markers, official SCC 0.5.31 compilation, combined ZIP inspection and new marker/adapter regression tests. **Pending verification** as of this documentation commit; no in-game proof.
+
+
 ## 2026-11-20 — real GCO Page 2 combined generation
 
 - Development branch `dev/redscript/resolver_handoff` now connects the pre-existing source-ordered REDscript generator to the real WPF Generate workflow. CET owns Lua selection and first/second-pass source safety, GCO owns REDscript rule composition, SCC validation, game-relative packaging, provenance and per-owner output. GRSP remains native profiler-only; no owner profiler source was changed.
