@@ -76,18 +76,19 @@ public class IndependentAuthor extends IScriptable {
         self.assertEqual(doc["schemaVersion"],
                          "gco.redscript.generation-plan.v1")
         self.assertEqual(doc["sourceFiles"], 2)
-        self.assertEqual(doc["implementedRuleCount"], 9)
+        self.assertEqual(doc["implementedRuleCount"], 10)
         self.assertEqual(doc["captureGatedExistingRules"], 0)
         self.assertEqual(doc["deferredExperimentalSystems"], 5)
         self.assertFalse(doc["productionZipAuthorized"])
         self.assertFalse(doc["gameplayValidated"])
-        active = doc["rules"][:9]
-        self.assertEqual([r["order"] for r in active], list(range(1, 10)))
+        active = doc["rules"][:10]
+        self.assertEqual([r["order"] for r in active], list(range(1, 11)))
         self.assertEqual([r["id"] for r in active], [
             "fixed-cname-index", "literal-action-filter",
             "angle-sort", "late-system-read",
             "source-cname-membership", "blackboard-definitions", "pure-constant-slices",
-            "immutable-action-event-snapshot", "shared-player-signal"
+            "immutable-action-event-snapshot", "shared-player-signal",
+            "stable-array-bound"
         ])
         self.assertEqual(doc["readyRuleCount"], sum(
             r["status"] == "READY_FOR_GENERATOR" for r in active))
@@ -100,12 +101,12 @@ public class IndependentAuthor extends IScriptable {
         self.assertEqual(source_membership["generator"], "preview-cname-membership")
         self.assertEqual(source_membership["scanCommand"], "scan-cname-membership")
         self.assertIsNotNone(source_membership["eligible"])
-        for rule in doc["rules"][9:]:
+        for rule in doc["rules"][10:]:
             self.assertEqual(rule["status"], "NO_GENERATOR_YET")
             self.assertIsNone(rule["order"])
             self.assertIsNone(rule["generator"])
             self.assertIsNone(rule["eligible"])
-        self.assertEqual([r["system"] for r in doc["rules"][9:]],
+        self.assertEqual([r["system"] for r in doc["rules"][10:]],
                          ["A", "B", "C", "D", "E"])
         self.assertEqual(len(list(self.game.rglob("*.reds"))), 2)
 
@@ -206,7 +207,7 @@ public class C extends IScriptable {
 
     def test_experimental_native_location_not_in_default_plan(self):
         doc = self.make_plan()
-        self.assertEqual(doc["implementedRuleCount"], 9)
+        self.assertEqual(doc["implementedRuleCount"], 10)
         self.assertFalse(any(
             rule["id"] == "native-player-location-predicate"
             for rule in doc["rules"]))
@@ -237,7 +238,7 @@ public class C extends IScriptable {
         self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
         self.assertEqual(self.consumer.read_bytes(), untouched)
         doc = json.loads(self.plan.read_text(encoding="utf8"))
-        self.assertEqual(doc["implementedRuleCount"], 9)
+        self.assertEqual(doc["implementedRuleCount"], 10)
 
     def test_plan_order_cannot_be_modified_by_caller(self):
         doc = self.make_plan()
