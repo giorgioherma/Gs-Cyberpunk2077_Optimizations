@@ -536,13 +536,17 @@ try {
     }
   }
   if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
-    # The fifth scenario combines ALL currently staged generic passes with
-    # authoritative framework source. Refuse empty/no-op integration output.
-    if ($outputs[$outputs.Count-1].Scenario -ne 'framework-all-generics-preview') {
+    # The framework-composed preview is a named mandatory scenario, not
+    # necessarily the last one when independent Phase 2 inputs are compiled.
+    $combined=@($outputs | Where-Object { $_.Scenario -eq 'framework-all-generics-preview' })
+    if ($combined.Count -ne 1) {
       throw 'R6_FRAMEWORK_COMBINED_SCENARIO_MISSING'
     }
-    $combinedHash=$outputs[$outputs.Count-1].Sha256
-    foreach($earlier in $outputs[0..($outputs.Count-2)]) {
+    $combinedHash=$combined[0].Sha256
+    foreach($earlier in @($outputs | Where-Object {
+      $_.Scenario -ne 'framework-all-generics-preview' -and
+      $_.Scenario -ne 'phase2-postgeneric-stock'
+    })) {
       if ($combinedHash -eq $earlier.Sha256) {
         throw 'R6_FRAMEWORK_COMBINED_GENERIC_OUTPUT_INDISTINGUISHABLE'
       }
