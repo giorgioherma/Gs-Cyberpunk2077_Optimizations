@@ -50,8 +50,55 @@ internal static class DarkFutureStatusIconCadencePass
             throw new InvalidDataException("DF_ICON_INSERTION_NOT_LINE_ALIGNED");
         return prefix;
     }
-    private static string Normalize(string source)
-        => string.Join(" ",SourceAdmission.ReadTokens(source).Select(t=>t.Value));
+    // Compare the actual REDscript tokens and literal values, not the exact
+    // whitespace/comments of a historical generated gate.
+    private static bool EndsWithGuard(string source,
+        IReadOnlyList<SourceAdmission.Token> tokens, int end,
+        string guard, out int begin)
+    {
+        var candidates=new[]{
+            guard,
+            "if ("+guard[3..^2]+") {"
+        };
+        foreach(string expectedSource in candidates)
+        {
+            var expected=SourceAdmission.ReadTokens(expectedSource);
+            if(end<expected.Count)continue;
+            int start=end-expected.Count;
+            bool same=true;
+            for(int j=0;j<expected.Count;j++)
+            {
+                var actual=tokens[start+j];
+                var pattern=expected[j];
+                string actualValue=actual.Value=="<literal>"
+                    ? source[actual.Start..actual.End]:actual.Value;
+                string patternValue=pattern.Value=="<literal>"
+                    ? expectedSource[pattern.Start..pattern.End]:pattern.Value;
+                if(!string.Equals(actualValue,patternValue,
+                    StringComparison.Ordinal)){same=false;break;}
+            }
+            if(!same)continue;
+            begin=tokens[start].Start;
+            return true;
+        }
+        begin=-1;
+        return false;
+    }
+
+    private static string TargetVisualGate(string record)
+    {
+        // The broad DarkFutureCanHideOnBuffBar tag also belongs to addiction
+        // withdrawal and injury effects. Only these four independently
+        // identified needs penalties are approved for 400 ms icon redraw.
+        string tags=record+".GameplayTags()";
+        string[] needs=[
+            "DarkFutureNeedNerve", "DarkFutureNeedHydration",
+            "DarkFutureNeedNutrition", "DarkFutureNeedEnergy"
+        ];
+        string membership=string.Join(" || ",needs.Select(name=>
+            "ArrayContains("+tags+", n\""+name+"\")"));
+        return "if "+Due+" || "+Force+" || !("+membership+") {";
+    }
 
     private static Inspection Inspect(string text)
     {
@@ -251,19 +298,26 @@ internal static class DarkFutureStatusIconCadencePass
         string setLineIndent;
         try{setLineIndent=LineIndent(text,t[setIndex].Start);}
         catch(InvalidDataException){return Refuse("DF_ICON_SETDATA_NOT_ALIGNED");}
-        // Leave ordinary Cyberpunk combat/quickhack status icons fully live.
-        // DF needs penalties carry this author-owned gameplay tag in the
-        // installed TweakXL data; no fixed buffID or version is assumed.
-        string gate="if "+Due+" || "+Force+
-            " || !ArrayContains("+change.Groups["record"].Value+
+        // DarkFutureCanHideOnBuffBar is NOT specific to the four approved
+        // needs icons. Do not throttle addictions, injuries or unrelated
+        // effects that happen to share that broad tag.
+        string record=change.Groups["record"].Value;
+        string gate=TargetVisualGate(record);
+        string legacyGate="if "+Due+" || "+Force+
+            " || !ArrayContains("+record+
             ".GameplayTags(), n\"DarkFutureCanHideOnBuffBar\") {";
-        bool guarded=text[..t[setIndex].Start].TrimEnd()
-            .EndsWith(gate,StringComparison.Ordinal);
-        if(!guarded)
+        bool guarded=EndsWithGuard(text,t,setIndex,gate,out int currentStart);
+        bool legacy=EndsWithGuard(text,t,setIndex,legacyGate,out int legacyStart);
+        if(!guarded && legacy)
         {
-            if(text[..t[setIndex].Start].TrimEnd().EndsWith("{",
-                StringComparison.Ordinal) &&
-               text[..t[setIndex].Start].Contains(Due,StringComparison.Ordinal))
+            // Upgrade a partially/already optimized prior generated guard
+            // in-place. Replacing just the predicate preserves the owner's
+            // original SetData, visual cadence and all unrelated source.
+            edits.Add(new(legacyStart,t[setIndex-1].End,gate));
+        }
+        else if(!guarded)
+        {
+            if(At(t,setIndex-1,"{"))
                 return Refuse("DF_ICON_UNKNOWN_SETDATA_GUARD");
             edits.Add(new(t[setIndex].Start,t[setIndex].Start,
                 gate+nl+setLineIndent));
