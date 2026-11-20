@@ -1,5 +1,10 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## 2026-11-20 — active REDscript location cleanup decision
+
+**Current generation policy overrides older nine/tenth-location notes below:** after owner-approved retirement, GCO's default REDscript source generator has **9 ordered families**. The former experimental `NATIVE_PLAYER_LOCATION_PREDICATE_V1` / `LOCATION_DEPENDENCY_FAR_V1` generator and REDscript native bridge staging were removed. Keep CET-owned native location/player code and G-REDruntime's separate framework API unchanged. Read-only player-position dependency analysis and generic `SHARED_PLAYER_SIGNAL_V1` are separate and retained. Old generated location overlays must be restored/disabled before Generate, never silently edited or assimilated. Real-source SCC, ZIP content, partial/source-drift refusal and gameplay A/B remain required. Check `docs/LATEST-WORK.md` and final CI status, not historical rule counts below.
+
+
 ## 2026-11-17 — REDscript pass-plan integration (verified)
 
 Read the **canonical** [R5/R6 work-elimination plan](docs/integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) for implementation and CI #657. GCO `dev/redscript/resolver_handoff` now bundles the GCO-owned REDscript Resolver in the **same self-contained .NET 10 app**, outputs a source-ranked ordered `REDscript_GenerationPlan.json` on ANALYZE, and lets the existing generators stage source from that manifest. **7 existing source generator families (6 source-scheduled + 1 capture-gated), 5 larger approved A–E systems not yet implemented.** On current CI source: **74 eligible edits / 44 staged `.reds` files / 131/131 tests / SCC 0.5.31 PASS**, no REDscript game ZIP or gameplay claim. See [CI #657](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44170790239) and [commit `92f453d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/92f453d345bb40294381951dd4e26579f3b68771).
