@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.VisualBasic.FileIO;
+using GRedscript.Resolver.Phase2;
 
 namespace GRedscript.Resolver;
 
@@ -50,6 +51,8 @@ public static class Program
                 return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "stage-redscript-plan")
                 return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-footsteps")
+                return RunPhase2Footsteps(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
                 return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
@@ -611,6 +614,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2Footsteps(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Phase 2 Footsteps needs --game and --out [--base-overlay]");
+        var result = DigitalVixenFootstepsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Footsteps: " +
+            "status=" + result.Status +
+            " edits=" + result.AppliedEdits +
+            " already=" + result.AlreadyComplete +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 
