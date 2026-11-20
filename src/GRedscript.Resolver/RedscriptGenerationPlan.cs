@@ -39,11 +39,17 @@ public static class RedscriptGenerationPlan
     public sealed record OutputItem(
         int Order, string Id, int RewrittenExpressions,
         int NewFiles, int ComposedFiles, string[] Collisions);
+    public sealed record SkippedRule(
+        int Order, string Id, int EligibleCandidates, string Reason);
+
     public sealed record StageResult(
         string SchemaVersion, string SourceStackSha256,
         int GeneratedFiles, int AppliedEdits,
         int DeferredCollisions, bool ProductionZipAuthorized,
-        OutputItem[] Completed);
+        OutputItem[] Completed)
+    {
+        public SkippedRule[] Skipped { get; init; } = [];
+    }
 
     // Canonical dependency/safety order: local callback/index transforms,
     // then pure independent geometric/guard work, followed by two source
@@ -300,6 +306,7 @@ public static class RedscriptGenerationPlan
         string final = Path.Combine(output, "effective-preview");
         var results = new List<OutputItem>();
         int files = 0, expressions = 0, deferred = 0;
+        var skipped = new List<SkippedRule>();
         Directory.CreateDirectory(output);
         foreach (var item in document.Rules.Take(Implemented.Length))
         {
@@ -307,7 +314,10 @@ public static class RedscriptGenerationPlan
             string next = Path.Combine(output, "_stages",
                 item.Order!.Value.ToString("D2") + "-" + item.Id);
             string? basePreview = Directory.Exists(final) ? final : null;
-            int edits = item.Id switch
+            int edits;
+            try
+            {
+                edits = item.Id switch
             {
                 "fixed-cname-index" =>
                     GenericCallbackRules.Preview(game, analysis, next),
@@ -339,6 +349,19 @@ public static class RedscriptGenerationPlan
                 _ => throw new InvalidDataException(
                     "REDSCRIPT_PLAN_UNKNOWN_GENERATOR")
             };
+            }
+            catch (InvalidDataException ex) when (IsLocalSourceRefusal(ex.Message))
+            {
+                // A malformed or already-edited author source can invalidate
+                // one approved family. Do not silently ship that family's
+                // partial output; continue with independent later families.
+                // Plan/capture/source drift and generator defects still fail.
+                if (Directory.Exists(next))
+                    Directory.Delete(next, recursive: true);
+                skipped.Add(new SkippedRule(item.Order!.Value, item.Id,
+                    item.Eligible.Value, ex.Message));
+                continue;
+            }
             if (edits <= 0 || edits > item.Eligible)
                 throw new InvalidDataException(
                     "REDSCRIPT_PLAN_GENERATOR_COUNT_MISMATCH: " + item.Id);
@@ -396,11 +419,41 @@ public static class RedscriptGenerationPlan
 
         var result = new StageResult("gco.redscript.staged-plan.v1",
             document.SourceStackSha256, files, expressions,
-            deferred, false, results.ToArray());
+            deferred, false, results.ToArray())
+        {
+            Skipped = skipped.ToArray()
+        };
         File.WriteAllText(Path.Combine(output, "stage-result.json"),
             JsonSerializer.Serialize(result, JsonOptions),
             new UTF8Encoding(false));
         return result;
+    }
+
+    private static bool IsLocalSourceRefusal(string message)
+    {
+        // Deliberately narrow. Unknown exceptions and postcondition failures
+        // are developer defects or global integrity concerns, never skips.
+        // These codes describe individual unsupported author-source shapes.
+        string[] recognized =
+        [
+            "ARRAY_BOUND_PARTIAL_", "ARRAY_BOUND_DUPLICATE_ALIAS",
+            "ARRAY_BOUND_MODIFIED_BODY",
+            "BBDEFS_SEQUENCE_PARTIAL_", "BBDEFS_SEQUENCE_DUPLICATE_ALIAS",
+            "BBDEFS_PARTIAL_OR_DRIFTED_",
+            "ANGLE_SORT_UNSAFE_INDENT",
+            "ANGLE_SORT_COMMENT_IN_REWRITTEN_SCOPE",
+            "ANGLE_SORT_UNOWNED_OPTIMIZED_SHAPE",
+            "ANGLE_SORT_PARTIAL_OR_DRIFTED_GENERATED_MARKER",
+            "LATE_SYSTEM_READ_INDENT_UNPROVEN",
+            "LATE_SYSTEM_READ_UNOWNED_OPTIMIZED_SHAPE",
+            "LATE_SYSTEM_READ_PARTIAL_OR_DRIFTED_GENERATED_MARKER",
+            "CNAME_MEMBERSHIP_COMPOSITION_DRIFT_OR_AMBIGUITY",
+            "SHARED_PLAYER_MODULE_HEADER_MISSING",
+            "Unbalanced REDscript method",
+            "Unbalanced REDscript source block"
+        ];
+        return recognized.Any(code =>
+            message.StartsWith(code, StringComparison.Ordinal));
     }
 
     private static bool IsInside(string child, string parent)
