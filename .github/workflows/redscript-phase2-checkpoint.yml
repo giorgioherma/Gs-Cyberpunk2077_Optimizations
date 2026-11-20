@@ -391,6 +391,27 @@ jobs:
               throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_FALLBACK_LOST'
             }
             Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots #16 APPLIED, independent bytes equal, generic intact'
+            $off=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
+            if ($off.Count -ne 0) { throw 'PHASE2_CQ_DPAD_USER_OFF_REWROTE_GAME_CODE' }
+            $enabled=Join-Path $work 'stage-controller-opt-in'
+            & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $enabled --quickslots-dpad true
+            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_DPAD_USER_ON_STAGE_FAILED' }
+            $enabledResult=Get-Content -LiteralPath (Join-Path $enabled 'stage-result.json') -Raw | ConvertFrom-Json
+            $dpad=@($enabledResult.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
+            if ($dpad.Count -ne 1 -or [int]$dpad[0].order -ne 17 -or
+                [int]$dpad[0].rewrittenExpressions -ne 1) {
+              throw 'PHASE2_CQ_DPAD_USER_ON_NOT_APPLIED'
+            }
+            $dpadReference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
+            $dpadCanonical=Join-Path $enabled 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
+            if (!(Test-Path -LiteralPath $dpadReference -PathType Leaf) -or
+                !(Test-Path -LiteralPath $dpadCanonical -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $dpadReference -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $dpadCanonical -Algorithm SHA256).Hash) {
+              throw 'PHASE2_CQ_DPAD_USER_ON_INDEPENDENT_SOURCE_MISMATCH'
+            }
+            Write-Host 'PASS GCO real post-generic one-pass D-pad: user OFF unchanged, user ON order=17 applied and independent bytes equal'
+
           }
           finally {
             if (Test-Path -LiteralPath $work) {
