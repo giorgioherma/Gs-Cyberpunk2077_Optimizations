@@ -135,6 +135,59 @@ public class IndependentAuthor extends IScriptable {
         self.assertFalse(list(self.staged.rglob("*.zip")))
 
 
+    def test_source_local_plan_refusal_skips_rule_but_generates_independent_mod(self):
+        # A user-edited partial marker must not be silently repaired or
+        # applied. Its source family is deferred, while an unrelated
+        # already-proven pure-constant source still generates.
+        bad = self.game / "r6/scripts/Experimental/Partial.reds"
+        bad.parent.mkdir(parents=True)
+        bad.write_text("""module Experimental
+public class PartialSource extends IScriptable {
+    // GCO-GENERIC:STABLE_ARRAY_BOUND_V1 user-edited incomplete marker
+    public func Noop() -> Void { }
+}
+""", encoding="utf8")
+        original = self.consumer.read_bytes()
+        doc = self.make_plan()
+        refused = doc["rules"][9]
+        self.assertEqual(refused["id"], "stable-array-bound")
+        self.assertEqual(refused["status"], "SOURCE_REFUSED")
+        self.assertEqual(refused["sourceRefusal"], "ARRAY_BOUND_PARTIAL_MARKER")
+        self.assertEqual(doc["rules"][6]["eligible"], 2)
+        self.make_analysis(doc["sourceStackSha256"])
+        run = self.cli("stage-redscript-plan", "--game", self.game,
+                       "--plan", self.plan, "--analysis", self.analysis,
+                       "--out", self.staged)
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        result = json.loads((self.staged / "stage-result.json").read_text())
+        self.assertEqual(result["appliedEdits"], 2)
+        self.assertEqual(result["skipped"], [{
+            "order": 10, "id": "stable-array-bound",
+            "eligibleCandidates": 0, "reason": "ARRAY_BOUND_PARTIAL_MARKER"
+        }])
+        self.assertEqual(result["completed"][-1]["id"], "pure-constant-slices")
+        self.assertTrue((self.staged /
+                         "effective-preview/r6/scripts/Consumer/Example.reds").exists())
+        self.assertEqual(self.consumer.read_bytes(), original)
+        self.assertIn("GCO-GENERIC:STABLE_ARRAY_BOUND_V1",
+                      bad.read_text(encoding="utf8"))
+
+    def test_fake_source_refusal_cannot_hide_an_applicable_rule(self):
+        doc = self.make_plan()
+        r = doc["rules"][9]
+        self.assertEqual(r["eligible"], 0)
+        r["status"] = "SOURCE_REFUSED"
+        r["sourceRefusal"] = "ARRAY_BOUND_PARTIAL_MARKER"
+        self.plan.write_text(json.dumps(doc), encoding="utf8")
+        self.make_analysis(doc["sourceStackSha256"])
+        run = self.cli("stage-redscript-plan", "--game", self.game,
+                       "--plan", self.plan, "--analysis", self.analysis,
+                       "--out", self.staged)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("REDSCRIPT_PLAN_SOURCE_REFUSAL_NOT_REPRODUCED",
+                      run.stdout + run.stderr)
+        self.assertFalse((self.staged / "stage-result.json").exists())
+
     def test_source_proven_membership_does_not_require_matching_hot_loop_capture(self):
         member = self.game / "r6/scripts/SecondAuthor/Membership.reds"
         member.parent.mkdir(parents=True)
