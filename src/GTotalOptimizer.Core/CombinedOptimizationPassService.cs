@@ -62,7 +62,8 @@ public sealed class CombinedOptimizationPassService
             string overlay = Path.Combine(temp, "game-overlay");
             Directory.CreateDirectory(overlay);
             var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            int cetFiles = CopyOwnerZip(cetZip, overlay, owners);
+            int cetFiles = cetResult.FileCount == 0 ? 0 :
+                CopyOwnerZip(cetZip, overlay, owners);
             int redFiles = CopyScriptPreview(Path.Combine(
                 planOutput, "effective-preview", "r6", "scripts"),
                 overlay, owners);
