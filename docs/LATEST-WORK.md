@@ -1,6 +1,6 @@
 # Latest work / evidence status
 
-## 2026-11-20 — approved-only standard generation and test/artifact cleanup (verification pending)
+## 2026-11-20 — approved-only standard generation and test/artifact cleanup (CI #899 VERIFIED)
 
 **User instruction:** preserve unfinished/previous experimental work in Git history and allow isolated manual testing, but do not spend default GitHub Actions on dormant investigations or bundle optional unused source with the application. Connect all accepted optimizations to the one combined CET+REDscript generated optimization pass.
 
@@ -10,7 +10,7 @@
 
 **Actions cleanup:** Eight historical/manual-only REDscript tests are skipped by default (native subscriber, shared native stage, callback-work scan, player-position dependency, shared-work scan, UI output slice, quest fact graph, callback semantic classifier). They remain runnable explicitly with `GCO_REDSCRIPT_RESEARCH_TESTS=1`; `workflow_dispatch` adds a separate `research_diagnostics` checkbox. The full private replay now gates its obsolete no-generator read-only research block behind `-IncludeResearchDiagnostics`, while keeping all accepted source-generator staging, full SCC, second-pass/partial validation and output contracts. The fresh-stack workflow no longer runs a duplicate inactive callback classifier; the historical callback-only step is manual. The source-owned QuestFactSignals research contract is manual; active player lifetime safety stays enforced.
 
-**Verification:** prior baseline [CI #880 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44670023624): 10 generic passes, 19 stable-bound edits across 12 independent non-semantic owners, 173 total eligible REDscript source edits / 78 generated files, official SCC passed. **The post-cleanup code CI is in progress**; do not mark current package or native opt-out green until the latest completed run proves it. Gameplay A/B and measured gains remain pending.
+**Verified post-cleanup:** [GCO CI #899 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44677043753), validated code source `6fd3135fb2a1fe890b16cb9ff8ad62cec5a32af9`, packaged GCO v1.2.5 artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run899-a1` (artifact ID `14602672094`). ​**196 unittest cases discovered, 64 manual-only cases skipped, 132 active passing**; 7 owner shared-player safety checks; read-only unfinished R5 investigations skipped in replay. Private installed stack: 2,319 REDscript files; 10 approved ordered rules, 10 ready, **173 eligible edits / 78 staged generated files**, including **19 stable ArraySize edits across 12 independent non-semantic owners**. Full official SCC 0.5.31 real-stack compilation passed, real generated source ZIP topology passed; one combined bundled .NET 10 app, owner CET/GRSP install/restore smoke and **361 final installation/CLI/package contracts** passed. The optional native REDscript backend no longer ships in components; runtime ZIP rejects experimental adapters. Previous [CI #880 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44670023624) remains the prior baseline. **Gameplay A/B, measured CPU/frametime gains and deployment to user's installation remain unverified.**
 
 
 ## 2026-11-20 — R5 stable ArraySize-bound source generator (verified)
