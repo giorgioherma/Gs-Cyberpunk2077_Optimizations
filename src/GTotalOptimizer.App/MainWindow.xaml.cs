@@ -135,9 +135,6 @@ public partial class MainWindow : Window
             if (button.Parent is Grid cardContent)
                 cardContent.SizeChanged += (_, _) => UpdateExpandedStageButton(button);
         }
-        // Load user preference before enabling change persistence.
-        QuickslotsDpadCacheCheckBox.IsChecked =
-            UserSettings.ReadOptimizeQuickslotsDpad();
         initialized = true;
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3)
             ?? throw new InvalidOperationException("GCO assembly version unavailable.");
@@ -2073,14 +2070,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void QuickslotsDpadPreference_Changed(
-        object sender, RoutedEventArgs e)
-    {
-        if (!initialized || generationRunning) return;
-        UserSettings.WriteOptimizeQuickslotsDpad(
-            QuickslotsDpadCacheCheckBox.IsChecked == true);
-    }
-
     private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
     {
         if (generationRunning || analysisRunning ||
@@ -2098,10 +2087,8 @@ public partial class MainWindow : Window
         // Snapshot the explicit user choice. UI changes during async source
         // generation must not alter the owner CLI invocation mid-operation.
         bool hotscenesEnglishOnly = HotscenesEnglishOnlyCheckBox.IsChecked == true;
-        bool useQuickslotsDpad = QuickslotsDpadCacheCheckBox.IsChecked == true;
         generationRunning = true;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
-        QuickslotsDpadCacheCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
         var session = completedSessionId;
         var game = completedGameRoot;
@@ -2118,7 +2105,7 @@ public partial class MainWindow : Window
             // published after source drift and ZIP ownership/integrity checks.
             var pass = await combinedPassGenerator.GenerateAsync(
                 packageRoot, game, session, cancellation.Token,
-                hotscenesEnglishOnly, useQuickslotsDpad);
+                hotscenesEnglishOnly);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             // OPEN FOLDER always opens the GCO root containing RESULTS
             // and generated_optimizations; it does not depend on a pass.
@@ -2161,7 +2148,6 @@ public partial class MainWindow : Window
             {
                 bool generated = CloseAfterGenerationButton.Visibility == Visibility.Visible;
                 HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
-                QuickslotsDpadCacheCheckBox.IsEnabled = !generated;
                 GenerateButton.Content = generated ? "GENERATED" :
                     "GENERATE OPTIMIZATION ZIP";
                 GenerateButton.IsEnabled = !generated && analyzedSessionId == session &&
@@ -2252,9 +2238,6 @@ public partial class MainWindow : Window
         savedCapture = null;
         HotscenesEnglishOnlyCheckBox.IsChecked = false;
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
-        // User's Quickslots preference persists across captures and return
-        // to Page 1; only unlock the control, do not reset the selection.
-        QuickslotsDpadCacheCheckBox.IsEnabled = true;
         CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
         RedReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
         AnalyzeButton.Content = "ANALYZE";
