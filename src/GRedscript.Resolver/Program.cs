@@ -61,6 +61,8 @@ public static class Program
                 return RunPhase2FeInput(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-fe-pins")
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-quickslots-input")
+                return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
                 return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
@@ -622,6 +624,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2QuickslotsInput(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Quickslots InputHub phase2 requires --game --out [--base-overlay]");
+        var result = CustomQuickslotsInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 quickslots input: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 
