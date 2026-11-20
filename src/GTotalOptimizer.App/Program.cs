@@ -332,7 +332,7 @@ internal static class Program
                              window.RefreshButton, window.BrowseButton,
                              window.GamePathBox, window.InstallButton,
                              window.LaunchButton, window.CollectButton,
-                             window.ContinueButton, window.OpenResultsButton
+                             window.ContinueButton, window.OpenFolderButton
                          })
                 {
                     if (!control.Focusable || !control.IsTabStop)
@@ -668,26 +668,31 @@ internal static class Program
                     throw new InvalidOperationException(
                         "Analyze BACK must match REFRESH on its left; CLOSE must be fully hidden before a successful ZIP.");
 
-                // Post-generation CLOSE must not squeeze the diagnostic
-                // viewport; it sits in its own row below full-width output.
+                // CLOSE shares a row with the left-aligned console. Hidden
+                // CLOSE grants its entire Auto column back to the message.
                 var originalConsoleWidth = window.ResultsConsoleScroll.ActualWidth;
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Visible;
                 root.UpdateLayout();
                 var closeTop = window.CloseAfterGenerationButton.TranslatePoint(
                     new System.Windows.Point(0, 0), window.ResultsPage).Y;
-                var consoleBottom = window.ResultsConsoleScroll.TranslatePoint(
-                    new System.Windows.Point(0, window.ResultsConsoleScroll.ActualHeight),
-                    window.ResultsPage).Y;
-                if (Math.Abs(window.ResultsConsoleScroll.ActualWidth - originalConsoleWidth) > 1 ||
-                    closeTop < consoleBottom - 1 ||
-                    window.ResultsConsoleScroll.ActualWidth <
-                        window.ResultsPage.ActualWidth - 100)
+                var consoleTop = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                var closeCenter = closeTop + window.CloseAfterGenerationButton.ActualHeight / 2;
+                var consoleCenter = consoleTop + window.ResultsConsoleScroll.ActualHeight / 2;
+                if (Math.Abs(closeCenter - consoleCenter) > 5 ||
+                    originalConsoleWidth - window.ResultsConsoleScroll.ActualWidth < 150 ||
+                    window.CloseAfterGenerationButton.ActualWidth < 150 ||
+                    window.OpenFolderButton.Content?.ToString() != "OPEN FOLDER" ||
+                    !window.OpenFolderButton.IsEnabled)
                     throw new InvalidOperationException(
-                        "CLOSE must occupy a separate lower row; Analyze console must remain full width.");
+                        "Analyze console and CLOSE must share a centered row, with OPEN FOLDER always available.");
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
+                if (Math.Abs(window.ResultsConsoleScroll.ActualWidth - originalConsoleWidth) > 1)
+                    throw new InvalidOperationException(
+                        "Hidden CLOSE must release the full Analyze console width.");
 
                 if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1 &&
                     window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
