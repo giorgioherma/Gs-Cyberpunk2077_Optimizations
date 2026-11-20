@@ -1,5 +1,11 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+## 2026-11-20 — Custom Quickslots #16 validated from post-generic stock
+
+- **CI gates:** [Phase 2 #91 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44830562006) proves 56 source-state contracts, a canonical one-generation GCO Stage **on `base_after_generic`**, six semantic original-owner files and zero re-applied generic work, byte-identical Quickslots independent reference, and official SCC 0.5.31 on the 2,331-file current stack. Framework discovery uses current `GRedRuntime` module/class/method structure, independent of physical folder and source-file splitting. [Full GCO #1030 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44829474253) proves app/ZIP/restore/source integrity with 361 contracts on the older 2,319-file sealed fixture (Quickslots specifically **REFUSED** there, not applied); one app artifact `v1.2.5-run1030-a1` published.
+- Keep historical pass-8 D-pad cache and other seven-mod remainders separate pending actual source/invalidation proof. No game-side SCC, old whole-file transplant, new runtime service, or claimed FPS improvement.
+
+
 ## 2026-11-20 — Implemented Custom Quickslots source-aware InputHub stage #16
 
 - **Source input:** current 2,331-file `base_after_generic` script tree, after generic optimizations; not historical full-pass replacement. `CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1` composes after five existing Phase 2 semantics in canonical `RedscriptGenerationPlan.Stage`. It changes current owner-local `custom_quickslots/player_puppet.reds` only, preserving original `OnAction` and generic `CNAME_ARRAY_MEMBERSHIP_V1` fallback, player spawn grace, device sync and CET Lua `SetLastUsedKBM`. Uses installed G-REDruntime action-specific InputHub and device notifier with synchronous attach rollback and complete detach cleanup. Requires actual matching framework method/field ABI, discovered from module rather than fixed paths. No unrelated D-pad cache from historical pass 8 and no imported old whole source.
