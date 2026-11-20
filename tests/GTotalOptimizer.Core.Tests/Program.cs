@@ -2158,7 +2158,7 @@ if (args.Length > 0)
     Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (1870, 652),
         "updated 1870x652 RGB blue skyline shipped under original filename");
     Require(!Directory.Exists(Path.Combine(delivered, "components", "redscript-compiler")) &&
-        !File.Exists(Path.Combine(delivered, "components", "redscript-compiler", "scc_lib.dll")),
+        !Directory.EnumerateFiles(delivered, "scc_lib.dll", SearchOption.AllDirectories).Any(),
         "third-party SCC compiler is CI-only and excluded from distributed GCO application");
     var frameworkManifest = Path.Combine(delivered, "components",
         "redruntime", "source-sha256.json");
