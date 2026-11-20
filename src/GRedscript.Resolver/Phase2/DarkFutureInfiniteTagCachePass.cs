@@ -237,14 +237,14 @@ internal static class DarkFutureInfiniteTagCachePass
         string replacement = CacheCondition(ValidField, CachedField, originalCall);
         var expected = SourceAdmission.ReadTokens(replacement)
             .Select(x => x.Value).ToArray();
-        int expectedStart = call.Start - 1 - (expected.Length - 9);
         // Search the same method for the exact semantic guard, ignoring
         // comments and whitespace. Never trust an optimization marker alone.
         bool conditionCached = false;
         for (int i = update + 1; i + expected.Length <= updEnd; i++)
         {
-            if (expected.Select((value, offset) => Is(t, i + offset, value))
-                .All(b => b))
+            if (i <= call.Start && call.Close < i + expected.Length &&
+                expected.Select((value, offset) => Is(t, i + offset, value))
+                    .All(b => b))
             {
                 conditionCached = true;
                 break;
@@ -357,8 +357,11 @@ internal static class DarkFutureInfiniteTagCachePass
         Result result;
         string? effective = null, transformed = null, relative = null;
         if (candidates.Count == 0)
-            result = new(Rule, "NOT_APPLICABLE", 0, 0, null,
-                "DARK_FUTURE_TARGET_NOT_INSTALLED", true, false);
+            result = Directory.Exists(owner)
+                ? new(Rule, "REFUSED", 0, 0, null,
+                    "DARK_FUTURE_COOLDOWN_TARGET_UNRECOGNIZED", true, false)
+                : new(Rule, "NOT_APPLICABLE", 0, 0, null,
+                    "DARK_FUTURE_NOT_INSTALLED", true, false);
         else if (candidates.Count > 1)
             result = new(Rule, "REFUSED", 0, 0, null,
                 "DARK_FUTURE_MULTIPLE_TARGET_FILES", true, false);
@@ -399,13 +402,23 @@ internal static class DarkFutureInfiniteTagCachePass
             {
                 if (Path.GetRelativePath(scripts, file) == relative)
                     continue;
-                if (File.ReadAllText(file, Encoding.UTF8).Contains(
-                    "m_gameplayTags", StringComparison.Ordinal))
+                string other = File.ReadAllText(file, Encoding.UTF8);
+                if (!other.Contains("m_gameplayTags",
+                        StringComparison.Ordinal)) continue;
+                var tokens = SourceAdmission.ReadTokens(other);
+                bool otherWriter = false;
+                for (int i = 0; i + 3 < tokens.Count; i++)
+                    if (Seq(tokens, i, "this", ".", "m_gameplayTags", "="))
+                    {
+                        otherWriter = true;
+                        break;
+                    }
+                if (otherWriter)
                 {
                     transformed = null;
                     result = new(Rule, "REFUSED", 0, 0,
                         result.SourcePath,
-                        "DARK_FUTURE_OTHER_OWNER_WRITES_TAG_FIELD_UNPROVEN",
+                        "DARK_FUTURE_EXTERNAL_TAG_FIELD_WRITE_UNPROVEN",
                         true, false);
                     break;
                 }
