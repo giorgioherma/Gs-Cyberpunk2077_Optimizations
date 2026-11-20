@@ -117,6 +117,49 @@ try
 {
     Directory.CreateDirectory(root);
 
+    // Combined CET+REDscript game ZIP: enforce actual archived entries,
+    // not only the list used by the application before ZipFile.Create.
+    string CreateGamePassZip(string id, params string[] entries)
+    {
+        string file = Path.Combine(root, "combined-" + id + ".zip");
+        using var zip = System.IO.Compression.ZipFile.Open(
+            file, System.IO.Compression.ZipArchiveMode.Create);
+        foreach (string path in entries)
+        {
+            var entry = zip.CreateEntry(path);
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("runtime");
+        }
+        return file;
+    }
+    var safePass = CreateGamePassZip("good",
+        "bin/x64/plugins/cyber_engine_tweaks/mods/ModA/init.lua",
+        "r6/scripts/IndependentOwner/optimized.reds",
+        "red4ext/plugins/G-CET-StaticLocations/G-CET.locations");
+    Require(CombinedPassOutputInspector.Validate(safePass) == 3,
+        "one combined game-only ZIP accepts CET Lua, REDscript and native locations");
+    foreach (var (id, path) in new[] {
+        ("escape", "r6/scripts/../secrets.reds"),
+        ("profiler", "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/init.lua"),
+        ("binary", "r6/scripts/Owner/scc_lib.dll"),
+        ("report", "r6/scripts/Owner/RSP_CallSites.csv"),
+        ("compiler", "components/redscript-compiler/scc_lib.dll"),
+        ("docs", "r6/scripts/Owner/README.md")
+    })
+    {
+        string bad = CreateGamePassZip(id, path);
+        bool refused = false;
+        try { CombinedPassOutputInspector.Validate(bad); }
+        catch (InvalidDataException) { refused = true; }
+        Require(refused, "combined game ZIP refuses " + id);
+    }
+    string duplicate = CreateGamePassZip("duplicate",
+        "r6/scripts/Owner/same.reds", "r6/scripts/owner/SAME.reds");
+    bool duplicateRefused = false;
+    try { CombinedPassOutputInspector.Validate(duplicate); }
+    catch (InvalidDataException) { duplicateRefused = true; }
+    Require(duplicateRefused, "case-insensitive duplicate generated owners refuse");
+
     // GCO Stage 2: numerical, read-only PresentMon -> CET frame chronology.
     // QPC anchors are artificial but independent, 1000ms per million ticks.
     var pmFixture = Path.Combine(root, "sealed-capture", "PresentMon");
@@ -2064,6 +2107,33 @@ if (args.Length > 0)
     // The builder checks original source/packaged SHA-256 identity.
     Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (1870, 652),
         "updated 1870x652 RGB blue skyline shipped under original filename");
+    var sccCompiler = Path.Combine(delivered, "components", "redscript-compiler", "scc_lib.dll");
+    Require(File.Exists(sccCompiler) &&
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            File.ReadAllBytes(sccCompiler))) == "49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100",
+        "official native SCC 0.5.31 compiler is packaged and SHA-verified");
+    var frameworkManifest = Path.Combine(delivered, "components",
+        "redruntime", "source-sha256.json");
+    Require(File.Exists(frameworkManifest),
+        "framework owner source hash manifest is shipped outside the game overlay");
+    using (var nativeSources = System.Text.Json.JsonDocument.Parse(
+               File.ReadAllText(frameworkManifest)))
+    {
+        var entries = nativeSources.RootElement.EnumerateArray().ToArray();
+        Require(entries.Length >= 11, "complete deployable owner REDruntime source inventory");
+        foreach (var item in entries)
+        {
+            var relative = item.GetProperty("path").GetString()!;
+            var installed = Path.Combine(delivered, "components", "redruntime", "owner",
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Require(File.Exists(installed) &&
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    File.ReadAllBytes(installed))).Equals(
+                        item.GetProperty("sha256").GetString(),
+                        StringComparison.OrdinalIgnoreCase),
+                "packaged framework source retains owner SHA: " + relative);
+        }
+    }
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +
