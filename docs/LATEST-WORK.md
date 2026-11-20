@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Retire experimental REDscript player-location generation (CI pending)
+
+- **Decision / user approval:** remove unsuccessful REDscript native FAR/subscriber experiments from automatic optimization. The canonical `RedscriptGenerationPlan` now contains **9** generic generation families instead of 10. Preserve `SHARED_PLAYER_SIGNAL_V1`, the separate read-only player-position provenance analyzer and CET owner native location services. Do not claim the old experimental FAR/near matcher produced broad cross-mod savings.
+- **Removed from GCO source:** the unused `GenericNativeLocationSubscriberPass.cs` (844 lines), `RedscriptNativeLocations.cs` (549 lines), `SharedNativeRuntimeStage.cs` (234 lines), their specialized Python test suites (397 + 310 lines), their CLI implementation and in-app REDscript native-location bridge/manifest staging. Optional REDscript native bridge is no longer bundled in the GCO runtime. The native CET owner still supplies its original Lua/C++ assets independently. Framework `NativeLocationSignals.reds` is a separately owned dormant public service and remains unchanged.
+- **Already optimized / partially optimized installs:** source admission refuses previous `GCO_NativeLocation_*.reds` files and old `NATIVE_PLAYER_LOCATION_PREDICATE_V1`, `NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1`, `LOCATION_DEPENDENCY_FAR_V1` and lifecycle markers with `REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT`. Users must disable the earlier experimental Vortex overlay or restore the original mod sources; GCO neither silently strips the optimizations nor overwrites those files.
+- **Contracts:** canonical-order, captured source-hash, nine-rule independent generated-source parity, real REDscript output ZIP, isolated SCC and regression tests for legacy marker/adapter refusal. Historical experimental code remains available from Git history; no new mod-specific semantics.
+- **Validation:** new CI after cleanup is pending; baseline prior to retirement was [GCO #839 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44647817800). No gameplay A/B results or measured speedup.
+
+
 ## 2026-11-20 — GCO one-button CET + REDscript generator integration (verification in progress)
 
 - **User request:** Page 2 GENERATE must produce one installable test ZIP covering existing CET Lua/native optimization and the ten ordered GCO REDscript source rules, while retaining the original two-page WPF app and one bundled .NET 10 runtime.
