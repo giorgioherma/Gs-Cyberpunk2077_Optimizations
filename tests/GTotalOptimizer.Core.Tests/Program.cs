@@ -2138,6 +2138,10 @@ if (args.Length > 0)
         foreach (var item in entries)
         {
             var relative = item.GetProperty("path").GetString()!;
+            Require(relative.StartsWith("r6/scripts/G-RedRuntime/",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !relative.Contains("optional-native", StringComparison.OrdinalIgnoreCase),
+                "experimental REDscript native backend cannot ship in GCO package");
             var installed = Path.Combine(delivered, "components", "redruntime", "owner",
                 relative.Replace('/', Path.DirectorySeparatorChar));
             Require(File.Exists(installed) &&
@@ -2148,6 +2152,9 @@ if (args.Length > 0)
                 "packaged framework source retains owner SHA: " + relative);
         }
     }
+    Require(!Directory.Exists(Path.Combine(delivered, "components",
+                 "redruntime", "owner", "optional-native")),
+        "inactive native-location backend must be absent from published GCO artifacts");
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +
