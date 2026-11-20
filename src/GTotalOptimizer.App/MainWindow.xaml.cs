@@ -979,7 +979,7 @@ public partial class MainWindow : Window
     internal void AdvanceConsoleActivity()
     {
         if (consoleActivities.Count == 0) return;
-        var activity = consoleActivities.Last().Value;
+        var activity = consoleActivities.MaxBy(pair => pair.Key).Value;
         consoleActivityDots = consoleActivityDots % 3 + 1;
         string rendered = activity.Message + new string('.', consoleActivityDots);
         lastActivityRender = activity.Results
@@ -1078,6 +1078,9 @@ public partial class MainWindow : Window
     private async Task RefreshSourceAsync()
     {
         if (!initialized || busy) return;
+        long refreshActivity = BeginConsoleActivity("Checking game and profiler status");
+        try
+        {
         if (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)
         {
             RefreshCompletedWorkspace();
@@ -1264,6 +1267,11 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("Profiler status inspection: " + ex);
                 SetStatus("Profiler status unavailable. Retry Refresh.");
             }
+        }
+        }
+        finally
+        {
+            EndConsoleActivity(refreshActivity);
         }
     }
 
@@ -1658,6 +1666,7 @@ public partial class MainWindow : Window
                 GcoProfilerReportService.ReportFile(packageRoot, sessionId)))
             return;
         profilerReportRunning = true;
+        long reportActivity = BeginConsoleActivity("Preparing performance graphs and report");
         try
         {
             var result = await Task.Run(() =>
@@ -1673,7 +1682,11 @@ public partial class MainWindow : Window
             // collection or strand the profiler restore workflow.
             Trace.TraceWarning("GCO combined profiler reporting: " + ex);
         }
-        finally { profilerReportRunning = false; }
+        finally
+        {
+            EndConsoleActivity(reportActivity);
+            profilerReportRunning = false;
+        }
     }
 
     // Domain and separators always use yellow. The verified word OK alone
