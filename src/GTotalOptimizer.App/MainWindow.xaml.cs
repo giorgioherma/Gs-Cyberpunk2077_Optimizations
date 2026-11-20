@@ -1805,7 +1805,7 @@ public partial class MainWindow : Window
                     "Generation order: " + order + Environment.NewLine +
                     "Resolver plan: RESULTS / " + saved.SessionId +
                     " / REDscript_GenerationPlan.json" + Environment.NewLine +
-                    "Ready for a single compiler-verified CET + REDscript optimization ZIP.";
+                    "Ready for a single source-checked CET + REDscript optimization ZIP.";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
