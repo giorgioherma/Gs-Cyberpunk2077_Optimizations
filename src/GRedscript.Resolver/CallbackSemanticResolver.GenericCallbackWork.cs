@@ -17,7 +17,8 @@ internal static partial class CallbackSemanticResolver
     private sealed record CallbackWorkSite(
         MethodSource Method, string SourceOwner, string Pattern,
         string[] ObservedPatterns, string[] ForwardedCalls,
-        int NameReads, int TypeReads, bool LookupBeforeSelector,
+        int NameReads, int TypeReads, int ActionPredicateCalls,
+        bool LookupBeforeSelector,
         string[] PreSelectorReads, string[] Blockers, Evidence? Measure,
         bool RankingIncluded);
 
@@ -48,16 +49,29 @@ internal static partial class CallbackSemanticResolver
             var forwards = new SortedSet<string>(StringComparer.Ordinal);
             var preReads = new SortedSet<string>(StringComparer.Ordinal);
             int earliest = int.MaxValue;
+            int actionPredicateCalls = 0;
             for (int i = method.Open + 1; i + 5 < method.Close; i++)
             {
                 if (t[i].Value != "ListenerAction" ||
                     t[i + 1].Value != "." ||
-                    t[i + 2].Value is not ("GetName" or "GetType") ||
                     t[i + 3].Value != "(" ||
-                    t[i + 4].Value != "action" ||
-                    t[i + 5].Value != ")") continue;
-                getters.Add((i, t[i + 2].Value));
-                earliest = Math.Min(earliest, i);
+                    t[i + 4].Value != "action") continue;
+                string operation = t[i + 2].Value;
+                if (operation is "GetName" or "GetType" &&
+                    t[i + 5].Value == ")")
+                {
+                    getters.Add((i, operation));
+                    earliest = Math.Min(earliest, i);
+                }
+                else if (operation is "IsAction" or "IsButtonJustPressed"
+                    or "IsButtonJustReleased" or "IsButtonJustHeld"
+                    or "IsButtonJustTapped" or "IsButtonJustHoldComplete")
+                {
+                    // Action/button predicates are selectors for discovery,
+                    // not proof of a complete action-name admission set.
+                    actionPredicateCalls++;
+                    earliest = Math.Min(earliest, i);
+                }
             }
             int nameReads = getters.Count(x => x.Name == "GetName");
             int typeReads = getters.Count(x => x.Name == "GetType");
@@ -127,7 +141,7 @@ internal static partial class CallbackSemanticResolver
             string owner = OwnerFolder(method.File.Relative);
             findings.Add(new CallbackWorkSite(method, owner, primary,
                 patterns.ToArray(), forwards.ToArray(), nameReads,
-                typeReads, preReads.Count > 0,
+                typeReads, actionPredicateCalls, preReads.Count > 0,
                 preReads.ToArray(), blockers.ToArray(), measured,
                 !rankingExcludedOwners.Contains(owner)));
         }
@@ -185,6 +199,7 @@ internal static partial class CallbackSemanticResolver
                     rankingIncluded = x.RankingIncluded,
                     actionNameReadSites = x.NameReads,
                     actionTypeReadSites = x.TypeReads,
+                    directActionPredicateSites = x.ActionPredicateCalls,
                     observedActionForwarding = x.ForwardedCalls,
                     preSelectorEngineReads = x.PreSelectorReads,
                     preSelectorReadPresence = x.LookupBeforeSelector,
