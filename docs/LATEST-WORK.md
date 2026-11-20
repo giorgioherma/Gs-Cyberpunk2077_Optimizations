@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Capture footer bleed-through on Analyze fixed (awaiting Windows verification)
+
+- User screenshot showed the disabled CONTINUE control and stale Page 1 `Saved ... Click CONTINUE` status beneath the new Analyze bottom-console message. The original Capture page scroll was hidden but its sibling footer remained visible behind transparent ResultsPage.
+- At the original WPF XAML owner, named `CaptureFooterHost` and bound its visibility to the existing `CapturePage.Visibility`. This removes both stale status and CONTINUE when Analyze is shown, while restoring both on Capture, including Back/next-capture navigation. No additional console or navigation state machine.
+- Updated the packaged WPF smoke to exercise the **real Capture/Analyze visibility pair** and fail if the Capture footer bleeds into Analyze or does not reappear on Capture. No changes to the heading, portrait, panel sizes, Generate, profiler management or output ZIP.
+- Commits: `b1112d1` (source) and `be8d288` (test). Windows CI, installed screenshot and gameplay not yet independently verified.
+
+
 ## 2026-11-20 — Analyze Page 2 compact UI follow-up (awaiting Windows CI)
 
 - Source branch: `dev/redscript/resolver_handoff`. BACK moved from the bottom-right to the header directly left of REFRESH, reusing its compact MinorButton visual. The existing Yes/No capture-reset workflow is unchanged; BACK only appears on Analyze.
