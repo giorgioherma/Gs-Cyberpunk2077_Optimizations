@@ -179,10 +179,12 @@ internal static class DarkFutureInfiniteTagCachePass
         var nl = source.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         if (!validField || !cachedField)
         {
-            // A literal collision with a differently-typed member is unsafe.
-            for (int i = 0; i + 1 < t.Count; i++)
-                if ((Is(t, i, ValidField) && !validField) ||
-                    (Is(t, i, CachedField) && !cachedField))
+            // References to a missing cache member are *expected* in
+            // partially optimized source. Only an actual conflicting
+            // declaration prevents completing that missing field.
+            for (int i = 0; i + 2 < t.Count; i++)
+                if (Seq(t, i, "let", ValidField, ":") && !validField ||
+                    Seq(t, i, "let", CachedField, ":") && !cachedField)
                     return Refuse("DARK_FUTURE_CUSTOM_CACHE_FIELD_COLLISION");
             string fields = "";
             if (!validField)
