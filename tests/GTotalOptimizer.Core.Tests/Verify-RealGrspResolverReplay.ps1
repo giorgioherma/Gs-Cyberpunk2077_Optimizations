@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
     [Parameter(Mandatory=$true)][string]$PluginsArchive,
     [string]$FrameworkRoot = '',
+    [string]$PostGenericSourceRoot = '',
     [switch]$IncludeResearchDiagnostics
 )
 $ErrorActionPreference = 'Stop'
@@ -1761,6 +1762,9 @@ try {
     $extra = @{}
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+    }
+    if (![string]::IsNullOrWhiteSpace($PostGenericSourceRoot)) {
+        $extra.PostGenericSourceRoot = (Resolve-Path -LiteralPath $PostGenericSourceRoot -ErrorAction Stop).Path
     }
     if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
         $extra.CallbackPreviewRoot = $legacyCallbackFolder
