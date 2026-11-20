@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Quickslots pass-8 changed to automatic input-state detection
+
+- **Owner clarification supersedes earlier manual-UI plans below.** No extra GCO checkbox, persisted Quickslots preference, or `--quickslots-dpad` Stage option. Current Quickslots phase 2 #17 is applied automatically after #16, when structurally compatible, directly from post-generic stock in one Generate. Physical controller connection is irrelevant; runtime cache uses original `PlayerLastUsedPad()` last-input predicate, and re-evaluates on existing device/held-modifier/configuration transitions. Controller/KBM input remains fully enabled; no new timer or polling. The game-tested handmade ZIP supplies the concept only.
+- Removed all WPF and storage toggle wiring and unnecessary sidecar preference. [Fast postgeneric #107](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44835578685) and [full GCO #1047](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44835517027) running; accept only actual results. Source-state, no-duplicate, one-pass generics, narrow incompatibility, full SCC and behavioral parity remain mandatory.
+
+
 ## 2026-11-20 — Manual Quickslots optimization setting and final post-generic #104 proof
 
 - `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` is optional canonical stage #17, after generic and InputHub #16. GCO checkbox on Analyze page is saved to `UserSettings.OptimizeQuickslotsDpad`, defaults OFF, and remains editable on Back/reset. `CombinedOptimizationPassService.GenerateAsync(... optimizeQuickslotsDpad)` forwards it through `RedscriptGenerationPlan.Stage(... bool)`; OFF skips source rewrite, ON generates one owner-local cache. This is a **ZIP generation preference**, not a live in-game toggle or controller-presence detector.
