@@ -5,6 +5,37 @@ namespace GTotalOptimizer.Core;
 /// <summary>Final independently enforced ZIP contract for Vortex overlay use.</summary>
 public static class CombinedPassOutputInspector
 {
+    // The same game-only allowlist is used while staging source-owner output
+    // and after writing the ZIP. No separate corrective packaging pass.
+    public static bool AllowedRuntimePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.StartsWith('/') ||
+            path.Contains('\\') || path.Contains(':') ||
+            path.Split('/').Any(x => x is "" or "." or ".."))
+            return false;
+        string file = Path.GetFileName(path);
+        if (new[] { "README", "LICENSE", "LICENCE", "CHANGELOG",
+                    "HANDOFF", "CONTRIBUTORS", "NOTICE" }
+            .Any(prefix => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+            new[] { ".exe", ".pdb", ".dll", ".md", ".csv", ".html",
+                    ".log", ".ps1", ".zip", ".bak", ".vortex_backup" }
+            .Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase) &&
+                !path.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
+                    StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        if (path.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase))
+            return path.EndsWith(".reds", StringComparison.OrdinalIgnoreCase);
+        if (path.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
+                StringComparison.OrdinalIgnoreCase))
+            return path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                   path.EndsWith(".locations", StringComparison.OrdinalIgnoreCase);
+        return path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
+                StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/CETProfiler", StringComparison.OrdinalIgnoreCase) &&
+               !path.Contains("/G-REDscript-Profiler", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static int Validate(string zipPath)
     {
         using var zip = ZipFile.OpenRead(zipPath);
@@ -13,31 +44,8 @@ public static class CombinedPassOutputInspector
         foreach (var item in zip.Entries)
         {
             string path = item.FullName;
-            if (item.Length < 1 || path.StartsWith('/') || path.Contains('\\') ||
-                path.Contains(':') ||
-                path.Split('/').Any(part => part is "" or "." or "..") ||
-                !seen.Add(path))
-                throw new InvalidDataException("GCO_PASS_ARCHIVE_UNSAFE_OR_DUPLICATE_PATH");
-            if (!(path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
-                    StringComparison.OrdinalIgnoreCase) ||
-                  path.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) ||
-                  path.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
-                    StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidDataException("GCO_PASS_ARCHIVE_NOT_GAME_RUNTIME");
-            if ((path.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) &&
-                 !path.EndsWith(".reds", StringComparison.OrdinalIgnoreCase)) ||
-                path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".log", StringComparison.OrdinalIgnoreCase) ||
-                path.Contains("/CETProfiler", StringComparison.OrdinalIgnoreCase) ||
-                path.Contains("/G-REDscript-Profiler", StringComparison.OrdinalIgnoreCase) ||
-                (path.StartsWith("red4ext/", StringComparison.OrdinalIgnoreCase) &&
-                 !(path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                   path.EndsWith(".locations", StringComparison.OrdinalIgnoreCase))))
-                throw new InvalidDataException("GCO_PASS_ARCHIVE_NONRUNTIME_FILE");
+            if (item.Length < 1 || !AllowedRuntimePath(path) || !seen.Add(path))
+                throw new InvalidDataException("GCO_PASS_ARCHIVE_UNSAFE_OR_NONRUNTIME_ENTRY");
             files++;
         }
         if (files == 0)
