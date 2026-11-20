@@ -125,7 +125,7 @@ try {
     foreach ($logPath in @($privateLog, (Join-Path $working 'process-output.txt'))) {
       if (!(Test-Path -LiteralPath $logPath -PathType Leaf)) { continue }
       $lines=@(Get-Content -LiteralPath $logPath -ErrorAction SilentlyContinue |
-        Where-Object { $_ -match '(?i)\\b(error|unknown|undefined|type mismatch|not found|failed to compile|unexpected token)\\b' } |
+        Where-Object { $_ -match '(?i)\b(error|unknown|undefined|type mismatch|not found|failed to compile|unexpected token)\b' } |
         Select-Object -Last 8)
       foreach ($line in $lines) {
         $safe=[string]$line
