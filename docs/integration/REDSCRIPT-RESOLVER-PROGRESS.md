@@ -1,5 +1,10 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — FE session pin semantic #15: successful post-generic SCC gate
+
+- [Fast #76 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44824725994): 44 semantic source-state tests, 2,331 post-generic sources plus 5 effective semantic owner overlays, official SCC 0.5.31 PASS / 43,485,167 compiled bytes. FE_SESSION_WASHROOM_PINS_V1 emits one complete semantic operation across current FE_Places.reds and FlushingEtiquette.reds and preserves source ownership. Multi-digit site count corrected inside the owning generator after #75; no old full-source ZIP imported.
+- Exact integrated one-ZIP CI [#1026](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44825017762) awaits final verification; in-game A/B and recorded performance benefit remain unverified.
+
 ## 2026-11-20 — Approved FE handmade pin lifecycle + minimap wrapper optimization
 
 - The owner's **game-tested handmade archive** proves a coordinated three-stage FE design: 7.2/7.2r1 session-owned pin service and explicit activation; 9.0 global `BaseMinimapMappinController.Update` wrapper removal; preservation of `MinimapPOIMappinController.UpdateIcon` FE-specific tint/icon hook. The previous isolated tint-only experiment was withdrawn; this full dependent implementation is a new, explicitly accepted concept and supersedes the withdrawal as intended behavior.
