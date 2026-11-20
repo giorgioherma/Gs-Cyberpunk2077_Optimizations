@@ -120,6 +120,21 @@ try {
     $codes=if($result.errorCodeCounts) {
       @($result.errorCodeCounts.PSObject.Properties | ForEach-Object { $_.Name }) -join ','
     } else { 'NO_STRUCTURED_CODES' }
+    # Keep private compiler inputs/logs off published artifacts while
+    # giving actionable, path-redacted error categories in CI failures.
+    foreach ($logPath in @($privateLog, (Join-Path $working 'process-output.txt'))) {
+      if (!(Test-Path -LiteralPath $logPath -PathType Leaf)) { continue }
+      $lines=@(Get-Content -LiteralPath $logPath -ErrorAction SilentlyContinue |
+        Where-Object { $_ -match '(?i)\\b(error|unknown|undefined|type mismatch|not found|failed to compile|unexpected token)\\b' } |
+        Select-Object -Last 8)
+      foreach ($line in $lines) {
+        $safe=[string]$line
+        $safe=$safe -replace '(?i)[A-Za-z]:\\\\[^:;\r\n]+','[PRIVATE_PATH]'
+        $safe=$safe -replace '(?i)r6[/\\\\]scripts[/\\\\][^:;\r\n]+','[PRIVATE_SOURCE]'
+        if ($safe.Length -gt 270) { $safe=$safe.Substring(0,270) }
+        Write-Host ('PHASE2_SCC_DIAGNOSTIC: '+$safe)
+      }
+    }
     throw ('PHASE2_OFFICIAL_SCC_FAILED: exit='+$exit+' errorCodes='+$codes)
   }
   $after=@(Get-ChildItem -LiteralPath $inputRoot -File -Recurse -Filter '*.reds')
