@@ -491,6 +491,63 @@ public static class RedscriptGenerationPlan
         else if (footstep.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("DVCORE_UNKNOWN_GENERATOR_STATUS");
 
+        // Phase 2 operation 12. Only the original current Dark Future source
+        // receives the missing immutable tag cache. Every cooldown Update,
+        // rendering call, widget animation and original fallback still runs.
+        // Incompatibility in this operation does not stop Footsteps/generics.
+        string darkFutureRoot = Path.Combine(output, "_stages",
+            "12-dark-future-infinite-tag");
+        var darkFuture = DarkFutureInfiniteTagCachePass.Generate(game,
+            darkFutureRoot, Directory.Exists(final) ? final : null);
+        if (darkFuture.Status == "APPLIED")
+        {
+            string rel = darkFuture.SourcePath ??
+                throw new InvalidDataException(
+                    "DARK_FUTURE_STAGE_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(darkFutureRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!IsInside(source, darkFutureRoot) ||
+                !IsInside(target, final) || !File.Exists(source) ||
+                !rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !target.EndsWith(".reds", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "DARK_FUTURE_SEMANTIC_OUTPUT_UNSAFE");
+            bool existing = File.Exists(target);
+            if (existing)
+            {
+                var earlier = System.Text.RegularExpressions.Regex.Matches(
+                    File.ReadAllText(target),
+                    @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                string rewritten = File.ReadAllText(source);
+                if (earlier.Any(marker => !rewritten.Contains(marker,
+                        StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "DARK_FUTURE_LOST_PRIOR_GENERIC_MARKER");
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            }
+            File.Copy(source, target, overwrite: existing);
+            files += existing ? 0 : 1;
+            expressions += darkFuture.AppliedEdits;
+            results.Add(new(12, "dark-future-infinite-tag",
+                darkFuture.AppliedEdits, existing ? 0 : 1,
+                existing ? 1 : 0, []));
+        }
+        else if (darkFuture.Status == "REFUSED")
+        {
+            skipped.Add(new(12, "dark-future-infinite-tag", 1,
+                darkFuture.Reason ??
+                    "DARK_FUTURE_SEMANTIC_INCOMPATIBLE"));
+        }
+        else if (darkFuture.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException(
+                "DARK_FUTURE_UNKNOWN_GENERATOR_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
