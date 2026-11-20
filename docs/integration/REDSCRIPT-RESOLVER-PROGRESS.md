@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Approved FE handmade pin lifecycle + minimap wrapper optimization
+
+- The owner's **game-tested handmade archive** proves a coordinated three-stage FE design: 7.2/7.2r1 session-owned pin service and explicit activation; 9.0 global `BaseMinimapMappinController.Update` wrapper removal; preservation of `MinimapPOIMappinController.UpdateIcon` FE-specific tint/icon hook. The previous isolated tint-only experiment was withdrawn; this full dependent implementation is a new, explicitly accepted concept and supersedes the withdrawal as intended behavior.
+- `FE_SESSION_WASHROOM_PINS_V1` generates the minimal original-path changes in `FE_Places.reds` and `FlushingEtiquette.reds` atomically after ten generics, DVCore, two DF semantics and FE input #14. Reuses current positions/keys, computes site count from actual current source, preserves generic markers, and recognizes existing partial/complete session service and pin states. Does not transplant historical FE InputHub source or use a CET-native REDscript bridge.
+- Focused tests cover stock/partial/complete/custom site count/moved files, repeat no-op, and narrow refusal; real 2,331-source SCC and independent canonical Stage byte parity are required. Fast #74 exposed callback-literal postcondition and #75 exposed a multi-digit pin count parser issue only in the real source. Both fixes landed in the owner generator; next fast and full CI must prove results. In-game visual parity and before/after captures remain outstanding.
+
 ## 2026-11-20 — FE minimap visual parity gate; unapproved pass-9 transformation withdrawn
 
 - User requires unchanged FlushingEtiquette minimap appearance and updates. `BaseMinimapMappinController.Update` tints FE pins on every update; the existing specific `MinimapPOIMappinController.UpdateIcon` does not prove equivalent redraw frequency. Accordingly the exploratory global-wrapper removal is **not an accepted semantic optimization**, despite source-state tests/official SCC #67 passing.
