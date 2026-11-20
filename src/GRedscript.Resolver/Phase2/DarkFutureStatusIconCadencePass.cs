@@ -174,14 +174,24 @@ internal static class DarkFutureStatusIconCadencePass
         {
             string[] clockProof=[
                 "let __gcoDfPlayer = this.GetPlayerControlledObject();",
-                "if IsDefined(__gcoDfPlayer) {",
-                "if IsDefined(__gcoDfTimeSystem) {",
-                "if "+Due+" {",
                 "this."+Flag+" = true;",
                 "this."+Last+" = now;",
                 "this."+Next+" = now + 0.40;"
             ];
-            if(clockProof.Any(x=>!body.Contains(x,StringComparison.Ordinal)))
+            // Use the canonical source lexer for guards so comments and
+            // whitespace in compatible custom versions never invalidate a
+            // correctly proven positive null guard. Negated guards refuse.
+            var clockTokens=SourceAdmission.ReadTokens(body);
+            bool IsGuard(string name)=>Enumerable.Range(0,clockTokens.Count)
+                .Any(i=>Sequence(clockTokens,i,"if","IsDefined","(",name,")","{")
+                    || Sequence(clockTokens,i,"if","(","IsDefined","(",
+                        name,")",")","{"));
+            bool dueGuard=Enumerable.Range(0,clockTokens.Count)
+                .Any(i=>Sequence(clockTokens,i,"if",Due,"{")
+                    || Sequence(clockTokens,i,"if","(",Due,")","{"));
+            if(clockProof.Any(x=>!body.Contains(x,StringComparison.Ordinal)) ||
+                !IsGuard("__gcoDfPlayer") ||
+                !IsGuard("__gcoDfTimeSystem") || !dueGuard)
                 return Refuse("DF_ICON_PARTIAL_CLOCK_CONTROL_FLOW_UNPROVEN");
         }
         // A partial source can retain the entire proven clock, yet lack
