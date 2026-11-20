@@ -62,6 +62,10 @@ public static class Program
                 return RunPureConstantScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-pure-constants")
                 return RunPureConstantPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-stable-array-bound")
+                return RunStableArrayBoundScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-stable-array-bound")
+                return RunStableArrayBoundPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-blackboard-defs")
                 return RunBlackboardDefinitionScan(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "preview-blackboard-defs")
@@ -731,6 +735,37 @@ public static class Program
                 ? Path.GetFullPath(basePreview) : null);
         Console.WriteLine("GCO pure constant generated .reds preview: transformed=" +
             count + " originalSourceWrites=0 compilerValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunStableArrayBoundScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Stable array-bound scan accepts --game and --out");
+        var result = GenericStableArrayBoundPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO stable array bound scan: files=" +
+            result.SourceFiles + " eligible=" + result.Eligible +
+            " already=" + result.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunStableArrayBoundPreview(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+            "--out" or "--base-preview")))
+            throw new ArgumentException("Stable array-bound preview accepts --game, --analysis, --out and optional --base-preview");
+        int count = GenericStableArrayBoundPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("GCO stable array bound preview: transformed=" +
+            count + " gameplayValidated=false deployable=false");
         return 0;
     }
 
