@@ -1,5 +1,19 @@
 using GTotalOptimizer.Core;
 
+// CI: inspect the actual ordered, real-source REDscript output archive through
+// the same final ZIP validator used by GCO, not a separate path heuristic.
+if (args.Length > 0 && args[0] == "--verify-combined-archive")
+{
+    if (args.Length != 3 || !int.TryParse(args[2], out int expected) || expected < 1)
+        throw new ArgumentException("Usage: --verify-combined-archive <game-relative ZIP> <expected generated files>");
+    int count = CombinedPassOutputInspector.Validate(args[1]);
+    if (count != expected)
+        throw new InvalidDataException("GCO_COMBINED_REAL_SOURCE_FILE_COUNT_MISMATCH");
+    Console.WriteLine("PASS GCO exact real generated REDscript ZIP topology: files=" + count +
+        " runtimeOnly=true sourcesCompiledSeparately=true");
+    return;
+}
+
 // GCO profiler reporting: the source owners' real CET/GRSP report engines
 // and GCO's genuine PresentMon chronology, independent of optimization.
 if (args.Length > 0 && args[0] == "--stage5-profiler-report")
