@@ -11,6 +11,8 @@ internal static class UserSettings
     private sealed class Settings
     {
         public string GameRoot { get; set; } = "";
+        // User selection only: a controller can stay plugged in during KBM play.
+        public bool OptimizeQuickslotsDpad { get; set; } = false;
         public string Mo2InstallationFolder { get; set; } = "";
         public string Mo2InstanceFolder { get; set; } = "";
         // Old versions stored a manual Mods-directory override. Retained for
@@ -35,6 +37,14 @@ internal static class UserSettings
     }
 
     internal static string ReadGameRoot() => Read().GameRoot;
+    internal static bool ReadOptimizeQuickslotsDpad() =>
+        Read().OptimizeQuickslotsDpad;
+    internal static void WriteOptimizeQuickslotsDpad(bool enabled)
+    {
+        var settings = Read();
+        settings.OptimizeQuickslotsDpad = enabled;
+        Write(settings);
+    }
     internal static Mo2Setup ReadMo2Setup()
     {
         var s = Read();
