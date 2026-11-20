@@ -1910,13 +1910,23 @@ public partial class MainWindow : Window
                 packageRoot, game, session, cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             resultsFolder = Path.GetDirectoryName(pass.ZipPath);
+            var refused = pass.CetSkipDetails.Where(row =>
+                row.Category is "GENERATION_FAILURE" or "LUA_LOCAL_LIMIT" or
+                    "MOD_BLACKLIST").ToArray();
+            string[] redSkipIds = pass.RedscriptSkipped
+                .Select(item => item.Id).ToArray();
             ResultsStatusText.Text = "TEST PASS CREATED: " + Path.GetFileName(pass.ZipPath) +
                 " | Files: " + pass.GeneratedFiles +
-                " | CET transformations: " + pass.CetTransforms +
-                " | REDscript source edits: " + pass.RedscriptEdits +
-                " | REDscript rules applied: " + pass.AppliedRedscriptRules +
-                ". Compilation is checked in GitHub CI, not in the app. " +
-                "Install as a Vortex overlay; gameplay remains untested.";
+                " | CET transforms: " + pass.CetTransforms +
+                " | REDscript edits: " + pass.RedscriptEdits + Environment.NewLine +
+                "Not applied: CET " + pass.CetSkipped +
+                " (needs review: " + refused.Length + ")" +
+                " | REDscript rules " + redSkipIds.Length +
+                (redSkipIds.Length == 0 ? "" :
+                    " (" + string.Join(", ", redSkipIds) + ")") + Environment.NewLine +
+                "Full skip reasons: " + Path.GetFileName(pass.ZipPath) +
+                ".ownership.json (beside ZIP). " +
+                "Compilation checked in GitHub CI; gameplay not yet tested.";
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
