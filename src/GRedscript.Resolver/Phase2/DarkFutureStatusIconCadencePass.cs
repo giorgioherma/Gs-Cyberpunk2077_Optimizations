@@ -230,7 +230,7 @@ internal static class DarkFutureStatusIconCadencePass
             edits.Add(new(t[setIndex].Start,t[setIndex].Start,
                 gate+nl+setLineIndent));
             edits.Add(new(t[setEnd].End,t[setEnd].End,
-                nl+setLineIndent+"}"));
+                nl+setLineIndent+"};"));
         }
         else
         {
