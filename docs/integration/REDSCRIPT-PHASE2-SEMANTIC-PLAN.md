@@ -1,5 +1,7 @@
 # REDscript Phase 2 — semantic optimization portfolio (planning ledger)
 
+**Phase 2 CI source:** [Post-generic source and SCC validation contract](REDSCRIPT-PHASE2-CI-SOURCE-CONTRACT.md). The private GitHub `base_after_generic/r6/scripts` is **already uploaded** and is independently compiled in the existing GCO Windows workflow, alongside the preserved historical generic/capture replay. Future semantic outputs must be compiled on top of this source in the same CI; the baseline compile is not itself semantic-output validation.
+
 **MANDATORY PHASE 2 IMPLEMENTATION POLICY:** [IMPORTANT FOR AGENTS — REDscript Optimization Rules](IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md). The owner requires **partial → complete**, **post-generic stock → complete in one Generate**, and **compatible version/custom edits → optimized**, with **narrow skips only for genuinely incompatible targets or unproven critical safety properties**. Historical archives demonstrate behavior, never serve as required precursor inputs or whole-file replacements.
 
 **Status:** 2026-11-20 source/archive audit; **documentation and proposed ordering only**. No Phase 2 generator rules, compiled output, or measured A/B benefit are claimed. Owner approval of the historical gameplay-tested passes establishes a useful behavioral reference **for the versions on which they were tested**, not automatic admission of altered live sources. This document reserves the Phase 2 / historical R7 area for decisions before implementation.
