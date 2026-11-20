@@ -418,6 +418,13 @@ public static class RedscriptGenerationPlan
             string content = File.ReadAllText(path);
             bool generatedAdapter = Path.GetFileName(path).StartsWith(
                 "GCO_NativeLocation_", StringComparison.OrdinalIgnoreCase);
+            // The optional REDscript native backend was added only by the
+            // retired experiment. CET's own DLL and .locations file are
+            // independent and must not be rejected.
+            bool legacyBridge = Path.GetRelativePath(scripts, path)
+                .Replace('\\', '/').Equals(
+                    "G-RedRuntime/Native/GCETNativeLocationBackend.reds",
+                    StringComparison.OrdinalIgnoreCase);
             bool generatedGuard =
                 content.Contains("GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1",
                     StringComparison.Ordinal) ||
@@ -427,7 +434,7 @@ public static class RedscriptGenerationPlan
                     StringComparison.Ordinal) ||
                 content.Contains("GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:",
                     StringComparison.Ordinal);
-            if (generatedAdapter || generatedGuard)
+            if (generatedAdapter || generatedGuard || legacyBridge)
                 throw new InvalidDataException(
                     "REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT: " +
                     "Disable the old experimental REDscript location pass in " +
