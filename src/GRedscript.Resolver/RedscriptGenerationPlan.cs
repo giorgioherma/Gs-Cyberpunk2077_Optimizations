@@ -26,7 +26,10 @@ public static class RedscriptGenerationPlan
         int? Order, string Id, string System, string Rule,
         string ScanCommand, string? Generator, int? Eligible,
         int? AlreadyComplete, string Status, string Risk,
-        string[] SourceFolders);
+        string[] SourceFolders)
+    {
+        public string? SourceRefusal { get; init; }
+    }
 
     public sealed record Document(
         string SchemaVersion, string SourceStackSha256, int SourceFiles,
@@ -139,30 +142,21 @@ public static class RedscriptGenerationPlan
             {
                 var def = Implemented[i];
                 string report = Path.Combine(temp, def.Id + ".json");
-                switch (def.Id)
+                try
                 {
-                    case "fixed-cname-index":
-                        GenericCallbackRules.Scan(game, report); break;
-                    case "literal-action-filter":
-                        GenericActionFilterPass.Scan(game, report); break;
-                    case "late-system-read":
-                        GenericLateSystemReadPass.Scan(game, report); break;
-                    case "angle-sort":
-                        GenericAngleSortPass.Scan(game, report); break;
-                    case "source-cname-membership":
-                        GenericMembershipPass.Scan(game, report); break;
-                    case "blackboard-definitions":
-                        GenericBlackboardDefinitionPass.Scan(game, report); break;
-                    case "pure-constant-slices":
-                        CallbackSemanticResolver.ScanPureConstantSlices(game, report); break;
-                    case "immutable-action-event-snapshot":
-                        CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
-                    case "shared-player-signal":
-                        GenericSharedPlayerSignalPass.Scan(game, report); break;
-                    case "stable-array-bound":
-                        GenericStableArrayBoundPass.Scan(game, report); break;
-                    default: throw new InvalidOperationException(
-                        "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
+                    ScanRule(def.Id, game, report);
+                }
+                catch (InvalidDataException ex) when (IsLocalSourceRefusal(ex.Message))
+                {
+                    // One unsafe user source cannot stop all independent
+                    // generator families. This refusal is re-proven at Stage.
+                    rows.Add(new(i + 1, def.Id, def.System, def.Rule,
+                        def.Scan, def.Preview, 0, 0,
+                        "SOURCE_REFUSED", def.Risk, [])
+                    {
+                        SourceRefusal = ex.Message
+                    });
+                    continue;
                 }
                 using var json = JsonDocument.Parse(File.ReadAllText(report));
                 var root = json.RootElement;
@@ -268,7 +262,33 @@ public static class RedscriptGenerationPlan
                 item.Generator != expected.Preview ||
                 item.ScanCommand != expected.Scan || item.Eligible is null ||
                 item.AlreadyComplete is null ||
-                item.Eligible < 0 || item.AlreadyComplete < 0 ||
+                item.Eligible < 0 || item.AlreadyComplete < 0)
+                throw new InvalidDataException("REDSCRIPT_PLAN_COMMAND_OR_ORDER_DRIFT");
+            if (item.Status == "SOURCE_REFUSED")
+            {
+                if (item.Eligible != 0 || item.AlreadyComplete != 0 ||
+                    string.IsNullOrWhiteSpace(item.SourceRefusal) ||
+                    !IsLocalSourceRefusal(item.SourceRefusal))
+                    throw new InvalidDataException("REDSCRIPT_PLAN_SOURCE_REFUSAL_INVALID");
+                // The plan is editable JSON: prove that the SAME current
+                // source actually causes the exact claimed local refusal.
+                string probe = Path.Combine(Path.GetTempPath(),
+                    "gco-source-refusal-" + Guid.NewGuid().ToString("N") + ".json");
+                string? actual = null;
+                try
+                {
+                    try { ScanRule(item.Id, game, probe); }
+                    catch (InvalidDataException ex) when (IsLocalSourceRefusal(ex.Message))
+                    { actual = ex.Message; }
+                }
+                finally { if (File.Exists(probe)) File.Delete(probe); }
+                if (!string.Equals(actual, item.SourceRefusal,
+                        StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "REDSCRIPT_PLAN_SOURCE_REFUSAL_NOT_REPRODUCED");
+                continue;
+            }
+            if (item.SourceRefusal is not null ||
                 item.Status != (item.Eligible > 0 ?
                     "READY_FOR_GENERATOR" : item.AlreadyComplete > 0 ?
                     "ALREADY_COMPLETE" : "NOT_APPLICABLE"))
@@ -310,6 +330,12 @@ public static class RedscriptGenerationPlan
         Directory.CreateDirectory(output);
         foreach (var item in document.Rules.Take(Implemented.Length))
         {
+            if (item.Status == "SOURCE_REFUSED")
+            {
+                skipped.Add(new SkippedRule(item.Order!.Value,
+                    item.Id, 0, item.SourceRefusal!));
+                continue;
+            }
             if (item.Eligible <= 0) continue;
             string next = Path.Combine(output, "_stages",
                 item.Order!.Value.ToString("D2") + "-" + item.Id);
@@ -427,6 +453,35 @@ public static class RedscriptGenerationPlan
             JsonSerializer.Serialize(result, JsonOptions),
             new UTF8Encoding(false));
         return result;
+    }
+
+    private static void ScanRule(string id, string game, string report)
+    {
+        switch (id)
+                {
+                    case "fixed-cname-index":
+                        GenericCallbackRules.Scan(game, report); break;
+                    case "literal-action-filter":
+                        GenericActionFilterPass.Scan(game, report); break;
+                    case "late-system-read":
+                        GenericLateSystemReadPass.Scan(game, report); break;
+                    case "angle-sort":
+                        GenericAngleSortPass.Scan(game, report); break;
+                    case "source-cname-membership":
+                        GenericMembershipPass.Scan(game, report); break;
+                    case "blackboard-definitions":
+                        GenericBlackboardDefinitionPass.Scan(game, report); break;
+                    case "pure-constant-slices":
+                        CallbackSemanticResolver.ScanPureConstantSlices(game, report); break;
+                    case "immutable-action-event-snapshot":
+                        CallbackSemanticResolver.ScanActionEventSnapshots(game, report); break;
+                    case "shared-player-signal":
+                        GenericSharedPlayerSignalPass.Scan(game, report); break;
+                    case "stable-array-bound":
+                        GenericStableArrayBoundPass.Scan(game, report); break;
+                    default: throw new InvalidOperationException(
+                        "REDSCRIPT_PLAN_UNKNOWN_IMPLEMENTED_RULE");
+                }
     }
 
     private static bool IsLocalSourceRefusal(string message)
