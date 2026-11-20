@@ -1,5 +1,13 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-20 — source-aware stable array-length generic before semantics
+
+- User approved implementing `STABLE_ARRAY_BOUND_V1` as a genuinely mod-independent structural REDscript optimization, with no change to the existing two blackboard-definition rules. The source-only generator runs after the existing nine R5 generic families within GCO's one canonical order, before any future R7 semantic work. Earlier CET generation order remains unchanged.
+- Current installed, locally customized source is authoritative. Typed local/parameter array scope, whole-loop no-call/no-array-mutation closure and exact marker/body verification gate admission. Preserve all original loop-body statements, branch/return behavior and earlier generated effective-source edits. Refuse structural ambiguity or source drift; do not introduce fixed mod lists, source hashes or version locks.
+- The seven approved R7 semantic owners are excluded from generic **performance ranking only**, not from generic generator admission. Generated source compiles with the installed stack via GCO's official SCC and remains subject to runtime A/B before any FPS claim. This is one generic rule, not another mod-specific semantic catalog or runtime observer.
+
+
+
 ## 2026-11-20 — one combined optimization ZIP in GCO's existing Page 2
 
 - User explicitly requests GCO itself to generate both CET and REDscript optimization output for in-game testing, as **one ZIP**, after the established combined capture, collect, restore and Analyze workflow. The former temporary CET-only Generate button is replaced by `GENERATE OPTIMIZATION ZIP`.
