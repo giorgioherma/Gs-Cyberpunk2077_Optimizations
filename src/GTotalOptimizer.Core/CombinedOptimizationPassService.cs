@@ -75,27 +75,10 @@ public sealed class CombinedOptimizationPassService
             {
                 string framework = Path.Combine(package, "components",
                     "redruntime", "owner");
-                // Resolve native dependencies from the generated source BEFORE
-                // adding base framework files. A framework declaration by
-                // itself must not activate an unused native service.
-                bool nativeRequired = RequiresNativeSubscriber(overlay);
-                int newFramework = nativeRequired || RequiresGRedRuntime(overlay)
-                    ? CopyMissingFramework(game, overlay, framework, owners) : 0;
-                if (nativeRequired)
-                {
-                    string cetOwner = Path.Combine(package, "components",
-                        "cet-resolver", "app");
-                    var native = SharedNativeRuntimeStage.Stage(
-                        cetOwner, game, overlay, framework);
-                    string bridge = "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds";
-                    owners[bridge] = "G-REDruntime/optional-native";
-                    owners["red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll"] =
-                        "G-CET/native";
-                    owners[SharedNativeRuntimeStage.LocationsPath] =
-                        "G-CET+G-REDruntime/native-locations";
-                    _ = native;
-                }
-                _ = newFramework;
+                // Experimental REDscript FAR/subscriber generation is retired.
+                // CET owner-native output is independent and remains untouched.
+                if (RequiresGRedRuntime(overlay))
+                    _ = CopyMissingFramework(game, overlay, framework, owners);
 
                 string compiler = Path.Combine(package, "components",
                     "redscript-compiler", "scc_lib.dll");
@@ -338,21 +321,6 @@ public sealed class CombinedOptimizationPassService
             Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
                 .Any(path => File.ReadAllText(path).Contains(
                     "import GRedRuntime.*", StringComparison.Ordinal));
-    }
-
-    private static bool RequiresNativeSubscriber(string overlay)
-    {
-        string scripts = Path.Combine(overlay, "r6", "scripts");
-        return Directory.Exists(scripts) &&
-            Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
-                .Any(path => Path.GetFileName(path).StartsWith("GCO_NativeLocation_",
-                        StringComparison.Ordinal) ||
-                    File.ReadAllText(path).Contains(
-                        "GCETNativeLocationGuard.DefinitelyFarPlayer(",
-                        StringComparison.Ordinal) ||
-                    File.ReadAllText(path).Contains(
-                        "new GCETNativeLocationBackend(",
-                        StringComparison.Ordinal));
     }
 
     private static bool Inside(string path, string root)
