@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-20 — Source-generated FE handmade session pins: full CI accepted
+
+- [Full CI #1026 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44825017762) at `363bf161`: 10 generic rules/173 eligible sites + five accepted semantic operations; 82 original-path source overlay files; source independent FE two-file reference and canonical Stage byte equivalence, actual SCC 0.5.31, ZIP topology, full Windows/CET/GRSP/package provenance and 361 package contracts all passed. Application ZIP artifact ID 14674596290.
+- [Fast SCC #76 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44824725994): 44 semantic source-state tests; 2,331 post-generic files + five semantic effective files, official SCC 0.5.31 and source integrity passed. Previous parser/literal failures (#74/#75) corrected at the owning generator.
+- `FE_SESSION_WASHROOM_PINS_V1` reconstructs the owner's handmade FE pass-7.2r1 session ownership and pass-9 hot-wrapper elimination **as a coordinated atomic two-file operation**, not a standalone tint deletion. All FE-specific icon/tint hooks and original pin sites remain. No imported historical whole files or REDscript native bridge. GCO generated overlay runtime behavior and gains still require game validation.
+
+
 ## 2026-11-20 — FE session pin semantic #15: successful post-generic SCC gate
 
 - [Fast #76 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44824725994): 44 semantic source-state tests, 2,331 post-generic sources plus 5 effective semantic owner overlays, official SCC 0.5.31 PASS / 43,485,167 compiled bytes. FE_SESSION_WASHROOM_PINS_V1 emits one complete semantic operation across current FE_Places.reds and FlushingEtiquette.reds and preserves source ownership. Multi-digit site count corrected inside the owning generator after #75; no old full-source ZIP imported.
