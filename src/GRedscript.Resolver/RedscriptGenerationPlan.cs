@@ -648,6 +648,54 @@ public static class RedscriptGenerationPlan
         else if(feInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("FE_INPUT_UNKNOWN_STATUS");
 
+        // Game-tested handmade FE 7.2r1 + 9 is one atomic operation:
+        // session-owned washroom pins and explicit activation must accompany
+        // removal of the old global minimap Update tint wrapper.
+        string fePinsRoot = Path.Combine(output, "_stages",
+            "15-fe-session-pins");
+        var fePins = FlushingEtiquetteWashroomPinsPass.Generate(game,
+            fePinsRoot, Directory.Exists(final) ? final : null);
+        if (fePins.Status == "APPLIED")
+        {
+            int newFiles = 0, composed = 0;
+            foreach (string rel in fePins.SourcePaths)
+            {
+                string source = Path.GetFullPath(Path.Combine(fePinsRoot,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                string target = Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                    !IsInside(source, fePinsRoot) || !IsInside(target, final) ||
+                    !File.Exists(source))
+                    throw new InvalidDataException("FE_PIN_STAGE_SOURCE_UNSAFE");
+                bool exists = File.Exists(target);
+                if (exists)
+                {
+                    string before = File.ReadAllText(target);
+                    string after = File.ReadAllText(source);
+                    var markers = System.Text.RegularExpressions.Regex.Matches(
+                        before, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                    if (markers.Any(m => !after.Contains(m,
+                        StringComparison.Ordinal)))
+                        throw new InvalidDataException(
+                            "FE_PIN_DISCARDED_GENERIC_SOURCE");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(source, target, overwrite: exists);
+                if (exists) composed++; else newFiles++;
+            }
+            files += newFiles;
+            expressions += fePins.AppliedEdits;
+            results.Add(new(15, "flushing-etiquette-session-pins",
+                fePins.AppliedEdits, newFiles, composed, []));
+        }
+        else if (fePins.Status == "REFUSED")
+            skipped.Add(new(15, "flushing-etiquette-session-pins", 1,
+                fePins.Reason ?? "FE_PIN_SOURCE_INCOMPATIBLE"));
+        else if (fePins.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("FE_PIN_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
