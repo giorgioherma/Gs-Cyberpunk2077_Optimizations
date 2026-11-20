@@ -696,6 +696,55 @@ public static class RedscriptGenerationPlan
         else if (fePins.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("FE_PIN_UNKNOWN_STATUS");
 
+        // Source-aware Custom Quickslots action-specific InputHub route.
+        // Keep the original OnAction and generic fixed-membership baseline
+        // as a fallback when runtime/subscription establishment fails.
+        // Original input inventory, gamepad/D-pad behavior, and CET Lua
+        // SetLastUsedKBM hook remain owned by Custom Quickslots.
+        string quickslotsRoot = Path.Combine(output, "_stages",
+            "16-custom-quickslots-input");
+        var quickslots = CustomQuickslotsInputHubPass.Generate(game,
+            quickslotsRoot, Directory.Exists(final) ? final : null);
+        if (quickslots.Status == "APPLIED")
+        {
+            string rel = quickslots.SourcePath ??
+                throw new InvalidDataException(
+                    "CQ_INPUT_STAGE_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(quickslotsRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !IsInside(source, quickslotsRoot) ||
+                !IsInside(target, final) || !File.Exists(source))
+                throw new InvalidDataException("CQ_INPUT_STAGE_SOURCE_UNSAFE");
+            bool exists = File.Exists(target);
+            if (exists)
+            {
+                string before = File.ReadAllText(target);
+                string after = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    before, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(m => !after.Contains(m,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "CQ_INPUT_DISCARDED_GENERIC_SOURCE");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: exists);
+            files += exists ? 0 : 1;
+            expressions += quickslots.AppliedEdits;
+            results.Add(new(16, "custom-quickslots-input",
+                quickslots.AppliedEdits, exists ? 0 : 1,
+                exists ? 1 : 0, []));
+        }
+        else if (quickslots.Status == "REFUSED")
+            skipped.Add(new(16, "custom-quickslots-input", 1,
+                quickslots.Reason ?? "CQ_INPUT_SOURCE_INCOMPATIBLE"));
+        else if (quickslots.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("CQ_INPUT_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
