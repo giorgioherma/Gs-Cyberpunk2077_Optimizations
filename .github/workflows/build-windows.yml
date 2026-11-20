@@ -181,7 +181,6 @@ jobs:
           sparse-checkout: |
             GCO-Capture-15112026_021913/r6/scripts
             r6/scripts
-            base_after_generic/r6/scripts
             Compiler
           sparse-checkout-cone-mode: true
       - name: Checkout authoritative G-REDruntime source for isolated SCC compilation
@@ -539,7 +538,7 @@ jobs:
           $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
           $effectiveCache = '.gco-ci-private-redscript/Compiler/modded/final.zip'
           $pluginsArchive = '.gco-ci-private-redscript/Compiler/plugins.zip'
-          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework' -PostGenericSourceRoot '.gco-ci-private-redscript/base_after_generic' -IncludeResearchDiagnostics:('${{ inputs.research_diagnostics }}' -eq 'true')
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework' -IncludeResearchDiagnostics:('${{ inputs.research_diagnostics }}' -eq 'true')
           if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
       - name: Remove exact real GRSP fixture checkout
         if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
