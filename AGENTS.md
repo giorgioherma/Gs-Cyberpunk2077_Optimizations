@@ -8,7 +8,7 @@ Experimental native REDscript location adapters remain in GitHub for manual isol
 
 Previous read-only R5 callback/position/quest/UI/shared-work investigations and native REDscript adapter unit tests are retained but are **manual opt-in only** (`workflow_dispatch: research_diagnostics` and `GCO_REDSCRIPT_RESEARCH_TESTS=1`). Standard Actions continue verifying current-source admission, accepted generator output and ordering, real-source SCC/rollback/idempotence, real captured results, one .NET 10 runtime and the actual published ZIP/package. Never remove a correctness contract for an approved shipping rule merely to shorten CI.
 
-**Validation status for this cleanup:** GitHub Actions runs initiated by code changes; record the exact completed result in `docs/LATEST-WORK.md`. No game performance or gameplay approval is implied.
+**Validation:** [GCO CI #899 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44677043753), code SHA `6fd3135fb2a1fe890b16cb9ff8ad62cec5a32af9`: 10 ordered approved REDscript generators/173 eligible edits/78 real preview files, full official SCC, 361 package/CLI/install contracts, packaged app artifact v1.2.5-run899-a1; 196 unittest cases with 64 manual-only skipped and 132 active passing. No game performance or gameplay approval is implied.
 
 
 ## 2026-11-20 — Current owner decision: experimental location available but opt-out of automatic generation
