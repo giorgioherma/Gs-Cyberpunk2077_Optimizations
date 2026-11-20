@@ -85,7 +85,7 @@ public sealed class CombinedOptimizationPassService
                     owners[bridge] = "G-REDruntime/optional-native";
                     owners["red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll"] =
                         "G-CET/native";
-                    owners["red4ext/plugins/G-CET-StaticLocations/locations.bin"] =
+                    owners[SharedNativeRuntimeStage.LocationsPath] =
                         "G-CET+G-REDruntime/native-locations";
                     _ = native;
                 }
@@ -209,16 +209,15 @@ public sealed class CombinedOptimizationPassService
             path.Split('/').Any(x => x is "" or "." or ".."))
             return false;
         return (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
-                StringComparison.OrdinalIgnoreCase) && path.EndsWith(".lua",
-                    StringComparison.OrdinalIgnoreCase)) ||
-            (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
                 StringComparison.OrdinalIgnoreCase) &&
-                (path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
-                 path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))) ||
+                !path.Contains("/CETProfiler", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) ||
             (path.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
                 StringComparison.OrdinalIgnoreCase) &&
                 (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                 path.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))) ||
+                 path.EndsWith(".locations", StringComparison.OrdinalIgnoreCase))) ||
             (path.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) &&
                 path.EndsWith(".reds", StringComparison.OrdinalIgnoreCase));
     }
@@ -272,9 +271,44 @@ public sealed class CombinedOptimizationPassService
         return count;
     }
 
+    private static void VerifyFrameworkBundle(string ownerRoot)
+    {
+        string manifest = Path.Combine(Path.GetDirectoryName(ownerRoot)!,
+            "source-sha256.json");
+        if (!File.Exists(manifest))
+            throw new InvalidDataException("GCO_FRAMEWORK_BUNDLE_MANIFEST_MISSING");
+        using var document = JsonDocument.Parse(File.ReadAllText(manifest));
+        var records = document.RootElement;
+        if (records.ValueKind != JsonValueKind.Array ||
+            records.GetArrayLength() < 11)
+            throw new InvalidDataException("GCO_FRAMEWORK_BUNDLE_MANIFEST_INVALID");
+        var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in records.EnumerateArray())
+        {
+            string rel = item.GetProperty("path").GetString() ?? "";
+            string sha = item.GetProperty("sha256").GetString() ?? "";
+            if ((!rel.StartsWith("r6/scripts/G-RedRuntime/",
+                    StringComparison.OrdinalIgnoreCase) &&
+                 !rel.StartsWith("optional-native/r6/scripts/G-RedRuntime/",
+                    StringComparison.OrdinalIgnoreCase)) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                rel.Contains('\\') || rel.Split('/').Any(x => x is "" or "." or "..") ||
+                sha.Length != 64 || !sha.All(Uri.IsHexDigit) ||
+                !checkedPaths.Add(rel))
+                throw new InvalidDataException("GCO_FRAMEWORK_BUNDLE_PATH_INVALID");
+            string path = Path.GetFullPath(Path.Combine(ownerRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!Inside(path, ownerRoot) || !File.Exists(path) ||
+                (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 ||
+                !Sha(path).Equals(sha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("GCO_FRAMEWORK_BUNDLE_HASH_MISMATCH");
+        }
+    }
+
     private static int CopyMissingFramework(string game, string overlay,
         string ownerRoot, Dictionary<string, string> owners)
     {
+        VerifyFrameworkBundle(ownerRoot);
         string framework = Path.Combine(ownerRoot, "r6", "scripts", "G-RedRuntime");
         if (!Directory.Exists(framework))
             throw new InvalidDataException(
