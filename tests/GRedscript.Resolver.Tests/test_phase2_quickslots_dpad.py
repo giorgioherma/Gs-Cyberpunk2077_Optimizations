@@ -3,6 +3,7 @@ specific InputHub bridge. Validate stock, partial, complete, custom drift,
 device transitions and focused incompatible skip. SCC/full-stage check is CI.
 """
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -190,7 +191,11 @@ class DpadSourceContracts(unittest.TestCase):
     def test_missing_modifier_recompute_is_completed(self):
         _, full = self.stage()
         prefix = "    this.modifiersForDpadDown = modifiersForDpadDown;"
-        partial = full.replace(prefix + "\n    this.RecomputeDpadProhibitions();", prefix)
+        partial, replaced = re.subn(
+            r"(this\.modifiersForDpadDown = modifiersForDpadDown;)\s*"
+            r"this\.RecomputeDpadProhibitions\(\);",
+            r"\1", full, count=1)
+        self.assertEqual(replaced, 1, "Test must remove an actual cache invalidation")
         report, result = self.stage(partial)
         self.assertEqual(report["status"], "APPLIED", report)
         self.assert_cached(result)
