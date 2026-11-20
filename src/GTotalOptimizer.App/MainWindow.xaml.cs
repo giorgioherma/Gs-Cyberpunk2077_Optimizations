@@ -1806,6 +1806,8 @@ public partial class MainWindow : Window
                 Warn(result.Detail, "Restoration blocked");
                 return;
             }
+            if (completedSessionId != saved.SessionId)
+                HotscenesEnglishOnlyCheckBox.IsChecked = false;
             completedSessionId = saved.SessionId;
             completedGameRoot = game;
             captureAndRestoreVerified = true;
@@ -2035,7 +2037,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Snapshot the explicit user choice. UI changes during async source
+        // generation must not alter the owner CLI invocation mid-operation.
+        bool hotscenesEnglishOnly = HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
+        HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
         var session = completedSessionId;
         var game = completedGameRoot;
@@ -2050,7 +2056,8 @@ public partial class MainWindow : Window
             // the canonical ordered plan. Only one game-relative ZIP is
             // published after source drift and ZIP ownership/integrity checks.
             var pass = await combinedPassGenerator.GenerateAsync(
-                packageRoot, game, session, cancellation.Token);
+                packageRoot, game, session, cancellation.Token,
+                hotscenesEnglishOnly);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             resultsFolder = Path.GetDirectoryName(pass.ZipPath);
             var refused = pass.CetSkipDetails.Where(row =>
@@ -2068,6 +2075,12 @@ public partial class MainWindow : Window
                 " | REDscript rules: " + redSkipIds.Length +
                 (redSkipIds.Length == 0 ? "" :
                     " (" + string.Join(", ", redSkipIds) + ")") + Environment.NewLine +
+                (pass.HotscenesEnglishOnlyRequested
+                    ? "Hotscenes ENG-only: " +
+                      (pass.HotscenesEnglishOnlyEdits > 0
+                          ? "applied" : "not applied; check skip details") +
+                      Environment.NewLine
+                    : "") +
                 "Skip details: " + Path.GetFileName(pass.ZipPath) +
                 ".ownership.json (beside the ZIP).");
             OpenResultsButton.IsEnabled = true;
@@ -2088,6 +2101,7 @@ public partial class MainWindow : Window
             generationRunning = false;
             if (IsLoaded)
             {
+                HotscenesEnglishOnlyCheckBox.IsEnabled = true;
                 GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
                 GenerateButton.IsEnabled = analyzedSessionId == session &&
                     redscriptPlanReady;
