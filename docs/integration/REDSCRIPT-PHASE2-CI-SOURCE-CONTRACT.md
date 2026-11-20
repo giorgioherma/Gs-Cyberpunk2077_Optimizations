@@ -1,40 +1,14 @@
-# REDscript Phase 2 — post-generic source CI contract
+# REDscript Phase 2 — checkpoint CI source contract (2026-11-20)
 
-**Active CI:** existing GCO `.github/workflows/build-windows.yml` on `dev/redscript/resolver_handoff`. Do **not** add a parallel product workflow, compiler implementation, separate managed runtime or source ZIP. The private GitHub fixture is already in `giorgioherma/original_cet_source`, default branch `main`.
+**Current authority:** dedicated GCO `main` workflow `.github/workflows/redscript-phase2-checkpoint.yml` and `tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1`. [Phase 2 checkpoint #1 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776264193) and [main checkpoint #2 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776660392). Narrow [PR #3](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/3) merged into `main` at `271a4c58`.
 
-## Inputs — distinct purposes
+## Chronological input / checkpoint sequence
 
-- Historical sealed-capture source: `GCO-Capture-15112026_021913/r6/scripts/`. Keep this as the original 2,319-file source/capture-correlated fixture for ten generic source generators and their original official SCC scenarios. No silent source replacement and no claim that historical callsite measurements describe changed files.
-- Independently staged **post-generic stock**: `base_after_generic/r6/scripts/`. This is the user's actual 2,331-file generic-applied baseline, including currently installed `G-RedRuntime`; use as **the starting source for Phase 2 semantic validation**, not as input to reinstall all generic transformations. Other installed versions/custom files may be used in additional structural tests without replacing this fixture.
-- Keep the existing private `Compiler/ssc.zip`, original cache, effective cache and native plugin scripts as CI-only SCC fixtures. Do **not** package SCC or third-party source in the released app/optimization ZIP. The full effective source plus plugin scripts are compiled in isolated workspaces.
+1. **Generic optimization stage:** Existing ten generic REDscript rules are generated/validated from the unoptimized installed source in the established generic generator CI. Keep the archived 2,319-file capture-correlated private baseline for its historical regression tests; no capture should be reinterpreted as a new source snapshot.
+2. **Post-generic stock stage:** The user already uploaded `giorgioherma/original_cet_source/main/base_after_generic/r6/scripts` containing **2,331** real .reds source files. This is the **stock input to Phase 2 semantics**. Do not re-run generics over it or copy historical whole-file semantic ZIPs into it.
+3. **Dedicated Phase 2 checkpoint:** Independent fast Windows CI fetches only the post-generic source and private `Compiler` assets; builds existing .NET 10 GCO Resolver `scc-headless` and compiles the isolated *effective source* with official SCC **0.5.31** and real native plugin scripts. Checks generic markers, framework, dependency presence, native compiler fingerprint, SCC output/cache evidence and unchanged original bytes; deletes private CI fixtures. **No CET capture replay, WPF build, long product packaging or distributed SCC.**
+4. **Approved semantic rule integration, later:** Extend this **same** checkpoint with actual owner-local semantic output on top of post-generic source, and tests for stock → full one-run completion, partial → only missing, complete → no-op, custom/newer compatible → applied, incompatible target → narrow refusal and exact idempotence. Compile the **combined source with all applicable other passes** in official SCC CI. Do not claim baseline compilation proves semantic correctness or gameplay.
 
-## Current Phase 2 gate
+This is a **logical chronological checkpoint after generic output**, not a required wait for the long application workflow or a separate runtime compiler implementation. Generic and full integrated app CI remain their own owners. The old extra `-PostGenericSourceRoot` scenario was **removed from the long development workflow and SCC harness** once the new checkpoint passed; it should not be reintroduced.
 
-The canonical REDscript CI job sparse-checks out `base_after_generic/r6/scripts` from the existing private repository and forwards it to the *same* `Verify-RealGrspResolverReplay.ps1` → `Verify-RealStackCompile.ps1` chain, using `-PostGenericSourceRoot`. The SCC owner script:
-
-1. Requires a distinct, meaningful REDscript source tree; verifies no filesystem link files, duplicate/escaping relative paths, at least one approved generic source marker, and an existing framework source.
-2. Compiles the actual post-generic source and existing installed framework under the isolated `phase2-postgeneric-stock` scenario, with independently checked official 0.5.31 compiler and existing effective/plugin inputs.
-3. Preserves the original five SCC scenarios and all original generic/ZIP source tests.
-4. Compares source hashes before/after to prove that all post-generic installed source remains byte-for-byte unchanged.
-5. Selects comparison scenarios by **explicit name**, not assumed last array position. The Phase 2 baseline is independent and must not be falsely treated as an unoptimized or callback preview.
-
-**Validation note:** The initial run [#988](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44769788675) compiled all six scenarios successfully, including the post-generic source, but then failed at an obsolete last-position assertion for the framework scenario. Fixed at source in commit `ea2844dd`; [#989 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44770961006) verifies all six SCC scenarios, the 2,331-file post-generic source (compiled 43,485,488 bytes), original 10 generic rules (173 eligible edits / 78 output files), no source writes, Windows/.NET10 packaging, CET/GRSP owner provenance and final artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run989-a1` (ID `14648431268`). The new lane compiles **post-generic stock only** until an approved semantic pass extends the output scenario.
-
-## Semantic rule acceptance — extension to this SAME lane
-
-No semantic generator is yet implemented in this checkpoint. **Do not claim that the Phase 2 baseline compile has tested semantic output.** For each approved semantic generator, extend this canonical SCC gate to compile its *actual* new/original-path staged output on top of post-generic source, plus all other accepted generic and semantic changes, with optional framework-owned files as needed.
-
-Require real regression fixtures for:
-- post-generic stock → complete semantic rule in one Generate;
-- partially implemented → only missing changes, including markerless equivalent code;
-- already complete → unchanged;
-- compatible older/newer/custom-modified source → applied with unrelated edits preserved;
-- genuinely incompatible target → only affected operation refused, with precise reason;
-- repeated generation → zero further changes;
-- complete combined output (including dependencies, cleanup and owner paths) → official SCC 0.5.31 in CI, full gameplay validation separately.
-
-Version numbers and historical whole-file hashes must never become production semantic admission allowlists. Preserve GCO's one ZIP, original installed mod source, native owner restore, and the single CI workflow. **Only verified output and integration safety can authorize merging Phase 2 implementation into the stable app.**
-
-## Integration status
-
-Draft [PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) proposes development→main integration, but GitHub reports `mergeable_state=dirty`: branches have conflicts across a broad development diff. **No direct merge or force update of main is authorized by green branch CI alone.** Resolve current main-only work without discarding either side, test the actual merged tree, then merge. The Phase 2 CI change itself is validated and retained on development.
+**Result:** #1 / #2 pass official SCC on 2,331 post-generic stock files; zero semantic rules tested so far. [Conflict-blocked dev-to-main integration PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) is distinct and remains unmerged. Never force-merge its 26 overlapping branch paths.
