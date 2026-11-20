@@ -70,6 +70,14 @@ internal static class DigitalVixenFootstepsPass
         return prefix;
     }
 
+    private static string LeadingIndent(string text, int position)
+    {
+        int start = StartOfLine(text, position);
+        int end = start;
+        while (end < text.Length && text[end] is ' ' or '\t') end++;
+        return text[start..end];
+    }
+
     private static int AfterLine(string text, int position)
     {
         int n = text.IndexOf('\n', position);
@@ -249,12 +257,12 @@ internal static class DigitalVixenFootstepsPass
             }
         }
 
-        bool assignment = false;
+        bool directAssignment = false;
         for (int i = hit.Open + 1; i + 8 < hit.Close; i++)
         {
             if (!Seq(t, i, "this", ".", field, "=", classesVar, "[", hit.Index, "]", ";"))
                 continue;
-            assignment = true;
+            directAssignment = true;
             break;
         }
         // Original success can instead name a hit local, then return it
@@ -280,6 +288,22 @@ internal static class DigitalVixenFootstepsPass
                     break;
                 }
         }
+        bool localAssignment = false;
+        if (resultVariable is not null && resultReturn >= 0)
+        {
+            // Recognize a guarded cache write BEFORE the original local
+            // result return, including a previously generated partial state.
+            for (int i = hit.Close + 1; i + 12 < resultReturn; i++)
+            {
+                if (!Seq(t, i, "if", "IsDefined", "(", resultVariable,
+                        ")", "{", "this", ".", field, "=", resultVariable,
+                        ";", "}"))
+                    continue;
+                localAssignment = true;
+                break;
+            }
+        }
+        bool assignment = directAssignment || localAssignment;
         if (!assignment && (resultVariable is null || resultReturn < 0))
             return new("REFUSED", "DVCORE_SUCCESS_RESULT_FLOW_CHANGED",
                 null, null, null, null, null, null, null, 0);
@@ -294,7 +318,7 @@ internal static class DigitalVixenFootstepsPass
         // Returning the cached field from inside the proven success arm is
         // required for the early-return historical shape. The original hit
         // return shape instead remains unchanged.
-        if (assignment)
+        if (directAssignment)
         {
             bool successReturnsCache = false;
             for (int i = hit.Open + 1; i + 4 < hit.Close; i++)
@@ -335,7 +359,7 @@ internal static class DigitalVixenFootstepsPass
                 return new("REFUSED", "DVCORE_FIELD_INSERTION_UNPROVEN",
                     null, null, null, null, null, null, null, 0);
             fieldInsert = AfterLine(text, lastFieldEnd);
-            fieldIndent = Indent(text, lastFieldLine);
+            fieldIndent = LeadingIndent(text, lastFieldLine);
         }
 
         // Insert the read guard just before the original reflection snapshot.
