@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory=$true)][string]$CleanBaselineArchive,
     [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
     [Parameter(Mandatory=$true)][string]$PluginsArchive,
-    [string]$FrameworkRoot = ''
+    [string]$FrameworkRoot = '',
+    [switch]$IncludeResearchDiagnostics
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -312,6 +313,10 @@ try {
         $scan.eligibleUnmeasured + ' rejected=' + $scan.rejectedUnproven +
         ' sourceOnlyEquivalent=true generated=0 liveSourcesUntouched=true')
 
+    # Historical read-only callback, position, quest, UI and shared-work
+    # investigations remain in Git but are not executed by default Actions.
+    # They generated zero admitted transforms; manual opt-in is preserved.
+    if ($IncludeResearchDiagnostics) {
     # CET's generic-first classification equivalent for REDscript must run
     # across the ENTIRE current stack, not only the 5 literal-array cases.
     # This additionally joins verified callsite evidence by source and method
@@ -868,6 +873,10 @@ try {
         ' crossOwnerSourceTypedListeners=' + $qFacts.factsWithCrossOwnerLiteralRegistrations +
         ' unprovenListenerReceivers=' + $qFacts.lexicalListenerCallsitesReceiverUnverified +
         ' runtimeSavingsClaimed=false generationAuthorized=false')
+
+    } else {
+        Write-Host 'SKIP inactive R5 research diagnostics; active source generators, SCC and output checks continue.'
+    }
 
     # GCO-local CET-inspired callback generic: scan every private source,
     # stage only the exact proven fixed CName index shape, then reuse the SAME
