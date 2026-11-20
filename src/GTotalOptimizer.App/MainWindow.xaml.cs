@@ -28,7 +28,12 @@ public partial class MainWindow : Window
     // from stopping another operation's indicator prematurely.
     private readonly DispatcherTimer consoleActivityTimer = new()
         { Interval = TimeSpan.FromMilliseconds(350) };
-    private sealed record ConsoleActivity(string Message, bool Results, string PreviousText);
+    private sealed record ConsoleActivity(
+        string Message, bool Results, string PreviousText, long StatusRevision);
+    private long captureConsoleRevision;
+    private long resultsConsoleRevision;
+    private string latestCaptureConsoleText = "";
+    private string latestResultsConsoleText = "";
     private readonly Dictionary<long, ConsoleActivity> consoleActivities = new();
     private long nextConsoleActivityId;
     private int consoleActivityDots;
@@ -969,7 +974,8 @@ public partial class MainWindow : Window
         long id = ++nextConsoleActivityId;
         bool results = ResultsPage.Visibility == Visibility.Visible;
         string previous = results ? ResultsStatusText.Text : StatusText.Text;
-        consoleActivities.Add(id, new ConsoleActivity(message, results, previous));
+        consoleActivities.Add(id, new ConsoleActivity(message, results, previous,
+            results ? resultsConsoleRevision : captureConsoleRevision));
         consoleActivityDots = 0;
         consoleActivityTimer.Start();
         AdvanceConsoleActivity();
@@ -1004,21 +1010,43 @@ public partial class MainWindow : Window
         }
         consoleActivityTimer.Stop();
         lastActivityRender = null;
-        if (!sameText) return; // Preserve a real completed/error message.
-        if (completed.Results)
-            ResultsStatusText.Text = completed.PreviousText;
-        else
-            StatusText.Text = completed.PreviousText;
+        // A timer tick may follow a final status while a cleanup await is
+        // still pending. Final success/failure messages must win over dots.
+        if (completed.Results && resultsConsoleRevision != completed.StatusRevision)
+            ResultsStatusText.Text = latestResultsConsoleText;
+        else if (!completed.Results &&
+                 captureConsoleRevision != completed.StatusRevision)
+            StatusText.Text = latestCaptureConsoleText;
+        else if (sameText)
+        {
+            if (completed.Results)
+                ResultsStatusText.Text = completed.PreviousText;
+            else
+                StatusText.Text = completed.PreviousText;
+        }
+    }
+
+    internal void SetResultsConsoleStatus(string message)
+    {
+        latestResultsConsoleText = message;
+        ++resultsConsoleRevision;
+        ResultsStatusText.Text = message;
     }
 
     // The Capture console is the main workflow guide: brief normal statuses,
     // distinct action rows for framework blockers and missing capture evidence.
-    private void SetStatus(string message) =>
-        StatusText.Text = UserFacingConsoleText.Render(consolePinned ?? message);
+    private void SetStatus(string message)
+    {
+        latestCaptureConsoleText = UserFacingConsoleText.Render(consolePinned ?? message);
+        ++captureConsoleRevision;
+        StatusText.Text = latestCaptureConsoleText;
+    }
     private void PinStatus(string message, string? detail = null)
     {
         consolePinned = message;
-        StatusText.Text = UserFacingConsoleText.Render(message);
+        latestCaptureConsoleText = UserFacingConsoleText.Render(message);
+        ++captureConsoleRevision;
+        StatusText.Text = latestCaptureConsoleText;
         if (!string.IsNullOrWhiteSpace(detail))
             Trace.TraceInformation("GCO capture status detail: " + detail);
     }
@@ -1813,7 +1841,7 @@ public partial class MainWindow : Window
             UpdateResultTexts(saved);
             resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
-                ResultsStatusText.Text = "Capture verified. Click ANALYZE to find optimizations.";
+                SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
             OpenResultsButton.IsEnabled = true;
             AnalyzeButton.IsEnabled = !analysisRunning && !generationRunning &&
                 analyzedSessionId != saved.SessionId;
@@ -1825,7 +1853,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
+            SetResultsConsoleStatus("Saved capture verification failed: " + ex.Message);
             ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
             ResultsRestoreStatusText.Foreground = AnalyzeYellow;
             SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET", "NOT VERIFIED");
@@ -1852,7 +1880,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ResultsStatusText.Text = "Cannot analyze: " + ex.Message;
+            SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
             RefreshCompletedWorkspace(); // disable actions if sealed evidence is no longer valid
             Trace.TraceWarning("Manual Analyze refused: " + ex);
         }
@@ -1964,17 +1992,17 @@ public partial class MainWindow : Window
             RedReportText.Text = redPlanStatus;
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
-            ResultsStatusText.Text = redscriptPlanReady
+            SetResultsConsoleStatus(redscriptPlanReady
                 ? "CET + REDscript analysis ready. GENERATE creates one source-checked Vortex overlay ZIP."
-                : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.";
+                : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.");
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)
         {
             if (cancel.IsCancellationRequested || !IsLoaded) return;
             Trace.TraceWarning("Read-only CET analysis: " + ex);
-            ResultsStatusText.Text = "CET analysis unavailable: " + ex.Message +
-                " Collected results remain untouched.";
+            SetResultsConsoleStatus("CET analysis unavailable: " + ex.Message +
+                " Collected results remain untouched.");
             analyzedSessionId = null;
             CetReportText.Text = "CET Resolver unavailable. The collected capture is unchanged.";
             AnalyzeButton.Content = "UNAVAILABLE";
@@ -2027,7 +2055,7 @@ public partial class MainWindow : Window
                     "MOD_BLACKLIST").ToArray();
             string[] redSkipIds = pass.RedscriptSkipped
                 .Select(item => item.Id).ToArray();
-            ResultsStatusText.Text = "Optimization ZIP created: " +
+            SetResultsConsoleStatus("Optimization ZIP created: " +
                 Path.GetFileName(pass.ZipPath) + Environment.NewLine +
                 "Files: " + pass.GeneratedFiles +
                 " | CET optimizations: " + pass.CetTransforms +
@@ -2038,7 +2066,7 @@ public partial class MainWindow : Window
                 (redSkipIds.Length == 0 ? "" :
                     " (" + string.Join(", ", redSkipIds) + ")") + Environment.NewLine +
                 "Skip details: " + Path.GetFileName(pass.ZipPath) +
-                ".ownership.json (beside the ZIP).";
+                ".ownership.json (beside the ZIP).");
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
@@ -2047,8 +2075,8 @@ public partial class MainWindow : Window
             if (!cancellation.IsCancellationRequested && IsLoaded)
             {
                 Trace.TraceWarning("Combined pass generation: " + ex);
-                ResultsStatusText.Text = "Combined pass refused: " + ex.Message +
-                    " Original game and capture files were not changed.";
+                SetResultsConsoleStatus("Combined pass refused: " + ex.Message +
+                    " Original game and capture files were not changed.");
             }
         }
         finally
@@ -2140,6 +2168,10 @@ public partial class MainWindow : Window
     private void Warn(string message, string title)
     {
         Trace.TraceWarning(title + ": " + message);
-        PinStatus(UserFacingConsoleText.Failure(title, message), title + ": " + message);
+        var summary = UserFacingConsoleText.Failure(title, message);
+        if (ResultsPage.Visibility == Visibility.Visible)
+            SetResultsConsoleStatus(summary);
+        else
+            PinStatus(summary, title + ": " + message);
     }
 }
