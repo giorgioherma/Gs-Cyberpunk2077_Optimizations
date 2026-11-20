@@ -1251,16 +1251,16 @@ public partial class MainWindow : Window
             CollectButton.IsEnabled = !running && readyToCollect;
             ContinueButton.IsEnabled = !running && !profilerReportRunning &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
-                saved is not null && HasCompletedProfilerReport(saved.SessionId);
+                saved is not null && HasCompletedProfilerReport(packageRoot, saved.SessionId);
             // Recover a sealed capture on restart or REFRESH without allowing
             // Continue to skip unfinished derived report generation.
             if (!running && saved is not null &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
-                !profilerReportRunning && !HasCompletedProfilerReport(saved.SessionId))
+                !profilerReportRunning && !HasCompletedProfilerReport(packageRoot, saved.SessionId))
             {
                 await GenerateCollectedProfilerReportAsync(current.GameRoot!, saved.SessionId);
                 if (cancel.IsCancellationRequested || !IsLoaded || busy) return;
-                ContinueButton.IsEnabled = HasCompletedProfilerReport(saved.SessionId);
+                ContinueButton.IsEnabled = HasCompletedProfilerReport(packageRoot, saved.SessionId);
             }
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
@@ -1700,7 +1700,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool HasCompletedProfilerReport(string sessionId)
+    internal static bool HasCompletedProfilerReport(string packageRoot, string sessionId)
     {
         var html = GcoProfilerReportService.ReportFile(packageRoot, sessionId);
         var json = Path.Combine(Path.GetDirectoryName(html)!,
@@ -1724,7 +1724,7 @@ public partial class MainWindow : Window
     private async Task<bool> GenerateCollectedProfilerReportAsync(string game, string sessionId)
     {
         if (profilerReportRunning) return false;
-        if (HasCompletedProfilerReport(sessionId)) return true;
+        if (HasCompletedProfilerReport(packageRoot, sessionId)) return true;
         profilerReportRunning = true;
         ContinueButton.IsEnabled = false;
         long reportActivity = BeginConsoleActivity("Preparing performance graphs and report");
@@ -1732,7 +1732,7 @@ public partial class MainWindow : Window
         {
             var result = await Task.Run(() =>
                 GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
-            if (!HasCompletedProfilerReport(sessionId))
+            if (!HasCompletedProfilerReport(packageRoot, sessionId))
                 throw new InvalidDataException("Combined profiler report was not published completely.");
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
@@ -1833,7 +1833,7 @@ public partial class MainWindow : Window
             return;
         }
         if (profilerReportRunning || saved is null ||
-            !HasCompletedProfilerReport(saved.SessionId))
+            !HasCompletedProfilerReport(packageRoot, saved.SessionId))
         {
             Warn("Wait for the combined profiler report to finish. " +
                 "If reporting failed, click REFRESH to retry.", "Continue");
