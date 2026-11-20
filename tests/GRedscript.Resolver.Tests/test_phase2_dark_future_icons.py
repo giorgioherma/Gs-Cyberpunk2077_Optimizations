@@ -112,7 +112,10 @@ class IconVisualCadenceTests(unittest.TestCase):
         self.assertIn("GetSimTime()", transformed)
         self.assertIn("if __gcoDfIconVisualDue || __gcoDfIconRecordChanged || "
                       "!ArrayContains(", transformed)
-        self.assertIn("n\"DarkFutureCanHideOnBuffBar\"", transformed)
+        for tag in ("DarkFutureNeedNerve", "DarkFutureNeedHydration",
+                    "DarkFutureNeedNutrition", "DarkFutureNeedEnergy"):
+            self.assertIn('n"'+tag+'"', transformed)
+        self.assertNotIn('n"DarkFutureCanHideOnBuffBar"', transformed)
         self.assertIn("    };\n", transformed)
         self.assertIn("__gcoDfIconRecordChanged = true;", transformed)
         self.assertIn("__gcoDfIconRecordChanged = false;", transformed)
@@ -197,6 +200,49 @@ class IconVisualCadenceTests(unittest.TestCase):
         self.assertEqual(report["status"], "REFUSED", report)
         self.assertEqual(
             report["reason"], "DF_ICON_PARTIAL_CLOCK_CONTROL_FLOW_UNPROVEN")
+        self.assertIsNone(staged)
+
+    def test_legacy_broad_tag_guard_is_upgraded_without_duplication(self):
+        _, complete = self.run_generator(SOURCE)
+        current = complete
+        first = current.index("if __gcoDfIconVisualDue || "
+                              "__gcoDfIconRecordChanged || !(")
+        last = current.index(" {", first) + 2
+        old_gate = ("if __gcoDfIconVisualDue || "
+                    "__gcoDfIconRecordChanged || "
+                    "!ArrayContains(data.GameplayTags(), "
+                    'n"DarkFutureCanHideOnBuffBar") {')
+        legacy = current[:first] + old_gate + current[last:]
+        report, rewritten = self.run_generator(legacy)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.check_complete(legacy, rewritten)
+        self.assertEqual(rewritten.count("let __gcoDfIconVisualDue:"), 1)
+        self.assertEqual(rewritten.count("currBuffLoc.SetData("), 1)
+        repeat, staged = self.run_generator(rewritten)
+        self.assertEqual(repeat["status"], "COMPLETE")
+        self.assertIsNone(staged)
+
+    def test_existing_need_guard_accepts_comments_and_whitespace(self):
+        _, complete = self.run_generator(SOURCE)
+        altered = complete.replace(
+            "if __gcoDfIconVisualDue || __gcoDfIconRecordChanged || !(",
+            "if ( __gcoDfIconVisualDue /* active cadence */ || "
+            "__gcoDfIconRecordChanged || !(")
+        needle = 'n"DarkFutureNeedEnergy")) {'
+        self.assertIn(needle, altered)
+        altered = altered.replace(needle, 'n"DarkFutureNeedEnergy")) ) {')
+        report, absent = self.run_generator(altered)
+        self.assertEqual(report["status"], "COMPLETE", report)
+        self.assertIsNone(absent)
+
+    def test_different_existing_setdata_guard_refuses_narrowly(self):
+        _, complete = self.run_generator(SOURCE)
+        incompatible = complete.replace(
+            'n"DarkFutureNeedEnergy")) {',
+            'n"OtherGameplayCondition")) {')
+        report, staged = self.run_generator(incompatible)
+        self.assertEqual(report["status"], "REFUSED", report)
+        self.assertEqual(report["reason"], "DF_ICON_UNKNOWN_SETDATA_GUARD")
         self.assertIsNone(staged)
 
     def test_compatible_custom_renamed_locals_and_moved_owner(self):
