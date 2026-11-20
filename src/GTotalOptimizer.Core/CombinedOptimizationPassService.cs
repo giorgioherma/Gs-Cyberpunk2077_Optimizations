@@ -9,7 +9,7 @@ namespace GTotalOptimizer.Core;
 /// <summary>
 /// One GCO Generate action. CET's authoritative Resolver supplies Lua/native
 /// output, the GCO-local ordered Resolver supplies REDscript sources, and
-/// official SCC 0.5.31 validates the effective game script stack.
+/// CI validates official SCC 0.5.31 separately; runtime generation never invokes it.
 /// All work is isolated. The only published game payload is one ZIP.
 /// </summary>
 public sealed record CombinedPassOutcome(
@@ -174,7 +174,7 @@ public sealed class CombinedOptimizationPassService
         }
         finally
         {
-            // Never touch game or capture. Failed compiler/generator leaves no
+            // Never touch game or capture. Failed generation leaves no
             // ZIP and retains source owner evidence for diagnosis.
             if (Directory.Exists(temp))
                 try { Directory.Delete(temp, recursive: true); }
