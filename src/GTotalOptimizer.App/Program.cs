@@ -602,6 +602,71 @@ internal static class Program
                         window.ResultsStatusText.Parent))
                     throw new InvalidOperationException(
                         "Analyze page restoration or native capture status controls are missing.");
+
+                // The Page 2 overlay must not hide the original shared
+                // skyline and V art; Capture layout must remain unchanged.
+                static bool Transparent(System.Windows.Media.Brush? value) =>
+                    value is System.Windows.Media.SolidColorBrush brush &&
+                    brush.Color.A == 0;
+                if (!Transparent(window.ResultsPage.Background) ||
+                    !Transparent(window.ResultsScrollViewer.Background) ||
+                    window.ResultsPage.Margin.Left < 35 ||
+                    window.ResultsPage.ActualWidth < 650 ||
+                    window.SkylineHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.CityImage.Source is null)
+                    throw new InvalidOperationException(
+                        "Analyze page hides the existing skyline, covers V, or clips the shifted content.");
+
+                var yellow = System.Windows.Media.Color.FromRgb(255, 240, 0);
+                var green = System.Windows.Media.Color.FromRgb(101, 220, 162);
+                static bool ColorIs(System.Windows.Media.Brush? value,
+                    System.Windows.Media.Color expected) =>
+                    value is System.Windows.Media.SolidColorBrush b && b.Color == expected;
+                if (!ColorIs(window.ResultsRestoreStatusText.Foreground, yellow) ||
+                    !ColorIs(window.CetCaptureStatusText.Foreground, yellow) ||
+                    !ColorIs(window.RedCaptureStatusText.Foreground, yellow) ||
+                    !ColorIs(window.PresentCaptureStatusText.Foreground, yellow))
+                    throw new InvalidOperationException(
+                        "Analyze restoration and domain labels must use owner yellow.");
+
+                // Test the actual formatter used by successful and missing
+                // capture results: only verified OK may be green.
+                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
+                    window.CetCaptureStatusText, "CET", "OK");
+                var good = window.CetCaptureStatusText.Inlines
+                    .OfType<System.Windows.Documents.Run>().ToArray();
+                if (good.Length != 2 || good[0].Text != "CET · " ||
+                    !ColorIs(good[0].Foreground, yellow) ||
+                    good[1].Text != "OK" || !ColorIs(good[1].Foreground, green))
+                    throw new InvalidOperationException(
+                        "Only the verified CET OK word must render green.");
+                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
+                    window.CetCaptureStatusText, "CET", "MISSING");
+                var missing = window.CetCaptureStatusText.Inlines
+                    .OfType<System.Windows.Documents.Run>().ToArray();
+                if (missing.Length != 2 || missing[1].Text != "MISSING" ||
+                    !ColorIs(missing[0].Foreground, yellow) ||
+                    !ColorIs(missing[1].Foreground, yellow))
+                    throw new InvalidOperationException(
+                        "Missing capture status must never be green.");
+                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
+                    window.CetCaptureStatusText, "CET", "NOT VERIFIED");
+
+                var backup = string.Concat(window.OptimizationFooterBackup.Inlines
+                    .OfType<System.Windows.Documents.Run>().Select(run => run.Text));
+                if (window.CetOptimizationHeading.Text != "CET mod Optimizations:" ||
+                    window.RedOptimizationHeading.Text != "REDscript mod Optimizations:" ||
+                    window.OptimizationFooterFirstLine.Text !=
+                        "CET + REDscript  One clean zip with optimized files." ||
+                    window.OptimizationFooterVortex.Text !=
+                        "Use Vortex for easy file management" ||
+                    !backup.Contains("For manual install BACKUP YOUR ", StringComparison.Ordinal) ||
+                    !backup.Contains(@"\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods",
+                        StringComparison.Ordinal) ||
+                    !backup.Contains(@"\Cyberpunk 2077\r6\scripts",
+                        StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Analyze headings or Vortex/manual backup instructions drifted.");
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
