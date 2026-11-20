@@ -981,6 +981,18 @@
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"
                                              MinHeight="70" Margin="0,7,0,0"
                                              VerticalScrollBarVisibility="Auto"/>
+                                    <!-- Explicit OPT-IN rather than controller hardware detection.
+                                         Unchecked leaves source-owned D-pad getters untouched. -->
+                                    <CheckBox x:Name="QuickslotsDpadCacheCheckBox"
+                                              IsChecked="False" IsThreeState="False"
+                                              Foreground="#FFF000" FontSize="13"
+                                              Margin="1,7,0,0" VerticalAlignment="Center"
+                                              Content="Optimize Custom Quickslots D-pad"
+                                              Checked="QuickslotsDpadPreference_Changed"
+                                              Unchecked="QuickslotsDpadPreference_Changed"/>
+                                    <TextBlock Foreground="#98A9B1" FontSize="11.5"
+                                               Margin="24,2,0,0" TextWrapping="Wrap"
+                                               Text="Manual option: enable when using controller D-pad. Off preserves original D-pad code, even if a controller is plugged in."/>
                                 </StackPanel>
                             </Grid>
                             <Grid Margin="0,12,0,0">
