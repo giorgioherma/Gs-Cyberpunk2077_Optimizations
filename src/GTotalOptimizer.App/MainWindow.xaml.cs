@@ -1610,7 +1610,7 @@ public partial class MainWindow : Window
 
     // Domain and separators always use yellow. The verified word OK alone
     // is green; absent/unaligned/unknown evidence never looks successful.
-    private static void SetAnalyzeCaptureStatus(
+    internal static void SetAnalyzeCaptureStatus(
         TextBlock label, string domain, string status)
     {
         label.Inlines.Clear();
