@@ -1732,6 +1732,16 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
+            ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
+            ResultsRestoreStatusText.Foreground = Brushes.Orange;
+            CetCaptureStatusText.Text = "CET · NOT VERIFIED";
+            RedCaptureStatusText.Text = "REDscript · NOT VERIFIED";
+            PresentCaptureStatusText.Text = "PresentMon · NOT VERIFIED";
+            CetCaptureStatusText.Foreground = Brushes.Orange;
+            RedCaptureStatusText.Foreground = Brushes.Orange;
+            PresentCaptureStatusText.Foreground = Brushes.Orange;
+            AnalyzeButton.IsEnabled = false;
+            GenerateButton.IsEnabled = false;
             OpenResultsButton.IsEnabled = false;
         }
     }
@@ -1752,6 +1762,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ResultsStatusText.Text = "Cannot analyze: " + ex.Message;
+            RefreshCompletedWorkspace(); // disable actions if sealed evidence is no longer valid
             Trace.TraceWarning("Manual Analyze refused: " + ex);
         }
     }
