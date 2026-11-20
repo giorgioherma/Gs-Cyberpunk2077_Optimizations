@@ -5,7 +5,7 @@ using Microsoft.VisualBasic.FileIO;
 
 namespace GRedscript.Resolver;
 
-internal static class Program
+public static class Program
 {
     private const string Schema = "grsp.resolver.input.v1";
 
