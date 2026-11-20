@@ -1,4 +1,38 @@
 # Latest work / evidence status
+## 2026-11-20 — Phase 2 semantic #2: Dark Future safe infinite-duration tag cache
+
+- Implemented `DARK_FUTURE_INFINITE_TAG_CACHE_V1` in
+  `src/GRedscript.Resolver/Phase2/DarkFutureInfiniteTagCachePass.cs`.
+  It moves only the immutable `ArrayContains(m_gameplayTags, DarkFutureInfiniteDurationEffect)`
+  membership calculation to `SingleCooldownManager.ActivateCooldown` after the
+  original tag load. Before wrapped activation it invalidates the cache; an
+  early synchronous Update uses the original condition. New/reused effects
+  recalculate the tag flag. Original Update, root visibility, gauge/stack/timer,
+  `SetTimeRemaining`, `FillOutroAnimationStart` and animations are never skipped.
+  Source-aware handling completes missing partial fields/guard/cache/condition;
+  completed or markerless source no-ops; compatible moved owner files/custom
+  layouts apply; unproven tag-list mutation/escape narrowly refuses.
+- Integrated in actual GCO `RedscriptGenerationPlan.Stage` after the ten
+  generics and Footsteps (order 12), using the same effective source and one
+  game-relative ZIP/ownership sidecar. Added `phase2-dark-future` to the
+  same existing Resolver CLI. There is no historical pass prerequisite,
+  corrective pass, new framework component or local compiler requirement.
+- **[Fast Phase 2 CI #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848)**:
+  21 active semantic regression tests, all stock/partial/complete/custom/
+  relocated-source/mutated-array/one-Generate contracts passed. Official SCC
+  0.5.31 compiled the real 2,331 already-generic source files with both
+  DigitalVixenCore Footsteps and Dark Future generated owner files,
+  43,482,205 compiled bytes, originals unchanged. The long combined app
+  integration/ZIP check [#1009](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613)
+  was initiated separately; verify final outcome before release.
+- Historical repeated `FillOutroAnimationStart` suppression, finite timer
+  throttling, 6/10-frame UI skipping, pool-slot clearing and SetData caching
+  were **not** applied. The source audit shows expensive repeated work but
+  not the state/animation/invalidation proof to skip it safely. The source
+  membership optimization has no isolated measured GRSP timing reduction;
+  no FPS/CPU saving or gameplay parity is claimed. See
+  [Dark Future workload audit](integration/REDSCRIPT-PHASE2-DARK-FUTURE-WORKLOAD.md).
+
 
 ## 2026-11-20 — DVCore semantic complete with fast and real GCO full integration CI
 
