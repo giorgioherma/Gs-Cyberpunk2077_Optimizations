@@ -1463,7 +1463,7 @@ try {
     if ($orderedPlan.schemaVersion -ne 'gco.redscript.generation-plan.v1' -or
         $orderedPlan.sourceStackSha256 -ne $expectedSourceHash -or
         [int]$orderedPlan.sourceFiles -ne [int]$sourceAudit.sourceFiles -or
-        [int]$orderedPlan.implementedRuleCount -ne 10 -or
+        [int]$orderedPlan.implementedRuleCount -ne 9 -or
         [int]$orderedPlan.captureGatedExistingRules -ne 0 -or
         [int]$orderedPlan.deferredExperimentalSystems -ne 5 -or
         $orderedPlan.productionZipAuthorized -ne $false -or
@@ -1475,16 +1475,14 @@ try {
     $gated = @($orderedPlan.rules | Where-Object {
         $_.status -eq 'CAPTURE_GATED_EXISTING_GENERATOR'
     })
-    if ($scheduled.Count -ne 10 -or $deferred.Count -ne 5 -or
+    if ($scheduled.Count -ne 9 -or $deferred.Count -ne 5 -or
         $gated.Count -ne 0 -or
         @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' }).Count -ne 1) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_RULES_MISSING'
     }
-    $nativePlanRow = @($scheduled | Where-Object { $_.id -eq 'native-player-location-predicate' })
-    if ($nativePlanRow.Count -ne 1) {
-        throw 'GCO_REDSCRIPT_NATIVE_PREDICATE_RULE_MISSING'
+    if (@($scheduled | Where-Object { $_.id -eq 'native-player-location-predicate' }).Count -ne 0) {
+        throw 'GCO_RETIRED_LOCATION_RULE_STILL_SCHEDULED'
     }
-    $nativePlanned = [int]$nativePlanRow[0].eligible
     $membershipRow = @($scheduled | Where-Object { $_.id -eq 'source-cname-membership' })
     $membershipPlanned = [int]$membershipRow[0].eligible
     $membershipScan = Join-Path $work 'gco-cname-source-membership-scan.json'
@@ -1502,7 +1500,7 @@ try {
     if ($planEligible -ne [int]$orderedPlan.eligibleSourceEdits -or
         $planEligible -ne ($callbackCount + $actionCount + $angleCount +
             $lateCount + $bbCount + $pureCount + $snapshotCount + $sharedPlayerCount +
-            $membershipPlanned + $nativePlanned)) {
+            $membershipPlanned)) {
         throw 'GCO_REDSCRIPT_ORDERED_PLAN_SOURCE_COUNTS_DISAGREE'
     }
     # Independently produce the same source-admitted membership edits on the
@@ -1572,20 +1570,18 @@ try {
         $stageFiles.Count -lt $manualFiles.Count) {
         throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
     }
-    # Independent source-only parity remains exact. Native predicate and
-    # companion adapter are compared to the separately run generator later.
+    # Every ordered generated REDscript source must match the independent
+    # composition. Retired native FAR/subscriber source is never emitted.
     foreach ($f in $stageFiles) {
         $rel = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
         $manual = Join-Path $manualScripts $rel
         $text = Get-Content -LiteralPath $f.FullName -Raw
-        $isNative = $text.Contains(
-            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
-            [StringComparison]::Ordinal) -or $text.Contains(
-            'GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',
-            [StringComparison]::Ordinal) -or $text.Contains(
-            'GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',
-            [StringComparison]::Ordinal)
-        if ($isNative) { continue }
+        if ($f.Name -match '^GCO_NativeLocation_[0-9]{9,10}\\.reds$' -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
+            throw 'GCO_RETIRED_LOCATION_RULE_EMITTED_SOURCE'
+        }
         if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
             (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
             (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
@@ -1654,118 +1650,14 @@ try {
     Copy-Item -LiteralPath $nativeBridge -Destination $nativeScriptDestination -ErrorAction Stop
     Write-Host 'PASS GCO real CET native DLL first-writer dispatch + REDscript RTTI bridge staged for official SCC'
 
-    # Experimental native location consumers are additive, source-matched
-    # per-mod wrappers. Stage ONLY in the framework+native SCC lane, after
-    # ordered-plan parity, so geometry/action/player regressions stay isolated.
-    $nativeSubscribersJson = Join-Path $work 'gco-native-location-subscribers.json'
-    $nativeSubscribersLog = Join-Path $work 'gco-native-location-subscribers.log'
-    & dotnet $dll scan-native-location-subscribers --game $game --out $nativeSubscribersJson *> $nativeSubscribersLog
-    if ($LASTEXITCODE -ne 0 -or
-        !(Test-Path -LiteralPath $nativeSubscribersJson -PathType Leaf)) {
-        throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_SCAN_FAILED'
-    }
-    $nativeSubscribers = Get-Content -LiteralPath $nativeSubscribersJson -Raw | ConvertFrom-Json
-    if ($nativeSubscribers.schemaVersion -ne 'gco.redscript.native-location-subscriber.v1' -or
-        $nativeSubscribers.sourceStackSha256 -ne $expectedSourceHash -or
-        $nativeSubscribers.mode -ne 'NATIVE_FAR_PREDICATE_OR_GROUP_BYPASS_ORIGINAL_CALLBACK_PRESERVED' -or
-        $nativeSubscribers.productionZipAuthorized -ne $false) {
-        throw 'GCO_NATIVE_LOCATION_SUBSCRIBER_SCAN_CONTRACT_FAILED'
-    }
-    $subscriberCount = [int]$nativeSubscribers.eligible
-    $groupCount = [int]$nativeSubscribers.locationGroupEligible
-    $adapterCount = $subscriberCount - $groupCount
-    if ($adapterCount -lt 0 -or $groupCount -lt 0) {
-        throw 'GCO_NATIVE_LOCATION_FAMILY_COUNTS_INVALID'
-    }
-    if (Test-Path -LiteralPath $nativeSubscribersLog -PathType Leaf) {
-        foreach ($diag in @(Get-Content -LiteralPath $nativeSubscribersLog)) {
-            if ($diag.StartsWith('NATIVE_PREDICATE_REFUSED:',[StringComparison]::Ordinal)) {
-                Write-Host $diag
-            }
-        }
-    }
-    if ($subscriberCount -gt 0) {
-        $subscriberFolder = Join-Path $work 'gco-native-subscriber-preview'
-        $subscriberLog = Join-Path $work 'gco-native-subscriber-preview.log'
-        & dotnet $dll preview-native-location-subscribers --game $game --out $subscriberFolder --source-sha $expectedSourceHash --base-preview $callbackFolder *> $subscriberLog
-        if ($LASTEXITCODE -ne 0) {
-            throw 'GCO_NATIVE_LOCATION_PREDICATE_PREVIEW_FAILED'
-        }
-        $subscriberScripts = Join-Path $subscriberFolder 'r6/scripts'
-        $generated = @(Get-ChildItem -LiteralPath $subscriberScripts -Recurse -Filter '*.reds' -File)
-        $adapters = @($generated | Where-Object { $_.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' })
-        $predicates = @($generated | Where-Object { $_.Name -notmatch '^GCO_NativeLocation_[0-9]{9,10}\.reds$' })
-        $groupMarkers = 0
-        foreach ($f in $predicates) {
-            $content = Get-Content -LiteralPath $f.FullName -Raw
-            $groupMarkers += @([regex]::Matches($content,
-                'GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:[0-9]+')).Count
-        }
-        if ($adapters.Count -ne $adapterCount -or
-            $groupMarkers -ne $groupCount -or
-            $predicates.Count -lt $adapterCount -or
-            $generated.Count -ne ($predicates.Count + $adapters.Count)) {
-            throw ('GCO_NATIVE_LOCATION_FAMILY_OUTPUT_MISMATCH adapters=' +
-                $adapters.Count + '/' + $adapterCount + ' groups=' +
-                $groupMarkers + '/' + $groupCount + ' sources=' +
-                $predicates.Count)
-        }
-        foreach ($file in $generated) {
-            $relative = [IO.Path]::GetRelativePath($subscriberScripts, $file.FullName)
-            $live = Join-Path (Join-Path $game 'r6/scripts') $relative
-            $destination = Join-Path (Join-Path $callbackFolder 'r6/scripts') $relative
-            $text = Get-Content -LiteralPath $file.FullName -Raw
-            if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
-                $relative.Contains(':')) {
-                throw 'GCO_NATIVE_LOCATION_SOURCE_PATH_ESCAPE'
-            }
-            if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$') {
-                if ((Test-Path -LiteralPath $live -PathType Leaf) -or
-                    (Test-Path -LiteralPath $destination -PathType Leaf) -or
-                    !$text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal)) {
-                    throw 'GCO_NATIVE_LOCATION_ADAPTER_COLLISION'
-                }
-            } else {
-                $legacyLocation = $text.Contains(
-                    'GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',
-                    [StringComparison]::Ordinal)
-                $genericGroup = $text.Contains(
-                    'GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',
-                    [StringComparison]::Ordinal)
-                if (!(Test-Path -LiteralPath $live -PathType Leaf) -or
-                    (!$legacyLocation -and !$genericGroup) -or
-                    ($legacyLocation -and !$text.Contains(
-                        'GCO-GENERIC:NATIVE_LOCATION_DIRECT_LIFECYCLE_V1',
-                        [StringComparison]::Ordinal)) -or
-                    ($genericGroup -and !$text.Contains(
-                        'GCETNativeLocationGuard.DefinitelyFarPlayer',
-                        [StringComparison]::Ordinal)) -or
-                    !$text.Contains('Vector4.Distance',
-                        [StringComparison]::Ordinal)) {
-                    throw 'GCO_NATIVE_LOCATION_PREDICATE_SOURCE_INVALID'
-                }
-                if (Test-Path -LiteralPath $destination -PathType Leaf) {
-                    $prior = Get-Content -LiteralPath $destination -Raw
-                    $markers = @([regex]::Matches($prior,
-                        '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
-                        ForEach-Object { $_.Value } | Select-Object -Unique)
-                    foreach ($marker in $markers) {
-                        if (!$text.Contains($marker,[StringComparison]::Ordinal)) {
-                            throw 'GCO_NATIVE_LOCATION_PREDICATE_LOST_PRIOR_RULE'
-                        }
-                    }
-                }
-            }
-            New-Item -ItemType Directory -Force -Path (Split-Path $destination -Parent) | Out-Null
-            Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop
-        }
-    }
-    # The canonical ninth generator must produce IDENTICAL bytes to the
-    # independently invoked native-lane generator for every mod-owned file.
+    # Native ABI remains a separately checked CET/framework capability, but
+    # no REDscript experimental location consumer/guard may be generated.
+    # The automatic ordered preview must remain identical to the independently
+    # composed source-only pass (except the optional native RTTI bridge).
     $manualAfterNative = @(Get-ChildItem -LiteralPath (Join-Path $callbackFolder 'r6/scripts') -Recurse -Filter '*.reds' -File |
         Where-Object { $_.Name -ne 'GCETNativeLocationBackend.reds' })
     if ($manualAfterNative.Count -ne $stageFiles.Count) {
-        throw 'GCO_NATIVE_PREDICATE_CANONICAL_FILE_COUNT_DIFF'
+        throw 'GCO_RETIRED_LOCATION_DEFAULT_SOURCE_FILE_COUNT_DIFF'
     }
     foreach ($f in $stageFiles) {
         $relative = [IO.Path]::GetRelativePath($stageScripts, $f.FullName)
@@ -1773,12 +1665,10 @@ try {
         if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
             (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
             (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
-            throw 'GCO_NATIVE_PREDICATE_CANONICAL_SOURCE_MISMATCH'
+            throw 'GCO_RETIRED_LOCATION_DEFAULT_SOURCE_PARITY_FAILED'
         }
     }
-    Write-Host ('PASS GCO native location subscription staging: adapters=' +
-        $adapterCount + ' genericLocationGroups=' + $groupCount +
-        ' originalModFilesUntouched=true distanceBypassedOnNativeFar=true callbackCadenceUnchanged=true deployable=false')
+    Write-Host 'PASS GCO default REDscript generation omits old native FAR, subscribers and location groups; CET native bridge separately checked'
 
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
@@ -1787,7 +1677,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
     }
-    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0 -or $subscriberCount -gt 0) {
+    if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
         $extra.CallbackPreviewRoot = $legacyCallbackFolder
         $extra.FrameworkPreviewRoot = $callbackFolder
     }
