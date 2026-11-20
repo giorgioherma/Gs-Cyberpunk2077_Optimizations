@@ -708,9 +708,38 @@ internal static class Program
                 if (window.ResultsStatusText.Text != prior)
                     throw new InvalidOperationException(
                         "Console spinner damaged the prior status after work ended.");
+
+                // A completed error can arrive while another async cleanup
+                // awaits and a timer tick is still possible. Never let the
+                // final dots erase the meaningful outcome.
+                long failedActivity = window.BeginConsoleActivity("Analyzing");
+                window.SetResultsConsoleStatus("Cannot analyze: source unavailable.");
+                window.AdvanceConsoleActivity();
+                window.EndConsoleActivity(failedActivity);
+                if (window.ResultsStatusText.Text != "Cannot analyze: source unavailable.")
+                    throw new InvalidOperationException(
+                        "Activity tick erased an actual Analyze failure message.");
+
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
+
+                // The same activity animation must work in the older Page 1
+                // console without changing the Capture image/card structure.
+                string capturePrevious = window.StatusText.Text;
+                long collecting = window.BeginConsoleActivity("Collecting results");
+                if (window.StatusText.Text != "Collecting results.")
+                    throw new InvalidOperationException(
+                        "Capture console spinner initial dot missing.");
+                window.AdvanceConsoleActivity();
+                window.AdvanceConsoleActivity();
+                if (window.StatusText.Text != "Collecting results...")
+                    throw new InvalidOperationException(
+                        "Capture console spinner three-dot step missing.");
+                window.EndConsoleActivity(collecting);
+                if (window.StatusText.Text != capturePrevious)
+                    throw new InvalidOperationException(
+                        "Capture spinner did not restore previous console status.");
             }
 
 
