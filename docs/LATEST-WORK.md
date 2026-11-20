@@ -23,8 +23,15 @@
   0.5.31 compiled the real 2,331 already-generic source files with both
   DigitalVixenCore Footsteps and Dark Future generated owner files,
   43,482,205 compiled bytes, originals unchanged. The long combined app
-  integration/ZIP check [#1009](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613)
-  was initiated separately; verify final outcome before release.
+  **integration/ZIP CI [#1009 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613)**
+  (generator SHA `35446da3`): **ten generics/173 eligible edits + both
+  semantic rules = 80 generated REDscript owner files**, independent
+  one-go composition parity, real game-relative ZIP topology and official
+  SCC 0.5.31 with 12 authoritative framework files all passed.
+  Windows .NET 10 app, CET/GRSP/PresentMon provenance, owner restore,
+  artifact packaging passed. Artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1009-a1`
+  ID `14655904907`, 90,365,716 bytes. Later source-only moved-owner/alias
+  proof changes were verified by focused #31, not rebuilt in full #1009.
 - Historical repeated `FillOutroAnimationStart` suppression, finite timer
   throttling, 6/10-frame UI skipping, pool-slot clearing and SetData caching
   were **not** applied. The source audit shows expensive repeated work but
