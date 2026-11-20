@@ -225,7 +225,7 @@ internal static class CustomQuickslotsDpadCachePass
   private func RecomputeDpadProhibitions() -> Void {
     // Preserve the original PlayerLastUsedPad predicate (including unknown
     // device state) when updating the cached value, not at each getter.
-    if !IsDefined(this.player) || this.lastUsedKBM || !this.player.PlayerLastUsedPad() {
+    if !IsDefined(this.player) || !this.player.PlayerLastUsedPad() {
       this.normalDpadLeftProhibited = false;
       this.normalDpadRightProhibited = false;
       this.normalDpadUpProhibited = false;
