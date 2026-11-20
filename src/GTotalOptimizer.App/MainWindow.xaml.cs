@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
+    private readonly CombinedOptimizationPassService combinedPassGenerator = new();
+    private bool redscriptPlanReady;
     private CancellationTokenSource? analysisCancellation;
     private bool analysisRunning;
     private bool generationRunning;
@@ -1698,7 +1700,7 @@ public partial class MainWindow : Window
             ResultsStatusText.Text = "CET Resolver will use the collected data and current installed source.";
             OpenResultsButton.IsEnabled = true;
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
-                analyzedSessionId == saved.SessionId;
+                analyzedSessionId == saved.SessionId && redscriptPlanReady;
             if (!analysisRunning && analyzedSessionId != saved.SessionId)
                 _ = RunReadOnlyAnalysisAsync(saved);
         }
@@ -1719,6 +1721,7 @@ public partial class MainWindow : Window
             return;
 
         analysisRunning = true;
+        redscriptPlanReady = false;
         analysisCancellation?.Dispose();
         analysisCancellation = new CancellationTokenSource();
         var cancel = analysisCancellation;
@@ -1780,6 +1783,7 @@ public partial class MainWindow : Window
                 }, cancel.Token);
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
+                redscriptPlanReady = true;
                 var ready = planned.Rules.Where(rule =>
                     rule.Status == "READY_FOR_GENERATOR").ToArray();
                 var affected = ready.SelectMany(rule => rule.SourceFolders)
@@ -1801,10 +1805,11 @@ public partial class MainWindow : Window
                     "Generation order: " + order + Environment.NewLine +
                     "Resolver plan: RESULTS / " + saved.SessionId +
                     " / REDscript_GenerationPlan.json" + Environment.NewLine +
-                    "No REDscript ZIP created; gameplay and performance not yet tested.";
+                    "Ready for a single compiler-verified CET + REDscript optimization ZIP.";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                redscriptPlanReady = false;
                 redPlanStatus = "REDscript current-source generation plan unavailable: " +
                     ex.Message + Environment.NewLine +
                     "Existing generated source rules remain preview-only.";
@@ -1815,7 +1820,9 @@ public partial class MainWindow : Window
                 RedReportText.Text += Environment.NewLine +
                     "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
             AnalyzeButton.Content = "ANALYZED";
-            ResultsStatusText.Text = "CET generator ready; REDscript source-ordered plan is shown below. GENERATE currently runs CET only.";
+            ResultsStatusText.Text = redscriptPlanReady
+                ? "CET + REDscript analysis ready. GENERATE creates one SCC-verified Vortex overlay ZIP."
+                : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.";
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)
@@ -1832,15 +1839,21 @@ public partial class MainWindow : Window
         {
             analysisRunning = false;
             GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
-                !generationRunning;
+                redscriptPlanReady && !generationRunning;
         }
     }
 
     private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
     {
         if (generationRunning || analysisRunning || completedSessionId is null ||
-            completedGameRoot is null || analyzedSessionId != completedSessionId)
+            completedGameRoot is null || analyzedSessionId != completedSessionId ||
+            !redscriptPlanReady || !captureAndRestoreVerified)
             return;
+        if (GameRunning())
+        {
+            Warn("Close Cyberpunk before generating the optimization ZIP.", "Generate");
+            return;
+        }
 
         generationRunning = true;
         GenerateButton.IsEnabled = false;
@@ -1849,18 +1862,23 @@ public partial class MainWindow : Window
         var cancellation = new CancellationTokenSource();
         analysisCancellation?.Dispose();
         analysisCancellation = cancellation;
-        ResultsStatusText.Text = "Generating CET pass from current sources...";
+        GenerateButton.Content = "GENERATING...";
+        ResultsStatusText.Text = "Generating CET + REDscript source and validating official SCC 0.5.31...";
         try
         {
-            // Exactly the source owner's established --generate-pass pipeline.
-            // No second GCO generator, no REDscript transform and no mod writes.
-            var pass = await readOnlyAnalyzer.GenerateCetPassAsync(
+            // CET retains its owner generator; GCO-local REDscript stages
+            // the canonical ordered plan. Only one game-relative ZIP is
+            // published, after source drift and SCC verification.
+            var pass = await combinedPassGenerator.GenerateAsync(
                 packageRoot, game, session, cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             resultsFolder = Path.GetDirectoryName(pass.ZipPath);
-            ResultsStatusText.Text = "CET pass created: " + Path.GetFileName(pass.ZipPath) +
-                " | Files: " + pass.FileCount + " | Transforms: " +
-                pass.TransformCount + ". REDscript generation is separate.";
+            ResultsStatusText.Text = "TEST PASS CREATED: " + Path.GetFileName(pass.ZipPath) +
+                " | Files: " + pass.GeneratedFiles +
+                " | CET transformations: " + pass.CetTransforms +
+                " | REDscript source edits: " + pass.RedscriptEdits +
+                " | Official SCC: " + (pass.SccPassed ? "PASS" : "NOT_REQUIRED") +
+                ". Install as a winning Vortex overlay; gameplay remains untested.";
             OpenResultsButton.IsEnabled = true;
         }
         catch (OperationCanceledException) { }
@@ -1868,15 +1886,20 @@ public partial class MainWindow : Window
         {
             if (!cancellation.IsCancellationRequested && IsLoaded)
             {
-                Trace.TraceWarning("CET owner pass generation: " + ex);
-                ResultsStatusText.Text = "CET pass not generated: " + ex.Message;
+                Trace.TraceWarning("Combined pass generation: " + ex);
+                ResultsStatusText.Text = "Combined pass refused: " + ex.Message +
+                    " Original game and capture files were not changed.";
             }
         }
         finally
         {
             generationRunning = false;
             if (IsLoaded)
-                GenerateButton.IsEnabled = analyzedSessionId == session;
+            {
+                GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
+                GenerateButton.IsEnabled = analyzedSessionId == session &&
+                    redscriptPlanReady;
+            }
         }
     }
 
