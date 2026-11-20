@@ -172,6 +172,33 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     return;
 }
 
+// Player-side Hotscenes ENG-only is a source-changing PERSONAL option.
+// Test the exact argument builder used by the production owner execution,
+// not an example command. Unchecked must never strip localization.
+{
+    var builder = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "BuildGenerateOwnerArguments",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException(
+            "CET_HOTSCENES_ENG_ONLY_OWNER_ARGUMENTS_MISSING");
+    string[] Args(bool enabled) =>
+        ((IReadOnlyList<string>?)builder.Invoke(null,
+            ["capture-root", "game-root", "owner-pass.zip", enabled]) ??
+            throw new InvalidDataException("CET owner arguments are null")).ToArray();
+    var normal = Args(false);
+    var english = Args(true);
+    if (normal.Contains("--hotscenes-english-only", StringComparer.Ordinal) ||
+        normal.Count(x => x == "--generate-pass") != 1 ||
+        english.Count(x => x == "--hotscenes-english-only") != 1 ||
+        !normal.Concat(["--hotscenes-english-only"])
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .SequenceEqual(english.OrderBy(x => x, StringComparer.Ordinal)) ||
+        normal.Last() != "--json" || english.Last() != "--json")
+        throw new InvalidDataException(
+            "CET_HOTSCENES_ENG_ONLY_MUST_BE_EXPLICIT_GENERATION_OPT_IN");
+}
+
 var checks = 0;
 void Require(bool valid, string message)
 {
