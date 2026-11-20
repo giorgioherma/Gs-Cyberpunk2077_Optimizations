@@ -204,44 +204,40 @@ public class C extends IScriptable {
         # No output rewrites for the source-unsafe case.
         self.assertFalse(doc["rules"][4]["status"] == "READY_FOR_GENERATOR")
 
-    def test_retired_location_marker_requires_restoring_original_mod_source(self):
+    def test_experimental_native_location_not_in_default_plan(self):
+        doc = self.make_plan()
+        self.assertEqual(doc["implementedRuleCount"], 9)
+        self.assertFalse(any(
+            rule["id"] == "native-player-location-predicate"
+            for rule in doc["rules"]))
+        self.make_analysis(doc["sourceStackSha256"])
+        before = self.consumer.read_bytes()
+        run = self.cli("stage-redscript-plan", "--game", self.game,
+                       "--plan", self.plan, "--analysis", self.analysis,
+                       "--out", self.staged)
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        self.assertEqual(self.consumer.read_bytes(), before)
+        self.assertFalse(list(self.staged.rglob("GCO_NativeLocation_*.reds")))
+        stages = json.loads((self.staged / "stage-result.json").read_text())
+        self.assertFalse(any(
+            item["id"] == "native-player-location-predicate"
+            for item in stages["completed"]))
+
+    def test_legacy_location_marker_is_not_a_global_capture_plan_refusal(self):
+        # Handling an actual previously generated install is a separate
+        # product decision. The now-removed blanket refusal must not prevent
+        # all Analyze/Plan from merely observing a historical marker.
         self.consumer.write_text(
             self.consumer.read_text(encoding="utf8") +
             "\n/* GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:123456789 */\n",
             encoding="utf8")
-        original = self.consumer.read_bytes()
+        untouched = self.consumer.read_bytes()
         run = self.cli("plan-redscript", "--game", self.game,
                        "--out", self.plan)
-        self.assertNotEqual(run.returncode, 0)
-        self.assertIn("REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT",
-                      run.stderr + run.stdout)
-        self.assertFalse(self.plan.exists())
-        self.assertEqual(self.consumer.read_bytes(), original)
-
-    def test_retired_generated_native_adapter_not_treated_as_normal_source(self):
-        adapter = self.game / "r6/scripts/Consumer/GCO_NativeLocation_123456789.reds"
-        adapter.write_text("module GenericConsumer\n", encoding="utf8")
-        run = self.cli("plan-redscript", "--game", self.game,
-                       "--out", self.plan)
-        self.assertNotEqual(run.returncode, 0)
-        self.assertIn("REDSCRIPT_RETIRED_LOCATION_OVERLAY_PRESENT",
-                      run.stderr + run.stdout)
-        self.assertFalse(self.plan.exists())
-        self.assertEqual(adapter.read_text(encoding="utf8"),
-                         "module GenericConsumer\n")
-
-    def test_retired_location_source_drift_after_plan_is_refused(self):
-        doc = self.make_plan()
-        self.make_analysis(doc["sourceStackSha256"])
-        self.consumer.write_text(
-            self.consumer.read_text(encoding="utf8") +
-            "\n/* GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1 */\n",
-            encoding="utf8")
-        result = self.cli("stage-redscript-plan", "--game", self.game,
-                          "--plan", self.plan, "--analysis", self.analysis,
-                          "--out", self.staged)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(self.staged.exists())
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        self.assertEqual(self.consumer.read_bytes(), untouched)
+        doc = json.loads(self.plan.read_text(encoding="utf8"))
+        self.assertEqual(doc["implementedRuleCount"], 9)
 
     def test_plan_order_cannot_be_modified_by_caller(self):
         doc = self.make_plan()
