@@ -50,55 +50,8 @@ internal static class DarkFutureStatusIconCadencePass
             throw new InvalidDataException("DF_ICON_INSERTION_NOT_LINE_ALIGNED");
         return prefix;
     }
-    // Compare the actual REDscript tokens and literal values, not the exact
-    // whitespace/comments of a historical generated gate.
-    private static bool EndsWithGuard(string source,
-        IReadOnlyList<SourceAdmission.Token> tokens, int end,
-        string guard, out int begin)
-    {
-        var candidates=new[]{
-            guard,
-            "if ("+guard[3..^2]+") {"
-        };
-        foreach(string expectedSource in candidates)
-        {
-            var expected=SourceAdmission.ReadTokens(expectedSource);
-            if(end<expected.Count)continue;
-            int start=end-expected.Count;
-            bool same=true;
-            for(int j=0;j<expected.Count;j++)
-            {
-                var actual=tokens[start+j];
-                var pattern=expected[j];
-                string actualValue=actual.Value=="<literal>"
-                    ? source[actual.Start..actual.End]:actual.Value;
-                string patternValue=pattern.Value=="<literal>"
-                    ? expectedSource[pattern.Start..pattern.End]:pattern.Value;
-                if(!string.Equals(actualValue,patternValue,
-                    StringComparison.Ordinal)){same=false;break;}
-            }
-            if(!same)continue;
-            begin=tokens[start].Start;
-            return true;
-        }
-        begin=-1;
-        return false;
-    }
-
-    private static string TargetVisualGate(string record)
-    {
-        // The broad DarkFutureCanHideOnBuffBar tag also belongs to addiction
-        // withdrawal and injury effects. Only these four independently
-        // identified needs penalties are approved for 400 ms icon redraw.
-        string tags=record+".GameplayTags()";
-        string[] needs=[
-            "DarkFutureNeedNerve", "DarkFutureNeedHydration",
-            "DarkFutureNeedNutrition", "DarkFutureNeedEnergy"
-        ];
-        string membership=string.Join(" || ",needs.Select(name=>
-            "ArrayContains("+tags+", n\""+name+"\")"));
-        return "if "+Due+" || "+Force+" || !("+membership+") {";
-    }
+    private static string Normalize(string source)
+        => string.Join(" ",SourceAdmission.ReadTokens(source).Select(t=>t.Value));
 
     private static Inspection Inspect(string text)
     {
@@ -147,11 +100,9 @@ internal static class DarkFutureStatusIconCadencePass
            !body.Contains("SetStatusEffectRecord",StringComparison.Ordinal) ||
            !body.Contains("onScreenBuffsCount",StringComparison.Ordinal))
             return Refuse("DF_ICON_WIDGET_POOL_FLOW_UNPROVEN");
-        // Parentheses around an unchanged record-identity comparison are
-        // source-layout drift, not a new callback or altered dataflow.
-        string recordPattern=@"\bif\s*\(?\s*(?<record>[a-zA-Z_]\w*)\s*!=\s*"+
+        string recordPattern=@"\bif\s+(?<record>[a-zA-Z_]\w*)\s*!=\s*"+
             Regex.Escape(receiver)+
-            @"\s*\.\s*GetStatusEffectRecord\s*\(\s*\)\s*\)?\s*\{";
+            @"\s*\.\s*GetStatusEffectRecord\s*\(\s*\)\s*\{";
         var matches=Regex.Matches(body,recordPattern);
         if(matches.Count!=1)
             return Refuse("DF_ICON_RECORD_IDENTITY_FLOW_UNPROVEN");
@@ -300,26 +251,19 @@ internal static class DarkFutureStatusIconCadencePass
         string setLineIndent;
         try{setLineIndent=LineIndent(text,t[setIndex].Start);}
         catch(InvalidDataException){return Refuse("DF_ICON_SETDATA_NOT_ALIGNED");}
-        // DarkFutureCanHideOnBuffBar is NOT specific to the four approved
-        // needs icons. Do not throttle addictions, injuries or unrelated
-        // effects that happen to share that broad tag.
-        string record=change.Groups["record"].Value;
-        string gate=TargetVisualGate(record);
-        string legacyGate="if "+Due+" || "+Force+
-            " || !ArrayContains("+record+
+        // Leave ordinary Cyberpunk combat/quickhack status icons fully live.
+        // DF needs penalties carry this author-owned gameplay tag in the
+        // installed TweakXL data; no fixed buffID or version is assumed.
+        string gate="if "+Due+" || "+Force+
+            " || !ArrayContains("+change.Groups["record"].Value+
             ".GameplayTags(), n\"DarkFutureCanHideOnBuffBar\") {";
-        bool guarded=EndsWithGuard(text,t,setIndex,gate,out int currentStart);
-        bool legacy=EndsWithGuard(text,t,setIndex,legacyGate,out int legacyStart);
-        if(!guarded && legacy)
+        bool guarded=text[..t[setIndex].Start].TrimEnd()
+            .EndsWith(gate,StringComparison.Ordinal);
+        if(!guarded)
         {
-            // Upgrade a partially/already optimized prior generated guard
-            // in-place. Replacing just the predicate preserves the owner's
-            // original SetData, visual cadence and all unrelated source.
-            edits.Add(new(legacyStart,t[setIndex-1].End,gate));
-        }
-        else if(!guarded)
-        {
-            if(At(t,setIndex-1,"{"))
+            if(text[..t[setIndex].Start].TrimEnd().EndsWith("{",
+                StringComparison.Ordinal) &&
+               text[..t[setIndex].Start].Contains(Due,StringComparison.Ordinal))
                 return Refuse("DF_ICON_UNKNOWN_SETDATA_GUARD");
             edits.Add(new(t[setIndex].Start,t[setIndex].Start,
                 gate+nl+setLineIndent));
@@ -368,18 +312,8 @@ internal static class DarkFutureStatusIconCadencePass
             string s=File.ReadAllText(p,Encoding.UTF8);
             bool owner=Path.GetRelativePath(scripts,p)
                 .Split(Path.DirectorySeparatorChar)
-                .Any(x=>x.Equals("Dark Future",StringComparison.OrdinalIgnoreCase));
-            if(!owner && s.Contains("DarkFuture",StringComparison.Ordinal))
-            {
-                // Match the declared module/import as code tokens, not a
-                // whitespace-specific substring. Relocated custom owners
-                // remain eligible even when comments separate import tokens.
-                var imports=SourceAdmission.ReadTokens(s);
-                for(int i=0;i+2<imports.Count;i++)
-                    if(Sequence(imports,i,"import","DarkFuture",".") ||
-                       Sequence(imports,i,"module","DarkFuture","."))
-                    {owner=true;break;}
-            }
+                .Any(x=>x.Equals("Dark Future",StringComparison.OrdinalIgnoreCase))
+                || s.Contains("import DarkFuture.",StringComparison.Ordinal);
             if(!owner)continue;
             ownerPresent=true;
             if(s.Contains("UpdateBuffDebuffList",StringComparison.Ordinal) &&
