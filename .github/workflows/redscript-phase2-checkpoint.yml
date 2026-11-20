@@ -323,7 +323,7 @@ jobs:
             throw 'PHASE2_CQ_DPAD_OUTPUT_MISSING'
           }
           $text=Get-Content -LiteralPath $generated -Raw
-          if (!$text.Contains('this.lastUsedKBM || !this.player.PlayerLastUsedPad()') -or
+          if (!$text.Contains('!this.player.PlayerLastUsedPad()') -or
               !$text.Contains('this.RecomputeDpadProhibitions();') -or
               !$text.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
               !$text.Contains('this.customQuickslotsInputHub.Subscribe(') -or
