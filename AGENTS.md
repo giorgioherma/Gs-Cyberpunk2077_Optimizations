@@ -1,6 +1,12 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
 
+## 2026-11-20 — explicit Page 2 Analyze and transparent source-local skip reporting (CURRENT)
+
+`CONTINUE` verifies source-owner CET and GRSP uninstall/restore, then opens the Analyze page **without starting analysis**. A resumed workspace behaves identically. Show "Both profilers uninstalled. All game files are restored." only for a verified restored, sealed capture; report CET/REDscript/PresentMon OK or missing independently outside the REDscript panel. Wire the user-clicked `ANALYZE` button as the only normal analysis trigger. Keep CET's numeric callback materiality distinct from distinct mods; use brief user-facing REDscript counts without research/generation-order clutter.
+
+Generate one safe ZIP when any independent changes qualify. Carry CET's existing source-owned skip reasons from its original pass manifest rather than implementing a competing CET resolver. Currently only explicitly known REDscript source-local errors may defer the affected entire ordered rule family; report rule and reason. Never suppress source/capture drift, tamper, unknown exceptions, generator postcondition failures, invalid game paths or ZIP collisions. The external ownership sidecar captures skipped counts/reasons and rollback hashes, while the game-relative ZIP contains only accepted source files. Official SCC remains GitHub CI-only and not redistributed.
+
 ## 2026-11-20 — owner SCC/redistribution and capture graph decision (CURRENT, overrides stale runtime compilation instructions)
 
 **Never invoke SCC during player-side Analyze or Generate.** Official redscript SCC 0.5.31 verifies current generated sources in GCO GitHub development/CI only; its failure remains a real CI/release blocker, but cannot prevent the shipped app from generating a source-checked ZIP. Do **not** package or redistribute `scc_lib.dll` or another third-party compiler in GCO without explicit licensing approval. Keep existing runtime structural proof, source-drift refusal, partial/idempotence, per-owner ZIP integrity and original game safety. Do not claim the user's freshly generated file was locally compiled, or that CI proves runtime/gameplay compatibility.
