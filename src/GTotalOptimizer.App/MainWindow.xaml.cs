@@ -2083,27 +2083,27 @@ public partial class MainWindow : Window
                     (pass.HotscenesEnglishOnlyEdits > 0
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
                         : "not applied (see generation details)");
-            SetResultsConsoleStatus("Optimization ZIP created: " +
-                Path.GetFileName(pass.ZipPath) + Environment.NewLine +
-                "Files: " + pass.GeneratedFiles +
-                " | CET optimizations: " + pass.CetTransforms +
+            // Compact completed output: the full-width console stays a few
+            // readable rows rather than wrapping behind CLOSE or scrolling.
+            SetResultsConsoleStatus("Optimization ZIP: " +
+                Path.GetFileName(pass.ZipPath) +
+                " | Files: " + pass.GeneratedFiles +
+                " | CET transforms: " + pass.CetTransforms +
                 " | REDscript edits: " + pass.RedscriptEdits + Environment.NewLine +
                 "Not applied: CET " + pass.CetSkipped +
-                " (needs review: " + refused.Length + ")" +
-                " | REDscript rules: " + redSkipIds.Length +
+                " (review " + refused.Length + ")" +
+                " | REDscript rules " + redSkipIds.Length +
                 (redSkipIds.Length == 0 ? "" :
-                    " (" + string.Join(", ", redSkipIds) + ")") + Environment.NewLine +
+                    " (" + string.Join(", ", redSkipIds) + ")") +
                 (pass.HotscenesEnglishOnlyRequested
-                    ? "Hotscenes ENG-only: " +
+                    ? " | Hotscenes ENG-only: " +
                       (pass.HotscenesEnglishOnlyEdits > 0
-                          ? "applied" : "not applied; check skip details") +
-                      Environment.NewLine
-                    : "") +
-                "Saved to: generated_optimizations/" +
-                Path.GetFileName(Path.GetDirectoryName(pass.ZipPath)!) + "/" +
-                Environment.NewLine +
-                "Skip details: " + Path.GetFileName(pass.ZipPath) +
-                ".ownership.json (beside the ZIP).");
+                          ? "applied" : "not applied")
+                    : "") + Environment.NewLine +
+                "Output: generated_optimizations/" +
+                Path.GetFileName(Path.GetDirectoryName(pass.ZipPath)!) +
+                "/ | Details: " + Path.GetFileName(pass.ZipPath) +
+                ".ownership.json");
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
             OpenResultsButton.IsEnabled = true;
         }
