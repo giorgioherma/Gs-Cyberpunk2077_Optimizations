@@ -2224,7 +2224,7 @@ public partial class MainWindow : Window
             Warn("Finish the current operation before returning to Capture.", "Back");
             return;
         }
-        if (MessageBox.Show(this,
+        if (System.Windows.MessageBox.Show(this,
                 "Return to page one. This will reset your captures and return you to the first page." +
                 Environment.NewLine + Environment.NewLine +
                 "Do you want to continue?",
