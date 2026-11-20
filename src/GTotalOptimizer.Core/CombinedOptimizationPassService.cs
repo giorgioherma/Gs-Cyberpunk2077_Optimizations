@@ -18,6 +18,7 @@ public sealed record CombinedPassOutcome(
 {
     public int AppliedRedscriptRules { get; init; }
     public int CetSkipped { get; init; }
+    public CetSkipDetail[] CetSkipDetails { get; init; } = [];
     public RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped { get; init; } = [];
 }
 
@@ -146,6 +147,11 @@ public sealed class CombinedOptimizationPassService
                             composedFiles = rule.ComposedFiles
                         }).ToArray(),
                         cetSkippedCount = cetResult.SkippedCount,
+                        cetSkipDetails = cetResult.SkipDetails.Select(item => new {
+                            category = item.Category, type = item.Type,
+                            owner = item.Owner, ruleId = item.RuleId,
+                            file = item.File, reason = item.Reason
+                        }).ToArray(),
                         redscriptSkippedRules = red.Skipped.Select(item => new {
                             order = item.Order, id = item.Id,
                             eligibleCandidates = item.EligibleCandidates,
@@ -181,6 +187,7 @@ public sealed class CombinedOptimizationPassService
                 {
                     AppliedRedscriptRules = red.Completed.Length,
                     CetSkipped = cetResult.SkippedCount,
+                    CetSkipDetails = cetResult.SkipDetails,
                     RedscriptSkipped = red.Skipped
                 };
             }
