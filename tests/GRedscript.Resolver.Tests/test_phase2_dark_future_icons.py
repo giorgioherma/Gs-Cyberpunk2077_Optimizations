@@ -262,6 +262,28 @@ class IconVisualCadenceTests(unittest.TestCase):
         self.assertEqual(again["status"], "COMPLETE")
         self.assertIsNone(nothing)
 
+    def test_parenthesized_record_identity_is_compatible(self):
+        source = SOURCE.replace(
+            "if data != currBuffLoc.GetStatusEffectRecord() {",
+            "if ( data != currBuffLoc.GetStatusEffectRecord() ) {")
+        report, staged = self.run_generator(source)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.check_complete(source, staged)
+        repeat, no_change = self.run_generator(staged)
+        self.assertEqual(repeat["status"], "COMPLETE", repeat)
+        self.assertIsNone(no_change)
+
+    def test_relocated_owner_import_with_comments_and_spaces(self):
+        source = SOURCE.replace("import DarkFuture.UI.*",
+            "import /* custom relocation */ DarkFuture . UI .*")
+        path = "r6/scripts/ThirdPartyOwner/ReplacementHUD.reds"
+        report, generated = self.run_generator(source, path=path)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.check_complete(source, generated)
+        repeated, absent = self.run_generator(generated, path=path)
+        self.assertEqual(repeated["status"], "COMPLETE", repeated)
+        self.assertIsNone(absent)
+
     def test_unknown_target_refuses_without_creating_semantic_source(self):
         incompatible = SOURCE.replace(
             "data != currBuffLoc.GetStatusEffectRecord()",
