@@ -1,5 +1,10 @@
 # R5 — REDscript work-elimination research: large generic passes first
 
+## 2026-11-20 — current accepted generator boundary
+
+The default GCO Generator uses the canonical **ten** source-proven REDscript generic passes, with `STABLE_ARRAY_BOUND_V1` final. The **seven future semantic owners are not excluded from generic code generation**; they are only excluded from R5 performance ranking. All five broader A–E systems are deferred and cannot enter the default ZIP. Previously explored callback work/quest/UI/position scanners did not authorize a useful additional generator and are retained as opt-in research in Git rather than executing in default Actions. Experimental native REDscript location backend/adapters are not copied to GCO's app package or generated game ZIP; CET's native optimization remains active. The external optimization ownership report now lists exactly which approved rule IDs/order/edits were applied; no performance benefit is inferred from counts. Verify post-cleanup CI results in `docs/LATEST-WORK.md`.
+
+
 ## 2026-11-20 — STABLE_ARRAY_BOUND_V1 source-only generator (new R5 family)
 
 The previous 28-loop/17-owner audit shortlist was research, not generation admission. GCO now implements a single **token-proven** no-call stable-array-length hoist, independent of mod names and capture hit frequency. The canonical tenth rule `stable-array-bound` runs **after** the prior nine rules against their effective staged source. It transforms only exact bare-local/typed-parameter `while idx < ArraySize(arr) {` loops with verified same-method scope, read-only array indexing, no nested loops, unknown calls, array mutators, array/member writes or alias escape. The original loop body is preserved byte-for-byte. The transformed header uses one local `let __gcoArrBoundLNN: Int32 = ArraySize(arr);` before the loop. Markers verify the saved original body hash; missing, partial or manually edited output refuses rather than silently patching. A strict original/current source SHA match and optional effective-preview equivalence guard source drift.
