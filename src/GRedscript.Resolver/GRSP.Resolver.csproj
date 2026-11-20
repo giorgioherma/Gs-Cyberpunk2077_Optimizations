@@ -10,6 +10,12 @@
     <SelfContained>false</SelfContained>
     <!-- Hosted in GCO's single .NET 10 process; CLI entry remains accessible via dotnet DLL. -->
     <UseAppHost>false</UseAppHost>
+    <!-- This CLI is also referenced as a managed library by GCO. During
+         win-x64 publication, suppress the second RID-specific CLI
+         runtimeconfig/deps copy; the non-RID CLI build used for tests
+         retains both files and the entry point. -->
+    <GenerateRuntimeConfigurationFiles Condition="'$(RuntimeIdentifier)' != ''">false</GenerateRuntimeConfigurationFiles>
+    <GenerateDependencyFile Condition="'$(RuntimeIdentifier)' != ''">false</GenerateDependencyFile>
     <IsPublishable>true</IsPublishable>
   </PropertyGroup>
 </Project>
