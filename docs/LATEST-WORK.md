@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-20 — Analyze Page 2 compact UI follow-up (awaiting Windows CI)
+
+- Source branch: `dev/redscript/resolver_handoff`. BACK moved from the bottom-right to the header directly left of REFRESH, reusing its compact MinorButton visual. The existing Yes/No capture-reset workflow is unchanged; BACK only appears on Analyze.
+- The redundant cyan boxed Page 2 status log was removed. The same ResultsStatusText/state/activity logic now renders in the fixed bottom strip, avoiding the stale Capture console beneath the Page 2 overlay. CLOSE retains Collapsed visibility until a verified published ZIP and remains bottom-right.
+- CET + REDscript ZIP guidance and Vortex guidance are on one line; manual backup paths occupy the second line. Original heading position, V image, skyline, CET/REDscript cards, source-owner profiler lifecycle and generator remain untouched.
+- Updated packaged WPF smoke to check the new header placement, hidden CLOSE, bottom-console location and no Analyze vertical scroll at the 1280×760 reference. Commit `9dbbc463d8529261cb9f67654f4cde7bcc77bd29` is the code checkpoint; **Windows build, CI and real-player visual acceptance remain pending**.
+
+
 ## 2026-11-20 — generated output separate from profilers, confirmed BACK and end-of-pass CLOSE
 
 - **Folder policy:** One game-relative optimized ZIP plus its external ownership sidecar now publishes under application root `generated_optimizations/pass-YYYYMMDD_HHMMSS/`. `RESULTS` is for immutable profiler captures and derived reports only; OPEN RESULTS still navigates there. The temporary pass directory is published by a same-volume atomic move after both files and ZIP integrity checks complete. No half-published pass, timestamp overwrites, migration/deletion of existing captures, or changes to game source.
