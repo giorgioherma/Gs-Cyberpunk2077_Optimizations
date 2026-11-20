@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-20 — mandatory REDscript semantic compatibility rules documented (owner decision)
+
+- Added the standalone, prominent agent contract [IMPORTANT FOR AGENTS — REDscript Optimization Rules](integration/IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md) and linked it from top-of-file `AGENTS.md`, the active [Phase 2 semantic plan](integration/REDSCRIPT-PHASE2-SEMANTIC-PLAN.md), and `docs/product/CURRENT-DECISIONS.md`. This **supersedes** older rules treating harmless source-version/whole-file differences as automatic rejection.
+- The four hard rules: **partial semantic optimization must be recognized and completed**; **one Generate from post-generic stock produces all compatible approved semantic work** (no sequential historical passes); **newer/older/custom-modified current source remains eligible by structural/semantic recognition while existing edits are preserved**; and **only truly incompatible or safety-unprovable target operations are skipped, narrowly and with specific diagnostics**. Markerless equivalent completed work, generic composition and exact idempotence are required.
+- No semantic rule, C#/REDscript code, framework service or game ZIP was changed. This records acceptance criteria for forthcoming generator implementation. Still require actual source-state tests, full official CI SCC, gameplay feature validation and owner rollback/integrity checks.
+
+
 ## 2026-11-20 — Dark Future dedicated Phase 2 workload audit (documentation only)
 
 - Added [Dark Future workload-first semantic audit](integration/REDSCRIPT-PHASE2-DARK-FUTURE-WORKLOAD.md) from the user's sealed 384.517s GRSP capture, current 43-file post-generic Dark Future source, verified GitHub `base_after_generic` copy (line-ending normalized exact text), and historical passes 3.0/5.0/6.0/7.0. The three sustained UI functions plus the finite-timer wrapper account for ~94.8% of source-owner exclusive outgoing-callsite work **within GRSP accounting**, not measured savings.
