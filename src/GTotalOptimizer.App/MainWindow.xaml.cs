@@ -1880,8 +1880,11 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
-            RefreshCompletedWorkspace(); // disable actions if sealed evidence is no longer valid
+            // Verify safety first, then retain the actual error in the
+            // console if the captured workspace is still usable.
+            RefreshCompletedWorkspace(); // disables actions if provenance failed
+            if (OpenResultsButton.IsEnabled)
+                SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
             Trace.TraceWarning("Manual Analyze refused: " + ex);
         }
     }
