@@ -2512,10 +2512,20 @@ try {
     $extra = @{}
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+        # The owner SCC must compile the actual final canonical Stage,
+        # including the two additive Pass 8 helpers and Pass 10 memoization.
+        $extra.FrameworkPreviewRoot = (Resolve-Path -LiteralPath (Join-Path $orderedStage 'effective-preview') -ErrorAction Stop).Path
+        $extra.ApprovedAdditiveStageRoot = (Resolve-Path -LiteralPath $orderedStage -ErrorAction Stop).Path
     }
     if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
         $extra.CallbackPreviewRoot = $legacyCallbackFolder
-        $extra.FrameworkPreviewRoot = $callbackFolder
+        if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+            # Full canonical preview was already selected above.
+            if ($extra.FrameworkPreviewRoot -ne
+                (Resolve-Path -LiteralPath (Join-Path $orderedStage 'effective-preview')).Path) {
+                throw 'GCO_OWNER_SCC_PREVIEW_HANDOFF_CHANGED'
+            }
+        }
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
     if ($LASTEXITCODE -ne 0) {
