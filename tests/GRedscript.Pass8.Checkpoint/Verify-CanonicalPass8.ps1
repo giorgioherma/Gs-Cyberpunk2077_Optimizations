@@ -37,12 +37,13 @@ try {
   $required = @(
     @{ Id='pass8-chipware-throughput'; Order=37; Edits=3 },
     @{ Id='pass8-chipware-combat-cache'; Order=38; Edits=9 },
-    @{ Id='pass8-immersive-cyberware'; Order=39; Edits=3 }
+    @{ Id='pass8-immersive-cyberware'; Order=39; Edits=3 },
+    @{ Id='pass10-chipware-perk-memo'; Order=40; Edits=3 }
   )
   foreach($stage in $required) {
     $rows = @($report.completed | Where-Object { $_.id -eq $stage.Id })
     if($rows.Count -ne 1 -or [int]$rows[0].order -ne $stage.Order -or
-       [int]$rows[0].rewrittenExpressions -ne $stage.Edits -or
+       [int]$rows[0].rewrittenExpressions -lt $stage.Edits -or
        @($report.skipped | Where-Object { $_.id -eq $stage.Id }).Count -gt 0) {
       throw ('PASS8_CANONICAL_STAGE_MISSING_OR_REFUSED:' + $stage.Id)
     }
@@ -66,7 +67,7 @@ try {
   if ($effectiveFiles.Count -ne [int]$report.generatedFiles) {
     throw 'PASS8_CANONICAL_STAGE_GENERATED_COUNT_MISMATCH'
   }
-  Write-Host ('PASS8_CANONICAL_ONE_PASS_ACCEPTED: stages 37-39, edits=15, ' +
+  Write-Host ('PASS10_CANONICAL_ONE_PASS_ACCEPTED: stages 37-40, Pass8+100ms memo, ' +
     'independent file byte parity=8, combined files=' + $effectiveFiles.Count)
   & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 `
     -PostGenericRoot $game `

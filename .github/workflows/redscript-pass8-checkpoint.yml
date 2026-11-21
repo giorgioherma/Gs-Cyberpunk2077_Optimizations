@@ -1,10 +1,10 @@
-name: REDscript Pass 8 - isolated throughput / SCC
+name: REDscript Pass 10 - approved Chipware memo SCC
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - dev/redscript/pass8
+      - dev/redscript/pass10
     # Deliberate grouped checkpoints only: source/tests commits do not
     # auto-cancel each other. Dispatch manually or update the trigger file
     # after a meaningful source-proven batch has been assembled.
@@ -15,12 +15,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: redscript-pass8-${{ github.ref }}
+  group: redscript-pass10-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   pass8:
-    name: Pass 8 source states and full effective-source SCC
+    name: Pass 10 post-generic one-pass and official SCC
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -56,6 +56,8 @@ jobs:
         run: |
           python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass8_*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'PASS8_SOURCE_STATE_FAILED' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_pass10_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PASS10_SOURCE_STATE_FAILED' }
       - name: Generate Pass 8 from actual post-generic mod sources once
         shell: pwsh
         run: |
@@ -141,6 +143,43 @@ jobs:
           }
           Write-Host "PASS8 ImmersiveCyberware operations: $($r.appliedEdits), merged scripts: $($files.Count)"
 
+      - name: Generate approved Chipware 100ms perk memo after Pass 8
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='tests/GRedscript.Pass8.Checkpoint/bin/Release/net10.0/GRedscript.Pass8.Checkpoint.dll'
+          & dotnet $dll --owner memo --game '.phase2-private/base_after_generic' --base-overlay '.phase2-pass8' --out '.phase2-pass10'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS10_MEMO_GENERATION_FAILED' }
+          $r=Get-Content -LiteralPath '.phase2-pass10/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($r.ruleId -ne 'CHIPWARE_100MS_PERK_RESULT_MEMO_V1' -or
+              $r.status -ne 'APPLIED' -or $r.appliedEdits -lt 3 -or
+              @($r.refusals).Count -ne 0) {
+            throw ('PASS10_APPROVED_HISTORICAL_CACHE_NOT_GENERATED:' + ($r | ConvertTo-Json -Compress))
+          }
+          $root=(Resolve-Path '.phase2-pass10').Path
+          $files=@(Get-ChildItem -LiteralPath '.phase2-pass10/r6/scripts' -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 2) { throw ('PASS10_OWNER_AND_HELPER_NOT_COMPOSED:' + $files.Count) }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($root,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..') -or
+                !$rel.Replace('\','/').StartsWith('r6/scripts/zzy_bChipwareExpansion/')) {
+              throw ('PASS10_OWNER_PATH_ESCAPE:' + $rel)
+            }
+            $dest=Join-Path '.phase2-pass8' $rel
+            if (!(Test-Path -LiteralPath $dest -PathType Leaf)) {
+              throw ('PASS10_UNEXPECTED_OWNER_OR_HELPER:' + $rel)
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+          }
+          Write-Host 'PASS Chipware approved 100ms memo composed into Pass 8 owner/helper'
+          & dotnet $dll --owner memo --game '.phase2-private/base_after_generic' --base-overlay '.phase2-pass8' --out '.phase2-pass10-repeat'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS10_REPEAT_GENERATION_FAILED' }
+          $repeat=Get-Content -LiteralPath '.phase2-pass10-repeat/phase2-result.json' -Raw | ConvertFrom-Json
+          $again=@(Get-ChildItem -LiteralPath '.phase2-pass10-repeat' -Recurse -File -Filter '*.reds')
+          if ($repeat.appliedEdits -ne 0 -or $again.Count -ne 0 -or
+              $repeat.status -ne 'COMPLETE') { throw 'PASS10_REPEAT_NOT_IDEMPOTENT' }
+          Write-Host 'PASS Chipware repeat COMPLETE, zero additional output'
+
       - name: Compile authoritative source plus actual Pass 8 overlay using official SCC 0.5.31
         shell: pwsh
         run: |
@@ -157,7 +196,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach($p in @('.phase2-private','.phase2-pass8','.phase2-chip-combat','.phase2-immersive')) {
+          foreach($p in @('.phase2-private','.phase2-pass8','.phase2-chip-combat','.phase2-immersive','.phase2-pass10','.phase2-pass10-repeat')) {
             if (Test-Path -LiteralPath $p) {
               Remove-Item -LiteralPath $p -Recurse -Force
             }
