@@ -429,11 +429,11 @@ internal static class BrowserExtensionInputHubPass
         foreach (string f in Directory.EnumerateFiles(scripts, "*.reds",
             SearchOption.AllDirectories))
         {
-            string path = f.Replace('\\','/');
-            if (!path.Contains("/G-RedRuntime/", StringComparison.OrdinalIgnoreCase) &&
-                !path.Contains("/GRedRuntime/", StringComparison.OrdinalIgnoreCase))
-                continue;
             string code = File.ReadAllText(f, Encoding.UTF8);
+            // Framework ownership is determined by the declared module/API,
+            // never a historical folder, file split or mod version.
+            if (!Regex.IsMatch(code, @"\bmodule\s+GRedRuntime\b"))
+                continue;
             for (int i=0;i<needed.Length;i++)
                 found[i] |= code.Contains(needed[i],StringComparison.Ordinal);
         }
