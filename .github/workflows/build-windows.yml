@@ -1,4 +1,5 @@
-name: Gs-Cyberpunk2077_Optimizer
+name: GCO | Full integration validation
+run-name: GCO full checkpoint | ${{ github.ref_name }}
 # Product version changes only on an explicit user request; keep fixed otherwise.
 
 on:
@@ -9,20 +10,16 @@ on:
         type: boolean
         required: false
         default: false
+  # Consolidated CI: ordinary source commits do NOT create full Windows runs.
+  # Only an explicit milestone marker commit launches the full validation.
   push:
     branches: [ main, feature/presentmon-resolver-integration ]
     paths:
-      - '.github/workflows/build-windows.yml'
-      - 'Directory.Build.props'
-      - 'integrations/three-profiler-test/Build-Test.ps1'
-      - 'integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1'
-      - 'src/GTotalOptimizer.App/**'
-      - 'src/GRedscript.Resolver/**'
-      - 'tests/GRedscript.Resolver.Tests/**'
-      - 'assets/ui/elements/**'
-      - 'src/GTotalOptimizer.Launcher/**'
-      - 'src/GTotalOptimizer.Core/**'
-      - 'tests/GTotalOptimizer.Core.Tests/**'
+      - '.ci/checkpoints/full-gco.txt'
+
+concurrency:
+  group: gco-full-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -733,6 +730,16 @@ jobs:
           if (Test-Path -LiteralPath '.gco-ci-private-cet') {
             Remove-Item -LiteralPath '.gco-ci-private-cet' -Recurse -Force -ErrorAction Stop
           }
+      - name: Summarize changes covered by this GCO checkpoint
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (Test-Path -LiteralPath 'unified/scripts/ci/Write-CheckpointSummary.ps1' -PathType Leaf) {
+            & 'unified/scripts/ci/Write-CheckpointSummary.ps1' -WorkflowFile 'build-windows.yml' -CheckpointFile 'unified/.ci/checkpoints/full-gco.txt'
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
