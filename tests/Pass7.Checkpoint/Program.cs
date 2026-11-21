@@ -243,7 +243,7 @@ static void Run(string baseline)
         Require(fullReport.AppliedEdits == 0 &&
             GeneratedFiles(Path.Combine(temp, "full-out")).Length == 0,
             "FULL_SOURCE_MUST_BE_NOOP");
-        foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN" })
+        foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER_QUEST_DETECTION", "STEALTH_RUNNER_PLAYER_HANDLE", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION", "LIZZIES_BDS_PERFORMER" })
             AssertStatus(fullReport, id, "COMPLETE");
 
         // Repeat on staged effective source, without modifying original source.
@@ -276,7 +276,7 @@ static void Run(string baseline)
             StringComparison.Ordinal);
         var partialReport = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "partial", partial), Path.Combine(temp, "partial-out"));
-        foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN" })
+        foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER_QUEST_DETECTION", "STEALTH_RUNNER_PLAYER_HANDLE", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION", "LIZZIES_BDS_PERFORMER" })
             AssertStatus(partialReport, id, "APPLIED");
         CheckContent(partial, Path.Combine(temp, "partial-out"));
 
