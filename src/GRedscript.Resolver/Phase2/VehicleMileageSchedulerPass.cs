@@ -201,7 +201,7 @@ internal static class VehicleMileageSchedulerPass
         // All scheduling edits are confined to the existing owner's arm
         // function. When Scheduler is absent or admission fails, continue
         // into the exact original DelaySystem branch unchanged.
-        string registerKey="this.m_gcoVMScheduler.Register(this.m_gcoVMJob)";
+        string registerKey="vmScheduler.Register(vmJob)";
         if(!armBody.Contains(registerKey,StringComparison.Ordinal))
         {
             if(Has(armBody,@"\bm_gcoVMJobID\b"))
