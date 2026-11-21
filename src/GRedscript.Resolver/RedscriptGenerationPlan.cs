@@ -1611,6 +1611,50 @@ public static class RedscriptGenerationPlan
         if(dd.Status is not ("APPLIED" or "COMPLETE" or "NOT_APPLICABLE" or "REFUSED"))
             throw new InvalidDataException("DD_HUB_UNKNOWN_STAGE_STATUS");
 
+        // Historical Pass 2.2: NCR's 30-second maintenance work runs via
+        // shared Scheduler when ready, retaining the owner DelayCallback as
+        // an exclusive fallback and cancelling both routes on teardown.
+        string ncrRoot=Path.Combine(output,"_stages","34-ncr-maintenance");
+        var ncr=NightCityRemembersTickPass.Generate(game,
+            ncrRoot,Directory.Exists(final)?final:null);
+        if(ncr.Status=="APPLIED")
+        {
+            if(ncr.AppliedEdits<5 || string.IsNullOrWhiteSpace(ncr.SourcePath))
+                throw new InvalidDataException("NCR_STAGE_EMPTY");
+            string rel=ncr.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(ncrRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/NightCityRemembers/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,ncrRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("NCR_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("NCR_STAGE_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=ncr.AppliedEdits;
+            results.Add(new(34,"ncr-maintenance-scheduler",ncr.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(ncr.Status=="REFUSED")
+            skipped.Add(new(34,"ncr-maintenance-scheduler",1,
+                ncr.Reason ?? "NCR_MAINTENANCE_INCOMPATIBLE_SOURCE"));
+        else if(ncr.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("NCR_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

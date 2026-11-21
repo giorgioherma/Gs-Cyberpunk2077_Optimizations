@@ -53,6 +53,7 @@ jobs:
       PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
       PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
       PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_NCR_TICK_OUTPUT: ${{ github.workspace }}/.phase2-ncr-tick
       PHASE2_DRUGDEALER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-drugdealer-input
     steps:
       - name: Checkout GCO REDscript resolver
@@ -1062,6 +1063,45 @@ jobs:
           }
           Write-Host 'PASS five source-aware DrugDealer listeners, exclusive engine fallback and generic guards'
 
+      - name: Generate historical Pass 2.2 NCR 30-second scheduler with DelaySystem fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-ncr-tick --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_NCR_TICK_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_NCR_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_NCR_TICK_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 5) {
+            throw ('PHASE2_NCR_SOURCE_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/NightCityRemembers/NCR.reds'
+          $src=Join-Path $env:PHASE2_NCR_TICK_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_NCR_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('NCRGCOMaintenanceJob extends ScheduledJob') -or
+              !$content.Contains('this.m_gcoScheduler.Unregister(') -or
+              !$content.Contains('this.ScheduleTick();') -or
+              !$content.Contains('this.m_gcoTickID <= 0')) {
+            throw 'PHASE2_NCR_FALLBACK_OR_LIFECYCLE_MISSING'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_NCR_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS NCR 30-second scheduler + DelaySystem fallback + detach/session cleanup'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1329,6 +1369,17 @@ jobs:
                 throw ('PHASE2_DD_INPUT_ONE_PASS_BYTE_DIFF:'+ $rel)
               }
             }
+            $ncr=@($result.completed | Where-Object { $_.id -eq 'ncr-maintenance-scheduler' })
+            $ncrRel='r6/scripts/NightCityRemembers/NCR.reds'
+            $ncrRef=Join-Path $env:PHASE2_NCR_TICK_OUTPUT $ncrRel
+            $ncrActual=Join-Path (Join-Path $stage 'effective-preview') $ncrRel
+            if ($ncr.Count -ne 1 -or [int]$ncr[0].order -ne 34 -or
+                [int]$ncr[0].rewrittenExpressions -lt 5 -or
+                !(Test-Path -LiteralPath $ncrActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $ncrActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $ncrRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_NCR_ONE_PASS_BYTE_PARITY_DIFF'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1367,7 +1418,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
