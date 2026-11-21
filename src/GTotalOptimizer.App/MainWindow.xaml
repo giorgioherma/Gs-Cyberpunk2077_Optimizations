@@ -955,14 +955,16 @@
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"
                                              MinHeight="70" Margin="0,7,0,0"
                                              VerticalScrollBarVisibility="Auto"/>
-                                    <!-- Explicit player choice; never inferred from game
-                                         language, installed mods, or saved Resolver settings. -->
+                                    <!-- Only visible when installed Hotscenes is found.
+                                         English-only remains an explicit, unchecked player choice. -->
                                     <CheckBox x:Name="HotscenesEnglishOnlyCheckBox"
+                                              Visibility="Collapsed"
                                               IsChecked="False" IsThreeState="False"
                                               Foreground="#FFF000" FontSize="13"
                                               Margin="1,7,0,0" VerticalAlignment="Center"
                                               Content="Hotscenes ENG only"/>
                                     <TextBlock x:Name="HotscenesEnglishOnlyDescription"
+                                               Visibility="Collapsed"
                                                Foreground="#98A9B1" FontSize="11.5"
                                                Margin="24,2,0,0" TextWrapping="Wrap"
                                                Text="Check only if you use English. Removes Hotscenes localization from the generated ZIP to make room for optimizations."/>

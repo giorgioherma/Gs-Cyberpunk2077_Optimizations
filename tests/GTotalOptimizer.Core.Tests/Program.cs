@@ -172,6 +172,44 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     return;
 }
 
+// The optional Hotscenes UI must follow actual installed CET source, never
+// an unrelated directory, external mod folder, or prior capture.
+{
+    string sandbox = Path.Combine(Path.GetTempPath(),
+        "gco-hotscenes-visibility-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string gameRoot = Path.Combine(sandbox, "Cyberpunk 2077");
+        string executable = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(executable)!);
+        File.WriteAllText(executable, "");
+        string cetMods = Path.Combine(gameRoot, "bin", "x64", "plugins",
+            "cyber_engine_tweaks", "mods");
+        string hotscenes = Path.Combine(cetMods, "hotscenes");
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_SHOWS_WITHOUT_MOD");
+        Directory.CreateDirectory(hotscenes);
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_SHOWS_WITHOUT_INIT");
+        File.WriteAllText(Path.Combine(hotscenes, "init.lua"), "-- test source");
+        if (!GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_HIDDEN_WHEN_INSTALLED");
+        string external = Path.Combine(sandbox, "external-cet-mods");
+        Directory.CreateDirectory(Path.Combine(external, "hotscenes"));
+        File.WriteAllText(Path.Combine(external, "hotscenes", "init.lua"), "-- external");
+        if (GameInspector.HasInstalledHotscenes(external))
+            throw new InvalidDataException("HOTSCENES_OPTION_ACCEPTED_EXTERNAL_SOURCE");
+        File.Delete(Path.Combine(hotscenes, "init.lua"));
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_STALE_AFTER_REMOVAL");
+    }
+    finally
+    {
+        if (Directory.Exists(sandbox)) Directory.Delete(sandbox, recursive: true);
+    }
+    Console.WriteLine("PASS Hotscenes checkbox installation-gated from live CET init.lua");
+}
+
 // Player-side Hotscenes ENG-only is a source-changing PERSONAL option.
 // Test the exact argument builder used by the production owner execution,
 // not an example command. Unchecked must never strip localization.

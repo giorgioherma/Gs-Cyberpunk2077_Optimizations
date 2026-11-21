@@ -117,6 +117,26 @@ public partial class MainWindow : Window
     private static bool GameRunning() => Process.GetProcessesByName("Cyberpunk2077").Length != 0;
     private static bool HasNative(CollectedCaptureIndex? capture) =>
         capture?.Cet is not null || capture?.Redscript is not null;
+
+    private void SetHotscenesOptionVisible(bool installed)
+    {
+        if (!installed)
+            HotscenesEnglishOnlyCheckBox.IsChecked = false;
+        var visibility = installed ? Visibility.Visible : Visibility.Collapsed;
+        HotscenesEnglishOnlyCheckBox.Visibility = visibility;
+        HotscenesEnglishOnlyDescription.Visibility = visibility;
+    }
+
+    private void RefreshHotscenesOption()
+    {
+        // Check the CURRENT physical game source, not the sealed capture.
+        // Removing/changing the mod revokes a previously checked option.
+        bool installed = captureAndRestoreVerified &&
+            ResultsPage.Visibility == Visibility.Visible &&
+            GameInspector.HasInstalledHotscenes(completedGameRoot);
+        SetHotscenesOptionVisible(installed);
+    }
+
     private bool ClosedOrClosing => !IsLoaded && initialized;
 
     public MainWindow()
@@ -1888,6 +1908,7 @@ public partial class MainWindow : Window
             var saved = CollectedCaptureStore.ReadRestored(
                 packageRoot, completedGameRoot, completedSessionId);
             UpdateResultTexts(saved);
+            RefreshHotscenesOption();
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
                 SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
             AnalyzeButton.IsEnabled = !analysisRunning && !generationRunning &&
@@ -1901,6 +1922,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            SetHotscenesOptionVisible(false);
             SetResultsConsoleStatus("Saved capture verification failed: " + ex.Message);
             ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
             ResultsRestoreStatusText.Foreground = AnalyzeYellow;
@@ -2084,9 +2106,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Snapshot the explicit user choice. UI changes during async source
-        // generation must not alter the owner CLI invocation mid-operation.
-        bool hotscenesEnglishOnly = HotscenesEnglishOnlyCheckBox.IsChecked == true;
+        // Recheck the live installed source immediately before Generate.
+        // A removed Hotscenes mod must not leave a stale ENG-only request.
+        RefreshHotscenesOption();
+        // Snapshot the explicit player choice for this generation only.
+        bool hotscenesEnglishOnly =
+            HotscenesEnglishOnlyCheckBox.Visibility == Visibility.Visible &&
+            HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
@@ -2236,7 +2262,7 @@ public partial class MainWindow : Window
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
         savedCapture = null;
-        HotscenesEnglishOnlyCheckBox.IsChecked = false;
+        SetHotscenesOptionVisible(false);
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
         CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
         RedReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
