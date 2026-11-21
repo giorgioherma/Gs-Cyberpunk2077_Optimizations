@@ -72,6 +72,44 @@ jobs:
           $scripts=@(Get-ChildItem -LiteralPath '.phase2-pass8/r6/scripts' -Recurse -File -Filter '*.reds')
           if ($scripts.Count -ne 3) { throw "PASS8_UNEXPECTED_FILE_COUNT:$($scripts.Count)" }
           Write-Host "PASS8 source operations: $($r.appliedEdits), changed files: $($scripts.Count)"
+      - name: Generate and compose historical chipware combat cache
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='tests/GRedscript.Pass8.Checkpoint/bin/Release/net10.0/GRedscript.Pass8.Checkpoint.dll'
+          & dotnet $dll --owner combat --game '.phase2-private/base_after_generic' --base-overlay '.phase2-pass8' --out '.phase2-chip-combat'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS8_CHIPWARE_COMBAT_GENERATION_FAILED' }
+          $r=Get-Content -LiteralPath '.phase2-chip-combat/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($r.ruleId -ne 'CHIPWARE_PASS8_COMBAT_STATS_CACHE_V1' -or
+              $r.status -ne 'APPLIED' -or $r.appliedEdits -ne 9 -or
+              @($r.refusals).Count -ne 0) {
+            throw ("PASS8_CHIPWARE_COMBAT_STOCK_NOT_COMPLETE: "+($r | ConvertTo-Json -Compress))
+          }
+          $root=(Resolve-Path '.phase2-chip-combat').Path
+          $files=@(Get-ChildItem -LiteralPath '.phase2-chip-combat/r6/scripts' -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 4) { throw "PASS8_COMBAT_FILE_COUNT_UNEXPECTED:$($files.Count)" }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($root,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw "PASS8_COMBAT_ESCAPE:$rel"
+            }
+            $dest=Join-Path '.phase2-pass8' $rel
+            if (Test-Path -LiteralPath $dest -PathType Leaf) {
+              # Both operations target the same owner but distinct method
+              # bodies. Combat consumed the existing early-guard overlay.
+              $content=Get-Content -LiteralPath $file.FullName -Raw
+              if ($rel.EndsWith('wreckingBall.reds') -and !$content.Contains('if !isMelee')) {
+                throw 'PASS8_COMBAT_LOST_EARLY_MELEE_GATE'
+              }
+              if ($rel.EndsWith('flashAndThunderclap.reds') -and !$content.Contains('if !gorillaArms')) {
+                throw 'PASS8_COMBAT_LOST_EARLY_GORILLA_GATE'
+              }
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+          }
+          Write-Host "PASS8 combat operations: $($r.appliedEdits); fully composed original files: $($files.Count)"
+
       - name: Generate and join ImmersiveCyberware Pass 8 operations
         shell: pwsh
         run: |
@@ -113,7 +151,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach($p in @('.phase2-private','.phase2-pass8','.phase2-immersive')) {
+          foreach($p in @('.phase2-private','.phase2-pass8','.phase2-chip-combat','.phase2-immersive')) {
             if (Test-Path -LiteralPath $p) {
               Remove-Item -LiteralPath $p -Recurse -Force
             }
