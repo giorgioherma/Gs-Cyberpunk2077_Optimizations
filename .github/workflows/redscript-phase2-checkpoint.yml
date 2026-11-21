@@ -53,6 +53,7 @@ jobs:
       PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
       PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
       PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_VM_OUTPUT: ${{ github.workspace }}/.phase2-vehicle-mileage
       PHASE2_GRS_POLL_OUTPUT: ${{ github.workspace }}/.phase2-grs-poll
       PHASE2_SC_JOBS_OUTPUT: ${{ github.workspace }}/.phase2-sc-jobs
       PHASE2_NCR_TICK_OUTPUT: ${{ github.workspace }}/.phase2-ncr-tick
@@ -1184,6 +1185,44 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS GRS periodic poll: scheduler registration and original DelayCallback fallback, #32 input preserved'
 
+      - name: Generate Pass 2.2 four VehicleMileage scheduler owners with exclusive engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-vehicle-mileage --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_VM_OUTPUT
+          if($LASTEXITCODE -ne 0){ throw 'PHASE2_VM_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_VM_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'VEHICLE_MILEAGE_FOUR_SCHEDULER_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or @($report.sourcePaths).Count -ne 4 -or
+              @($report.refusals).Count -ne 0){
+            throw ('PHASE2_VM_FOUR_OWNERS_INCOMPATIBLE: '+$report.status+' '+(@($report.refusals) -join ','))
+          }
+          foreach($filename in @('VM3DOdoHUD.reds','VMFuelAvailable.reds','VMFuelGauge.reds','VMPriceSign.reds')){
+            $rel='r6/scripts/VehicleMileage/UI/'+$filename
+            $src=Join-Path $env:PHASE2_VM_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){ throw ('PHASE2_VM_OWNER_NOT_EMITTED:'+ $filename) }
+            $content=Get-Content -LiteralPath $src -Raw
+            if(!$content.Contains('extends ScheduledJob') -or
+                !$content.Contains('GCOStopVMJob') -or
+                !$content.Contains('this.m_gcoVMScheduler.Unregister(') -or
+                !$content.Contains('DelayCallback(')){
+              throw ('PHASE2_VM_SCHEDULER_OR_FALLBACK_MISSING:'+ $filename)
+            }
+            if(Test-Path -LiteralPath $dst -PathType Leaf){
+              $old=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($old,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+                if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                  throw ('PHASE2_VM_GENERIC_LOST:'+ $filename)
+                }
+              }
+            } else { New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS VehicleMileage four independent recurring jobs, preserved per-owner callback fallback and cleanup'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1499,6 +1538,21 @@ jobs:
                 (Get-FileHash -LiteralPath $grsPollRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_GRS_POLL_ONE_PASS_BYTE_PARITY_DIFF'
             }
+            $vm=@($result.completed | Where-Object { $_.id -eq 'vehicle-mileage-scheduler' })
+            if($vm.Count -ne 4 -or @($vm | Where-Object { [int]$_.order -ne 37 }).Count -ne 0){
+              throw 'PHASE2_VM_STAGE_COUNT_ORDER_MISSING'
+            }
+            foreach($filename in @('VM3DOdoHUD.reds','VMFuelAvailable.reds','VMFuelGauge.reds','VMPriceSign.reds')){
+              $rel='r6/scripts/VehicleMileage/UI/'+$filename
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              $expected=Join-Path $env:PHASE2_VM_OUTPUT $rel
+              if(!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                 !(Test-Path -LiteralPath $expected -PathType Leaf) -or
+                 (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+                 (Get-FileHash -LiteralPath $expected -Algorithm SHA256).Hash){
+                throw ('PHASE2_VM_ONE_PASS_BYTE_PARITY_DIFF:'+ $filename)
+              }
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1537,7 +1591,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

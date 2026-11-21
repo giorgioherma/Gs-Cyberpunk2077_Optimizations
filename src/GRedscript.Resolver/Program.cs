@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FeInputHub(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-grs-input-hub")
                 return RunPhase2GrsInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-vehicle-mileage")
+                return RunPhase2VehicleMileage(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-grs-poll")
                 return RunPhase2GrsPoll(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-sc-jobs")
@@ -701,6 +703,24 @@ public static class Program
             result.Status + " edits=" + result.AppliedEdits +
             " owners=" + result.SourcePaths.Length +
             " refused=" + result.Refusals.Length);
+        return 0;
+    }
+
+    private static int RunPhase2VehicleMileage(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "VehicleMileage scheduler needs --game --out [--base-overlay]");
+        var result=VehicleMileageSchedulerPass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 VehicleMileage scheduler: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Refusals.Length==0?"":" refused="+
+                string.Join(",",result.Refusals)));
         return 0;
     }
 

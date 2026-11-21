@@ -1743,6 +1743,52 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 2.2 VehicleMileage: four independent UI owner
+        // scheduler operations. A one-shot DelayCallback remains the fallback
+        // when runtime is unavailable. Preserve each owner's existing
+        // fast-wake tokens, visual refresh, HUD animation and detach.
+        string vmRoot=Path.Combine(output,"_stages","37-vehicle-mileage");
+        var vm=VehicleMileageSchedulerPass.Generate(game,
+            vmRoot,Directory.Exists(final)?final:null);
+        if(vm.Status=="APPLIED")
+        {
+            if(vm.AppliedEdits<vm.SourcePaths.Length || vm.SourcePaths.Length is <1 or >4)
+                throw new InvalidDataException("VM_STAGE_INVALID_FILE_COUNT");
+            foreach(string rel in vm.SourcePaths.Order(StringComparer.Ordinal))
+            {
+                string src=Path.GetFullPath(Path.Combine(vmRoot,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                string dest=Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                if(!rel.StartsWith("r6/scripts/VehicleMileage/",StringComparison.Ordinal) ||
+                   !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                   !IsInside(src,vmRoot) || !IsInside(dest,final) ||
+                   !File.Exists(src))
+                    throw new InvalidDataException("VM_STAGE_OWNER_PATH_UNSAFE");
+                bool existed=File.Exists(dest);
+                if(existed)
+                {
+                    string before=File.ReadAllText(dest);
+                    string after=File.ReadAllText(src);
+                    var markers=System.Text.RegularExpressions.Regex.Matches(
+                        before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                    if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                        throw new InvalidDataException("VM_STAGE_GENERIC_LOST");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(src,dest,overwrite:existed);
+                files+=existed?0:1;
+                results.Add(new(37,"vehicle-mileage-scheduler",1,
+                    existed?0:1,existed?1:0,[]));
+            }
+            expressions+=vm.AppliedEdits;
+        }
+        foreach(string reason in vm.Refusals)
+            skipped.Add(new(37,"vehicle-mileage-scheduler",1,reason));
+        if(vm.Status is not ("APPLIED" or "REFUSED" or "COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("VM_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
