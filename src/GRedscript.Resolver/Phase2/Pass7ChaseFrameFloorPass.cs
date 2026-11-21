@@ -520,9 +520,9 @@ public static class Pass7ChaseFrameFloorPass
             var missing = records.Where(id => !known.Contains(id)).ToArray();
             if (missing.Length == 0)
                 return new("COMPLETE", null, 0, 1, null);
-            string nl = Newline(source);
-            string addition = " ||" + nl + "    " +
-                string.Join(" ||" + nl + "    ",
+            string gateNl = Newline(source);
+            string addition = " ||" + gateNl + "    " +
+                string.Join(" ||" + gateNl + "    ",
                     missing.Select(id => local + " == t\"" + id + "\""));
             int brace = body.LastIndexOf('{', guard.Index + guard.Length - 1);
             if (brace < guard.Index || brace >= crowd.Index)
