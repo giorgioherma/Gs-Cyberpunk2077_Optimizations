@@ -159,7 +159,7 @@ class ProvidedRuntimeContracts(unittest.TestCase):
         self.assertEqual(after.returncode, 0, after.stdout + after.stderr)
         data = self.report(generated)
         self.assertEqual(data["sourceStackSha256"], source_hash)
-        self.assertIn("nightcity-remembers-scheduler",
+        self.assertIn("ncr-maintenance-scheduler",
                       [r["id"] for r in data["completed"]])
         self.assertIn("class NCRGCOMaintenanceJob extends ScheduledJob",
                       (generated / "effective-preview" / NCR).read_text("utf8"))
@@ -178,7 +178,7 @@ class ProvidedRuntimeContracts(unittest.TestCase):
         with_bundle, target = self.stage()
         self.assertEqual(with_bundle.returncode, 0,
                          with_bundle.stdout + with_bundle.stderr)
-        self.assertIn("grs-state-cache",
+        self.assertIn("gear-recovery-statecache",
                       [x["id"] for x in self.report(target)["completed"]])
 
     def test_input_hub_and_device_admitted_from_bundled_classes(self):
