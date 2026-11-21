@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Historical Pass 2.0 FlushingEtiquette input routing #31
+
+- `FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1` is connected after the ten generics and semantic #14/#15 in the canonical one-Generate output. Only live owner `r6/scripts/FlushingEtiquette/FE_Input.reds` is rewritten. The original `FEInput.Handle(player, ListenerAction)` retains the early unrelated-name gate; the gameplay body is shared by InputHub `OnGRedInput` via `HandleValues(player,name,type)`, without duplicated gameplay logic.
+- InputHub registers the three relief actions, dynamic modifier actions, and the compile-gated optional `ShowStatusEffects` only if **every** subscription succeeds. Partial subscriptions roll back. When no compatible runtime is ready, the original PlayerPuppet engine registrations and `OnAction` path operate exclusively instead. Detach unregisters only the active path. Original generic marker, modifiers, hotkey ownership and washroom pin semantics survive.
+- [Fast Phase 2 CI #170 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44864305033): source-state tests and repeated no-op, independent real post-generic output, canonical one-pass bytes, official SCC 0.5.31 combined source. [Full GCO #1074](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44864318699) includes captured-source independent reference and one application ZIP; result pending at this record. Not game-tested, no performance gain claimed.
+- Pass 2.1 initial source audit: five DrugDealer handlers have current `ACTION_LITERAL_MEMBERSHIP_V1` generic markers; GearRecoverySystem listener is present and requires its own consumption/registration proof. Historical Street Vendors is absent, with no proven current unoptimized baseline; do not generate it or bypass the ten-rule generic-first gate.
+
 ## 2026-11-21 — Enhanced Vehicle System historical Pass 2.0 local PS #30
 
 - `EVS_ONACTION_PS_HANDLE_REUSE_V1` implements the game-tested idea of one `this.GetPS()` handle per synchronous `@replaceMethod(VehicleComponent) OnAction`; current post-generic method has 163 source-level getter occurrences. The source-aware generator replaces only proven same-receiver reads, preserves original dynamic PS field values/writes and the destroyed PS early-return, and adds no persistent cache, timer or callback. Existing current generic player/action snapshots and Audioware/gameplay code are retained, never historical whole-file replaced.
