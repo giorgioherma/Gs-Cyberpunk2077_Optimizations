@@ -282,8 +282,11 @@ static void Run(string baseline)
                 StringComparison.Ordinal);
         partial["rm"] = "@addField(SprintEvents)\nprivate let m_gredRunningManDoubleRunPerk: Bool;\n\n"
             + partial["rm"];
-        partial["dir"] = "@addField(SprintDecisions)\nprivate let m_gredRunningManSprintDirectionPerk: Bool;\n\n"
-            + partial["dir"];
+        partial["dir"] = partial["dir"].Replace("\r\n", "\n",
+            StringComparison.Ordinal).Replace("module RunningMan\n",
+            "module RunningMan\n@addField(SprintDecisions)\n" +
+            "private let m_gredRunningManSprintDirectionPerk: Bool;\n",
+            StringComparison.Ordinal);
         partial["lizzies"] = partial["lizzies"].Replace(
             "\tif !this.IsCrowd() {",
             "\tlet __gcoLizzieRecordID: TweakDBID = this.GetRecordID();\n\tif !this.IsCrowd() {",
