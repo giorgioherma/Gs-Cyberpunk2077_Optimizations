@@ -1,1 +1,1 @@
-checkpoint=pass10-chipware-memo-canonical-source-state-scc
+checkpoint=pass10-chipware-memo-source-state-scc-build-fix
