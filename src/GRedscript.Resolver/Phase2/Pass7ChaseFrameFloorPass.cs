@@ -506,17 +506,36 @@ public static class Pass7ChaseFrameFloorPass
         const string local = "__gcoLizzieRecordID";
         bool localPresent = Has(body, @"\blet\s+" + local +
             @"\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(\s*\)\s*;");
-        bool wrapped = Has(body,
-            @"\bif\s+" + local + @"\s*==\s*t""");
+        bool wrapped = Has(body, @"\bif\s+" + local + @"\s*==\s*t""");
         if (wrapped)
         {
-            bool includesAll = records.All(id =>
-                body.Contains("t\"" + id + "\"", StringComparison.Ordinal));
-            int recordGuard = body.IndexOf("if " + local, StringComparison.Ordinal);
-            if (localPresent && includesAll &&
-                recordGuard >= 0 && recordGuard < crowd.Index)
+            var guard = Regex.Match(body,
+                @"\bif\s+" + local + @"\s*==\s*t""[^""]+""" +
+                @"(?:\s*\|\|\s*" + local + @"\s*==\s*t""[^""]+"")*\s*\{", Rx);
+            if (!localPresent || !guard.Success || guard.Index > crowd.Index)
+                return new("REFUSED", null, 0, 0,
+                    "LIZZIES_EXISTING_GATE_STRUCTURE_UNPROVEN");
+            var known = Regex.Matches(guard.Value, @"t""(?<id>[^""]+)""", Rx)
+                .Select(m => m.Groups["id"].Value).ToHashSet(StringComparer.Ordinal);
+            var missing = records.Where(id => !known.Contains(id)).ToArray();
+            if (missing.Length == 0)
                 return new("COMPLETE", null, 0, 1, null);
-            return new("REFUSED", null, 0, 0, "LIZZIES_PARTIAL_RECORD_GATE_INCOMPATIBLE");
+            string nl = Newline(source);
+            string addition = " ||" + nl + "    " +
+                string.Join(" ||" + nl + "    ",
+                    missing.Select(id => local + " == t\"" + id + "\""));
+            int brace = body.LastIndexOf('{', guard.Index + guard.Length - 1);
+            if (brace < guard.Index || brace >= crowd.Index)
+                return new("REFUSED", null, 0, 0,
+                    "LIZZIES_EXISTING_GATE_BRACE_UNPROVEN");
+            string updated = Apply(source,
+            [
+                new Edit(attach.Start + brace, attach.Start + brace,
+                    addition + " ")
+            ]);
+            if (LizziePerformerGate(updated).Status != "COMPLETE")
+                throw new InvalidDataException("LIZZIES_PARTIAL_GATE_POSTCONDITION_FAILED");
+            return new("APPLIED", updated, 1, 1, null);
         }
         if (!localPresent && SourceAdmission.ReadTokens(body)
             .Any(t => t.Value == local))
