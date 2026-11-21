@@ -231,6 +231,37 @@ class RunningManPass9Tests(unittest.TestCase):
         self.assertIn("GCO-GENERIC:STABLE_ARRAY_BOUND_V1", s)
         self.check_complete(s)
 
+    def test_sprint_only_keeps_independent_eligible_operation(self):
+        # A changed mod may remove standing logic while the double-sprint
+        # evaluator remains. Do not reject the eligible sprint operation.
+        source = SOURCE[:SOURCE.index("@wrapMethod(StandEvents)")]
+        r, optimized = self.gen(source)
+        self.assertEqual(r["status"], "APPLIED", r)
+        self.assertEqual(r["appliedEdits"], 1)
+        self.assertIn("RM_STAND_UPDATE_METHOD_NOT_UNIQUE", r["reason"])
+        self.assertIn("private let m_gredRunningManDoubleRunPerk: Bool;", optimized)
+        self.assertIn(
+            "if this.m_gredRunningManDoubleRunPerk || this.m_isInSecondSprint",
+            optimized)
+        self.assertNotIn("m_gredRunningManResumeChecked", optimized)
+        again, repeat_output = self.gen(optimized)
+        self.assertEqual(again["status"], "REFUSED", again)
+        self.assertEqual(again["alreadyComplete"], 1)
+        self.assertIsNone(repeat_output)
+
+    def test_stand_only_keeps_independent_eligible_operation(self):
+        source = SOURCE[SOURCE.index("@wrapMethod(StandEvents)"):]
+        r, optimized = self.gen(source)
+        self.assertEqual(r["status"], "APPLIED", r)
+        self.assertEqual(r["appliedEdits"], 1)
+        self.assertIn("RM_SPRINT_OWNER_METHODS_NOT_UNIQUE", r["reason"])
+        self.assertIn("private let m_gredRunningManResumeChecked: Bool;", optimized)
+        self.assertNotIn("m_gredRunningManDoubleRunPerk", optimized)
+        again, repeat_output = self.gen(optimized)
+        self.assertEqual(again["status"], "REFUSED", again)
+        self.assertEqual(again["alreadyComplete"], 1)
+        self.assertIsNone(repeat_output)
+
     def test_absent_owner(self):
         r, output = self.gen("public func Unrelated() -> Void {}",
                              target="r6/scripts/Unrelated/test.reds")
