@@ -218,7 +218,12 @@ internal static class ReinforcementsPass
                !prefix.Contains("+16.0",StringComparison.Ordinal)||
                !prefix.Contains("-100000.0",StringComparison.Ordinal)||
                !prefix.Contains("<100000.0",StringComparison.Ordinal)||
-               !CallsOnly(quadBody[..sorted[0].Index],"AbsF","Sign"))
+               !CallsOnly(quadBody[..sorted[0].Index],"AbsF","Sign")||
+               SourceAdmission.ReadTokens(quadBody[..sorted[0].Index]).Any(t =>
+                   Regex.IsMatch(t.Value,@"^[A-Za-z_]\\w*$") &&
+                   !new[]{"p","sq","outside","a","b","c","d","X","Y",
+                       "let","if","return","false","AbsF","Sign"}
+                       .Contains(t.Value,StringComparer.Ordinal)))
                 return "RS_QUAD_BROADPHASE_NOT_PROVEN_CONSERVATIVE";
             foreach(string v in new[]{"a","b","c","d"})
                 if(!prefix.Contains("sq."+v+".X",StringComparison.Ordinal)||
@@ -246,7 +251,11 @@ internal static class ReinforcementsPass
         if(!centerText.StartsWith("returnnewVector2(",StringComparison.Ordinal)||
            !centerText.EndsWith(");",StringComparison.Ordinal)||
            !CallsOnly(centerBody,"Vector2")||
-           Regex.IsMatch(centerBody,@"\bthis\b|\bGameInstance\b"))
+           Regex.IsMatch(centerBody,@"\bthis\b|\bGameInstance\b")||
+           SourceAdmission.ReadTokens(centerBody).Any(t =>
+               Regex.IsMatch(t.Value,@"^[A-Za-z_]\\w*$") &&
+               !new[]{"sq","a","b","c","d","X","Y","Vector2","new","return"}
+                   .Contains(t.Value,StringComparer.Ordinal)))
             return "RS_SORT_CENTER_HELPER_NOT_PURE";
         foreach(string v in new[]{"a","b","c","d"})
             if(!centerText.Contains("sq."+v+".X",StringComparison.Ordinal)||
