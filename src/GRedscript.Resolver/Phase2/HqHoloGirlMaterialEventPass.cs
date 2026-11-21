@@ -287,8 +287,8 @@ internal static class HqHoloGirlMaterialEventPass
         {
             var files = Directory.EnumerateFiles(owner, "*.reds",
                 SearchOption.AllDirectories)
-                .Where(f => File.ReadAllText(f,Encoding.UTF8).Contains(
-                    "class HoloGirl", StringComparison.Ordinal)).ToArray();
+                .Where(f => Regex.IsMatch(File.ReadAllText(f,Encoding.UTF8),
+                    @"\bclass\s+HoloGirl\s+extends\s+ScriptableService\b")).ToArray();
             if (files.Length != 1)
             {
                 status = "REFUSED";
