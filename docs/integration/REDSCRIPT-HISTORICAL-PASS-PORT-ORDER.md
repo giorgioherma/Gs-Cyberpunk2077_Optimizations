@@ -3,7 +3,7 @@
 ## 2026-11-21 — Pass 7 final isolated owner port
 
 - Registered four newly completed owner operations in canonical one-pass: #706 Lizzie performer-index live-record memo, #707 reinforcement stimulus gate, #708 police/prevention guard, #709 historical 100 ms reinforcement burst throttle; #710 Chipware memo **REFUSED narrowly** because source cannot prove perk/equipment/charge and vanilla wrapped-result invalidation. Existing six operations #700–705 unchanged.
-- Cross-pass ownership: Pass 4 geometry separate files; Pass 4/7 StealthRunner weak field overlaps, merge once; Pass 4/8 Chipware gates/caches coexist but never emit unsafe 24-perk result TTL. Original generic+semantic source preserved. [Focused #12](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908307127) initiated with explicit marker; result pending. No other branches touched.
+- Cross-pass ownership: Pass 4 geometry separate files; Pass 4/7 StealthRunner weak field overlaps, merge once; Pass 4/8 Chipware gates/caches coexist but never emit unsafe 24-perk result TTL. Original generic+semantic source preserved. **[Focused #15 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908744794)**: 10 accepted operations, six output files / 46 source edits, precise memo refusal, canonical exact parity, 2,331 post-generic files + 35 overlay SCC 0.5.31 PASS, original files unchanged. No other branches touched; expanded package CI and gameplay test still required.
 - See `REDSCRIPT-PASS7-ISOLATED-HANDOFF.md` for acceptance and remaining gameplay checks.
 
 
