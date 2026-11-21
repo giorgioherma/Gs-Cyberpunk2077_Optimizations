@@ -1,5 +1,14 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 2.2 remaining owners and safe Pass 3.0 operations #37–#41
+
+- #37 four VehicleMileage scheduler+fallback owners; #38 StealthRunner pickpocket atomic hub; #39 CyberwareEx ToggleSprint/Overclock hub, original engine fallback; #40 GearRecoverySystem player/blackboard StateCache with direct fallback; #41 Vehicle Call Plus 3-local QuestSystem reuse without deleting engine wrappers.
+- Fast CI #201/#205/#214 **SUCCESS**. Latest #214: 216 source-state tests, 2,331 post-generic .reds, 36 semantic overlays, independent one-run byte parity and official SCC 0.5.31 (43,523,591 bytes); live user sources never written.
+- Full #1085 **SUCCESS** through #39 (development app artifact 14695702525); final #40/#41 package check still required after CI #214. No gameplay/benchmarked performance claim.
+- Current negotiableaffection historic 3.0 would erase payout, memory, save locks and callbacks, therefore excluded as incompatible. Absent Street Vendors, Exodus and Repeatable Psychos require ten-generics-first review of trustworthy new baseline, no generated owner files. Quickslots and DF overlapping operations completed earlier.
+- Future #4 and #5 agents work on independent branches; primary branch remains stage integration owner.
+
+
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
 
 - NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.

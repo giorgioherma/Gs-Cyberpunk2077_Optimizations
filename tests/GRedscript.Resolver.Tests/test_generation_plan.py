@@ -306,6 +306,37 @@ public class C extends IScriptable {
                       run.stdout + run.stderr)
         self.assertFalse(self.staged.exists())
 
+    def test_absent_semantic_owners_never_generate_optimizations_or_rewrite_input(self):
+        # An installed stack containing only unrelated generic-eligible
+        # sources must not receive any absent GRS, VCP, VM, StealthRunner,
+        # CyberwareEx, NightCityRemembers or ShatteredChrome output.
+        doc = self.make_plan()
+        self.make_analysis(doc["sourceStackSha256"])
+        originals = {p: p.read_bytes() for p in (self.provider, self.consumer)}
+        run = self.cli("stage-redscript-plan", "--game", self.game,
+                       "--plan", self.plan, "--analysis", self.analysis,
+                       "--out", self.staged)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        result = json.loads((self.staged / "stage-result.json").read_text())
+        unexpected = {
+            "gear-recovery-statecache", "vehicle-call-quest-reuse",
+            "vehicle-mileage-scheduler", "stealth-runner-pickpocket-input",
+            "cyberware-ex-input-hub", "gear-recovery-poll-scheduler",
+            "ncr-maintenance-scheduler", "shattered-chrome-periodic-jobs"
+        }
+        self.assertFalse(unexpected.intersection(
+            x["id"] for x in result["completed"]))
+        self.assertFalse(unexpected.intersection(
+            x["id"] for x in result.get("skipped", [])))
+        scripts = self.staged / "effective-preview/r6/scripts"
+        for folder in ("GearRecoverySystem", "Vehicle Call Plus",
+                       "VehicleMileage", "StealthRunner", "CyberwareEx",
+                       "NightCityRemembers", "ShatteredChrome"):
+            self.assertFalse((scripts / folder).exists(), folder)
+        self.assertTrue((scripts / "Consumer/Example.reds").is_file())
+        for path, contents in originals.items():
+            self.assertEqual(path.read_bytes(), contents)
+
     def test_source_drift_rejects_stale_plan(self):
         doc = self.make_plan()
         self.make_analysis(doc["sourceStackSha256"])
