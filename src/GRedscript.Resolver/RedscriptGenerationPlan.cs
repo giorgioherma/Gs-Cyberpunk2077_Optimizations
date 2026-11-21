@@ -1699,6 +1699,50 @@ public static class RedscriptGenerationPlan
         else if(sc.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("SC_JOBS_UNKNOWN_STAGE_STATUS");
 
+        // Historical Pass 2.2 GearRecoverySystem: recurring job for
+        // interaction polling while original DelayCallback remains a single
+        // fallback. Compose on #32 InputHub owner file without source loss.
+        string grsPollRoot=Path.Combine(output,"_stages","36-grs-poll");
+        var grsPoll=GearRecoveryPollingPass.Generate(game,
+            grsPollRoot,Directory.Exists(final)?final:null);
+        if(grsPoll.Status=="APPLIED")
+        {
+            if(grsPoll.AppliedEdits<5 || string.IsNullOrWhiteSpace(grsPoll.SourcePath))
+                throw new InvalidDataException("GRS_POLL_STAGE_EMPTY");
+            string rel=grsPoll.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(grsPollRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/GearRecoverySystem/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,grsPollRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("GRS_POLL_STAGE_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("GRS_POLL_STAGE_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=grsPoll.AppliedEdits;
+            results.Add(new(36,"gear-recovery-poll-scheduler",grsPoll.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(grsPoll.Status=="REFUSED")
+            skipped.Add(new(36,"gear-recovery-poll-scheduler",1,
+                grsPoll.Reason ?? "GRS_POLL_INCOMPATIBLE_SOURCE"));
+        else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
