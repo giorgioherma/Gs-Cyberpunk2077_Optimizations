@@ -177,10 +177,11 @@ internal static class VehicleMileageSchedulerPass
                 "    this.m_gcoVMScheduler = null;",
                 "    this."+spec.Armed+" = false;",
                 spec.Variable?"    this.tickToken += 1;":"",
+                spec.Owner=="fuel-gauge"?"    this.callbackGeneration += 1;":"",
                 "  }",
                 ""
             }.Where(x=>x.Length>0))+nl;
-            Add(arm.Start,arm.Start,method);
+            Add(arm.Close+1,arm.Close+1,nl+method);
         }
         else if(!Has(GetBody(s,stop),@"\bUnregister\s*\(\s*this\s*\.\s*m_gcoVMJobID\s*\)") ||
                 !Has(GetBody(s,stop),@"\bm_gcoVMJobID\s*=\s*0"))
@@ -268,22 +269,21 @@ internal static class VehicleMileageSchedulerPass
             nl+"  if IsDefined(vmUI) && IsDefined(vmUI.vmFuelGauge) { vmUI.vmFuelGauge.GCOStopVMJob(); };":
             "if IsDefined(this."+spec.PlayerField+") { this."+
                 spec.PlayerField+".GCOStopVMJob(); };";
-        if(!Has(s,@"\b"+Regex.Escape(spec.Job)+@"\b[\s\S]*?@wrapMethod\s*\(\s*PlayerPuppet\s*\)[\s\S]*?\bGCOStopVMJob\s*\("))
+        // Match the owner's actual field in the detach wrapper; a different
+        // VehicleMileage owner's cleanup is not equivalent.
+        if(!Has(s,@"@wrapMethod\s*\(\s*PlayerPuppet\s*\)[\s\S]{0,800}"+
+            Regex.Escape(spec.PlayerField.Length==0?"vmFuelGauge":spec.PlayerField)+
+            @"\s*\.\s*GCOStopVMJob\s*\("))
         {
-            // Owner-local detach wrapper must not be duplicated if a
-            // user-provided adapter already performs equivalent cleanup.
-            if(!Has(s,@"@wrapMethod\s*\(\s*PlayerPuppet\s*\)[\s\S]{0,350}\bGCOStopVMJob\s*\("))
+            Add(s.Length,s.Length,nl+string.Join(nl,new[]
             {
-                Add(s.Length,s.Length,nl+string.Join(nl,new[]
-                {
-                    "@wrapMethod(PlayerPuppet)",
-                    "protected cb func OnDetach() -> Bool {",
-                    "  "+detachWitness,
-                    "  return wrappedMethod();",
-                    "}",
-                    ""
-                }));
-            }
+                "@wrapMethod(PlayerPuppet)",
+                "protected cb func OnDetach() -> Bool {",
+                "  "+detachWitness,
+                "  return wrappedMethod();",
+                "}",
+                ""
+            }));
         }
 
         if(edits.Count==0)
