@@ -47,6 +47,7 @@ jobs:
       PHASE2_RW_RENDER_OUTPUT: ${{ github.workspace }}/.phase2-rw-render
       PHASE2_DF_AGGRESSIVE_OUTPUT: ${{ github.workspace }}/.phase2-df-aggressive
       PHASE2_RW_SETTERS_OUTPUT: ${{ github.workspace }}/.phase2-rw-setters
+      PHASE2_DVC_UI_OUTPUT: ${{ github.workspace }}/.phase2-dvc-ui
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -718,6 +719,67 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS RedWindows historical color/tint and opacity tolerance write guards'
 
+      - name: Generate historical DigitalVixenCore BodyMap ItemEditor and Status UI dormancy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-digitalvixen-ui --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DVC_UI_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DVC_UI_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DVC_UI_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -ne 7 -or
+              @($report.sourcePaths).Count -ne 3) {
+            throw ('PHASE2_DVC_UI_SEVEN_OPERATIONS_REQUIRED: '+$report.status+' '+$report.reason)
+          }
+          $files=@('DVCore_BodyMapWindow.reds','DVCore_ItemEditor.reds','DVCore_StatusWindow.reds')
+          foreach($file in $files) {
+            $rel='r6/scripts/DigitalVixenCore/'+$file
+            $src=Join-Path $env:PHASE2_DVC_UI_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+              throw ('PHASE2_DVC_UI_MISSING:'+ $file)
+            }
+            $content=Get-Content -LiteralPath $src -Raw
+            if (!$content.Contains('IsRendered()',[StringComparison]::Ordinal)) {
+              throw ('PHASE2_DVC_UI_NOT_RENDER_GATED:'+ $file)
+            }
+            if ($file -eq 'DVCore_BodyMapWindow.reds' -and
+                (!$content.Contains('if !overlay && !cfgPinned') -or
+                 !$content.Contains('DVBodyMapWindow.HideRuleActive(') -or
+                 !$content.Contains('win.Checkbox(n"hiPin"'))) {
+              throw 'PHASE2_DVC_UI_PINNED_BODYMAP_ORIGINAL_BEHAVIOR_LOST'
+            }
+            if ($file -in @('DVCore_ItemEditor.reds','DVCore_StatusWindow.reds') -and
+                (!$content.Contains('let delay: Float = 2.0;') -or
+                 !$content.Contains('delay = 0.5;') -or
+                 !$content.Contains('delay = 0.25;') -or
+                 !$content.Contains('cb.initialized = true;') -or
+                 !$content.Contains('DelayCallback(cb, delay, false)'))) {
+              throw ('PHASE2_DVC_UI_CADENCE_CHANGED:'+ $file)
+            }
+            if ($file -eq 'DVCore_StatusWindow.reds' -and
+                (!$content.Contains('if this.initialized && IsDefined(mgr) {') -or
+                 !$content.Contains('win.SetOverlayOnly(!pinned)'))) {
+              throw 'PHASE2_DVC_UI_PINNED_STATUS_NOT_REFRESHED'
+            }
+            if (Test-Path -LiteralPath $dst -PathType Leaf) {
+              $previous=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($previous,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw ('PHASE2_DVC_UI_GENERIC_LOST:'+ $file)
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS DigitalVixenCore game-tested BodyMap and adaptive developer UI with pinned status'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -890,6 +952,23 @@ jobs:
                 (Get-FileHash -LiteralPath $rwsRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_RW_SET_ONE_PASS_DIFFERS_FROM_REFERENCE'
             }
+            $dvc=@($result.completed | Where-Object { $_.id -eq 'digitalvixen-ui-dormancy' })
+            if ($dvc.Count -ne 3 -or
+                @($dvc | Where-Object { [int]$_.order -ne 27 }).Count -ne 0 -or
+                [int](($dvc | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne 7) {
+              throw 'PHASE2_DVC_UI_ONE_PASS_COUNT_DIFF'
+            }
+            foreach($file in @('DVCore_BodyMapWindow.reds','DVCore_ItemEditor.reds','DVCore_StatusWindow.reds')) {
+              $rel='r6/scripts/DigitalVixenCore/'+$file
+              $ref=Join-Path $env:PHASE2_DVC_UI_OUTPUT $rel
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              if (!(Test-Path -LiteralPath $ref -PathType Leaf) -or
+                  !(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash) {
+                throw ('PHASE2_DVC_UI_ONE_PASS_REFERENCE_DIFF:'+ $file)
+              }
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -928,7 +1007,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

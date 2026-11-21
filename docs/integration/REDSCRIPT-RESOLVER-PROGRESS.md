@@ -1,5 +1,10 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — DigitalVixenCore UI historical port #27
+
+- BodyMap early hidden/unpinned fast exit and IsRendered gating; ItemEditor and StatusWindow adaptive 2.0/0.5/0.25s loops, initial registration, and pinned StatusWindow visibility preserved. Complete missing work from current post-generic source in one generation without interfering with Footsteps and RedWindows. Source-state and SCC/full app checks added; results pending.
+
+
 ## 2026-11-21 — Accepted historical Dark Future and RedWindows setter rules
 
 - #25 Dark Future historical 10/6/6 aggressive UI throttles, current generic-first source and prior tag/icon rules preserved. Focused CI #137 SCC GREEN; full GCO #1059 pending.

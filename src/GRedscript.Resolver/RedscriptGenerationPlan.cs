@@ -1285,6 +1285,62 @@ public static class RedscriptGenerationPlan
             skipped.Add(new(26,"redwindows-redundant-setters",1,
                 rwSetters.Reason));
 
+        // Historical Pass 9 DigitalVixenCore BodyMap / ItemEditor /
+        // StatusWindow UI dormancy. Dependent on RedWindows IsRendered()
+        // already generated at #24, with no duplicate UI abstractions.
+        // Preserve pinned status rendering even with overlay closed.
+        string dvcUiRoot=Path.Combine(output,"_stages",
+            "27-digitalvixen-ui-dormancy");
+        var dvcUi=DigitalVixenUiDormancyPass.Generate(game,
+            dvcUiRoot,Directory.Exists(final)?final:null);
+        if(dvcUi.Status=="APPLIED")
+        {
+            if(dvcUi.AppliedEdits is < 1 or > 7 ||
+               dvcUi.SourcePaths.Length is < 1 or > 3)
+                throw new InvalidDataException("DVC_UI_EMPTY_OR_OVERBROAD_STAGE");
+            var sourcePaths=dvcUi.SourcePaths.Order(StringComparer.Ordinal).ToArray();
+            for(int i=0;i<sourcePaths.Length;i++)
+            {
+                string rel=sourcePaths[i];
+                string source=Path.GetFullPath(Path.Combine(dvcUiRoot,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                string target=Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                if(!rel.StartsWith("r6/scripts/DigitalVixenCore/",
+                        StringComparison.Ordinal) ||
+                   !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                   !IsInside(source,dvcUiRoot) || !IsInside(target,final) ||
+                   !File.Exists(source))
+                    throw new InvalidDataException("DVC_UI_OWNER_PATH_UNSAFE");
+                bool existed=File.Exists(target);
+                if(existed)
+                {
+                    string old=File.ReadAllText(target);
+                    string rewritten=File.ReadAllText(source);
+                    var markers=System.Text.RegularExpressions.Regex.Matches(
+                        old,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(x=>x.Value).Distinct(StringComparer.Ordinal);
+                    if(markers.Any(x=>!rewritten.Contains(x,StringComparison.Ordinal)))
+                        throw new InvalidDataException("DVC_UI_LOST_GENERIC");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(source,target,overwrite:existed);
+                files+=existed?0:1;
+                results.Add(new(27,"digitalvixen-ui-dormancy",
+                    i==sourcePaths.Length-1?dvcUi.AppliedEdits:0,
+                    existed?0:1,existed?1:0,[]));
+            }
+            expressions+=dvcUi.AppliedEdits;
+        }
+        else if(dvcUi.Status=="REFUSED")
+            skipped.Add(new(27,"digitalvixen-ui-dormancy",1,
+                dvcUi.Reason ?? "DVC_UI_SOURCE_INCOMPATIBLE"));
+        else if(dvcUi.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("DVC_UI_STAGE_UNKNOWN_STATUS");
+        if(dvcUi.Status=="APPLIED" && dvcUi.Reason is not null)
+            skipped.Add(new(27,"digitalvixen-ui-dormancy",1,
+                dvcUi.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

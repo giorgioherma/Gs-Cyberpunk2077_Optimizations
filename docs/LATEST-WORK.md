@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-21 — DigitalVixenCore historical Pass 9 UI dormancy stage #27
+
+- Confirmed current semantic generator covered DigitalVixenCore Footsteps only; historical game-tested BodyMap / ItemEditor / StatusWindow UI changes were not in the one-pass semantic output.
+- Added **DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1** as canonical stage 27 after RedWindows IsRendered (#24) and setters (#26), operating on effective post-generic source. Three independent owner files and 7 operations: BodyMap early return when overlay closed + unpinned and two effective-visibility conditions; ItemEditor initialized-first adaptive 2.0s hidden/0.5s overlay idle/0.25s visible scheduling plus IsRendered Update gate; StatusWindow same adaptive timing and visibility gate, with pinned-status refresh retained even when overlay closed (safer correction to original historical overlay-only loop).
+- Source-state contracts include untouched/post-generic, partial field/visibility, complete idempotent, compatible relocated/custom source, affected-method-only narrow refusal, pinned rendering, dependency omission and input immutability. The stage refuses missing RedWindows IsRendered rather than breaking compilation; no marker/file-version locks, no historical whole-file transplantation, no duplicate callbacks/fields and no game modification.
+- **Focused SCC and full .NET10 combined ZIP verdict pending** at this commit. Previous combined GCO #1060 SUCCESS (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44853273280). The historical handmade implementation was game-tested, but this generator's output is not yet gameplay/benchmark verified. No frame-time gain claimed.
+
+
+
 ## 2026-11-21 — Dark Future #25 / RedWindows #26 focused SCC accepted; MapWaypoint historical edge rejected
 
 - **Dark Future historical aggressive throttles #25:** Original handwritten game-tested pass uses buff/debuff list updates every 10th stable-count callback (immediate on count changes), effect wheel every 6th, single cooldown every 6th non-urgent callback (immediate first/stack/outro), and static infinite effect fast return. Owner explicitly accepts aggressive behavior. New source-aware generator preserves existing infinite tag cache and 400ms tagged-icon cadence; partial/complete/custom/incompatible and idempotence tests are active. **Focused CI #137 SUCCESS** (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44852944165) against actual 2,331 post-generic files, canonical one-pass source equality and official SCC 0.5.31. Full GCO app/ZIP #1059 (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44852944171) was running at this checkpoint.
