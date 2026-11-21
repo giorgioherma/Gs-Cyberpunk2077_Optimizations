@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Agent 6 Pass 9 production one-pass integration (isolated branch)
+
+- Branch `dev/redscript/pass9` was forked from verified `96d66c66`. RunningMan source-aware `RUNNINGMAN_DOUBLE_SPRINT_STAND_DORMANCY_V1` now executes **inside** the actual GCO `RedscriptGenerationPlan.Stage` immediately after existing semantic #36 (branch-local order **#37**), not only in a standalone CLI. Both sprint perk cache/evaluator gate and StandEvents first-eligible-frame refresh are completed from post-generic source in one Generate; original per-tick `wrappedMethod`, sprint transition and stamina logic remain.
+- Historical Pass 9 DVCore, FE and RedWindows operations were already covered by #27/#15/#19/#24; no duplicate stages. RunningMan recognizes partial, markerless complete, custom/relocated, incompatible and independent missing-wrapper source states. Existing Pass 7 perk caching is reused rather than duplicated. Refusal reasons, stage ownership, game-relative file, generic markers and source hash integrity remain in existing GCO reporting/ZIP path.
+- Added production one-pass `plan-redscript` → `stage-redscript-plan` integration contracts and branch-only canonical parity/SCC workflow. **Full GCO CI #1088 SUCCESS** at earlier code commit `25db95ee` (production stage and package before final test refinements); current expanded source-state + full package CI **#8 / #1091 in progress**. No player-side SCC, game testing, measured FPS benefit, stable `main` merge, or cross-branch integrated Pass 7/9 gameplay proof.
+- Main handoff must merge independent Pass 7 first (perk cache), then this Pass 9 stage against the effective source, reconcile semantic stage numbers if other agents have added stages, and rerun complete combined SCC/ZIP/full GCO validation. The isolated branch should not modify any other development branch.
+
+
 ## 2026-11-21 — Historical Pass 2.2 scheduling batch #34–#36
 
 - **#34 NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1:** current post-generic `NCRSystem` retains its original `NCRTickCallback` + source-defined DelaySystem period when GRedRuntime Scheduler is unavailable or registration fails. The new recurring `NCRGCOMaintenanceJob` prevents duplicate requeues and is unregistered on session end/detach; faction, pending kills, daily decay and original callbacks remain untouched. Original callback creation, binding and DelayCallback arguments are proven, not just its declared type.
