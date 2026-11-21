@@ -12,6 +12,7 @@ on:
       - main
       - ci/redscript-phase2-postgeneric
       - dev/redscript/resolver_handoff
+      - 'dev/redscript/pass*'
     paths:
       - '.github/workflows/redscript-phase2-checkpoint.yml'
       - 'tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1'
