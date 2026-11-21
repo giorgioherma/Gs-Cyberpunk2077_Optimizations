@@ -860,6 +860,54 @@ public static class RedscriptGenerationPlan
             skipped.Add(new(18, "quickhack-direct-tags", 1,
                 quickhack.Reason));
 
+        // RedWindows historical Pass 9: exact last hit + next cursor.
+        // Requires source-proven private append-only retained widget array
+        // and uniqueness through Find-before-append. Do not copy old files.
+        string rwRoot = Path.Combine(output, "_stages",
+            "19-redwindows-retained-widget-lookup");
+        var rw = RedWindowsWidgetLookupPass.Generate(game, rwRoot,
+            Directory.Exists(final) ? final : null);
+        if (rw.Status == "APPLIED")
+        {
+            string rel = rw.SourcePath ??
+                throw new InvalidDataException("RW_FIND_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(rwRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/RedWindows/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, rwRoot) || !IsInside(target, final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("RW_FIND_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string previous = File.ReadAllText(target);
+                string replacement = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    previous, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !replacement.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "RW_FIND_LOST_PREVIOUS_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += rw.AppliedEdits;
+            results.Add(new(19, "redwindows-widget-lookup",
+                rw.AppliedEdits, existed ? 0 : 1,
+                existed ? 1 : 0, []));
+        }
+        else if (rw.Status == "REFUSED")
+            skipped.Add(new(19, "redwindows-widget-lookup", 1,
+                rw.Reason ?? "RW_FIND_SOURCE_INCOMPATIBLE"));
+        else if (rw.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("RW_FIND_STATUS_UNKNOWN");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
