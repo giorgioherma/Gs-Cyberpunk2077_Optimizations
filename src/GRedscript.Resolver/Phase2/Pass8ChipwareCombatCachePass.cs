@@ -210,7 +210,6 @@ public final func GRedChipwareHotpathCache() -> ref<GRedChipwareHotpathCache> {
     {
         string body=source[(method.Open+1)..method.Close];
         string marker="player.GRedChipwareHotpathCache().HasWreckingBall(player)";
-        string name="hasWreckingBallChip";
         if (body.Contains(marker,StringComparison.Ordinal))
         {
             if (Regex.IsMatch(body,@"\blet\s+hasWreckingBallChip\s*:\s*Float") ||
