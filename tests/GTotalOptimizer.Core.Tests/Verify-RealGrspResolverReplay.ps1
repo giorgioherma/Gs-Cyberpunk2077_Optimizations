@@ -2070,7 +2070,9 @@ try {
       @{ Id='redwindows-redundant-setters'; Order=26; Command='phase2-redwindows-setters';
          Rule='REDWINDOWS_HISTORICAL_REDUNDANT_SETTERS_V1'; Owner='RedWindows' },
       @{ Id='digitalvixen-ui-dormancy'; Order=27; Command='phase2-digitalvixen-ui';
-         Rule='DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1'; Owner='DigitalVixenCore' }
+         Rule='DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1'; Owner='DigitalVixenCore' },
+      @{ Id='browser-extension-journal'; Order=28; Command='phase2-browser-journal';
+         Rule='BROWSER_EXTENSION_JOURNAL_HANDLES_V1'; Owner='BrowserExtension' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2097,6 +2099,24 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'browser-extension-journal') {
+          if ($portFiles.Count -ne 1 -or
+              [int]$portReport.appliedEdits -ne 1) {
+            throw 'GCO_BROWSER_JOURNAL_REFERENCE_COUNT_INVALID'
+          }
+          $ownerFile=Join-Path $portScripts 'BrowserExtension/BrowserExtension.System.reds'
+          if (!(Test-Path -LiteralPath $ownerFile -PathType Leaf)) {
+            throw 'GCO_BROWSER_JOURNAL_OWNER_FILE_MISSING'
+          }
+          $ownerText=Get-Content -LiteralPath $ownerFile -Raw
+          if (!$ownerText.Contains('private func GetCachedJournal()') -or
+              !$ownerText.Contains('m_corpoStartQuest: wref<JournalQuest>') -or
+              !$ownerText.Contains('m_ep1EpilogueQuest: wref<JournalQuest>') -or
+              !$ownerText.Contains('journal.GetEntryState(this.m_corpoStartQuest)') -or
+              !$ownerText.Contains('journal.GetEntryState(this.m_ep1EpilogueQuest)')) {
+            throw 'GCO_BROWSER_JOURNAL_STATE_FRESHNESS_CONTRACT'
+          }
         }
         if ($port.Id -eq 'digitalvixen-ui-dormancy') {
           if ($portFiles.Count -ne 3 -or
