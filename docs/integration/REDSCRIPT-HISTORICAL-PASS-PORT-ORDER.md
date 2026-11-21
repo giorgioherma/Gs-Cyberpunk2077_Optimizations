@@ -1,5 +1,12 @@
 # GCO Phase 2 — systematic historical REDscript port order
 
+## Pass 9 production Stage branch update (2026-11-21)
+
+- Agent 6 implements the uncovered RunningMan source-aware double-sprint / StandEvents dormancy in `dev/redscript/pass9` at branch-local semantic order **#37**, directly in `RedscriptGenerationPlan.Stage`. It reuses an existing Pass 7 per-state perk cache, completes compatible partials, preserves the original wrapped callback on every frame, and records narrow sprint/stand refusals independently.
+- DigitalVixenCore #27, FlushingEtiquette #15 and RedWindows #19/#24 cover their historical Pass 9 operations. No reimplementation or historical file copy. Canonical one-pass tests and dedicated SCC workflow are on this branch. Final merge must preserve existing staging and re-evaluate stage numbering after other agents' branches merge.
+- Full GCO #1088 passed with production stage; branch-fast #8 and latest full #1091 are pending. No in-game generated-overlay validation.
+
+
 **Established:** 21 November 2026. **Branch:** `dev/redscript/resolver_handoff`.
 
 ## Source and method
