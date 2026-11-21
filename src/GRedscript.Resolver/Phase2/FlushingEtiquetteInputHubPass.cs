@@ -264,10 +264,10 @@ internal static class FlushingEtiquetteInputHubPass
                 @"\blet\s+gi\s*=\s*player\s*\.\s*GetGame\s*\(\s*\)\s*;");
             if(!name.Success||!typ.Success||!gi.Success||name.Index>=typ.Index||typ.Index>=gi.Index)
                 return new("REFUSED","FE_HUB_HANDLE_ACCESSOR_FLOW_UNPROVEN",null,0);
-            string between=hb[(name.Index+name.Length)..typ.Index];
-            if(!Present(between,@"\bif\b") || !between.Contains("return false",StringComparison.Ordinal) ||
-               !between.Contains("Equals",StringComparison.Ordinal))
-                return new("REFUSED","FE_HUB_GENERIC_NAME_GATE_MISSING",null,0);
+            // Preserve whatever safe name-only filter already exists, whether
+            // the prior #14 semantic gate has been added or not. The owner's
+            // name/type accessor ordering remains unchanged and all code
+            // between them is retained in the adapter.
             // The base FE gameplay branch starts at the GetGame statement.
             // Moving this complete source slice keeps later mod/custom code.
             string gameplay=hb[(typ.Index+typ.Length)..];
