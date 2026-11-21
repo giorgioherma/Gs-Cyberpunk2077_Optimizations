@@ -126,12 +126,16 @@ static void CheckContent(Dictionary<string, string> original, string output,
         }
         else if (key == "sr")
         {
-            int gate = content.IndexOf("if !IsDefined(this.m_stealthRunnerStatus)",
+            int callback = content.LastIndexOf(
+                "func OnPlayerDetectionChangedEvent", StringComparison.Ordinal);
+            Require(callback >= 0, "STEALTH_DETECTION_CALLBACK_MISSING");
+            string detection = content[callback..];
+            int gate = detection.IndexOf("if !IsDefined(this.m_stealthRunnerStatus)",
                 StringComparison.Ordinal);
-            int gateQuest = content.IndexOf(
+            int gateQuest = detection.IndexOf(
                 "if !IsDefined(this.m_stealthRunnerStatus.quest)",
                 StringComparison.Ordinal);
-            int player = content.LastIndexOf("let player:",
+            int player = detection.IndexOf("let player:",
                 StringComparison.Ordinal);
             Require(gate >= 0 && gateQuest > gate && gateQuest < player,
                 "STEALTH_QUEST_GUARD_MISSING");
