@@ -73,8 +73,11 @@ internal static class Pass4Program
                     "STEALTHRUNNER_NPC_PLAYER_CACHE_V1" =>
                         File.ReadAllText(x).Contains("OnPlayerDetectionChangedEvent",StringComparison.Ordinal),
                     "CHIPWARE_PERK_RELEVANCE_GATE_V1" =>
-                        File.ReadAllText(x).Contains("IsNewPerkBought(",StringComparison.Ordinal),
-                    _ => File.ReadAllText(x).Contains("ReinforcementsChecksCall(",StringComparison.Ordinal)
+                        System.Text.RegularExpressions.Regex.IsMatch(
+                            File.ReadAllText(x),
+                            @"@wrapMethod\s*\(\s*PlayerDevelopmentData\s*\)[\s\S]{0,160}\bfunc\s+IsNewPerkBought\s*\("),
+                    _ => System.Text.RegularExpressions.Regex.IsMatch(
+                            File.ReadAllText(x),@"\bfunc\s+ReinforcementsChecksCall\s*\(")
                 }).ToArray();
             if(candidates.Length != 1) {
                 operations.Add(new(id,"REFUSED",0,0,"PASS4_OWNER_TARGET_MISSING_OR_AMBIGUOUS",[]));

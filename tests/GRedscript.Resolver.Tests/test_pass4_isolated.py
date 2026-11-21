@@ -244,5 +244,23 @@ class Pass4IsolatedContracts(unittest.TestCase):
         self.assertEqual(self.owners(r)["STEALTHRUNNER_NPC_PLAYER_CACHE_V1"]["status"],
                          "REFUSED")
 
+    def test_other_owner_files_call_target_methods_without_ambiguity(self):
+        # Real installs contain unrelated callsites in skillTreeScripts and
+        # TickSystem; only function declarations can identify the owner.
+        fixtures={
+            CHIP:CHIP_STOCK,
+            "r6/scripts/zzy_bChipwareExpansion/skillTreeScripts.reds":
+                "public func Other() -> Void { this.IsNewPerkBought(gamedataNewPerkType.Invalid); }\n",
+            R_SYS:REIN_SYS,R_UTIL:REIN_UTIL,
+            "r6/scripts/ReinforcementsSystem/TickSystem.reds":
+                "public func Tick() -> Void { this.ReinforcementsChecksCall(null, false, false); }\n",
+        }
+        r,out,_=self.run_pass(fixtures)
+        self.assertIn(CHIP,out,r)
+        self.assertIn(R_SYS,out,r)
+        self.assertIn(R_UTIL,out,r)
+        self.assertNotIn("r6/scripts/ReinforcementsSystem/TickSystem.reds",out)
+        self.assertNotIn("r6/scripts/zzy_bChipwareExpansion/skillTreeScripts.reds",out)
+
 if __name__=="__main__":
     unittest.main()
