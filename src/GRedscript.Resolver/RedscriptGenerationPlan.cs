@@ -1751,7 +1751,7 @@ public static class RedscriptGenerationPlan
         string pass7Root = Path.Combine(output, "_stages", "700-pass7-chase");
         var pass7 = Pass7ChaseFrameFloorPass.Generate(game, pass7Root,
             Directory.Exists(final) ? final : null);
-        if (pass7.Operations.Length != 4 ||
+        if (pass7.Operations.Length != 5 ||
             pass7.AppliedEdits != pass7.Operations.Sum(x => x.AppliedEdits))
             throw new InvalidDataException("PASS7_STAGE_REPORT_INCONSISTENT");
 
@@ -1761,6 +1761,8 @@ public static class RedscriptGenerationPlan
                 "pass7-ncr-spawn-guards"),
             ("STEALTH_RUNNER_QUEST_DETECTION_GATE_V1", "StealthRunner",
                 "pass7-stealth-detection-gate"),
+            ("STEALTH_RUNNER_PLAYER_HANDLE_CACHE_V1", "StealthRunner",
+                "pass7-stealth-player-cache"),
             ("RUNNING_MAN_SPRINT_ENTRY_PERK_CACHE_V1", "RunningMan",
                 "pass7-runningman-double-sprint"),
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
