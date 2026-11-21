@@ -43,6 +43,7 @@ jobs:
       PHASE2_TRIGGER_OUTPUT: ${{ github.workspace }}/.phase2-trigger-tags
       PHASE2_DPR_OUTPUT: ${{ github.workspace }}/.phase2-dpr-tracing
       PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
+      PHASE2_RW_CURSORS_OUTPUT: ${{ github.workspace }}/.phase2-rw-cursors
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -533,6 +534,39 @@ jobs:
           Copy-Item -LiteralPath $file -Destination $target
           Write-Host 'PASS HQ_HoloGirl cached material target and event-local color/emissive'
 
+      - name: Generate RedWindows shape and label search cursors
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-cursors --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_RW_CURSORS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_CURSOR_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_RW_CURSORS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'REDWINDOWS_SHAPE_LABEL_CURSORS_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_RW_CURSOR_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/RedWindows/RW_Widgets.reds'
+          $src=Join-Path $env:PHASE2_RW_CURSORS_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src)) {
+            throw 'PHASE2_RW_CURSOR_EXPECTED_OWNER_FILE'
+          }
+          $now=Get-Content -LiteralPath $src -Raw
+          if (!$now.Contains('this.m_shapeFindCursor = idx;') -or
+              !$now.Contains('this.m_labelFindCursor = idx;') -or
+              !$now.Contains('if IsDefined(shape) && Equals(shape.id, shapeId)') -or
+              !$now.Contains('if IsDefined(label) && Equals(label.id, labelId)') -or
+              !$now.Contains('public func Drop() -> Void')) {
+            throw 'PHASE2_RW_CURSOR_RETAINED_ARRAY_LOOKUP_MISSING'
+          }
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (Test-Path -LiteralPath $dst) {
+            throw 'PHASE2_RW_CURSOR_UNEXPECTED_OWNER_COLLISION'
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          Copy-Item -LiteralPath $src -Destination $dst
+          Write-Host 'PASS RedWindows both cursor lookups, live arrays always scanned'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -630,6 +664,17 @@ jobs:
                 (Get-FileHash -LiteralPath $hqRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_HQ_HOLOGIRL_CANONICAL_DIFFERS_FROM_REFERENCE'
             }
+            $rwc=@($result.completed | Where-Object { $_.id -eq 'redwindows-shape-label-cursors' })
+            $rwcRel='r6/scripts/RedWindows/RW_Widgets.reds'
+            $rwcRef=Join-Path $env:PHASE2_RW_CURSORS_OUTPUT $rwcRel
+            $rwcActual=Join-Path (Join-Path $stage 'effective-preview') $rwcRel
+            if ($rwc.Count -ne 1 -or [int]$rwc[0].order -ne 23 -or
+                [int]$rwc[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $rwcActual) -or
+                (Get-FileHash -LiteralPath $rwcActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $rwcRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_RW_CURSOR_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -668,7 +713,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

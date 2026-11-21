@@ -2060,7 +2060,9 @@ try {
       @{ Id='disable-position-tracing'; Order=21; Command='phase2-disable-position-tracing';
          Rule='DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1'; Owner='DisablePositionReveal' },
       @{ Id='hologirl-material-event'; Order=22; Command='phase2-hologirl-material';
-         Rule='HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1'; Owner='HQ_HoloGirl' }
+         Rule='HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1'; Owner='HQ_HoloGirl' },
+      @{ Id='redwindows-shape-label-cursors'; Order=23; Command='phase2-redwindows-cursors';
+         Rule='REDWINDOWS_SHAPE_LABEL_CURSORS_V1'; Owner='RedWindows' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

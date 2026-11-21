@@ -1051,6 +1051,56 @@ public static class RedscriptGenerationPlan
         else if (hologirl.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("HQ_HOLOGIRL_STATUS_UNKNOWN");
 
+        // RedWindows historical Pass 8: cyclic shape/label search-start
+        // hints only, never retained object pointers. Public arrays can be
+        // cleared and recreated without returning old entries.
+        string rwCursorsRoot = Path.Combine(output,"_stages",
+            "23-redwindows-shape-label-cursors");
+        var rwCursors = RedWindowsShapeLabelCursorsPass.Generate(game,
+            rwCursorsRoot, Directory.Exists(final) ? final : null);
+        if (rwCursors.Status == "APPLIED")
+        {
+            string rel = rwCursors.SourcePath ??
+                throw new InvalidDataException("RW_CURSOR_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(rwCursorsRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/RedWindows/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source,rwCursorsRoot) || !IsInside(target,final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("RW_CURSOR_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string previous = File.ReadAllText(target);
+                string updated = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    previous,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !updated.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException("RW_CURSOR_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source,target,overwrite:existed);
+            files += existed ? 0 : 1;
+            expressions += rwCursors.AppliedEdits;
+            results.Add(new(23,"redwindows-shape-label-cursors",
+                rwCursors.AppliedEdits,existed ? 0 : 1,
+                existed ? 1 : 0,[]));
+        }
+        else if (rwCursors.Status == "REFUSED")
+            skipped.Add(new(23,"redwindows-shape-label-cursors",1,
+                rwCursors.Reason ?? "RW_CURSOR_SOURCE_INCOMPATIBLE"));
+        else if (rwCursors.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("RW_CURSOR_STATUS_UNKNOWN");
+        if (rwCursors.Status == "APPLIED" && rwCursors.Reason is not null)
+            skipped.Add(new(23,"redwindows-shape-label-cursors",1,
+                rwCursors.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
