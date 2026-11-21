@@ -45,7 +45,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Build isolated generator and test runner
+      - name: Build isolated generator and complete source-state test runner
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
