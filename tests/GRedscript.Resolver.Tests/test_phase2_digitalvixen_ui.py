@@ -229,7 +229,7 @@ class DigitalVixenDormancyTests(unittest.TestCase):
         legacy=dict(fully_optimized)
         status=legacy["DVCore_StatusWindow.reds"]
         match=re.search(
-            r'let shouldUpdate: Bool = !this.initialized;[\s\S]*?(?=if shouldUpdate \{)',
+            r'let shouldUpdate: Bool = !this.initialized;[\s\S]*?(?=if shouldUpdate \{\s*DVCStatusWindow\.Update)',
             status)
         self.assertIsNotNone(match)
         old=match.group(0)
