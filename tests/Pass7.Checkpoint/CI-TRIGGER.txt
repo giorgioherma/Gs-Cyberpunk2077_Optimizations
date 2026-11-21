@@ -1,1 +1,1 @@
-2026-11-21 Pass 7 focused corrective checkpoint #2: verify composed Lizzie attach/index structural recognition after initial source-state contract failure, then canonical six-owner parity and official SCC 0.5.31.
+2026-11-21 Pass 7 focused checkpoint #3: the previous source-state fixture inserted a commented duplicate ReactionManagerComponent field; now use only the live wrapper. Validate full grouped output and SCC 0.5.31.
