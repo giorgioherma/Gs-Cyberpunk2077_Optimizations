@@ -44,6 +44,7 @@ jobs:
       PHASE2_TRIGGER_OUTPUT: ${{ github.workspace }}/.phase2-trigger-tags
       PHASE2_DPR_OUTPUT: ${{ github.workspace }}/.phase2-dpr-tracing
       PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
+      PHASE2_HOLOTRAVEL_OUTPUT: ${{ github.workspace }}/.phase2-holotravel-material
       PHASE2_RW_CURSORS_OUTPUT: ${{ github.workspace }}/.phase2-rw-cursors
       PHASE2_RW_RENDER_OUTPUT: ${{ github.workspace }}/.phase2-rw-render
       PHASE2_DF_AGGRESSIVE_OUTPUT: ${{ github.workspace }}/.phase2-df-aggressive
@@ -1185,6 +1186,49 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS GRS periodic poll: scheduler registration and original DelayCallback fallback, #32 input preserved'
 
+      - name: Generate historical Pass 5 HoloTravel material event from post-generic source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-holotravel-material --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_HOLOTRAVEL_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_HOLOTRAVEL_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_HOLOTRAVEL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'HQ_HOLOTRAVEL_MATERIAL_EVENT_FASTPATH_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1 -or
+              $report.sourcePath -notlike 'r6/scripts/HQ_HoloTravel/*.reds') {
+            throw ('PHASE2_HOLOTRAVEL_NOT_APPLIED:'+ $report.status+' '+$report.reason)
+          }
+          $rel=[string]$report.sourcePath
+          $source=Join-Path $env:PHASE2_HOLOTRAVEL_OUTPUT $rel
+          $dest=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw 'PHASE2_HOLOTRAVEL_OWNER_OUTPUT_MISSING'
+          }
+          $effective=Get-Content -LiteralPath $source -Raw
+          if (!$effective.Contains('if !IsDefined(mtl) {') -or
+              !$effective.Contains('if resPath != this.beam_baseRR && resPath != this.flare_baseRR') -or
+              !$effective.Contains('let color = this.ResolveColor(this.svc.holo.particleColor);') -or
+              !$effective.Contains('mtl.params[i].data = color;') -or
+              !$effective.Contains('BindCallbackTRL(self, n"OnUpdate", n"CMaterialInstance")')) {
+            throw 'PHASE2_HOLOTRAVEL_BEHAVIOR_NOT_PRESERVED'
+          }
+          if (Test-Path -LiteralPath $dest -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dest -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$effective.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_HOLOTRAVEL_DROPPED_GENERIC_SOURCE'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+          }
+          $candidateFiles=@(Get-ChildItem -LiteralPath (Join-Path $env:PHASE2_HOLOTRAVEL_OUTPUT 'r6/scripts') -File -Recurse -Filter '*.reds')
+          if ($candidateFiles.Count -ne 1) { throw 'PHASE2_HOLOTRAVEL_OUTPUT_NOT_SINGLE_OWNER' }
+          Copy-Item -LiteralPath $source -Destination $dest -Force
+          Write-Host 'PASS HoloTravel Pass 5 #37: independent one-file source, material fast path, callback and generic preserved'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1500,6 +1544,21 @@ jobs:
                 (Get-FileHash -LiteralPath $grsPollRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_GRS_POLL_ONE_PASS_BYTE_PARITY_DIFF'
             }
+            $holoTravel=@($result.completed | Where-Object { $_.id -eq 'holotravel-material-event' })
+            $holoTravelReport=Get-Content -LiteralPath (Join-Path $env:PHASE2_HOLOTRAVEL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+            $holoTravelRel=[string]$holoTravelReport.sourcePath
+            $holoTravelRef=Join-Path $env:PHASE2_HOLOTRAVEL_OUTPUT $holoTravelRel
+            $holoTravelActual=Join-Path (Join-Path $stage 'effective-preview') $holoTravelRel
+            if ($holoTravel.Count -ne 1 -or [int]$holoTravel[0].order -ne 37 -or
+                [int]$holoTravel[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $holoTravelActual -PathType Leaf) -or
+                !(Test-Path -LiteralPath $holoTravelRef -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $holoTravelActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $holoTravelRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_HOLOTRAVEL_ONE_PASS_DIFFERS_FROM_INDEPENDENT'
+            }
+            Write-Host 'PASS canonical one-generation Stage #37: HoloTravel independent output byte-identical'
+
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1538,7 +1597,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_HOLOTRAVEL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
