@@ -29,7 +29,7 @@
 
 ---
 
-## Integrated on this branch
+## Earlier six-operation checkpoint (#700–705; superseded by full #700–710 batch)
 
 The canonical `RedscriptGenerationPlan.Stage` now invokes `Pass7ChaseFrameFloorPass.Generate` **after the ten generics and existing Phase 2 semantic stages**. It composes against effective previously staged source, never an old whole-file ZIP, and produces only owner-local game-relative files. Reserved semantic operation slots 700–705 deliberately avoid collision with other agents' active 37+ sequences; the integration lead may renumber when combining branches.
 
@@ -55,12 +55,10 @@ Dedicated branch-only workflow `.github/workflows/redscript-pass7-checkpoint.yml
 
 **[Dedicated Pass 7 CI #11 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876625041)**: all six operations (23 edits / five original-path owner files) passed stock/partial/complete/custom/incompatible/absent/repeat tests, canonical one-pass byte parity and SCC 0.5.31 compilation across 2,331 post-generic files plus 34 semantic effective files (43,512,829 compiled bytes; sources untouched). `build-windows.yml` now has a **mandatory branch-scoped reusable Pass 7 CI/SCC prerequisite**, so a successful app build alone cannot mask invalid output. **[Full GCO #1098 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876651197)** at `3f8a8615ba8b22d4b38c38ccbbe00e60280820ac`: reusable source/SCC prerequisite plus integrated .NET 10 build, one game-relative combined ZIP/ownership contracts and package integrity passed. Development app artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1098-a1`, ID `14696655833`, size `90,572,902` bytes. **CI ship-path ready on this branch**, pending independent generated-overlay gameplay/A-B proof; source correctness alone does not verify frame-time benefit. CI results are not gameplay or measured savings. Historical handmade ZIP behavior was played/tested, but **the new generator-produced files still need comparable in-game A/B checks**.
 
-## Remaining Pass 7 review / isolation
+## Remaining cross-agent consolidation and gameplay acceptance
 
-- **Already implemented on baseline:** Dark Future throttles (#25), DigitalVixenCore windows (#27), DisablePositionReveal tracing (#21), Quickhack_Fixes status-tag probe (#18). Do not duplicate these rules.
-- **ReinforcementsCall / 7.1:** correlated with combat Pass 4 ReinforcementsSystem and Pass 6 scheduling; owner must agree exact file/operation boundaries, stimulus admission, police prevention, 100-ms throttle and 7.1 correction before integration. Do not race another agent or import old source.
-- **zzy_bChipwareExpansion:** overlaps Pass 5 and Pass 8 perk-state caching; do not create competing perk rewrites.
-- **LizziesBDs:** implemented only the independently safe attach-gate operation; historical across-method index rewriting is not automatically claimed.
-- **RunningMan Pass 9 dormancy and other Pass 7 operations:** remaining independent work requires source audit and explicit behavior/lifecycle proof.
+- **No unresolved compatible source operation is silently omitted in this branch.** ReinforcementsCall/Pass 7.1 stimulus, prevention and burst probe are now staged as #707–709 and LizziesBDs index as #706; Chipware's 24-result TTL is refused only because no safe invalidation event/epoch is proven.
+- Merge owner must reconcile Pass 4/7 `m_stealthRunnerPlayer` cache exactly once, compose Pass 4 geometry and Pass 7 reaction filtering on independent actual files, and compose Pass 4/8 Chipware relevance/combat optimizations while leaving #710 refused until new dependency proof exists. Stage #700–710 numbering is provisional.
+- Previously implemented and intentionally not duplicated: Dark Future #25, DigitalVixenCore #27, DisablePositionReveal #21, Quickhack Fixes #18. The separately planned Pass 9 RunningMan dormancy is not part of this batch.
+- **Before player release:** game-side wanted-level/chase/police behavior, NPC attach/record identity and Lizzie appearance/position/events, repeat capture, and Pass 4/8 Chipware equipment/perk transition parity must be checked. GitHub compilation/source-state/ZIP contracts never establish measured frame-time gains.
 
-Production one-pass integration and focused real-source compilation are verified on this development branch. Full application/package CI and actual generated in-game behavior need distinct acceptance; source/CI correctness alone does not establish FPS/CPU improvement.
