@@ -22,7 +22,7 @@ jobs:
   pass8:
     name: Pass 8 source states and full effective-source SCC
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout isolated GCO branch
         uses: actions/checkout@v4
@@ -147,6 +147,12 @@ jobs:
           $ErrorActionPreference='Stop'
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.phase2-pass8'
           if (!$?) { throw 'PASS8_EFFECTIVE_SOURCE_SCC_FAILED' }
+      - name: Verify production one-pass Pass 8 composition, byte parity and SCC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Pass8.Checkpoint/Verify-CanonicalPass8.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -IsolatedOverlayRoot '.phase2-pass8'
+          if (!$?) { throw 'PASS8_CANONICAL_ONE_PASS_OR_SCC_FAILED' }
       - name: Clean private source and compiler
         if: always()
         shell: pwsh
