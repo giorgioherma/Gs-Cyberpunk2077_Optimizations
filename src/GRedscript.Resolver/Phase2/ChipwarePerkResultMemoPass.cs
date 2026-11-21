@@ -92,15 +92,14 @@ public static class ChipwarePerkResultMemoPass
     private static Outcome RewriteOwner(string source, Block method)
     {
         string body = source[(method.Open + 1)..method.Close];
-        if (Regex.IsMatch(body, @"\bTryGetPerkResult\s*\(") &&
-            Regex.IsMatch(body, @"\bStorePerkResult\s*\("))
-        {
-            // Recognize the fully historical version (including its
-            // switch-based dispatcher) without creating another cache.
-            return new("COMPLETE", null, 0, null);
-        }
-
         var guards = PerkBranch.Matches(body);
+        bool readPresent = Regex.IsMatch(body, @"\bTryGetPerkResult\s*\(");
+        bool storedPresent = Regex.IsMatch(body, @"\bStorePerkResult\s*\(");
+        // Already optimized historical switch dispatch is complete; do not
+        // inject a second cache or misclassify its markerless source.
+        if (guards.Count == 0 && readPresent && storedPresent &&
+            Regex.IsMatch(body, @"\bswitch\s+perkType\b"))
+            return new("COMPLETE", null, 0, null);
         if (guards.Count == 0)
             return new("REFUSED", null, 0, "CHIPWARE_MEMO_UNRECOGNIZED_PERK_DISPATCH");
 
@@ -138,13 +137,17 @@ public static class ChipwarePerkResultMemoPass
             Regex.Matches(body, @"\bGetPlayer\s*\(\s*game\s*\)").Count != 1)
             return new("REFUSED", null, 0, "CHIPWARE_MEMO_PLAYER_SETUP_UNPROVEN");
 
+        bool finalStored = Regex.IsMatch(body,
+            @"\bcache\s*\.\s*StorePerkResult\s*\(\s*cacheIndex\s*,\s*player\s*,\s*vanillaPerkResult\s*\)") &&
+            Regex.IsMatch(body, @"\breturn\s+vanillaPerkResult\s*;");
         var vanilla = VanillaReturn.Matches(body);
-        if (vanilla.Count is < 1 or > 2 ||
-            vanilla[^1].Index < stats.Index)
+        if (!finalStored &&
+            (vanilla.Count is < 1 or > 2 ||
+             vanilla[vanilla.Count - 1].Index < stats.Index))
             return new("REFUSED", null, 0, "CHIPWARE_MEMO_VANILLA_FALLBACK_UNPROVEN");
 
         var edits = new List<Edit>();
-        bool preludePresent = Regex.IsMatch(body, @"\bTryGetPerkResult\s*\(");
+        bool preludePresent = readPresent;
         if (preludePresent &&
             (!Regex.IsMatch(body, @"\blet\s+cacheIndex\s*:\s*Int32") ||
              !Regex.IsMatch(body, @"\bGRedChipwareHotpathCache\s*\(")))
@@ -186,14 +189,19 @@ public static class ChipwarePerkResultMemoPass
                 "); return " + perk.Level + ";"));
         }
 
-        Match last = vanilla[^1];
-        string tail = body[(last.Index + last.Length)..];
-        if (Regex.Replace(tail, @"//[^\r\n]*|/\*[\s\S]*?\*/", "").Trim().Length != 0)
-            return new("REFUSED", null, 0, "CHIPWARE_MEMO_FINAL_FALLBACK_MOVED");
-        edits.Add(new(last.Index, last.Length,
-            "let vanillaPerkResult: Int32 = wrappedMethod(perkType); " +
-            "cache.StorePerkResult(cacheIndex, player, vanillaPerkResult); " +
-            "return vanillaPerkResult;"));
+        if (!finalStored)
+        {
+            Match last = vanilla[vanilla.Count - 1];
+            string tail = body[(last.Index + last.Length)..];
+            if (Regex.Replace(tail, @"//[^\r\n]*|/\*[\s\S]*?\*/", "").Trim().Length != 0)
+                return new("REFUSED", null, 0, "CHIPWARE_MEMO_FINAL_FALLBACK_MOVED");
+            edits.Add(new(last.Index, last.Length,
+                "let vanillaPerkResult: Int32 = wrappedMethod(perkType); " +
+                "cache.StorePerkResult(cacheIndex, player, vanillaPerkResult); " +
+                "return vanillaPerkResult;"));
+        }
+        if (edits.Count == 0)
+            return new("COMPLETE", null, 0, null);
 
         string rewrite = ApplyEdits(body, edits);
         var markers = Regex.Matches(source,
