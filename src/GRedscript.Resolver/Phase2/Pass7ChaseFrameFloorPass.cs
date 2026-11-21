@@ -233,6 +233,107 @@ public static class Pass7ChaseFrameFloorPass
         return new("APPLIED", changed, missing.Count, complete, null);
     }
 
+    private static Decision StealthPlayerHandle(string source)
+    {
+        var init = Find(source, "NPCInitTask", "OnActivate", "wrapMethod");
+        var detach = Find(source, "NPCPuppet", "OnDetach", "wrapMethod");
+        var detection = Find(source, "NPCPuppet",
+            "OnPlayerDetectionChangedEvent", "wrapMethod");
+        if (init is null || detach is null || detection is null)
+            return new("REFUSED", null, 0, 0, "SR_PLAYER_LIFECYCLE_MISSING");
+        string onInit = source[init.Start..init.End],
+            onDetach = source[detach.Start..detach.End],
+            onDetect = source[detection.Start..detection.End];
+        if (!Has(onInit, @"\bAIBehaviorScriptBase\s*\.\s*GetNPCPuppet\s*\(\s*context\s*\)") ||
+            !Has(onInit, @"\bStealthRunnerQuestEvent\s*\.\s*NPCInitEvent\s*\(\s*npc\s*,\s*player\s*\)") ||
+            !Has(onInit, @"\bwrappedMethod\s*\(\s*context\s*\)") ||
+            !Has(onDetach, @"\bwrappedMethod\s*\(\s*\)") ||
+            !Has(onDetach, @"\bUnregisterEnemyEvent\s*\(") ||
+            !Has(onDetect, @"\bwrappedMethod\s*\(\s*evt\s*\)"))
+            return new("REFUSED", null, 0, 0, "SR_PLAYER_LIFECYCLE_FLOW_INCOMPATIBLE");
+
+        const string fieldName = "m_stealthRunnerPlayer";
+        var fields = Regex.Matches(source,
+            @"@\s*addField\s*\(\s*NPCPuppet\s*\)\s*private\s+let\s+" +
+            fieldName + @"\s*:\s*wref\s*<\s*PlayerPuppet\s*>\s*;", Rx);
+        if (fields.Count > 1 || (fields.Count == 0 &&
+            Has(source, @"\blet\s+" + fieldName + @"\b")))
+            return new("REFUSED", null, 0, 0, "SR_PLAYER_CACHE_FIELD_COLLISION");
+
+        var playerInit = Regex.Match(onInit,
+            @"\blet\s+player\s*:\s*wref\s*<\s*PlayerPuppet\s*>\s*=\s*" +
+            @"GameInstance\s*\.\s*GetPlayerSystem\s*\(\s*npc\s*\.\s*GetGame\s*\(\s*\)\s*\)" +
+            @"\s*\.\s*GetLocalPlayerMainGameObject\s*\(\s*\)\s+as\s+PlayerPuppet\s*;", Rx);
+        var oldPlayer = Regex.Match(onDetect,
+            @"\blet\s+player\s*:\s*ref\s*<\s*PlayerPuppet\s*>\s*=\s*" +
+            @"GameInstance\s*\.\s*GetPlayerSystem\s*\(\s*this\s*\.\s*GetGame\s*\(\s*\)\s*\)" +
+            @"\s*\.\s*GetLocalPlayerMainGameObject\s*\(\s*\)\s+as\s+PlayerPuppet\s*;", Rx);
+        bool initCached = Has(onInit,
+            @"\bnpc\s*\.\s*" + fieldName + @"\s*=\s*player\s*;");
+        bool cleared = Has(onDetach,
+            @"\bthis\s*\.\s*" + fieldName + @"\s*=\s*null\s*;");
+        bool detectionCached = Has(onDetect,
+            @"\blet\s+player\s*:\s*wref\s*<\s*PlayerPuppet\s*>\s*=\s*this\s*\.\s*" +
+            fieldName + @"\s*;") &&
+            Has(onDetect, @"\bif\s+!\s*IsDefined\s*\(\s*player\s*\)\s*\{" +
+                @"\s*player\s*=\s*GameInstance\s*\.\s*GetPlayerSystem\s*\(") &&
+            Has(onDetect, @"\bthis\s*\.\s*" + fieldName + @"\s*=\s*player\s*;");
+        if (!playerInit.Success ||
+            (initCached && onInit.IndexOf("npc." + fieldName, StringComparison.Ordinal) <
+                playerInit.Index + playerInit.Length) ||
+            (!detectionCached && !oldPlayer.Success) ||
+            (detectionCached && oldPlayer.Success) ||
+            (detectionCached && Regex.Matches(onDetect,
+                @"\blet\s+player\s*:", Rx).Count != 1))
+            return new("REFUSED", null, 0, 0, "SR_PLAYER_OWNER_OR_CACHE_FLOW_UNPROVEN");
+
+        var edits = new List<Edit>();
+        int complete = 0;
+        if (fields.Count == 0)
+        {
+            var module = Regex.Match(source, @"\bmodule\s+StealthRunner\s*\r?\n", Rx);
+            if (!module.Success)
+                return new("REFUSED", null, 0, 0, "SR_PLAYER_MODULE_ANCHOR_MISSING");
+            edits.Add(new(module.Index + module.Length, module.Index + module.Length,
+                "@addField(NPCPuppet)" + Newline(source) +
+                "private let " + fieldName + ": wref<PlayerPuppet>;" +
+                Newline(source)));
+        }
+        else complete++;
+        if (!initCached)
+        {
+            edits.Add(new(init.Start + playerInit.Index + playerInit.Length,
+                init.Start + playerInit.Index + playerInit.Length,
+                Newline(source) + "    npc." + fieldName + " = player;"));
+        }
+        else complete++;
+        if (!cleared)
+        {
+            edits.Add(new(detach.Start, detach.Start,
+                Newline(source) + "  this." + fieldName + " = null;"));
+        }
+        else complete++;
+        if (!detectionCached)
+        {
+            string replacement =
+                "let player: wref<PlayerPuppet> = this." + fieldName + ";" +
+                Newline(source) + "  if !IsDefined(player) {" +
+                Newline(source) +
+                "    player = GameInstance.GetPlayerSystem(this.GetGame()).GetLocalPlayerMainGameObject() as PlayerPuppet;" +
+                Newline(source) + "    this." + fieldName + " = player;" +
+                Newline(source) + "  }";
+            edits.Add(new(detection.Start + oldPlayer.Index,
+                detection.Start + oldPlayer.Index + oldPlayer.Length,
+                replacement));
+        }
+        else complete++;
+        if (edits.Count == 0) return new("COMPLETE", null, 0, complete, null);
+        string changed = Apply(source, edits);
+        if (StealthPlayerHandle(changed).Status != "COMPLETE")
+            throw new InvalidDataException("SR_PLAYER_CACHE_POSTCONDITION_FAILED");
+        return new("APPLIED", changed, edits.Count, complete, null);
+    }
+
     private static readonly Regex PerkLocal = new(
         @"\blet\s+hasDoubleRunPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
@@ -489,6 +590,8 @@ public static class Pass7ChaseFrameFloorPass
                 "NCR_CullChanceForTier", (Func<string, Decision>)SpawnCulling),
             ("STEALTH_RUNNER_QUEST_DETECTION_GATE_V1", "StealthRunner",
                 "OnPlayerDetectionChangedEvent", (Func<string, Decision>)StealthDetection),
+            ("STEALTH_RUNNER_PLAYER_HANDLE_CACHE_V1", "StealthRunner",
+                "OnPlayerDetectionChangedEvent", (Func<string, Decision>)StealthPlayerHandle),
             ("RUNNING_MAN_SPRINT_ENTRY_PERK_CACHE_V1", "RunningMan",
                 "EvaluateTwoStepSprint", (Func<string, Decision>)DoubleSprint),
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
