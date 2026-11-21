@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 4–10 integration branch and approved 100 ms Chipware cache
+
+- **Owned branch:** `dev/redscript/integration` based on handoff #41. Imported source-owner Pass 4–10 generators and source-state tests without merging historical `RedscriptGenerationPlan.cs` copies. One `RedscriptHistoricalIntegration.Apply()` appends #42–51 to the existing generic-first production `Stage` and GCO ZIP path.
+- **Overlap control:** Pass 4 Reinforcements geometry only (StealthRunner NPC weak player cache from Pass 7; chipware early classification from Pass 8); Pass 5 HoloTravel; Pass 6 VirtualAtelier and EVS camera; Pass 7 chase/StealthRunner/Lizzies/RunningMan/Reinforcements; Pass 8 cheap chip checks + 50 ms combat and ImmersiveCyberware caching; Pass 9 StandEvents/sprint; Pass 10 approved 100 ms Chipware 24-perk memoization. Pass 10 isolated [SCC #14 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44911716216).
+- **In progress:** combined canonical source and SCC [checkpoint #220](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991). No combined SUCCESS or final ZIP claim yet. Real GRSP capture replay's source provenance, additive helper attestation and full GCO build need a successful milestone run. Preserve actual historical gameplay behavior, native owner boundaries, SCC correctness and clean ZIP. No extra repair pass, no `main` promotion.
+
 ## 2026-11-21 — Checkpoint-driven CI for uninterrupted REDscript batches
 
 - **Implementation commits no longer auto-run SCC or the full GCO package workflow on this development line.** Existing workflows retain `workflow_dispatch` for normal GitHub UI manual runs. Agents can create/fix/commit a complete pass without churn from auto-cancelled older SCC and full packaging runs.

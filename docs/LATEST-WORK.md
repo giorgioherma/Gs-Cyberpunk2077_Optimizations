@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Pass 10 approved historical Chipware cache and Pass 4–10 one-pass integration
+
+- **Pass 10 isolated:** `dev/redscript/pass10`, [SCC #14 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44911716216): 100 ms source-derived perk-result memoization ported into the existing Pass 8 Chipware helper; stock, partial, complete, custom/relocated, incompatible, absent and repeat source-state coverage; actual canonical SCC on 2,331 post-generic sources. Historical gameplay behavior is user-approved; no fresh A/B benchmark claim.
+- **Integration branch:** `dev/redscript/integration`; source-owned Pass 4–10 generators imported without replacing newer handoff plan, wired as ordered #42–51 after generic-first #11–41. Pass 4 StealthRunner/Chipware duplicate operations are excluded in favor of Pass 7/8 owners; Pass 9 follows Pass 7; Pass 10 follows Pass 8; no corrective pass.
+- **Verification:** [combined SCC checkpoint #220](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991) is the current checkpoint to examine. Earlier #217 exposed an isolated RunningMan stage-ID assumption; #219 exposed EVS final-versus-intermediate source-byte comparison. Both checks were corrected to verify actual source composition rather than alter approved generated behavior. **Do not report #220 as successful until its GitHub result is SUCCESS.**
+- **Full product evidence outstanding:** The real captured GRSP replay now checks new later-stage file provenance rather than an obsolete #33 reference file-count; the official combined-source owner SCC additionally verifies the two Pass 8 helper producers and Pass 10's final Chipware helper. These changes and the combined CET/REDscript ZIP have **not yet been validated by a successful full GCO integration workflow**. Gameplay and measured performance remain separate release gates.
+- **CI cadence:** Checkpoint-marker only; grouped focused SCC and one full GCO milestone at release acceptance. Do not launch CI for every micro-edit or require exact UI/code strings unrelated to safety and behavior. `main` and independent agent branches remain untouched.
+
 ## 2026-11-21 — Checkpoint-driven CI for uninterrupted REDscript batches
 
 - **Implementation commits no longer auto-run SCC or the full GCO package workflow on this development line.** Existing workflows retain `workflow_dispatch` for normal GitHub UI manual runs. Agents can create/fix/commit a complete pass without churn from auto-cancelled older SCC and full packaging runs.

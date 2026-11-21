@@ -1,6 +1,6 @@
 # REDscript Pass 4–9 consolidation audit — 2026-11-21
 
-**Coordinator branch:** `dev/redscript/integration`, created from `dev/redscript/resolver_handoff` code/docs HEAD `b4b668931d9521f72396a2b57f93ec5b7cafe4dc`. **Status: inventory only, no branch imports or SCC of combined 4–9 yet.** Do not treat individual isolated CI passes as proof of the consolidated ZIP.
+**Coordinator branch:** `dev/redscript/integration`, created from `dev/redscript/resolver_handoff` code/docs HEAD `b4b668931d9521f72396a2b57f93ec5b7cafe4dc`. **Status: Pass 4–10 source integration is implemented; combined SCC and GCO full-package acceptance are pending.** Do not treat individual isolated CI passes as proof of the consolidated ZIP.
 
 | Pass | Exact audited branch HEAD | Latest source-code CI and scope | Production stage wiring in isolated branch | Handoff |
 | --- | --- | --- | --- | --- |
@@ -31,3 +31,9 @@
 - Run **one focused consolidated SCC checkpoint** on the actual merged 2,331-file post-generic stack; separately run **one full GCO package/checkpoint** on the combined output, verifying true one-ZIP path and ownership sidecar.
 - Real in-game parity and matched profiling captures remain a separate shipping gate. No measurable FPS/CPU improvement is established from compilation alone.
 - Pass 10 has no live branch as of this audit and remains pending review/approval. No merge to `main` is authorized by this audit.
+
+## Integration implementation after original audit
+
+The initial table documents the **original isolated evidence** and is not a release assertion. Current integration imports all source-owner generators into `dev/redscript/integration` without copying isolated branches' outdated central plans. `src/GRedscript.Resolver/Phase2/RedscriptHistoricalIntegration.cs` composes #42–51 after existing #41, with Pass 7 before Pass 9 and Pass 8 before Pass 10. Pass 4's overlapping StealthRunner/Chipware ops are not duplicated. Approved historical Chipware 100 ms memoization is implemented in `ChipwarePerkResultMemoPass.cs`; its isolated real-source [SCC #14 is successful](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44911716216).
+
+The combined source-state test and post-generic SCC checkpoint is [#220](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991); its result must be inspected before any combined acceptance claim. The full GCO real-source replay now checks file-level later-producer provenance rather than demanding that current output equal earlier #33 manual overlay bytes; a newer source owner may legitimately compose on earlier generated work. The native SCC owner script validates both Pass 8 helper producers, then Pass 10's final Chipware helper content, and rejects arbitrary additive source files. Full CI/package/ZIP/gameplay are not yet confirmed.
