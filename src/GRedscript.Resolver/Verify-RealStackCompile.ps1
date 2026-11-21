@@ -360,7 +360,7 @@ try {
     foreach($contract in $additiveContracts) {
       $entry=@($stageReport.completed | Where-Object { $_.id -eq $contract.Id })
       if ($entry.Count -ne 1 -or [int]$entry[0].order -ne $contract.Order -or
-          [int]$entry[0].newFiles -ne 1 -or [int]$entry[0].rewrittenExpressions -lt 2) {
+          [int]$entry[0].newFiles -lt 1 -or [int]$entry[0].rewrittenExpressions -lt 2) {
         throw ('R6_ADDITIVE_STAGE_RULE_NOT_PROVEN:'+$contract.Id)
       }
       $owner=Join-Path $liveSources $contract.Owner
@@ -373,6 +373,17 @@ try {
       if (!(Test-Path -LiteralPath $canonicalFile -PathType Leaf) -or
           (Test-Path -LiteralPath (Join-Path $liveSources $relative) -PathType Leaf)) {
         throw ('R6_ADDITIVE_SOURCE_NOT_NEW:'+$contract.Id)
+      }
+      # Verify this exact new source came from its declared owner stage,
+      # not merely that it appeared in the final composed preview. Stage
+      # NewFiles also counts newly staged ORIGINAL owner files, so it is
+      # intentionally not assumed to equal one additive helper.
+      $producerRoot=Join-Path $stageHome ('_stages/'+$contract.Order+'-'+$contract.Id)
+      $producer=Join-Path (Join-Path $producerRoot 'r6/scripts') $relative
+      if (!(Test-Path -LiteralPath $producer -PathType Leaf) -or
+          (Get-FileHash -LiteralPath $producer -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $canonicalFile -Algorithm SHA256).Hash) {
+        throw ('R6_ADDITIVE_HELPER_PRODUCER_MISMATCH:'+$contract.Id)
       }
       $helper=Get-Content -LiteralPath $canonicalFile -Raw
       if (!$helper.Contains('class '+$contract.Type,[StringComparison]::Ordinal) -or
