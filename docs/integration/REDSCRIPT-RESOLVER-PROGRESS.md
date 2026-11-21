@@ -1,5 +1,14 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 7 remaining owners: stage #706–710 and bounded Chipware refusal
+
+- Source-aware generator `Pass7ChaseFrameFloorPass.Generate` now runs on canonical production one-pass effective post-generic source with **11** independent operation statuses: #700–705 existing, #706 performer index reusable across Lizzie appearance/positioning/event callsites (live record identity check), #707 chase stimulus filtering, #708 police/prevention guard, #709 100 ms per-component reinforcement probe; #710 **REFUSED only for 24-perk result TTL** because no source-proven invalidation of perk/equipment/charges/wrapped vanilla result.
+- Pass 4 reinforces `Utils.reds` and `ReinforcementSystem.reds` geometry separately; Pass 7 owns `ReinforcementsCall.reds`. Pass 4 and 7 share StealthRunner `m_stealthRunnerPlayer` lifecycle and must not double-emit. Pass 4/8 optimize Chipware perk source without the unverified memo. Preserve generic ten-pass markers, all original gameplay calls and unaffected owner sources.
+- [Focused source/SCC checkpoint #12](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908307127) launched once by explicit marker; **outcome pending here**. No claims of runtime/gameplay parity or measured gains until in-game A/B; package CI belongs to integration owner.
+- See `docs/integration/REDSCRIPT-PASS7-ISOLATED-HANDOFF.md` for operation table, partial/refusal rationale and consolidation instructions.
+
+
+
 ## 2026-11-21 — Agent 5 Pass 7 integrated; independent SCC/one-pass SUCCESS
 
 - Base green `96d66c66`; branch `dev/redscript/pass7` only. Canonical `RedscriptGenerationPlan.Stage` automatically includes six source-aware Pass 7 operations (#700–705) on actual effective post-generic source, producing five owner files without sharing generation code with the Pass 2.2 / 3.0 and Pass 4/5 agents.
