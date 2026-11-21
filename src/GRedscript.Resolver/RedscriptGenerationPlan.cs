@@ -1749,6 +1749,18 @@ public static class RedscriptGenerationPlan
         Pass8CanonicalComposition.Apply(game, output, final, results,
             skipped, ref files, ref expressions);
 
+        // Pass 10: the approved historical 100ms chip perk-result cache
+        // consumes Pass 8's already composed owner and existing helper.
+        // This belongs to the SAME post-generic one-pass Generate.
+        Pass8CanonicalComposition.Run(40, "pass10-chipware-perk-memo",
+            "zzy_bChipwareExpansion", game, output, final, results,
+            skipped, ref files, ref expressions, (g, o, b) =>
+            {
+                var r = ChipwarePerkResultMemoPass.Generate(g, o, b);
+                return new Pass8CanonicalComposition.Outcome(
+                    r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
+            });
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

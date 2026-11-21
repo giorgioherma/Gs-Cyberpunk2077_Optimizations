@@ -10,7 +10,7 @@ namespace GRedscript.Resolver.Phase2;
 /// </summary>
 internal static class Pass8CanonicalComposition
 {
-    private sealed record Outcome(
+    internal sealed record Outcome(
         string RuleId, string Status, int AppliedEdits,
         string[] SourcePaths, string[] Refusals);
 
@@ -43,7 +43,7 @@ internal static class Pass8CanonicalComposition
             });
     }
 
-    private static void Run(
+    internal static void Run(
         int order, string id, string owner,
         string game, string output, string final,
         List<RedscriptGenerationPlan.OutputItem> completed,

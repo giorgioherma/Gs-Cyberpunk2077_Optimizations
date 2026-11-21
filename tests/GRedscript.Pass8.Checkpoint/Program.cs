@@ -18,6 +18,8 @@ object report = (options.GetValueOrDefault("--owner") ?? "chipware") switch
         options.GetValueOrDefault("--base-overlay")),
     "combat" => Pass8ChipwareCombatCachePass.Generate(game, output,
         options.GetValueOrDefault("--base-overlay")),
+    "memo" => ChipwarePerkResultMemoPass.Generate(game, output,
+        options.GetValueOrDefault("--base-overlay")),
     _ => throw new ArgumentException("Unsupported Pass 8 owner")
 };
 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
