@@ -1,0 +1,144 @@
+name: REDscript Phase 2 - Agent6 Pass9 isolated
+
+# Branch-only gate; shared sequencing and full GCO workflow are unchanged.
+on:
+  push:
+    branches:
+      - dev/redscript/pass9
+    paths:
+      - '.github/workflows/redscript-phase2-pass9.yml'
+      - 'src/GRedscript.Resolver/Phase2/RunningManDoubleSprintPass.cs'
+      - 'tools/Pass9/**'
+      - 'tests/GRedscript.Resolver.Tests/test_phase2_runningman_pass9.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gco-redscript-pass9-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pass9:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated Pass 9 branch
+        uses: actions/checkout@v4
+
+      - name: Read private effective source and CI-only SCC dependencies
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .pass9-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile existing Resolver and isolated Pass 9 test host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build tools/Pass9/Pass9.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_DOTNET10_BUILD_FAILED' }
+
+      - name: Exercise stock partial historical complete custom incompatible and idempotent states
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_runningman_pass9.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_SOURCE_STATE_TEST_FAILED' }
+
+      - name: Generate on actual 2331-file post-generic stack in one invocation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.pass9-private/base_after_generic'
+          $target='r6/scripts/RunningMan/double_sprint.reds'
+          $input=Join-Path $game $target
+          if (!(Test-Path -LiteralPath $input -PathType Leaf)) { throw 'PASS9_AUTHORITATIVE_OWNER_ABSENT' }
+          $before=(Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash
+          dotnet run --no-build -c Release --project tools/Pass9/Pass9.csproj -- --game $game --out '.pass9-overlay'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_ONE_GO_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath '.pass9-overlay/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'RUNNINGMAN_DOUBLE_SPRINT_STAND_DORMANCY_V1' -or
+              $report.status -ne 'APPLIED' -or $report.appliedEdits -ne 2 -or
+              @($report.sourcePaths).Count -ne 1) {
+            throw ('PASS9_STOCK_MUST_COMPLETE_TWO_OPERATIONS: '+($report | ConvertTo-Json -Compress))
+          }
+          $generated=Join-Path '.pass9-overlay' $target
+          if (!(Test-Path -LiteralPath $generated -PathType Leaf)) { throw 'PASS9_OWNER_SOURCE_NOT_EMITTED' }
+          $new=Get-Content -LiteralPath $generated -Raw
+          foreach($proof in @(
+            'm_gredRunningManDoubleRunPerk',
+            'm_gredRunningManResumeChecked',
+            'if this.m_gredRunningManDoubleRunPerk || this.m_isInSecondSprint',
+            'if !this.m_gredRunningManResumeChecked && this.GetInStateTime()',
+            'this.RemoveMaxSpeedModifier',
+            'SetPermanentBoolParameter(n"RunningMan_ResumeSecondSprint", false, true)')) {
+            if (!$new.Contains($proof,[StringComparison]::Ordinal)) {
+              throw ('PASS9_GENERATED_FLOW_MISSING: '+$proof)
+            }
+          }
+          if ((Get-FileHash -LiteralPath $input -Algorithm SHA256).Hash -ne $before) {
+            throw 'PASS9_MUTATED_POST_GENERIC_SOURCE'
+          }
+          $ownerFiles=@(Get-ChildItem -LiteralPath '.pass9-overlay/r6/scripts' -Recurse -File)
+          if ($ownerFiles.Count -ne 1 -or $ownerFiles[0].Name -ne 'double_sprint.reds') {
+            throw 'PASS9_UNEXPECTED_OUTPUT_OR_OWNER_FILE'
+          }
+          Write-Host 'PASS Pass9 stock source: 2 independent operations / 1 owner file / input unchanged'
+
+      - name: Repeated generate against output must be exact no-op
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $target='r6/scripts/RunningMan/double_sprint.reds'
+          $effective=Join-Path '.pass9-overlay' $target
+          $before=(Get-FileHash -LiteralPath $effective -Algorithm SHA256).Hash
+          New-Item -ItemType Directory -Force -Path (Split-Path (Join-Path '.pass9-reinput' $target) -Parent) | Out-Null
+          Copy-Item -LiteralPath $effective -Destination (Join-Path '.pass9-reinput' $target)
+          dotnet run --no-build -c Release --project tools/Pass9/Pass9.csproj -- --game '.pass9-reinput' --out '.pass9-noop'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_REPEAT_FAILED' }
+          $r=Get-Content '.pass9-noop/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($r.status -ne 'COMPLETE' -or $r.appliedEdits -ne 0 -or
+              $r.alreadyComplete -ne 2 -or
+              (Test-Path (Join-Path '.pass9-noop' $target))) {
+            throw ('PASS9_REPEAT_CHANGED_OUTPUT: '+($r | ConvertTo-Json -Compress))
+          }
+          if ((Get-FileHash -LiteralPath $effective -Algorithm SHA256).Hash -ne $before) {
+            throw 'PASS9_PRIOR_OUTPUT_MUTATED'
+          }
+          Write-Host 'PASS Pass9 idempotence, no duplicate fields or callbacks'
+
+      - name: Official SCC 0.5.31 - complete post-generic stack plus Pass9
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass9-private/base_after_generic' -CompilerRoot '.pass9-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass9-overlay'
+          if (!$?) { throw 'PASS9_OFFICIAL_SCC_FAILED' }
+
+      - name: Cleanup private owner sources compiler and overlays
+        if: always()
+        shell: pwsh
+        run: |
+          foreach($p in @('.pass9-private','.pass9-overlay','.pass9-reinput','.pass9-noop')) {
+            if(Test-Path -LiteralPath $p) {
+              Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
