@@ -1,0 +1,127 @@
+name: REDscript Pass 4 - isolated combat checkpoint
+
+# Independent source-state and official SCC contract for the Pass 4
+# development branch. Does not modify or cancel shared Phase 2 jobs.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/redscript/pass4
+    paths:
+      - '.github/workflows/redscript-pass4-checkpoint.yml'
+      - 'src/GRedscript.Pass4/**'
+      - 'tests/GRedscript.Resolver.Tests/test_pass4_*.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redscript-pass4-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  combat:
+    name: Pass 4 source state and official SCC 0.5.31
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated Pass 4 branch
+        uses: actions/checkout@v4
+
+      - name: Checkout authoritative post-generic stack and CI-only SCC
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .pass4-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+
+      - name: Configure .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build isolated Pass 4 generator and authoritative SCC runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Pass4/GRedscript.Pass4.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_GENERATOR_DOTNET_BUILD_FAILED' }
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_SCC_OWNER_BUILD_FAILED' }
+
+      - name: Verify original, partial, complete, custom, incompatible and absent states
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass4_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_SOURCE_STATE_CONTRACT_FAILED' }
+
+      - name: Generate all applicable Pass 4 operations in one source-aware invocation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Pass4/bin/Release/net10.0/GRedscript.Pass4.dll'
+          & dotnet $dll pass4 --game '.pass4-private/base_after_generic' --out '.pass4-generated'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_ONE_RUN_GENERATOR_FAILED' }
+          $report=Get-Content '.pass4-generated/pass4-result.json' -Raw | ConvertFrom-Json
+          if ($report.schemaVersion -ne 'gco.phase2.pass4.isolated.v1' -or
+              $report.sourceUnchanged -ne $true -or
+              $report.status -ne 'APPLIED') {
+            throw ('PASS4_GENERATION_NOT_APPLIED: '+$report.status)
+          }
+          foreach($id in @(
+            'STEALTHRUNNER_NPC_PLAYER_CACHE_V1',
+            'CHIPWARE_PERK_RELEVANCE_GATE_V1',
+            'REINFORCEMENTS_PREPARED_QUAD_CACHE_V1')) {
+            $item=@($report.operations | Where-Object ruleId -eq $id)
+            if($item.Count -ne 1 -or $item[0].status -ne 'APPLIED') {
+              throw ('PASS4_OWNER_MISSING: '+$id+' '+(@($item | ForEach-Object reason) -join ';'))
+            }
+          }
+          $files=@(Get-ChildItem '.pass4-generated/r6/scripts' -Recurse -File -Filter '*.reds')
+          if($files.Count -ne 4 -or @($report.sourcePaths).Count -ne 4) {
+            throw ('PASS4_EXPECTED_FOUR_GAME_RELATIVE_SOURCES: '+$files.Count)
+          }
+          $utils=@(Get-ChildItem '.pass4-generated/r6/scripts/ReinforcementsSystem' -Recurse -File -Filter 'Utils.reds')
+          if($utils.Count -ne 1) { throw 'PASS4_REINFORCEMENTS_UTILS_NOT_UNIQUE' }
+          $text=Get-Content $utils[0].FullName -Raw
+          foreach($marker in @('GCO-GENERIC:ANGLE_SORT_INVARIANT_V1',
+                'GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1',
+                'return IsPointInQuad(p, sq);')) {
+            if(!$text.Contains($marker,[StringComparison]::Ordinal)) {
+              throw ('PASS4_GENERIC_OR_MUTATION_FALLBACK_MISSING: '+$marker)
+            }
+          }
+          & dotnet $dll pass4 --game '.pass4-private/base_after_generic' --base-overlay '.pass4-generated' --out '.pass4-repeated'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_REPEATED_GENERATION_FAILED' }
+          $second=Get-Content '.pass4-repeated/pass4-result.json' -Raw | ConvertFrom-Json
+          if($second.status -ne 'COMPLETE' -or
+             [int]$second.appliedEdits -ne 0 -or
+             @(Get-ChildItem '.pass4-repeated/r6/scripts' -File -Recurse -ErrorAction SilentlyContinue).Count -ne 0) {
+            throw 'PASS4_REPEATED_GENERATION_NOT_IDEMPOTENT'
+          }
+          Write-Host ('PASS Pass4 one-run owners=3 files='+$files.Count+' repeated=no-op')
+
+      - name: Compile real post-generic stack with all Pass 4 source files using official SCC 0.5.31
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass4-private/base_after_generic' -CompilerRoot '.pass4-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass4-generated'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS4_OFFICIAL_SCC_FAILED' }
+
+      - name: Remove private stack, compiler and generated source
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force '.pass4-private','.pass4-generated','.pass4-repeated' -ErrorAction SilentlyContinue
