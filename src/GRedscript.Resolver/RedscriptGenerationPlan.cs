@@ -1341,6 +1341,50 @@ public static class RedscriptGenerationPlan
             skipped.Add(new(27,"digitalvixen-ui-dormancy",1,
                 dvcUi.Reason));
 
+        // Historical Pass 2.0 / BrowserExtension: cache only journal and
+        // immutable quest-entry handles; re-query live quest state per call.
+        // Independently eligible from BrowserExtension's InputHub migration.
+        string browserRoot=Path.Combine(output,"_stages",
+            "28-browser-extension-journal");
+        var browser=BrowserExtensionJournalCachePass.Generate(game,
+            browserRoot,Directory.Exists(final)?final:null);
+        if(browser.Status=="APPLIED")
+        {
+            string rel=browser.SourcePath ??
+                throw new InvalidDataException("BEX_JOURNAL_STAGE_PATH_MISSING");
+            string src=Path.GetFullPath(Path.Combine(browserRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/BrowserExtension/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,browserRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("BEX_JOURNAL_STAGE_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("BEX_JOURNAL_LOST_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=browser.AppliedEdits;
+            results.Add(new(28,"browser-extension-journal",browser.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(browser.Status=="REFUSED")
+            skipped.Add(new(28,"browser-extension-journal",1,
+                browser.Reason ?? "BEX_JOURNAL_SOURCE_INCOMPATIBLE"));
+        else if(browser.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("BEX_JOURNAL_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
