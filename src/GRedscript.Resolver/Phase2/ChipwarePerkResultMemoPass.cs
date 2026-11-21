@@ -240,37 +240,37 @@ public static class ChipwarePerkResultMemoPass
         if (!Regex.IsMatch(body, @"\bm_perkResult\s*:\s*array<Int32>"))
             pieces.Add("    private let m_perkResult: array<Int32>;");
         if (!body.Contains("EnsurePerkCache(", StringComparison.Ordinal))
-            pieces.Add($"""
-    private func EnsurePerkCache() -> Void {{
-        if ArraySize(this.m_perkResult) != {perkCount} {{
-            ArrayResize(this.m_perkResult, {perkCount});
-            ArrayResize(this.m_perkResultUntil, {perkCount});
-        }}
-    }}
-""");
+            pieces.Add("""
+    private func EnsurePerkCache() -> Void {
+        if ArraySize(this.m_perkResult) != __COUNT__ {
+            ArrayResize(this.m_perkResult, __COUNT__);
+            ArrayResize(this.m_perkResultUntil, __COUNT__);
+        }
+    }
+""".Replace("__COUNT__", perkCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (!body.Contains("TryGetPerkResult(", StringComparison.Ordinal))
-            pieces.Add($"""
-    public func TryGetPerkResult(index: Int32, player: ref<PlayerPuppet>, out result: Int32) -> Bool {{
-        if !IsDefined(player) || index < 0 || index >= {perkCount} {{ return false; }}
+            pieces.Add("""
+    public func TryGetPerkResult(index: Int32, player: ref<PlayerPuppet>, out result: Int32) -> Bool {
+        if !IsDefined(player) || index < 0 || index >= __COUNT__ { return false; }
         this.EnsurePerkCache();
         let now: Float = EngineTime.ToFloat(GameInstance.GetEngineTime(player.GetGame()));
-        if now < this.m_perkResultUntil[index] {{
+        if now < this.m_perkResultUntil[index] {
             result = this.m_perkResult[index];
             return true;
-        }}
+        }
         return false;
-    }}
-""");
+    }
+""".Replace("__COUNT__", perkCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (!body.Contains("StorePerkResult(", StringComparison.Ordinal))
-            pieces.Add($"""
-    public func StorePerkResult(index: Int32, player: ref<PlayerPuppet>, result: Int32) -> Void {{
-        if !IsDefined(player) || index < 0 || index >= {perkCount} {{ return; }}
+            pieces.Add("""
+    public func StorePerkResult(index: Int32, player: ref<PlayerPuppet>, result: Int32) -> Void {
+        if !IsDefined(player) || index < 0 || index >= __COUNT__ { return; }
         this.EnsurePerkCache();
         this.m_perkResult[index] = result;
         this.m_perkResultUntil[index] =
             EngineTime.ToFloat(GameInstance.GetEngineTime(player.GetGame())) + 0.10;
-    }}
-""");
+    }
+""".Replace("__COUNT__", perkCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (pieces.Count == 0)
             return new("REFUSED", null, 0, "CHIPWARE_MEMO_UNRECOGNIZED_PARTIAL_HELPER");
         string updated = source[..close] + nl + string.Join(nl, pieces) + nl +
