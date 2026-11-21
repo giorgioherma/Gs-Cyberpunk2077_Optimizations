@@ -2398,7 +2398,7 @@ try {
         Status=[string]$portResult.status;
         Edits=[int]$portResult.appliedEdits;
         Files=$portFiles.Count;
-        Refusals=@($portResult.refusals)
+        Refusals=@($portResult.refusals | Where-Object { $null -ne $_ -and $_ -ne '' })
       }
       Write-Host ('PASS independent source reference '+$port.Id+
         ' status='+$portResult.status+' edits='+$portResult.appliedEdits+
