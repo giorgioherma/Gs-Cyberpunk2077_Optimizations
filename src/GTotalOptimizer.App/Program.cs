@@ -662,42 +662,44 @@ internal static class Program
                         new System.Windows.Point(0, 0), window.TopHeaderHost).X >=
                     window.RefreshButton.TranslatePoint(
                         new System.Windows.Point(0, 0), window.TopHeaderHost).X ||
-                    window.CloseAfterGenerationButton.Content?.ToString() != "CLOSE" ||
+                    window.CloseAfterGenerationButton.Content?.ToString() != "DONE" ||
                     window.CloseAfterGenerationButton.Visibility !=
-                        System.Windows.Visibility.Collapsed)
+                        System.Windows.Visibility.Collapsed ||
+                    window.OpenFolderButton.IsEnabled)
                     throw new InvalidOperationException(
-                        "Analyze BACK must match REFRESH on its left; CLOSE must be fully hidden before a successful ZIP.");
+                        "Analyze BACK must match REFRESH; DONE is hidden and OPEN FOLDER disabled before generation.");
 
-                // CLOSE shares a row with the left-aligned console. Hidden
-                // CLOSE grants its entire Auto column back to the message.
+                // DONE shares the footer row with the console. Simulating its
+                // visibility must not shift status messages or overlap them.
+                // The user intentionally placed the console ABOVE the button
+                // center, so do not assert arbitrary visual center alignment.
                 var originalConsoleWidth = window.ResultsConsoleScroll.ActualWidth;
                 var originalConsoleTop = window.ResultsConsoleScroll.TranslatePoint(
                     new System.Windows.Point(0, 0), window.ResultsPage).Y;
-                var originalConsoleCenter = originalConsoleTop +
-                    window.ResultsConsoleScroll.ActualHeight / 2;
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Visible;
                 root.UpdateLayout();
-                var closeTop = window.CloseAfterGenerationButton.TranslatePoint(
-                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                var doneLeft = window.CloseAfterGenerationButton.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).X;
+                var consoleRight = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(window.ResultsConsoleScroll.ActualWidth, 0),
+                    window.ResultsPage).X;
                 var consoleTop = window.ResultsConsoleScroll.TranslatePoint(
                     new System.Windows.Point(0, 0), window.ResultsPage).Y;
-                var closeCenter = closeTop + window.CloseAfterGenerationButton.ActualHeight / 2;
-                var consoleCenter = consoleTop + window.ResultsConsoleScroll.ActualHeight / 2;
-                if (Math.Abs(closeCenter - consoleCenter) > 5 ||
-                    Math.Abs(consoleCenter - originalConsoleCenter) > 1 ||
-                    originalConsoleWidth - window.ResultsConsoleScroll.ActualWidth < 150 ||
-                    window.CloseAfterGenerationButton.ActualWidth < 150 ||
+                if (consoleRight > doneLeft ||
+                    Math.Abs(consoleTop - originalConsoleTop) > 1 ||
+                    window.ResultsConsoleScroll.ActualWidth >= originalConsoleWidth ||
+                    window.CloseAfterGenerationButton.ActualWidth <= 0 ||
                     window.OpenFolderButton.Content?.ToString() != "OPEN FOLDER" ||
-                    !window.OpenFolderButton.IsEnabled)
+                    window.OpenFolderButton.IsEnabled)
                     throw new InvalidOperationException(
-                        "CLOSE must not move the centered console; OPEN FOLDER remains available.");
+                        "DONE must not overlap or shift the console; OPEN FOLDER requires a generated ZIP.");
                 window.CloseAfterGenerationButton.Visibility =
                     System.Windows.Visibility.Collapsed;
                 root.UpdateLayout();
                 if (Math.Abs(window.ResultsConsoleScroll.ActualWidth - originalConsoleWidth) > 1)
                     throw new InvalidOperationException(
-                        "Hidden CLOSE must release the full Analyze console width.");
+                        "Hidden DONE must release the full Analyze console width.");
 
                 if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1 &&
                     window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
