@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
                 return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-trigger-mode-tags")
+                return RunPhase2TriggerModeTags(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-redwindows-find")
                 return RunPhase2RedWindowsFind(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickhack-tags")
@@ -630,6 +632,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2TriggerModeTags(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "TriggerModeControl pass requires --game --out [--base-overlay]");
+        var result = TriggerModeLiteralTagsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 TriggerMode tags: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 

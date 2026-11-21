@@ -908,6 +908,53 @@ public static class RedscriptGenerationPlan
         else if (rw.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("RW_FIND_STATUS_UNKNOWN");
 
+        // Historical TriggerModeControl Pass 5: use literal CNames for
+        // primary/secondary trigger tags. Keep all hint-refresh callbacks
+        // unchanged; the older UI cadence edit needs separate proof.
+        string triggerRoot = Path.Combine(output, "_stages",
+            "20-trigger-mode-literal-tags");
+        var trigger = TriggerModeLiteralTagsPass.Generate(game, triggerRoot,
+            Directory.Exists(final) ? final : null);
+        if (trigger.Status == "APPLIED")
+        {
+            string rel = trigger.SourcePath ??
+                throw new InvalidDataException("TMC_TAG_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(triggerRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/TriggerModeControl/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, triggerRoot) || !IsInside(target, final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("TMC_TAG_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string previous = File.ReadAllText(target);
+                string updated = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    previous, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !updated.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException("TMC_TAG_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += trigger.AppliedEdits;
+            results.Add(new(20, "trigger-mode-literal-tags",
+                trigger.AppliedEdits, existed ? 0 : 1,
+                existed ? 1 : 0, []));
+        }
+        else if (trigger.Status == "REFUSED")
+            skipped.Add(new(20, "trigger-mode-literal-tags", 1,
+                trigger.Reason ?? "TMC_TAG_SOURCE_INCOMPATIBLE"));
+        else if (trigger.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("TMC_TAG_STATUS_UNKNOWN");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

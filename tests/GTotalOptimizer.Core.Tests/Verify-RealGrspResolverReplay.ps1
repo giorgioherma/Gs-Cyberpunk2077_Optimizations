@@ -2054,7 +2054,9 @@ try {
       @{ Id='quickhack-direct-tags'; Order=18; Command='phase2-quickhack-tags';
          Rule='QUICKHACK_FIXES_DIRECT_TAG_PREDICATE_V1'; Owner='Quickhack_Fixes' },
       @{ Id='redwindows-widget-lookup'; Order=19; Command='phase2-redwindows-find';
-         Rule='REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1'; Owner='RedWindows' }
+         Rule='REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1'; Owner='RedWindows' },
+      @{ Id='trigger-mode-literal-tags'; Order=20; Command='phase2-trigger-mode-tags';
+         Rule='TRIGGER_MODE_LITERAL_TAG_NAMES_V1'; Owner='TriggerModeControl' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
