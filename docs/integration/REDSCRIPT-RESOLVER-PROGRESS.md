@@ -1,5 +1,17 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Optimized-stack repeat Generate: support-only ZIP refusal and complete framework contract
+
+**Verified user evidence:** the repeated Analyze/Generate on an already-optimized installation reported CET generic 0, semantic 0 and REDscript 0 new edits, but still produced a 15-file game-relative pass. The supplied ownership sidecar verified **14/15 files byte-identical to live installed source**, with only `G-GC/threshold.lua` changed (per-capture calibration); all 11 0-Engine files, the G-GC runtime and both CET native-location assets were identical. The screenshot's one CET "transform" is the source owner's `GC_CONTROLLER` transform, **not** another gameplay/source optimization. No REDscript source files were emitted. Three independent source refusals remain explicitly unproven: `late-system-read` (partial/drifted generated marker), `flushing-etiquette-input` (action order/receiver), and `pass8-chipware-throughput` (perk fallback). Do not silently classify these as complete without source proof.
+
+**Fix in development:** GCO reads CET's authoritative `transforms[]`, excludes `GC_CONTROLLER` only from the **new optimization eligibility** count (retains owner accounting and G-GC calibration inside real passes). `CombinedOptimizationPassService` refuses support-only output **before ZIP staging/publication**. Page 2 ANALYZE uses isolated read-only CET and canonical REDscript generator previews to establish actual remaining source edits; GENERATE is disabled and console says `NO NEW OPTIMIZATIONS AVAILABLE` when both engines have no proven work. Hotscenes ENG-only remains an explicitly selected **Generate-only** operation, with current-source completed-marker recognition and no misleading `not applied` on an already English-only installation. Unproven source refusals remain diagnostically visible. One combined ZIP only.
+
+**Framework user decision:** when at least one actual CET or REDscript optimization exists, every generated ZIP includes the **complete hash-verified G-REDruntime owner source inventory**. Source already present in the user's game is copied from those exact live bytes; missing files come from the verified bundled owner. New optimizer-stage output wins if a framework path was already staged. No framework, G-GC, 0-Engine, native-location or profiler-only ZIP when no substantive edits exist. Never overwrite original game source automatically. Tests cover support-only classification, verified full runtime set, installed-source precedence, manifest tamper and unmanifested file refusal. Note that the separate source-owner CET Resolver remains authoritative and unchanged.
+
+**Validation at this document update:** attached repeat-pass ZIP + ownership sidecar independently inspected; source-level changes prepared. .NET 10 WPF compilation, complete generated player ZIP structure, and a genuine fully-optimized second-run no-output integration contract still require CI and user smoke validation. Main remains untouched; do not claim green CI from source inspection.
+
+
+
 ## 2026-11-21 — New capture-ranked stages #52–54: integration and automated acceptance COMPLETE
 
 **Working branch:** `dev/redscript/integration` (full GCO application). Production `main` untouched. Original 10 generic rules and all prior semantic stages #11–51 remain intact. New operations apply to the live *post-generic effective preview* during the original single player-side `Generate`; source is never replaced by historical files.

@@ -55,6 +55,8 @@ public partial class MainWindow : Window
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
     private readonly CombinedOptimizationPassService combinedPassGenerator = new();
     private bool redscriptPlanReady;
+    private CombinedPassAvailability? analyzedAvailability;
+    private bool hotscenesOptInRefused;
     // This session's successfully published combined optimization ZIP only.
     // OPEN FOLDER selects the actual file, not the GCO application root.
     private string? generatedPassZipPath;
@@ -140,11 +142,87 @@ public partial class MainWindow : Window
         SetHotscenesOptionVisible(installed);
     }
 
+    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
+    private static bool HasCompletedHotscenesEnglishOnly(string game)
+    {
+        try
+        {
+            string file = Path.Combine(game, "bin", "x64", "plugins",
+                "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (!File.Exists(file)) return false;
+            string source = File.ReadAllText(file);
+            return source.Contains("-- G-CET personal:hotscenes-english-only-v1",
+                       StringComparison.Ordinal) &&
+                !source.Contains("function loadAllLanguageFiles()", StringComparison.Ordinal) &&
+                !source.Contains("function getGameUILanguage(", StringComparison.Ordinal) &&
+                !source.Contains("function loadLocalizedStrings(", StringComparison.Ordinal);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private bool HasPendingHotscenesOptIn()
+    {
+        if (hotscenesOptInRefused || completedGameRoot is null ||
+            HotscenesEnglishOnlyCheckBox.Visibility != Visibility.Visible ||
+            HotscenesEnglishOnlyCheckBox.IsChecked != true) return false;
+        try
+        {
+            string file = Path.Combine(completedGameRoot, "bin", "x64",
+                "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (!File.Exists(file)) return false;
+            // Incomplete generated markers are not a new optimization:
+            // the CET owner must refuse them rather than reapply a partial pass.
+            return !File.ReadAllText(file).Contains(
+                "-- G-CET personal:hotscenes-english-only-v1", StringComparison.Ordinal);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private bool HasNewOptimizationAvailable() =>
+        analyzedAvailability?.HasNewOptimizations == true ||
+        HasPendingHotscenesOptIn();
+
+    private string NoNewOptimizationStatus()
+    {
+        int refused = analyzedAvailability?.RedscriptSkipped.Length ?? 0;
+        return "NO NEW OPTIMIZATIONS AVAILABLE. All proven compatible work is already installed." +
+            (refused > 0
+                ? Environment.NewLine + refused +
+                  " REDscript operation(s) remain source-refused; not counted as new work."
+                : "");
+    }
+
+    private void RefreshGenerateEligibility()
+    {
+        if (analyzedSessionId is null || analyzedSessionId != completedSessionId ||
+            !redscriptPlanReady || analyzedAvailability is null) return;
+        bool ready = HasNewOptimizationAvailable();
+        GenerateButton.IsEnabled = !analysisRunning && !generationRunning &&
+            CloseAfterGenerationButton.Visibility != Visibility.Visible && ready;
+        if (!analysisRunning && !generationRunning &&
+            CloseAfterGenerationButton.Visibility != Visibility.Visible)
+            SetResultsConsoleStatus(ready
+                ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
+                : NoNewOptimizationStatus());
+    }
+
     private bool ClosedOrClosing => !IsLoaded && initialized;
 
     public MainWindow()
     {
         InitializeComponent();
+        HotscenesEnglishOnlyCheckBox.Checked += (_, _) =>
+        {
+            hotscenesOptInRefused = false;
+            RefreshGenerateEligibility();
+        };
+        HotscenesEnglishOnlyCheckBox.Unchecked += (_, _) =>
+        {
+            hotscenesOptInRefused = false;
+            RefreshGenerateEligibility();
+        };
         originalConsoleMargin = ConsoleTextHost.Margin;
         CapturePage.SizeChanged += (_, _) =>
         {
@@ -1877,7 +1955,8 @@ public partial class MainWindow : Window
         ResultsRestoreStatusText.Text = saved.Restored
             ? "Both profilers uninstalled. All game files are restored."
             : "Profiler restoration has not yet been verified.";
-        ResultsRestoreStatusText.Foreground = AnalyzeYellow;
+        ResultsRestoreStatusText.Foreground = saved.Restored
+            ? (System.Windows.Media.Brush)FindResource("Cyan") : AnalyzeYellow;
 
         SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET",
             saved.Cet is null ? "MISSING" : "OK");
@@ -2000,7 +2079,12 @@ public partial class MainWindow : Window
                     ? "ANALYZED" : "ANALYZE";
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
                 analyzedSessionId == saved.SessionId && redscriptPlanReady &&
-                CloseAfterGenerationButton.Visibility != Visibility.Visible;
+                CloseAfterGenerationButton.Visibility != Visibility.Visible &&
+                HasNewOptimizationAvailable();
+            if (analyzedSessionId == saved.SessionId && !generationRunning &&
+                CloseAfterGenerationButton.Visibility != Visibility.Visible &&
+                analyzedAvailability is not null && !HasNewOptimizationAvailable())
+                SetResultsConsoleStatus(NoNewOptimizationStatus());
             OpenFolderButton.IsEnabled = !generationRunning &&
                 generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
         }
@@ -2053,6 +2137,8 @@ public partial class MainWindow : Window
 
         analysisRunning = true;
         redscriptPlanReady = false;
+        analyzedAvailability = null;
+        hotscenesOptInRefused = false;
         analysisCancellation?.Dispose();
         analysisCancellation = new CancellationTokenSource();
         var cancel = analysisCancellation;
@@ -2067,7 +2153,7 @@ public partial class MainWindow : Window
                 packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
-            SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 2, "ANALYZE / REDSCRIPT SOURCES");
+            SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 5, "ANALYZE / REDSCRIPT SOURCES");
             // Do not mark the session ANALYZED until both CET and the
             // REDscript generation plan have completed successfully.
             // The Resolver's UnresolvedCount is a CALLBACK count, not
@@ -2119,7 +2205,8 @@ public partial class MainWindow : Window
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
                 redscriptPlanReady = true;
-                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 2, 2, "ANALYZE / CET + REDSCRIPT DONE");
+                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 2, 5,
+                    "ANALYZE / VERIFYING APPLICABLE RULES");
                 var ready = planned.Rules.Where(rule =>
                     rule.Status == "READY_FOR_GENERATOR").ToArray();
                 var affected = ready.SelectMany(rule => rule.SourceFolders)
@@ -2138,7 +2225,7 @@ public partial class MainWindow : Window
                     " configured" + Environment.NewLine +
                     "Eligible generic edits: " + planned.EligibleSourceEdits +
                     " | Already optimized: " + alreadyComplete + Environment.NewLine +
-                    "Semantic compatibility checked at GENERATE.";
+                    "Semantic compatibility checked against installed source.";
                 var sourceRefused = planned.Rules.Where(rule =>
                     rule.Status == "SOURCE_REFUSED").ToArray();
                 if (sourceRefused.Length > 0)
@@ -2154,12 +2241,31 @@ public partial class MainWindow : Window
                     "Existing generated source rules remain preview-only.";
                 Trace.TraceWarning("REDscript Resolver plan: " + ex);
             }
+            if (redscriptPlanReady)
+            {
+                // Probe source-aware eligibility in disposable output using
+                // the existing CET and REDscript generators. Hotscenes remains
+                // Generate-only, as required by the owner's opt-in contract.
+                analyzedAvailability = await combinedPassGenerator.InspectAvailableAsync(
+                    packageRoot, completedGameRoot!, saved.SessionId, cancel.Token,
+                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress));
+                if (cancel.IsCancellationRequested || !IsLoaded ||
+                    completedSessionId != saved.SessionId) return;
+                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 5, 5,
+                    "ANALYZE / APPLICABLE RULES VERIFIED");
+                if (analyzedAvailability.RedscriptSkipped.Length > 0)
+                    Trace.TraceInformation("REDscript source-specific refusals: " +
+                        string.Join(" | ", analyzedAvailability.RedscriptSkipped.Select(
+                            item => item.Id + ": " + item.Reason)));
+            }
             RedReportText.Text = redPlanStatus;
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
-            SetResultsConsoleStatus(redscriptPlanReady
-                ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
-                : "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged.");
+            SetResultsConsoleStatus(!redscriptPlanReady
+                ? "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged."
+                : HasNewOptimizationAvailable()
+                    ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
+                    : NoNewOptimizationStatus());
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)
@@ -2169,6 +2275,7 @@ public partial class MainWindow : Window
             SetResultsConsoleStatus("CET analysis unavailable: " + ex.Message +
                 " Collected results remain untouched.");
             analyzedSessionId = null;
+            analyzedAvailability = null;
             CetReportText.Text = "CET Resolver unavailable. The collected capture is unchanged.";
             AnalyzeButton.Content = "UNAVAILABLE";
         }
@@ -2183,7 +2290,8 @@ public partial class MainWindow : Window
             if (analyzedSessionId != saved.SessionId)
                 AnalyzeButton.Content = "ANALYZE";
             GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
-                redscriptPlanReady && !generationRunning &&
+                redscriptPlanReady && analyzedAvailability is not null &&
+                HasNewOptimizationAvailable() && !generationRunning &&
                 CloseAfterGenerationButton.Visibility != Visibility.Visible;
         }
     }
@@ -2194,7 +2302,8 @@ public partial class MainWindow : Window
             CloseAfterGenerationButton.Visibility == Visibility.Visible ||
             completedSessionId is null || completedGameRoot is null ||
             analyzedSessionId != completedSessionId ||
-            !redscriptPlanReady || !captureAndRestoreVerified)
+            !redscriptPlanReady || !captureAndRestoreVerified ||
+            !HasNewOptimizationAvailable())
             return;
         if (GameRunning())
         {
@@ -2240,7 +2349,9 @@ public partial class MainWindow : Window
             // The CET/REDscript boxes keep detailed source information.
             // Success console is deliberately just the two measured edit counts.
             // Actual skip outcomes stay visible if any pass was refused.
-            if (pass.HotscenesEnglishOnlyRequested)
+            if (pass.HotscenesEnglishOnlyRequested &&
+                (pass.HotscenesEnglishOnlyEdits > 0 ||
+                 !HasCompletedHotscenesEnglishOnly(game)))
                 CetReportText.Text += Environment.NewLine +
                     "Hotscenes ENG-only: " +
                     (pass.HotscenesEnglishOnlyEdits > 0
@@ -2274,7 +2385,8 @@ public partial class MainWindow : Window
                     unavailableRuleFamilies + " rule families (" +
                     pass.RedscriptSkipped.Length + " operations).";
             if (pass.HotscenesEnglishOnlyRequested &&
-                pass.HotscenesEnglishOnlyEdits == 0)
+                pass.HotscenesEnglishOnlyEdits == 0 &&
+                !HasCompletedHotscenesEnglishOnly(game))
                 summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
             // Publish access only after the combined owner returns a real ZIP.
@@ -2294,6 +2406,15 @@ public partial class MainWindow : Window
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException) { }
+        catch (NoNewOptimizationsException)
+        {
+            // A source-dependent Hotscenes attempt may have been refused:
+            // do not re-enable an identical unsuccessful Generate forever.
+            hotscenesOptInRefused = true;
+            analyzedAvailability = new CombinedPassAvailability(0, 0,
+                analyzedAvailability?.RedscriptSkipped ?? []);
+            SetResultsConsoleStatus(NoNewOptimizationStatus());
+        }
         catch (Exception ex)
         {
             if (!cancellation.IsCancellationRequested && IsLoaded)
@@ -2318,7 +2439,7 @@ public partial class MainWindow : Window
                 GenerateButton.Content = generated ? "GENERATED" :
                     "GENERATE OPTIMIZATION ZIP";
                 GenerateButton.IsEnabled = !generated && analyzedSessionId == session &&
-                    redscriptPlanReady;
+                    redscriptPlanReady && HasNewOptimizationAvailable();
             }
         }
     }
@@ -2402,6 +2523,8 @@ public partial class MainWindow : Window
         completedGameRoot = null;
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
+        analyzedAvailability = null;
+        hotscenesOptInRefused = false;
         savedCapture = null;
         generatedPassZipPath = null;
         ClearWorkProgress();

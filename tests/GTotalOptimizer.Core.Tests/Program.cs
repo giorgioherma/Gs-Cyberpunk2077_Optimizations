@@ -270,11 +270,128 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     finally { if (Directory.Exists(scratch)) Directory.Delete(scratch, true); }
 }
 
+// Only source-changing transforms count as new optimization work.
+// Source-owner G-GC calibration is valid capture data but cannot authorize
+// a second combined pass or regenerate a support-only optimization ZIP.
+{
+    var classify = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "CountOptimizationTransforms",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("CET_MISSING_REAL_OPTIMIZATION_CLASSIFIER");
+
+    int Count(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return (int?)classify.Invoke(null, [document.RootElement]) ??
+            throw new InvalidDataException("CET_OWNER_TRANSFORM_COUNT_UNAVAILABLE");
+    }
+
+    if (Count("""{"transforms":[{"type":"GC_CONTROLLER"}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER"},{"type":"SEMANTIC_RULE"}]}""") != 1 ||
+        Count("""{"transforms":[{"type":"PERSONAL_HOTSCENES_ENGLISH_ONLY"}]}""") != 1 ||
+        new CombinedPassAvailability(0, 0, []).HasNewOptimizations ||
+        !new CombinedPassAvailability(1, 0, []).HasNewOptimizations ||
+        !new CombinedPassAvailability(0, 1, []).HasNewOptimizations)
+        throw new InvalidDataException("GCO_GENERATE_MUST_REFUSE_SUPPORT_ONLY_SECOND_PASS");
+
+    bool malformedRefused = false;
+    try { _ = Count("""{"transforms":[{"unexpected":"no-type"}]}"""); }
+    catch (System.Reflection.TargetInvocationException ex)
+        when (ex.InnerException is InvalidDataException)
+    { malformedRefused = true; }
+    if (!malformedRefused)
+        throw new InvalidDataException("GCO_OWNER_TRANSFORM_MANIFEST_TAMPER_NOT_REFUSED");
+}
+
 var checks = 0;
 void Require(bool valid, string message)
 {
     checks++;
     if (!valid) throw new Exception("FAIL " + message);
+}
+
+// Every substantive pass packages the FULL verified runtime framework.
+// A user's installed compatible/custom source takes precedence, and the
+// authoritative bundle refuses extra unmanifested or tampered source.
+{
+    var copy = typeof(CombinedOptimizationPassService).GetMethod(
+        "CopyCompleteFramework",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_COMPLETE_FRAMEWORK_STAGER_MISSING");
+    var sandbox = Path.Combine(Path.GetTempPath(),
+        "gco-runtime-complete-contract-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string owner = Path.Combine(sandbox, "components", "redruntime", "owner");
+        string game = Path.Combine(sandbox, "game");
+        string overlay = Path.Combine(sandbox, "overlay");
+        var sources = new List<(string Relative, string Content)>();
+        var manifest = new List<object>();
+        for (int i = 0; i < 11; i++)
+        {
+            string relative = $"r6/scripts/G-RedRuntime/Test/Source{i:D2}.reds";
+            string content = $"owner original {i}";
+            string actual = Path.Combine(owner,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(actual)!);
+            File.WriteAllText(actual, content);
+            manifest.Add(new {
+                path = relative,
+                sha256 = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(content)))
+            });
+            sources.Add((relative, content));
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(owner)!);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(owner)!,
+            "source-sha256.json"), System.Text.Json.JsonSerializer.Serialize(manifest));
+
+        var customized = Path.Combine(game,
+            sources[0].Relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(customized)!);
+        File.WriteAllText(customized, "player current custom bytes");
+        var indexed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        int count = (int)(copy.Invoke(null, [game, overlay, owner, indexed]) ??
+            throw new InvalidDataException("GCO_FRAMEWORK_COPY_RETURNED_NULL"));
+        Require(count == sources.Count && indexed.Count == sources.Count,
+            "every runtime owner source is staged into a genuine pass");
+        foreach (var (relative, content) in sources)
+        {
+            string delivered = Path.Combine(overlay,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Require(indexed.ContainsKey(relative) && File.Exists(delivered) &&
+                    File.ReadAllText(delivered) ==
+                        (relative == sources[0].Relative
+                            ? "player current custom bytes" : content),
+                "runtime owner stages all source and preserves installed bytes: " + relative);
+        }
+
+        // No hand-added/unmanifested generated source may enter the ZIP.
+        var stray = Path.Combine(owner, "r6", "scripts",
+            "G-RedRuntime", "Test", "Unmanifested.reds");
+        File.WriteAllText(stray, "unknown");
+        bool refused = false;
+        try { copy.Invoke(null, [game, Path.Combine(sandbox, "extra"), owner,
+                new Dictionary<string, string>()]); }
+        catch (System.Reflection.TargetInvocationException ex)
+            when (ex.InnerException is InvalidDataException) { refused = true; }
+        Require(refused, "unknown framework source is refused before packaging");
+        File.Delete(stray);
+
+        // A bad package hash must never be masked by an installed copy.
+        File.AppendAllText(Path.Combine(owner,
+            sources[1].Relative.Replace('/', Path.DirectorySeparatorChar)), "tamper");
+        refused = false;
+        try { copy.Invoke(null, [game, Path.Combine(sandbox, "tampered"), owner,
+                new Dictionary<string, string>()]); }
+        catch (System.Reflection.TargetInvocationException ex)
+            when (ex.InnerException is InvalidDataException) { refused = true; }
+        Require(refused, "tampered bundled framework refuses even with existing source");
+    }
+    finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
 }
 
 var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().ToString("N"));

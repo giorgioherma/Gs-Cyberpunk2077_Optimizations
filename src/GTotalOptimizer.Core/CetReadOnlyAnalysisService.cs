@@ -25,6 +25,9 @@ public sealed record CetSkipDetail(
 
 public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
 {
+    // The CET owner's transform count includes per-capture G-GC calibration.
+    // Calibration alone does not authorize another combined optimization pass.
+    public int OptimizationTransformCount { get; init; }
     public CetSkipDetail[] SkipDetails { get; init; } = [];
     public int HotscenesEnglishOnlyEdits { get; init; }
 }
@@ -231,6 +234,8 @@ public sealed class CetReadOnlyAnalysisService
                 generatedPass = new CetPassOutcome(destination, expectedFiles,
                     Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"))
                 {
+                    OptimizationTransformCount =
+                        ReadOwnerOptimizationTransforms(pass, temporaryZip),
                     SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip),
                     HotscenesEnglishOnlyEdits = ReadOwnerEnglishOnlyEdits(
                         pass, temporaryZip, hotscenesEnglishOnly)
@@ -285,6 +290,44 @@ public sealed class CetReadOnlyAnalysisService
             args.Add("--hotscenes-english-only");
         args.Add("--json");
         return args;
+    }
+
+    // Ground actual new work in the CET owner's authoritative transform list.
+    // 0-Engine, native locations and G-GC remain pass support; a newly
+    // calibrated G-GC threshold is never sufficient by itself to create a ZIP.
+    internal static int CountOptimizationTransforms(JsonElement manifest)
+    {
+        if (!manifest.TryGetProperty("transforms", out var rows) ||
+            rows.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
+        int count = 0;
+        foreach (var item in rows.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("type", out var type) ||
+                type.ValueKind != JsonValueKind.String)
+                throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_INVALID");
+            if (type.GetString() != "GC_CONTROLLER")
+                count++;
+        }
+        return count;
+    }
+
+    private static int ReadOwnerOptimizationTransforms(JsonElement pass, string zipPath)
+    {
+        string expected = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var location) ||
+            location.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(location.GetString() ?? ""),
+                Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(expected))
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
+        using var manifest = JsonDocument.Parse(File.ReadAllText(expected));
+        int count = CountOptimizationTransforms(manifest.RootElement);
+        int recorded = manifest.RootElement.GetProperty("transforms").GetArrayLength();
+        if (recorded != Nonnegative(pass, "TransformCount"))
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_COUNT_MISMATCH");
+        return count;
     }
 
     private static int ReadOwnerEnglishOnlyEdits(

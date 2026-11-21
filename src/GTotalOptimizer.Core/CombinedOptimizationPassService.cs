@@ -31,6 +31,19 @@ public sealed record CombinedPassOutcome(
     public int HotscenesEnglishOnlyEdits { get; init; }
 }
 
+public sealed record CombinedPassAvailability(
+    int CetOptimizationTransforms, int RedscriptEdits,
+    RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped)
+{
+    public bool HasNewOptimizations => CetOptimizationTransforms > 0 || RedscriptEdits > 0;
+}
+
+public sealed class NoNewOptimizationsException : InvalidOperationException
+{
+    public NoNewOptimizationsException() : base(
+        "NO NEW OPTIMIZATIONS AVAILABLE. Installed compatible optimizations are already present.") { }
+}
+
 public sealed class CombinedOptimizationPassService
 {
     private readonly CetReadOnlyAnalysisService cet = new();
@@ -38,6 +51,63 @@ public sealed class CombinedOptimizationPassService
     internal static string GeneratedPassFolder(string packageRoot, DateTime when) =>
         Path.Combine(Path.GetFullPath(packageRoot), "generated_optimizations",
             "pass-" + when.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
+
+    // Read-only, source-proven admission for the Page 2 Generate button.
+    // Uses the SAME CET owner and REDscript one-pass source generator as
+    // Generate, but stages only to an exclusive disposable directory. This
+    // does not publish a ZIP, touch installed source or recalibrate live G-GC.
+    public async Task<CombinedPassAvailability> InspectAvailableAsync(
+        string packageRoot, string gameRoot, string sessionId,
+        CancellationToken token = default,
+        IProgress<WorkflowStepProgress>? progress = null)
+    {
+        string package = Path.GetFullPath(packageRoot);
+        string game = Path.GetFullPath(gameRoot);
+        var captured = CollectedCaptureStore.ReadRestored(package, game, sessionId);
+        if (captured.Cet is null || captured.Redscript is null)
+            throw new InvalidDataException("GCO_BOTH_COMPLETED_CAPTURE_DOMAINS_REQUIRED");
+        string session = CollectedCaptureStore.SessionFolder(package, sessionId);
+        string plan = Path.Combine(session, "REDscript_GenerationPlan.json");
+        if (!File.Exists(plan))
+            throw new InvalidDataException("Analyze must create a valid REDscript source plan first.");
+
+        string temp = Path.Combine(Path.GetTempPath(), "GCO-Availability-" +
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            // Personal Hotscenes source reduction is an explicit Generate
+            // opt-in. Never execute it during read-only Analyze.
+            var cetResult = await cet.GenerateCetStagedAsync(
+                package, game, sessionId, Path.Combine(temp, "cet-owner.zip"),
+                token, hotscenesEnglishOnly: false).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            progress?.Report(new(3, 5, "ANALYZE / CET CHANGES VERIFIED"));
+            string analysis = Path.Combine(temp, "redscript-analysis.json");
+            await Task.Run(() => Program.AnalyzeCollected(session, game, analysis),
+                token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            string frameworkOwner = Path.Combine(package, "components",
+                "redruntime", "owner");
+            string? providedRuntime = Directory.Exists(frameworkOwner)
+                ? frameworkOwner : null;
+            var red = await Task.Run(() =>
+                RedscriptGenerationPlan.Stage(game, plan, analysis,
+                    Path.Combine(temp, "redscript-stage"), providedRuntime),
+                token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            progress?.Report(new(4, 5, "ANALYZE / REDSCRIPT CHANGES VERIFIED"));
+            return new(cetResult.OptimizationTransformCount,
+                red.AppliedEdits, red.Skipped);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+                try { Directory.Delete(temp, recursive: true); }
+                catch (IOException) { /* isolated preview cleanup only */ }
+                catch (UnauthorizedAccessException) { }
+        }
+    }
 
     public async Task<CombinedPassOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
@@ -91,6 +161,14 @@ public sealed class CombinedOptimizationPassService
             token.ThrowIfCancellationRequested();
 
             progress?.Report(new(3, 6, "GENERATE / REDSCRIPT OPTIMIZATIONS READY"));
+            // The CET manifest counts a newly calibrated G-GC threshold as
+            // one transform. That is a support update, not an optimization
+            // opportunity. An already-optimized stack must not get a new ZIP.
+            var applicable = new CombinedPassAvailability(
+                cetResult.OptimizationTransformCount, red.AppliedEdits, red.Skipped);
+            if (!applicable.HasNewOptimizations)
+                throw new NoNewOptimizationsException();
+
             string overlay = Path.Combine(temp, "game-overlay");
             Directory.CreateDirectory(overlay);
             var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -100,30 +178,20 @@ public sealed class CombinedOptimizationPassService
                 planOutput, "effective-preview", "r6", "scripts"),
                 overlay, owners);
 
-            // Framework files are deployable game scripts, not profiler output.
-            // Stage only missing source files; do not silently overwrite an
-            // installed framework that may have local source modifications.
-            if (redFiles > 0)
-            {
-                // Experimental REDscript FAR/subscriber generation is retired.
-                // CET owner-native output is independent and remains untouched.
-                if (RequiresGRedRuntime(overlay))
-                    _ = CopyMissingFramework(game, overlay, frameworkOwner, owners);
+            // The complete verified G-REDruntime core accompanies every REAL
+            // optimization pass, like the CET-owned 0-Engine/G-GC/native support.
+            // If the player already has a framework file (including a compatible
+            // customization), package those exact installed bytes, not an older
+            // historical version. Generated source takes precedence.
+            _ = CopyCompleteFramework(game, overlay, frameworkOwner, owners);
 
-                // Official SCC compilation belongs to the existing GitHub CI
-                // real-source validation lane, not the player-side generator.
-                // Keep runtime source admission, drift, ownership, and output
-                // validation; never infer compilation success at generation.
-            }
+            // Official SCC compilation belongs to CI; no compiler binaries
+            // or profiler payloads are shipped in the optimized game ZIP.
 
             progress?.Report(new(4, 6, "GENERATE / COMBINED SOURCE STAGED"));
             if (cetFiles == 0 && redFiles == 0)
-                throw new InvalidOperationException(
-                    "No safe source changes remain. CET skipped " +
-                    cetResult.SkippedCount + "; REDscript skipped " +
-                    red.Skipped.Length + " rule(s). " +
-                    string.Join(" | ", red.Skipped.Select(x =>
-                        x.Id + ": " + x.Reason)));
+                throw new InvalidDataException(
+                    "GCO_GENERATOR_REPORTED_EDITS_BUT_EMITTED_NO_SOURCE");
 
             string finalFolder = GeneratedPassFolder(package, DateTime.Now);
             string outputRoot = Path.GetDirectoryName(finalFolder)!;
@@ -226,7 +294,7 @@ public sealed class CombinedOptimizationPassService
                 Directory.Move(stagedFolder, finalFolder);
                 progress?.Report(new(6, 6, "GENERATE / ZIP PUBLISHED"));
                 return new(final, cetFiles, redFiles, indexed.Count,
-                    cetResult.TransformCount, red.AppliedEdits)
+                    cetResult.OptimizationTransformCount, red.AppliedEdits)
                 {
                     AppliedRedscriptRules = red.Completed
                         .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
@@ -346,7 +414,7 @@ public sealed class CombinedOptimizationPassService
         return count;
     }
 
-    private static void VerifyFrameworkBundle(string ownerRoot)
+    private static string[] VerifyFrameworkBundle(string ownerRoot)
     {
         string manifest = Path.Combine(Path.GetDirectoryName(ownerRoot)!,
             "source-sha256.json");
@@ -376,45 +444,52 @@ public sealed class CombinedOptimizationPassService
                 !Sha(path).Equals(sha, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("GCO_FRAMEWORK_BUNDLE_HASH_MISMATCH");
         }
-    }
-
-    private static int CopyMissingFramework(string game, string overlay,
-        string ownerRoot, Dictionary<string, string> owners)
-    {
-        VerifyFrameworkBundle(ownerRoot);
         string framework = Path.Combine(ownerRoot, "r6", "scripts", "G-RedRuntime");
         if (!Directory.Exists(framework))
-            throw new InvalidDataException(
-                "Bundled authoritative G-REdruntime framework sources missing.");
-        int added = 0;
+            throw new InvalidDataException("GCO_FRAMEWORK_OWNER_SOURCES_MISSING");
         foreach (string source in Directory.EnumerateFiles(framework, "*.reds",
                      SearchOption.AllDirectories))
         {
-            if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException("GCO_FRAMEWORK_SOURCE_LINK");
-            string rel = Path.GetRelativePath(ownerRoot, source).Replace('\\', '/');
+            if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0 ||
+                !checkedPaths.Contains(Path.GetRelativePath(ownerRoot, source)
+                    .Replace('\\', '/')))
+                throw new InvalidDataException("GCO_FRAMEWORK_UNMANIFESTED_SOURCE");
+        }
+        return checkedPaths.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+    }
+
+    private static int CopyCompleteFramework(string game, string overlay,
+        string ownerRoot, Dictionary<string, string> owners)
+    {
+        string[] verified = VerifyFrameworkBundle(ownerRoot);
+        int added = 0;
+        foreach (string rel in verified)
+        {
             if (!SafeGamePath(rel))
                 throw new InvalidDataException("GCO_FRAMEWORK_SOURCE_PATH");
-            string live = Path.Combine(game, rel.Replace('/', Path.DirectorySeparatorChar));
+            string bundled = Path.Combine(ownerRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar));
+            string live = Path.Combine(game,
+                rel.Replace('/', Path.DirectorySeparatorChar));
             string staged = Path.Combine(overlay,
                 rel.Replace('/', Path.DirectorySeparatorChar));
-            if (File.Exists(staged) || File.Exists(live))
+            if (File.Exists(staged))
+            {
+                // A real, structurally admitted REDscript edit wins over
+                // framework packaging. Never overwrite staged optimizer output.
                 continue;
+            }
+            // The current installed runtime always takes precedence over the
+            // bundled reference, including owner-local compatible modifications.
+            string source = File.Exists(live) ? live : bundled;
+            if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("GCO_FRAMEWORK_SOURCE_LINK");
             Directory.CreateDirectory(Path.GetDirectoryName(staged)!);
             File.Copy(source, staged);
             owners.Add(rel, "G-REdruntime/framework");
             added++;
         }
         return added;
-    }
-
-    private static bool RequiresGRedRuntime(string overlay)
-    {
-        string scripts = Path.Combine(overlay, "r6", "scripts");
-        return Directory.Exists(scripts) &&
-            Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
-                .Any(path => File.ReadAllText(path).Contains(
-                    "import GRedRuntime.*", StringComparison.Ordinal));
     }
 
     private static bool Inside(string path, string root)
