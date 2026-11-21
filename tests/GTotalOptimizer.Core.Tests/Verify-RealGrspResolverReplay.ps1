@@ -2098,6 +2098,43 @@ try {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
         }
+        if ($port.Id -eq 'digitalvixen-ui-dormancy') {
+          if ($portFiles.Count -ne 3 -or
+              [int]$portReport.appliedEdits -ne 7) {
+            throw 'GCO_DVC_UI_REFERENCE_SEVEN_EDITS_THREE_FILES_REQUIRED'
+          }
+          $body=Join-Path $portScripts 'DigitalVixenCore/DVCore_BodyMapWindow.reds'
+          $item=Join-Path $portScripts 'DigitalVixenCore/DVCore_ItemEditor.reds'
+          $status=Join-Path $portScripts 'DigitalVixenCore/DVCore_StatusWindow.reds'
+          foreach($required in @($body,$item,$status)) {
+            if (!(Test-Path -LiteralPath $required -PathType Leaf)) {
+              throw 'GCO_DVC_UI_REFERENCE_OWNER_MISSING'
+            }
+          }
+          $bodyText=Get-Content -LiteralPath $body -Raw
+          $itemText=Get-Content -LiteralPath $item -Raw
+          $statusText=Get-Content -LiteralPath $status -Raw
+          if (!$bodyText.Contains('if !overlay && !cfgPinned') -or
+              !$bodyText.Contains('win.SetOverlayOnly(true);') -or
+              !$bodyText.Contains('win.Checkbox(n"hiPin"') -or
+              !$bodyText.Contains('DVBodyMapWindow.HideRuleActive(')) {
+            throw 'GCO_DVC_UI_BODYMAP_PINNED_BEHAVIOR_LOST'
+          }
+          foreach($t in @($itemText,$statusText)) {
+            if (!$t.Contains('let delay: Float = 2.0;') -or
+                !$t.Contains('delay = 0.5;') -or
+                !$t.Contains('delay = 0.25;') -or
+                !$t.Contains('cb.initialized = true;') -or
+                !$t.Contains('DelayCallback(cb, delay, false)') -or
+                !$t.Contains('if !win.IsRendered() { return; }')) {
+              throw 'GCO_DVC_UI_ADAPTIVE_LOOP_OR_RENDER_GUARD_MISSING'
+            }
+          }
+          if (!$statusText.Contains('if this.initialized && IsDefined(mgr) {') -or
+              !$statusText.Contains('win.SetOverlayOnly(!pinned)')) {
+            throw 'GCO_DVC_UI_PINNED_STATUS_REFRESH_REGRESSION'
+          }
+        }
         if ($port.Id -eq 'redwindows-render-dormancy') {
           # This full-source integration check must prove that all three
           # dependent outputs were composed over #19 and current generic
