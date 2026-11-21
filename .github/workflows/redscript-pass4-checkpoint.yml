@@ -67,6 +67,18 @@ jobs:
           python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass4_*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'PASS4_SOURCE_STATE_CONTRACT_FAILED' }
 
+      - name: Verify production .NET 10 Core/App compilation and tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          # Build validation is framework-dependent; the existing owner
+          # packaging pipeline performs the self-contained publish separately.
+          # Do not change the app's product/runtime packaging properties.
+          dotnet build src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -c Release -p:SelfContained=false --nologo
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_APP_BUILD_FAILED' }
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_CORE_TESTS_FAILED' }
+
       - name: Generate all applicable Pass 4 operations in one source-aware invocation
         shell: pwsh
         run: |
@@ -182,18 +194,6 @@ jobs:
           $ErrorActionPreference='Stop'
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass4-private/base_after_generic' -CompilerRoot '.pass4-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass4-canonical-stage/effective-preview'
           if($LASTEXITCODE -ne 0) { throw 'PASS4_CANONICAL_FULL_SEMANTIC_SCC_FAILED' }
-
-      - name: Verify production .NET 10 Core/App compilation and tests
-        shell: pwsh
-        run: |
-          $ErrorActionPreference='Stop'
-          # Build validation is framework-dependent; the existing owner
-          # packaging pipeline performs the self-contained publish separately.
-          # Do not change the app's product/runtime packaging properties.
-          dotnet build src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -c Release -p:SelfContained=false --nologo
-          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_APP_BUILD_FAILED' }
-          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release --no-restore
-          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_CORE_TESTS_FAILED' }
 
       - name: Remove private stack, compiler and generated source
         if: always()
