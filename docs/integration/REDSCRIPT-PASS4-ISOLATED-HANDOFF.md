@@ -21,8 +21,20 @@ Date: 2026-11-21. Branch: `dev/redscript/pass4`, based on green parent `96d66c66
 - Validate untouched → applied, partial → missing completed, complete → no-op, relocated/custom → applied, incompatible → narrowly refused, absent → no output, repeated run → zero new changes. The independent fast CI must validate source-state fixtures, original private 2,331-file post-generic input, generated merged `.reds` SCC 0.5.31 and original-byte immutability.
 - The isolated CI tests **only Pass 4 atop the post-generic base**. The integration agent must add these classes to the existing one-pass generation plan, compose with all already-integrated semantics through latest stable stage, run full combined SCC and GCO build, then game-test with comparable capture. Do not claim gameplay/FPS/CPU benefits from historical output or SCC.
 
+## Validated checkpoint (2026-11-21)
+
+- **Code commit:** `a3afca3b1450bc2469c5799fa3bd3c18947c4ca8`.
+- **Independent [Pass 4 CI #3 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874456828)** (run ID `44874456828`).
+- .NET 10 isolated generator and canonical GCO SCC runner both built successfully.
+- **10/10** owner source-state tests passed: post-generic/stock, partial, complete/no-op, custom/relocated, absent, incompatible, original source unchanged and sibling callsite owner disambiguation.
+- Real authoritative post-generic input: **2,331** .reds files. **3 accepted independent owner operations**, **15** generated source edits across **4** game-relative .reds files.
+- Repeated generation on first overlay: **COMPLETE, 0 edits, 0 output files**.
+- **Official SCC 0.5.31 SUCCESS** on merged full post-generic real source plus the four isolated Pass 4 outputs: **43,485,218 compiled bytes**; original sources unchanged.
+- Initial CI #1 found improper partial-chipware relevance recognition. CI #2 found discovery ambiguity from sibling method callsites. Both were fixed in the source-owning generator and regression contracts. No corrective pass was introduced.
+- Full integrated GCO CI after future merge and new gameplay/performance measurements: **NOT YET RUN**. Do not misstate isolated SCC as full combined semantic #11 onward parity or runtime approval.
+
 ## Remaining work / responsibility
-1. Finish independent CI (record exact run ID, conclusion and full commit SHA here).
+1. Independent CI completed green at code commit above.
 2. Investigate any SCC type/ABI or source structural refusal, fixing the owner generator and tests — no corrective stages.
 3. Integrate accepted operations into the central plan **only by the integration owner**. Respect other agents' concurrent Stage 2.2/3/5 changes.
 4. ReinforcementsSystem historical context scheduler/racing/district/quest throttling remains unported pending event/timing safety proof; do not silently add delayed gameplay-state checks.
