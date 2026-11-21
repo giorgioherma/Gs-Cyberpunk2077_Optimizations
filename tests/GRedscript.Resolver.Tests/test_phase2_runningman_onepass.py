@@ -113,7 +113,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         completed = [r for r in report["completed"]
                      if r["id"] == "runningman-pass9"]
         self.assertEqual(len(completed), 1, report)
-        self.assertEqual(completed[0]["order"], 37)
+        self.assertEqual(completed[0]["order"], 50)
         self.assertEqual(completed[0]["rewrittenExpressions"], expected_edits)
         output = self.staged / "effective-preview" / TARGET
         self.assertTrue(output.is_file())
@@ -222,7 +222,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         self.assertIn("this.CustomSpeedMode();", output.read_text("utf8"))
         refusals = [r for r in stage["skipped"] if r["id"] == "runningman-pass9"]
         self.assertEqual(len(refusals), 1)
-        self.assertEqual(refusals[0]["order"], 37)
+        self.assertEqual(refusals[0]["order"], 50)
         self.assertIn("RM_SPRINT_TRANSITION_OR_CALLBACK_UNPROVEN",
                       refusals[0]["reason"])
 
