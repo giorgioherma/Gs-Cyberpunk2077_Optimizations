@@ -684,12 +684,26 @@ jobs:
             $rw=@($result.completed | Where-Object { $_.id -eq 'redwindows-widget-lookup' })
             $rwRef=Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts/RedWindows/RW_Window.reds'
             $rwActual=Join-Path $stage 'effective-preview/r6/scripts/RedWindows/RW_Window.reds'
+            # #24 intentionally adds IsRendered to #19's RW_Window owner.
+            # Validate the prior lookup invariant in both files here; exact
+            # final owner bytes are checked against the independently
+            # composed #24 reference below, not against intermediate #19.
             if ($rw.Count -ne 1 -or [int]$rw[0].order -ne 19 -or
                 [int]$rw[0].rewrittenExpressions -ne 1 -or
                 !(Test-Path -LiteralPath $rwActual) -or
-                (Get-FileHash -LiteralPath $rwActual -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $rwRef -Algorithm SHA256).Hash) {
-              throw 'PHASE2_RW_FIND_CANONICAL_OUTPUT_DIFFERENT_FROM_INDEPENDENT'
+                !(Test-Path -LiteralPath $rwRef)) {
+              throw 'PHASE2_RW_FIND_CANONICAL_STAGE_MISSING'
+            }
+            $rwBefore=Get-Content -LiteralPath $rwRef -Raw
+            $rwFinal=Get-Content -LiteralPath $rwActual -Raw
+            foreach($must in @('this.m_findCursor = idx + 1;',
+                'IsDefined(this.m_lastFindWidget)',
+                'this.m_lastFindId = id;',
+                'this.m_lastFindWidget = widget;')) {
+              if (!$rwBefore.Contains($must,[StringComparison]::Ordinal) -or
+                  !$rwFinal.Contains($must,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_RW_FIND_LOOKUP_LOST_DURING_RENDER_COMPOSITION'
+              }
             }
             $tmc=@($result.completed | Where-Object { $_.id -eq 'trigger-mode-literal-tags' })
             $tmcRel='r6/scripts/TriggerModeControl/TriggerModeControl.reds'
