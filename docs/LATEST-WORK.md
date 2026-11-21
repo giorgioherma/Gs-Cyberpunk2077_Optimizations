@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Pass 4 historical combat optimizations integrated on separate agent branch (NOT main)
+
+- **Branch:** `dev/redscript/pass4` based on green `96d66c66642ac52dd13fd4001416572b9169bace`; code SHA `06f1b83c1020d0549e46a1364c1a9b7c76ef7902`.
+- **Provisional semantic stages #37–#39** on this branch only: StealthRunner NPC weak-player cache with refresh and detach cleanup; chipware source-derived perk relevance early gate with original fallback; ReinforcementsSystem prepared quad cache with coordinate-mutation fallback, source-closed pure sort and unchanged original geometry/RNG/restriction flow. Existing DVCore Footsteps #11 and HQ_HoloGirl #22 are not duplicated. Unproven Reinforcements context pacing was not ported.
+- **[Independent Pass 4 CI #10 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875974828)**: 12 source-state tests, one-run 15 edits across four original owner files, repeated generation 0, 2,331 post-generic sources, official SCC 0.5.31 isolated and **full canonical** output (33 semantic files, 43,515,691 compiled bytes, source untouched), exact independent/canonical Pass 4 byte parity, .NET 10 WPF app built and 310 Core contracts passed. Do not conflate these with full publisher CI, released ZIP, gameplay parity or measured FPS savings.
+- **Merge requirement:** cross-agent owner integrates these changes with live Pass 2.2/3/5 updates, reconciles stage numbering and verifies real package/ZIP and gameplay. Never overwrite newer `RedscriptGenerationPlan.cs` with this historical branch copy. See [Pass 4 integration handoff](integration/REDSCRIPT-PASS4-ISOLATED-HANDOFF.md).
+
+
 ## 2026-11-21 — Historical Pass 2.2 scheduling batch #34–#36
 
 - **#34 NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1:** current post-generic `NCRSystem` retains its original `NCRTickCallback` + source-defined DelaySystem period when GRedRuntime Scheduler is unavailable or registration fails. The new recurring `NCRGCOMaintenanceJob` prevents duplicate requeues and is unregistered on session end/detach; faction, pending kills, daily decay and original callbacks remain untouched. Original callback creation, binding and DelayCallback arguments are proven, not just its declared type.
