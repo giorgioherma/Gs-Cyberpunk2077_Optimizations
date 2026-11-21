@@ -2127,6 +2127,8 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
         generatedPassZipPath = null;
+        GeneratedPassNotice.Visibility = Visibility.Collapsed;
+        GeneratedPassLocation.Text = string.Empty;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
         OpenFolderButton.IsEnabled = false;
@@ -2191,6 +2193,17 @@ public partial class MainWindow : Window
             SetResultsConsoleStatus(summary);
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
+            if (generatedPassZipPath is not null)
+            {
+                GeneratedPassLocation.Text = "Saved in portable app: " +
+                    Path.GetRelativePath(packageRoot, generatedPassZipPath);
+                GeneratedPassNotice.Visibility = Visibility.Visible;
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+                {
+                    if (GeneratedPassNotice.Visibility == Visibility.Visible)
+                        GeneratedPassNotice.BringIntoView();
+                }));
+            }
             OpenFolderButton.IsEnabled = generatedPassZipPath is not null;
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
         }
@@ -2303,6 +2316,8 @@ public partial class MainWindow : Window
         redscriptPlanReady = false;
         savedCapture = null;
         generatedPassZipPath = null;
+        GeneratedPassNotice.Visibility = Visibility.Collapsed;
+        GeneratedPassLocation.Text = string.Empty;
         OpenFolderButton.IsEnabled = false;
         SetHotscenesOptionVisible(false);
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
