@@ -1,1 +1,1 @@
-checkpoint=unified-semantic-module-final-real-grsp-replay-clean-zip
+checkpoint=unified-redscript-dark-future-lifecycle-gameplay-candidate-20261121
