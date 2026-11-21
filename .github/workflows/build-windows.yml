@@ -15,7 +15,7 @@ on:
         required: false
         default: false
   push:
-    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/pass9 ]
     paths:
       - '.github/workflows/build-windows.yml'
       - 'Directory.Build.props'
