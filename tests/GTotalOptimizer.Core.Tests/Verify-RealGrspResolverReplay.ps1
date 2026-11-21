@@ -2574,6 +2574,9 @@ try {
     if ($callbackCount -gt 0 -or $actionCount -gt 0 -or $angleCount -gt 0 -or $lateCount -gt 0 -or $bbStageCount -gt 0 -or $bbComposedCount -gt 0 -or $pureStaged -gt 0 -or $pureComposed -gt 0 -or $snapshotMerged -gt 0 -or $sharedPlayerMerged -gt 0) {
         $extra.CallbackPreviewRoot = $legacyCallbackFolder
         $extra.FrameworkPreviewRoot = $callbackFolder
+        # Only canonical Stage-generated source-owned Pass 8 helpers may be
+        # additive in the combined SCC workspace, not arbitrary .reds files.
+        $extra.ApprovedAdditiveStageRoot = $orderedStage
     }
     & $ownerScript -GameRoot $game -PreviewRoot $previewFolder -ResolverDll $dll -CompilerArchive $CompilerArchive -CleanBaselineArchive $CleanBaselineArchive -EffectiveCacheArchive $EffectiveCacheArchive -PluginsArchive $PluginsArchive @extra
     if ($LASTEXITCODE -ne 0) {
