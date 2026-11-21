@@ -119,17 +119,18 @@ internal static class DarkFutureHistoricalThrottlePass
         return -1;
     }
 
-    private static IReadOnlyList<Method> FindMethods(string source)
+    private static IReadOnlyList<Method> FindMethods(string source, bool activation = false)
     {
         var t = SourceAdmission.ReadTokens(source);
         var result = new List<Method>();
         for (int i = 0; i + 5 < t.Count; i++)
         {
             if (t[i].Value != "@" ||
-                t[i + 1].Value != "replaceMethod" ||
+                t[i + 1].Value != (activation ? "wrapMethod" : "replaceMethod") ||
                 t[i + 2].Value != "(" ||
                 t[i + 4].Value != ")" ||
-                !Operations.Any(o => o.Owner == t[i + 3].Value))
+                (activation ? t[i + 3].Value != "SingleCooldownManager" :
+                    !Operations.Any(o => o.Owner == t[i + 3].Value)))
                 continue;
             int func = i + 5;
             while (func + 2 < t.Count && func < i + 40 &&
@@ -139,8 +140,9 @@ internal static class DarkFutureHistoricalThrottlePass
                 t[func + 2].Value != "(")
                 continue;
             string name = t[func + 1].Value;
-            if (!Operations.Any(o => o.Owner == t[i + 3].Value &&
-                o.MethodName == name))
+            if (activation ? name != "ActivateCooldown" :
+                !Operations.Any(o => o.Owner == t[i + 3].Value &&
+                    o.MethodName == name))
                 continue;
             int argsEnd = Close(t, func + 2, "(", ")");
             if (argsEnd < 0) continue;
@@ -246,6 +248,58 @@ internal static class DarkFutureHistoricalThrottlePass
                 "DF_AGGRESSIVE_PARTIAL_GUARD_CONTROL_FLOW_UNPROVEN:" +
                 op.Name, []);
 
+        // The renderer is reused for different buffs. Its optimization state
+        // must be invalidated BEFORE wrappedMethod: the wrapped activation
+        // may synchronously call Update on a new effect with the same stack.
+        // This is part of the existing cooldown operation, not a new pass.
+        Method? activation = null;
+        bool hasInitializedReset = false, hasPhaseReset = false;
+        if (op.Name == "cooldown-render-six")
+        {
+            var wrappers = FindMethods(source, activation: true);
+            if (wrappers.Count != 1)
+                return new("REFUSED",
+                    "DF_AGGRESSIVE_ACTIVATION_WRAPPER_MISSING_OR_AMBIGUOUS", []);
+            activation = wrappers[0];
+            var wake = SourceAdmission.ReadTokens(
+                source[activation.Open..activation.Close]);
+            var calls = Enumerable.Range(0, wake.Count)
+                .Where(i => wake[i].Value == "wrappedMethod").ToArray();
+            if (calls.Length != 1 || calls[0] + 4 >= wake.Count ||
+                wake[calls[0] + 1].Value != "(" ||
+                wake[calls[0] + 3].Value != ")" ||
+                wake[calls[0] + 4].Value != ";")
+                return new("REFUSED",
+                    "DF_AGGRESSIVE_ACTIVATION_CALL_FLOW_UNPROVEN", []);
+
+            static int[] Assignments(
+                IReadOnlyList<SourceAdmission.Token> tokens, string field)
+            {
+                var matches = new List<int>();
+                for (int i = 0; i + 5 < tokens.Count; i++)
+                    if (tokens[i].Value == "this" &&
+                        tokens[i + 1].Value == "." &&
+                        tokens[i + 2].Value == field &&
+                        tokens[i + 3].Value == "=")
+                        matches.Add(i);
+                return matches.ToArray();
+            }
+
+            var init = Assignments(wake, "m_gredRenderInitialized");
+            var phase = Assignments(wake, "m_gredRenderPhase");
+            if (init.Length > 1 || phase.Length > 1 ||
+                init.Any(i => i >= calls[0] ||
+                    wake[i + 4].Value != "false" ||
+                    wake[i + 5].Value != ";") ||
+                phase.Any(i => i >= calls[0] ||
+                    wake[i + 4].Value != "0" ||
+                    wake[i + 5].Value != ";"))
+                return new("REFUSED",
+                    "DF_AGGRESSIVE_ACTIVATION_RESET_ORDER_UNPROVEN", []);
+            hasInitializedReset = init.Length == 1;
+            hasPhaseReset = phase.Length == 1;
+        }
+
         string nl = source.Contains("\r\n", StringComparison.Ordinal)
             ? "\r\n" : "\n";
 
@@ -287,6 +341,18 @@ internal static class DarkFutureHistoricalThrottlePass
                 op.Prelude.Replace("\n", nl + "    ").TrimEnd() +
                 nl + "    ";
             edits.Add(new(method.Open, method.Open, prelude));
+        }
+        if (activation is not null &&
+            (!hasInitializedReset || !hasPhaseReset))
+        {
+            var missing = new List<string>();
+            if (!hasInitializedReset)
+                missing.Add("this.m_gredRenderInitialized = false;");
+            if (!hasPhaseReset)
+                missing.Add("this.m_gredRenderPhase = 0;");
+            edits.Add(new(activation.Open, activation.Open,
+                nl + "    " + string.Join(nl + "    ", missing) +
+                nl + "    "));
         }
         return new(edits.Count == 0 ? "COMPLETE" : "APPLIED",
             null, edits);

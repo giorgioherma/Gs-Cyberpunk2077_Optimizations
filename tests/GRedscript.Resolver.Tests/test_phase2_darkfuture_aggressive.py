@@ -120,6 +120,12 @@ class DarkFutureAggressiveTests(unittest.TestCase):
         self.assertIn("currentDebuffCount != this.m_gredDebuffCount",source)
         self.assertIn("this.m_gredEffectUpdatePhase < 6",source)
         self.assertIn("this.m_gredRenderPhase < 6",source)
+        self.assertEqual(source.count("this.m_gredRenderInitialized = false;"),1)
+        self.assertEqual(source.count("this.m_gredRenderPhase = 0;"),2)
+        self.assertLess(source.index("this.m_gredRenderInitialized = false;"),
+                        source.index("wrappedMethod(buffData);"))
+        self.assertLess(source.index("this.m_gredRenderPhase = 0;"),
+                        source.index("wrappedMethod(buffData);"))
         self.assertIn("timeLeft == -1.00",source)
         self.assertIn("this.m_gredLastTimeLeft == -1.00",source)
         self.assertIn("NotEquals(stackCount, this.m_gredLastStackCount)",source)
@@ -199,6 +205,47 @@ class DarkFutureAggressiveTests(unittest.TestCase):
             "r6/scripts/Other/Other.reds")
         self.assertEqual(result["status"],"NOT_APPLICABLE")
         self.assertIsNone(output)
+
+    def test_existing_complete_render_guard_gets_missing_activation_reset(self):
+        _, full = self.generate(STOCK)
+        partial = full.replace("this.m_gredRenderInitialized = false;", "", 1)
+        partial = partial.replace("this.m_gredRenderPhase = 0;", "", 1)
+        result, repaired = self.generate(partial)
+        self.assertEqual(result["status"], "APPLIED", result)
+        self.assertEqual(result["appliedEdits"], 1)
+        self.check(repaired)
+        self.assertEqual(self.generate(repaired)[0]["status"], "COMPLETE")
+
+    def test_single_present_activation_reset_is_not_duplicated(self):
+        _, full = self.generate(STOCK)
+        partial = full.replace("this.m_gredRenderPhase = 0;", "", 1)
+        result, repaired = self.generate(partial)
+        self.assertEqual(result["status"], "APPLIED", result)
+        self.assertEqual(result["appliedEdits"], 1)
+        self.check(repaired)
+
+    def test_late_activation_reset_refuses_cooldown_only(self):
+        source = STOCK.replace(
+            "wrappedMethod(buffData);",
+            "wrappedMethod(buffData); this.m_gredRenderInitialized = false;")
+        result, generated = self.generate(source)
+        self.assertEqual(result["status"], "APPLIED", result)
+        self.assertEqual(result["appliedEdits"], 2)
+        self.assertIn("DF_AGGRESSIVE_ACTIVATION_RESET_ORDER_UNPROVEN",
+                      result["reason"])
+        self.assertNotIn("m_gredLastStackCount", generated)
+        self.assertEqual(generated.count(
+            "this.m_gredRenderInitialized = false;"), 1)
+
+    def test_activation_wrapper_without_original_call_refuses_cooldown_only(self):
+        source = STOCK.replace("wrappedMethod(buffData);",
+                               "this.UnrelatedActivation(buffData);")
+        result, generated = self.generate(source)
+        self.assertEqual(result["status"], "APPLIED", result)
+        self.assertEqual(result["appliedEdits"], 2)
+        self.assertIn("DF_AGGRESSIVE_ACTIVATION_CALL_FLOW_UNPROVEN",
+                      result["reason"])
+        self.assertNotIn("m_gredLastStackCount", generated)
 
 
 if __name__=="__main__":
