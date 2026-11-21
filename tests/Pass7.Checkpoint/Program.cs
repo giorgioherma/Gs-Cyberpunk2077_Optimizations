@@ -262,8 +262,10 @@ static void Run(string baseline)
             .Replace("    let player: ref<PlayerPuppet> = GetPlayer(gi);",
                 q + "\n    let player: ref<PlayerPuppet> = GetPlayer(gi);",
                 StringComparison.Ordinal);
-        partial["sr"] = "@addField(NPCPuppet)\nprivate let m_stealthRunnerPlayer: wref<PlayerPuppet>;\n" +
-            partial["sr"].Replace("  wrappedMethod(evt);",
+        partial["sr"] = partial["sr"].Replace(
+            "module StealthRunner\n",
+            "module StealthRunner\n@addField(NPCPuppet)\nprivate let m_stealthRunnerPlayer: wref<PlayerPuppet>;\n",
+            StringComparison.Ordinal).Replace("  wrappedMethod(evt);",
                 "  wrappedMethod(evt);\n  if !IsDefined(this.m_stealthRunnerStatus) { return false; }",
                 StringComparison.Ordinal);
         partial["rm"] = "@addField(SprintEvents)\nprivate let m_gredRunningManDoubleRunPerk: Bool;\n\n"
