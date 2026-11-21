@@ -2040,9 +2040,10 @@ public partial class MainWindow : Window
                     .Where(rule => rule.Order is not null)
                     .Sum(rule => rule.AlreadyComplete ?? 0);
                 redPlanStatus = "REDscript source files: " + planned.SourceFiles +
-                    " | Source groups affected: " + affected + Environment.NewLine +
-                    "Generic rules ready: " + ready.Length +
-                    " | Eligible edits: " + planned.EligibleSourceEdits +
+                    " | Generic source groups: " + affected + Environment.NewLine +
+                    "Generic candidates: " + ready.Length +
+                    " | Semantic rules: checked at GENERATE" + Environment.NewLine +
+                    "Eligible generic edits: " + planned.EligibleSourceEdits +
                     " | Already optimized: " + alreadyComplete + Environment.NewLine +
                     "Ready to generate a combined CET + REDscript optimization ZIP.";
                 var sourceRefused = planned.Rules.Where(rule =>
@@ -2144,12 +2145,33 @@ public partial class MainWindow : Window
                     (pass.HotscenesEnglishOnlyEdits > 0
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
                         : "not applied (see pass details)");
+
+            // ANALYZE only plans the ten generic families. GENERATE knows
+            // the real applied semantic rules, including multi-file stages.
+            int unavailableRuleFamilies = pass.RedscriptSkipped
+                .Select(item => item.Id)
+                .Distinct(StringComparer.Ordinal).Count();
+            string sourceSummary = RedReportText.Text
+                .Split([Environment.NewLine], StringSplitOptions.None)[0];
+            RedReportText.Text = sourceSummary + Environment.NewLine +
+                "Generic rules applied: " + pass.GenericRedscriptRules +
+                " | Semantic rules applied: " + pass.SemanticRedscriptRules +
+                Environment.NewLine +
+                "Generic edits: " + pass.GenericRedscriptEdits +
+                " | Semantic edits: " + pass.SemanticRedscriptEdits +
+                " | Output files: " + pass.RedscriptFiles + Environment.NewLine +
+                (pass.RedscriptSkipped.Length == 0
+                    ? "No refused REDscript operations."
+                    : "Unavailable: " + unavailableRuleFamilies +
+                      " rule families (" + pass.RedscriptSkipped.Length +
+                      " operations). See ZIP ownership details.");
             string summary = "ZIP generated. CET: " + pass.CetTransforms +
                 " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
             if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
-                summary += Environment.NewLine + "Skipped: CET " +
-                    pass.CetSkipped + " | REDscript rules " +
-                    pass.RedscriptSkipped.Length + ".";
+                summary += Environment.NewLine + "Unavailable: CET " +
+                    pass.CetSkipped + " entries | REDscript " +
+                    unavailableRuleFamilies + " rule families (" +
+                    pass.RedscriptSkipped.Length + " operations).";
             if (pass.HotscenesEnglishOnlyRequested &&
                 pass.HotscenesEnglishOnlyEdits == 0)
                 summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";

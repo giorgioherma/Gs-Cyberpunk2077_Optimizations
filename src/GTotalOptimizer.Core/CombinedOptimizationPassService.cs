@@ -18,6 +18,12 @@ public sealed record CombinedPassOutcome(
     int CetTransforms, int RedscriptEdits)
 {
     public int AppliedRedscriptRules { get; init; }
+    // Source-owned applied outputs may span several files per rule. Count
+    // distinct rule IDs, not completed-file rows or refused operations.
+    public int GenericRedscriptRules { get; init; }
+    public int SemanticRedscriptRules { get; init; }
+    public int GenericRedscriptEdits { get; init; }
+    public int SemanticRedscriptEdits { get; init; }
     public int CetSkipped { get; init; }
     public CetSkipDetail[] CetSkipDetails { get; init; } = [];
     public RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped { get; init; } = [];
@@ -204,7 +210,20 @@ public sealed class CombinedOptimizationPassService
                 return new(final, cetFiles, redFiles, indexed.Count,
                     cetResult.TransformCount, red.AppliedEdits)
                 {
-                    AppliedRedscriptRules = red.Completed.Length,
+                    AppliedRedscriptRules = red.Completed
+                        .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
+                    GenericRedscriptRules = red.Completed
+                        .Where(item => item.Order <= 10)
+                        .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
+                    SemanticRedscriptRules = red.Completed
+                        .Where(item => item.Order > 10)
+                        .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
+                    GenericRedscriptEdits = red.Completed
+                        .Where(item => item.Order <= 10)
+                        .Sum(item => item.RewrittenExpressions),
+                    SemanticRedscriptEdits = red.Completed
+                        .Where(item => item.Order > 10)
+                        .Sum(item => item.RewrittenExpressions),
                     CetSkipped = cetResult.SkippedCount,
                     CetSkipDetails = cetResult.SkipDetails,
                     RedscriptSkipped = red.Skipped,
