@@ -1789,6 +1789,51 @@ public static class RedscriptGenerationPlan
         if(vm.Status is not ("APPLIED" or "REFUSED" or "COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("VM_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 3.0 StealthRunner pickpocket navigation:
+        // both hub routes must subscribe before the original PlayerPuppet
+        // OnAction wrapper is gated. Preserve original fallback and all
+        // independent pickpocket, inventory, phone and weapon wrappers.
+        string srRoot=Path.Combine(output,"_stages","38-stealth-pickpocket");
+        var sr=StealthRunnerPickpocketInputPass.Generate(game,
+            srRoot,Directory.Exists(final)?final:null);
+        if(sr.Status=="APPLIED")
+        {
+            if(sr.AppliedEdits<4 || string.IsNullOrWhiteSpace(sr.SourcePath))
+                throw new InvalidDataException("SR_INPUT_STAGE_EMPTY");
+            string rel=sr.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(srRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/StealthRunner/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,srRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("SR_INPUT_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("SR_INPUT_STAGE_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=sr.AppliedEdits;
+            results.Add(new(38,"stealth-runner-pickpocket-input",sr.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(sr.Status=="REFUSED")
+            skipped.Add(new(38,"stealth-runner-pickpocket-input",1,
+                sr.Reason ?? "SR_INPUT_INCOMPATIBLE_SOURCE"));
+        else if(sr.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("SR_INPUT_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

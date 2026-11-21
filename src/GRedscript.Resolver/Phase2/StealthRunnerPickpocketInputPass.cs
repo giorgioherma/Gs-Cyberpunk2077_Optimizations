@@ -201,7 +201,14 @@ internal static class StealthRunnerPickpocketInputPass
             })+nl);
         }
         if(edits.Count==0)return new("COMPLETE",null,null,0);
-        var ordered=edits.OrderByDescending(x=>x.Start).ThenByDescending(x=>x.End).ToArray();
+        // Multiple field/class/import insertions share the module anchor.
+        // Apply equal-position edits in reverse creation order so imports
+        // remain before all REDscript declarations in the effective file.
+        var ordered=edits.Select((edit,index)=>(edit,index))
+            .OrderByDescending(x=>x.edit.Start)
+            .ThenByDescending(x=>x.edit.End)
+            .ThenByDescending(x=>x.index)
+            .Select(x=>x.edit).ToArray();
         for(int i=1;i<ordered.Length;i++)
             if(ordered[i].End>ordered[i-1].Start)
                 return new("REFUSED","SR_INPUT_EDITS_OVERLAP",null,0);
