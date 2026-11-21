@@ -129,7 +129,7 @@ jobs:
           }
           Write-Host 'PASS Pass 7 production one-pass: six operations in five independently composed source files and exact output parity'
 
-      - name: Official SCC 0.5.31 on full canonical generic plus semantic output
+      - name: Official SCC 0.5.31 on module-safe full canonical one-pass output
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
