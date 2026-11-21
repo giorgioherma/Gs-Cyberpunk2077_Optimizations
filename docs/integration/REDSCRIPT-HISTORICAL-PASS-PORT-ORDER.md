@@ -1,5 +1,12 @@
 # GCO Phase 2 — systematic historical REDscript port order
 
+## 2026-11-21 — Parallel Agent 3 Pass 5.0 integration checkpoint
+
+- Isolated `dev/redscript/pass5` now includes historical Pass 5 HoloTravel material/event optimization as structural, source-safe semantic **#37** in the actual `RedscriptGenerationPlan.Stage()`, after the generic ten rules and earlier stages #11–#36. Independent CLI output is compared byte-for-byte with real post-generic canonical one-pass output and both compile with official SCC in CI. See `REDSCRIPT-PASS5-AGENT-HANDOFF.md`.
+- Remaining file disposition: Dark Future #12/#13/#25, FE pins #15, HoloGirl #22, RedWindows #19/#23/#24/#26 and TriggerMode CNames #20 already cover their historical Pass 5 concepts. MapWaypoint's historical pooled-controller visibility-edge cache remains explicitly incompatible; do not reintroduce it. TriggerMode's state-only hint cache/removal of per-update refresh requires source-proven weapon/settings/hint invalidation first; zzy chipware perk rewrite shares Pass 4 ownership and must not be independently duplicated.
+- Prior focused HoloTravel [fast #207 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874654298). Canonical #37 fast [#215](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875328295) and full GCO [#1087](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875337791) pending. No main merge or user-game verification.
+
+
 **Established:** 21 November 2026. **Branch:** `dev/redscript/resolver_handoff`.
 
 ## Source and method
