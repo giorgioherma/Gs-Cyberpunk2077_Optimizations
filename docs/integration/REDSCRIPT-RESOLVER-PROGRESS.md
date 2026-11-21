@@ -1,5 +1,14 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Checkpoint-driven CI for uninterrupted REDscript batches
+
+- **Implementation commits no longer auto-run SCC or the full GCO package workflow on this development line.** Existing workflows retain `workflow_dispatch` for normal GitHub UI manual runs. Agents can create/fix/commit a complete pass without churn from auto-cancelled older SCC and full packaging runs.
+- **Focused postgeneric SCC:** increment `.ci/checkpoints/redscript.txt` on the same branch only after a meaningful semantic batch. Existing `redscript-phase2-checkpoint.yml` performs source-state, one-go composition, original source integrity and official SCC 0.5.31. Its concurrency group stays branch-specific (`redscript-phase2-${{ github.ref }}`), cancelling superseded focused checkpoints.
+- **Full GCO milestone:** increment `.ci/checkpoints/full-gco.txt` only at integration/release checkpoints; `build-windows.yml` retains original .NET 10, sealed evidence, generator, ZIP/package and ownership checks, plus its optional manual replay inputs. Its concurrency is branch-specific (`gco-full-${{ github.ref }}`) with cancellation disabled.
+- Changes to a marker trigger only its corresponding workflow, not the other. Normal commits, including workflow source edits, do not dispatch either workflow. GitHub Actions run history remains the authoritative result; a marker commit is a trigger, not a success claim.
+- The change is confined to `dev/redscript/resolver_handoff`; if promoted into `main`, the integration/release agent must explicitly approve replacing main's prior per-push CI policy. Other agents' branches and stable releases are not modified.
+- To start a run without the GitHub web UI: change the appropriate marker's `checkpoint=` value and push the commit. No extra GitHub connector action, API token or automation service required.
+
 ## 2026-11-21 — Pass 2.2 remaining owners and safe Pass 3.0 operations #37–#41
 
 - #37 four VehicleMileage scheduler+fallback owners; #38 StealthRunner pickpocket atomic hub; #39 CyberwareEx ToggleSprint/Overclock hub, original engine fallback; #40 GearRecoverySystem player/blackboard StateCache with direct fallback; #41 Vehicle Call Plus 3-local QuestSystem reuse without deleting engine wrappers.

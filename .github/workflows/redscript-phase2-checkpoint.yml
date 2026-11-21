@@ -7,16 +7,15 @@ name: REDscript Phase 2 - Post-generic checkpoint
 # No CET capture replay, WPF packaging, second compiler or game writes.
 on:
   workflow_dispatch:
+  # Explicit checkpoint only: ordinary resolver commits do not launch SCC.
+  # workflow_dispatch remains available from GitHub Actions.
   push:
     branches:
       - main
       - ci/redscript-phase2-postgeneric
       - dev/redscript/resolver_handoff
     paths:
-      - '.github/workflows/redscript-phase2-checkpoint.yml'
-      - 'tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1'
-      - 'src/GRedscript.Resolver/**'
-      - 'tests/GRedscript.Resolver.Tests/test_phase2_*.py'
+      - '.ci/checkpoints/redscript.txt'
 
 permissions:
   contents: read

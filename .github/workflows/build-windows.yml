@@ -14,24 +14,16 @@ on:
         type: boolean
         required: false
         default: false
+  # Milestone only: source/test/packaging commits do not launch full CI.
+  # workflow_dispatch above remains available when a user starts a run.
   push:
     branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff ]
     paths:
-      - '.github/workflows/build-windows.yml'
-      - 'Directory.Build.props'
-      - 'integrations/three-profiler-test/Build-Test.ps1'
-      - 'integrations/three-profiler-test/Apply-GcoCaptureLifecycle.ps1'
-      - 'src/GTotalOptimizer.App/**'
-      - 'assets/ui/elements/**'
-      - 'src/GTotalOptimizer.Launcher/**'
-      - 'src/GTotalOptimizer.Core/**'
-      # Phase 2 source-only work has its own ~1-minute SCC checkpoint.
-      # Changes to the shared generator/orchestrator still run full CI.
-      - 'src/GRedscript.Resolver/**'
-      - '!src/GRedscript.Resolver/Phase2/**'
-      - 'tests/GRedscript.Resolver.Tests/**'
-      - '!tests/GRedscript.Resolver.Tests/test_phase2_*.py'
-      - 'tests/GTotalOptimizer.Core.Tests/**'
+      - '.ci/checkpoints/full-gco.txt'
+
+concurrency:
+  group: gco-full-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
