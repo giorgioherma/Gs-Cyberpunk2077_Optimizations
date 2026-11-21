@@ -96,6 +96,10 @@ internal static class HoloTravelMaterialEventPass
         return callback;
     }
 
+    // The initializer is not a hot-loop call. Count only residual usages.
+    private static int HotColorCalls(string source) =>
+        OldColor.Matches(ColorLocal.Replace(source, "")).Count;
+
     private static (string Status, string? Reason, string? Source) Rewrite(string original)
     {
         var cb = FindParticleCallback(original);
@@ -169,17 +173,28 @@ internal static class HoloTravelMaterialEventPass
         }
 
         bool hasColor = ColorLocal.IsMatch(result);
+        var declaration = ColorLocal.Match(result);
+        int hotCalls = HotColorCalls(result);
         if (ColorLocal.Matches(result).Count > 1 ||
             (!hasColor && Regex.IsMatch(result, @"\blet\s+color\s*=")) ||
-            OldColor.Matches(result).Count > 1)
+            hotCalls > 1)
             return ("REFUSED", "HOLOTRAVEL_COLOR_LOCAL_AMBIGUOUS", null);
-        if (OldColor.IsMatch(result))
+        if (hotCalls == 1)
         {
-            // Replace the call inside the loop first; otherwise the inserted
-            // declaration would become "let color = color".
-            result = OldColor.Replace(result, "color", 1);
-            if (!hasColor)
+            if (hasColor)
             {
+                // A partial source can already have the declaration but still
+                // call ResolveColor inside the loop: replace only that call.
+                int afterDecl = declaration.Index + declaration.Length;
+                string suffix = result[afterDecl..];
+                if (!OldColor.IsMatch(suffix))
+                    return ("REFUSED", "HOLOTRAVEL_COLOR_USE_ORDER_CHANGED", null);
+                result = result[..afterDecl] +
+                    OldColor.Replace(suffix, "color", 1);
+            }
+            else
+            {
+                result = OldColor.Replace(result, "color", 1);
                 var loop = LoopStart.Match(result);
                 result = result.Insert(loop.Index,
                     "let color = this.ResolveColor(this.svc.holo.particleColor);" +
@@ -191,7 +206,7 @@ internal static class HoloTravelMaterialEventPass
 
         if (!EarlyEvent.IsMatch(result) || !MaterialGuard.IsMatch(result) ||
             !NewFilter.IsMatch(result) || !HoloGuard.IsMatch(result) ||
-            !ColorLocal.IsMatch(result) || OldColor.IsMatch(result) ||
+            !ColorLocal.IsMatch(result) || HotColorCalls(result) != 0 ||
             OldFilter.IsMatch(result) || OldGuard.IsMatch(result))
             throw new InvalidDataException("HOLOTRAVEL_EVENT_POSTCONDITION");
         if (string.Equals(body, result, StringComparison.Ordinal))
