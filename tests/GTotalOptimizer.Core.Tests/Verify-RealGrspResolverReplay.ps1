@@ -2480,6 +2480,74 @@ try {
         $stageFiles.Count + ' deferredExperimental=' + $deferred.Count +
         ' realSourceOutputMatchesExistingCI=true productionZip=false')
 
+    # Essential one-pass contract: installing the complete canonical overlay
+    # into a CLEAN COPY of the same admitted source must cause a second
+    # Generate to produce zero further game files. Never mutate live source.
+    $repeatGame=Join-Path $work 'gco-complete-source-repeat'
+    $repeatScripts=Join-Path $repeatGame 'r6/scripts'
+    New-Item -ItemType Directory -Force -Path (Split-Path $repeatScripts -Parent) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $game 'r6/scripts') -Destination $repeatScripts -Recurse
+    if (!(Test-Path -LiteralPath $repeatScripts -PathType Container)) {
+        throw 'GCO_REDSCRIPT_COMPLETE_REPLAY_COPY_MISSING'
+    }
+    foreach($f in $stageFiles) {
+        $rel=[IO.Path]::GetRelativePath($stageScripts,$f.FullName)
+        if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+            throw 'GCO_REDSCRIPT_COMPLETE_REPLAY_PATH_ESCAPE'
+        }
+        $dest=Join-Path $repeatScripts $rel
+        New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+        Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
+    }
+    $repeatBefore=@{}
+    foreach($f in @(Get-ChildItem -LiteralPath $repeatScripts -File -Recurse -Filter '*.reds')) {
+        $rel=[IO.Path]::GetRelativePath($repeatScripts,$f.FullName)
+        $repeatBefore[$rel]=(Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
+    }
+    $repeatPlan=Join-Path $work 'gco-complete-source-plan.json'
+    $repeatAnalysis=Join-Path $work 'gco-complete-source-analysis.json'
+    $repeatStage=Join-Path $work 'gco-complete-source-stage'
+    & dotnet $dll plan-redscript --game $repeatGame --out $repeatPlan
+    if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $repeatPlan -PathType Leaf)) {
+        throw 'GCO_REDSCRIPT_COMPLETE_SECOND_PLAN_FAILED'
+    }
+    $repeatPlanDoc=Get-Content -LiteralPath $repeatPlan -Raw | ConvertFrom-Json
+    @{
+      schemaVersion='grsp.resolver.input.v1'
+      generationAuthorized=$false
+      capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+      source=@{ sourceStackSha256=[string]$repeatPlanDoc.sourceStackSha256 }
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $repeatAnalysis -Encoding utf8
+    & dotnet $dll stage-redscript-plan --game $repeatGame --plan $repeatPlan --analysis $repeatAnalysis --out $repeatStage
+    if ($LASTEXITCODE -ne 0) { throw 'GCO_REDSCRIPT_COMPLETE_SECOND_STAGE_FAILED' }
+    $repeatStageReport=Get-Content -LiteralPath (Join-Path $repeatStage 'stage-result.json') -Raw | ConvertFrom-Json
+    $repeatFiles=@()
+    $repeatFileRoot=Join-Path $repeatStage 'effective-preview/r6/scripts'
+    if (Test-Path -LiteralPath $repeatFileRoot -PathType Container) {
+      $repeatFiles=@(Get-ChildItem -LiteralPath $repeatFileRoot -File -Recurse -Filter '*.reds')
+    }
+    if ($repeatStageReport.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+        [int]$repeatStageReport.generatedFiles -ne 0 -or
+        [int]$repeatStageReport.appliedEdits -ne 0 -or
+        @($repeatStageReport.completed).Count -ne 0 -or
+        $repeatFiles.Count -ne 0) {
+        throw ('GCO_REDSCRIPT_COMPLETE_SECOND_GENERATION_NOT_IDEMPOTENT: files='+
+            $repeatFiles.Count+' edits='+$repeatStageReport.appliedEdits)
+    }
+    $repeatAfter=@(Get-ChildItem -LiteralPath $repeatScripts -File -Recurse -Filter '*.reds')
+    if ($repeatAfter.Count -ne $repeatBefore.Count) {
+        throw 'GCO_REDSCRIPT_COMPLETE_SOURCE_FILE_COUNT_CHANGED'
+    }
+    foreach($f in $repeatAfter) {
+        $rel=[IO.Path]::GetRelativePath($repeatScripts,$f.FullName)
+        if (!$repeatBefore.ContainsKey($rel) -or
+            $repeatBefore[$rel] -ne (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
+            throw ('GCO_REDSCRIPT_COMPLETE_INPUT_MUTATED:'+ $rel)
+        }
+    }
+    Write-Host ('PASS GCO completed-source repeated one-pass Generate: sourceFiles='+
+        $repeatAfter.Count+' generated=0 edits=0 untouched=true')
+
     # Publish the ACTUAL independently source-verified ordered REDscript
     # output to a temporary game-relative archive. Validate with the same
     # GCO shipping inspector used by the combined CET+REDscript product.
