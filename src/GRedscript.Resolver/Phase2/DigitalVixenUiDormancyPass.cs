@@ -167,7 +167,6 @@ internal static class DigitalVixenUiDormancyPass
         if(field.Count>1 ||
             (field.Count==1 && field[0].Groups["type"].Value!="Bool"))
             return new("REFUSED","DVC_UI_LOOP_INIT_FIELD_CONFLICT",null,0,0);
-        string expectedTail="cb.initialized = true;";
         bool hasPrelude=ContainsSequence(body,prelude);
         bool preludeReference=Regex.IsMatch(body,
             @"\blet\s+shouldUpdate\s*:\s*Bool") ||
