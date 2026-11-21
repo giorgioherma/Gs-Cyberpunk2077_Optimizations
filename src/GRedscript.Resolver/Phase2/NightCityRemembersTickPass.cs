@@ -266,14 +266,21 @@ internal static class NightCityRemembersTickPass
         // original fallback remains untouched, including its 30s cadence.
         var calls = Regex.Matches(tickBody,
             @"\bthis\s*\.\s*ScheduleTick\s*\(\s*\)\s*;");
-        foreach (Match m in calls)
-            Add(tick.Open + 1 + m.Index, tick.Open + 1 + m.Index + m.Length,
-                "if this.m_gcoTickID <= 0 { this.ScheduleTick(); };");
-        if (calls.Count == 0 &&
-            !Has(tickBody, @"\bm_gcoTickID\s*<=\s*0"))
-            return new("REFUSED", "NCR_TICK_REQUEUE_MISSING", null, 0);
-        if (calls.Count > 0 && Has(tickBody, @"\bm_gcoTickID\s*<=\s*0"))
-            return new("REFUSED", "NCR_MIXED_TICK_REQUEUE_UNPROVEN", null, 0);
+        var gated = Regex.Matches(tickBody,
+            @"if\s+this\s*\.\s*m_gcoTickID\s*<=\s*0\s*\{\s*this\s*\.\s*ScheduleTick\s*\(\s*\)\s*;\s*\}\s*;");
+        if (gated.Count > 0)
+        {
+            if (calls.Count != gated.Count || gated.Count < 3)
+                return new("REFUSED", "NCR_MIXED_TICK_REQUEUE_UNPROVEN", null, 0);
+        }
+        else
+        {
+            if (calls.Count < 3)
+                return new("REFUSED", "NCR_TICK_REQUEUE_MISSING", null, 0);
+            foreach (Match m in calls)
+                Add(tick.Open + 1 + m.Index, tick.Open + 1 + m.Index + m.Length,
+                    "if this.m_gcoTickID <= 0 { this.ScheduleTick(); };");
+        }
 
         if (edits.Count == 0) return new("COMPLETE", null, null, 0);
         var sorted = edits.OrderByDescending(x => x.Start).ThenByDescending(x => x.End).ToArray();
