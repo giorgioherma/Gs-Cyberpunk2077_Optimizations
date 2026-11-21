@@ -4,7 +4,7 @@
 
 - Agent 6 implements the uncovered RunningMan source-aware double-sprint / StandEvents dormancy in `dev/redscript/pass9` at branch-local semantic order **#37**, directly in `RedscriptGenerationPlan.Stage`. It reuses an existing Pass 7 per-state perk cache, completes compatible partials, preserves the original wrapped callback on every frame, and records narrow sprint/stand refusals independently.
 - DigitalVixenCore #27, FlushingEtiquette #15 and RedWindows #19/#24 cover their historical Pass 9 operations. No reimplementation or historical file copy. Canonical one-pass tests and dedicated SCC workflow are on this branch. Final merge must preserve existing staging and re-evaluate stage numbering after other agents' branches merge.
-- Full GCO #1088 passed with production stage; branch-fast #8 and latest full #1091 are pending. No in-game generated-overlay validation.
+- **[Isolated canonical Pass 9 #8 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875735836)**: 18/18 source-state contracts, 30 canonical staged files, SCC 0.5.31 (43,512,447 bytes) after 2,331 post-generic scripts. **[Full GCO #1091 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875735837)**: 361 package/CLI contracts, app artifact ID 14695658499. No in-game generated-overlay validation.
 
 
 **Established:** 21 November 2026. **Branch:** `dev/redscript/resolver_handoff`.
