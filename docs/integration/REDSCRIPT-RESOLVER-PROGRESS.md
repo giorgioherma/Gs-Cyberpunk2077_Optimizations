@@ -1,10 +1,10 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
-## 2026-11-21 — Agent 5 Pass 7 integrated on isolated branch; focused CI pending
+## 2026-11-21 — Agent 5 Pass 7 integrated; independent SCC/one-pass SUCCESS
 
 - Base green `96d66c66`; branch `dev/redscript/pass7` only. Canonical `RedscriptGenerationPlan.Stage` automatically includes six source-aware Pass 7 operations (#700–705) on actual effective post-generic source, producing five owner files without sharing generation code with the Pass 2.2 / 3.0 and Pass 4/5 agents.
 - Independent owners: NCR spawn culling, StealthRunner detection and player-handle lifecycle, RunningMan double-sprint and direction per-entry cache (EasierControllerSprint missing entry override retains original live query), LizziesBDs performer-only attach gate. Each operation tracks complete/partial/refusal independently; duplicate Stealth owner output is merged before stage copy.
-- Branch-only checkpoint includes real canonical one-invocation byte parity with independent outputs and official SCC 0.5.31 combined-source compilation. Source-state CI #6 (run 44875905281) pending here. Full GCO build/ZIP not accepted; in-game behavior and measured savings remain unverified. See `REDSCRIPT-PASS7-ISOLATED-HANDOFF.md` for exact boundaries and remaining overlapping historical owners.
+- Branch-only checkpoint includes real canonical one-invocation byte parity with independent outputs and official SCC 0.5.31 combined-source compilation. **[Focused #11 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876625041):** all source states, 23 edits across five owner files, exact six-operation canonical Stage parity, 2,331 effective post-generic sources + 34 semantic overlays, official SCC 0.5.31 (43,512,829 bytes), original source unchanged. Full GCO [#1098](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876651197) now has a required *successful* Pass 7 source/SCC job before application/package verification; its bundle result remains pending at this record. In-game behavior and measured savings remain unverified. See `REDSCRIPT-PASS7-ISOLATED-HANDOFF.md` for exact boundaries and remaining overlapping historical owners.
 
 
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
