@@ -55,6 +55,9 @@ public partial class MainWindow : Window
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
     private readonly CombinedOptimizationPassService combinedPassGenerator = new();
     private bool redscriptPlanReady;
+    // This session's successfully published combined optimization ZIP only.
+    // OPEN FOLDER selects the actual file, not the GCO application root.
+    private string? generatedPassZipPath;
     private CancellationTokenSource? analysisCancellation;
     private bool analysisRunning;
     private bool generationRunning;
@@ -1919,6 +1922,8 @@ public partial class MainWindow : Window
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
                 analyzedSessionId == saved.SessionId && redscriptPlanReady &&
                 CloseAfterGenerationButton.Visibility != Visibility.Visible;
+            OpenFolderButton.IsEnabled = !generationRunning &&
+                generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
         }
         catch (Exception ex)
         {
@@ -1931,6 +1936,7 @@ public partial class MainWindow : Window
             SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon", "NOT VERIFIED");
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
+            OpenFolderButton.IsEnabled = false;
         }
     }
 
@@ -2039,13 +2045,18 @@ public partial class MainWindow : Window
                 int alreadyComplete = planned.Rules
                     .Where(rule => rule.Order is not null)
                     .Sum(rule => rule.AlreadyComplete ?? 0);
+                // The plan admits only generic source candidates. Semantic
+                // stages #11–#54 exist in the production one-pass generator,
+                // but their owner/source compatibility is decided at Generate.
                 redPlanStatus = "REDscript source files: " + planned.SourceFiles +
                     " | Generic source groups: " + affected + Environment.NewLine +
                     "Generic candidates: " + ready.Length +
-                    " | Semantic rules: checked at GENERATE" + Environment.NewLine +
+                    " | Semantic stages: " +
+                    RedscriptGenerationPlan.ConfiguredSemanticStages +
+                    " configured" + Environment.NewLine +
                     "Eligible generic edits: " + planned.EligibleSourceEdits +
                     " | Already optimized: " + alreadyComplete + Environment.NewLine +
-                    "Ready to generate a combined CET + REDscript optimization ZIP.";
+                    "Semantic compatibility checked at GENERATE.";
                 var sourceRefused = planned.Rules.Where(rule =>
                     rule.Status == "SOURCE_REFUSED").ToArray();
                 if (sourceRefused.Length > 0)
@@ -2115,8 +2126,10 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.Visibility == Visibility.Visible &&
             HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
+        generatedPassZipPath = null;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
+        OpenFolderButton.IsEnabled = false;
         var session = completedSessionId;
         var game = completedGameRoot;
         var cancellation = new CancellationTokenSource();
@@ -2176,6 +2189,9 @@ public partial class MainWindow : Window
                 pass.HotscenesEnglishOnlyEdits == 0)
                 summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
+            // Publish access only after the combined owner returns a real ZIP.
+            generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
+            OpenFolderButton.IsEnabled = generatedPassZipPath is not null;
             CloseAfterGenerationButton.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException) { }
@@ -2196,6 +2212,8 @@ public partial class MainWindow : Window
             {
                 bool generated = CloseAfterGenerationButton.Visibility == Visibility.Visible;
                 HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
+                OpenFolderButton.IsEnabled = generated && generatedPassZipPath is not null &&
+                    File.Exists(generatedPassZipPath);
                 GenerateButton.Content = generated ? "GENERATED" :
                     "GENERATE OPTIMIZATION ZIP";
                 GenerateButton.IsEnabled = !generated && analyzedSessionId == session &&
@@ -2284,6 +2302,8 @@ public partial class MainWindow : Window
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
         savedCapture = null;
+        generatedPassZipPath = null;
+        OpenFolderButton.IsEnabled = false;
         SetHotscenesOptionVisible(false);
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;
         CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
@@ -2347,13 +2367,30 @@ public partial class MainWindow : Window
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
+        // The source of truth is the exact ZIP returned by GenerateAsync.
+        // Never open a prior pass or the application root before completion.
+        if (generationRunning || generatedPassZipPath is null ||
+            !File.Exists(generatedPassZipPath))
+        {
+            OpenFolderButton.IsEnabled = false;
+            return;
+        }
         try
         {
-            Process.Start(new ProcessStartInfo(packageRoot) { UseShellExecute = true });
+            // OPEN FOLDER opens the pass folder with the generated ZIP selected.
+            // Use ArgumentList so spaces in the game/package path stay intact.
+            var explorer = new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = false
+            };
+            explorer.ArgumentList.Add("/select,");
+            explorer.ArgumentList.Add(generatedPassZipPath);
+            Process.Start(explorer);
         }
         catch (Exception ex)
         {
-            Warn("Could not open the GCO folder: " + ex.Message, "Open folder");
+            Warn("Could not show the generated optimization ZIP: " +
+                ex.Message, "Open folder");
         }
     }
 

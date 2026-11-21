@@ -15,6 +15,13 @@ namespace GRedscript.Resolver;
 /// </summary>
 public static class RedscriptGenerationPlan
 {
+    // Integrated semantic stage orders #11-#54. ANALYZE displays the number
+    // of configured stages, never claims that they match installed sources.
+    // Update this when the production one-pass stage catalog grows.
+    public const int LatestSemanticStageOrder = 54;
+    public static int ConfiguredSemanticStages =>
+        LatestSemanticStageOrder - Implemented.Length;
+
     private const string Schema = "gco.redscript.generation-plan.v1";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

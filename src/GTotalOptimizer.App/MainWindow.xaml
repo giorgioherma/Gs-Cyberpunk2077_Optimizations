@@ -998,7 +998,7 @@
                                         Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
                                         Click="GenerateCetPass_Click"/>
                                 <Button x:Name="OpenFolderButton" Grid.Column="2" Content="OPEN FOLDER"
-                                        Style="{StaticResource ActionButton}" IsEnabled="True"
+                                        Style="{StaticResource ActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
                             <!-- Short installation guidance remains in two rows. -->
