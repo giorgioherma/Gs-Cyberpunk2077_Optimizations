@@ -48,6 +48,20 @@ internal static class DigitalVixenUiDormancyPass
         }
         """;
 
+    // The older handwritten Pass 9 used overlay state alone. Recognize it
+    // structurally, then upgrade only that guard to honor pinned status.
+    private const string LegacyStatusPrelude = """
+        let shouldUpdate: Bool = !this.initialized;
+        let delay: Float = 2.0;
+        let mgr: ref<RWManager> = RWManager.Get(this.gi);
+        if this.initialized && IsDefined(mgr) && mgr.IsOverlay() {
+          delay = 0.5;
+          let win: ref<RWWindow> = mgr.FindWindow(n"DigitalVixenCore.Status");
+          shouldUpdate = IsDefined(win) && win.IsRendered();
+          if shouldUpdate { delay = 0.25; }
+        }
+        """;
+
     private const string BodyGate = """
         if !overlay && !cfgPinned {
           win.SetOverlayOnly(true);
@@ -118,6 +132,23 @@ internal static class DigitalVixenUiDormancyPass
         return false;
     }
 
+    private static (int Start,int End)? FindTokenSpan(
+        string body,string probe)
+    {
+        var tokens=SourceAdmission.ReadTokens(body);
+        var pattern=SourceAdmission.ReadTokens(probe);
+        for(int i=0;i+pattern.Count<=tokens.Count;i++)
+        {
+            bool same=true;
+            for(int j=0;j<pattern.Count;j++)
+                if(tokens[i+j].Value!=pattern[j].Value)
+                {same=false;break;}
+            if(same)return (tokens[i].Start,
+                tokens[i+pattern.Count-1].End);
+        }
+        return null;
+    }
+
     private static string Apply(string text,IEnumerable<Edit> edits)
     {
         foreach(var e in edits.OrderByDescending(x=>x.Start))
@@ -168,18 +199,21 @@ internal static class DigitalVixenUiDormancyPass
             (field.Count==1 && field[0].Groups["type"].Value!="Bool"))
             return new("REFUSED","DVC_UI_LOOP_INIT_FIELD_CONFLICT",null,0,0);
         bool hasPrelude=ContainsSequence(body,prelude);
+        var legacy=status && !hasPrelude
+            ? FindTokenSpan(body,LegacyStatusPrelude) : null;
+        bool knownPrelude=hasPrelude || legacy is not null;
         bool preludeReference=Regex.IsMatch(body,
             @"\blet\s+shouldUpdate\s*:\s*Bool") ||
             Regex.IsMatch(body,@"\blet\s+delay\s*:\s*Float") ||
             Regex.IsMatch(body,@"\bshouldUpdate\s*=\s*IsDefined\s*\(\s*win");
-        if(preludeReference && !hasPrelude)
+        if(preludeReference && !knownPrelude)
             return new("REFUSED","DVC_UI_PARTIAL_CADENCE_CONTROL_FLOW_UNPROVEN",
                 null,0,0);
         bool isConditional=conditional.Count==1;
         if(!isConditional && hasPrelude && Regex.IsMatch(body,
             @"\bif\s+shouldUpdate\s*\{"))
             return new("REFUSED","DVC_UI_UPDATE_BRANCH_CHANGED",null,0,0);
-        if(schedule[0].Groups["delay"].Value=="delay" && !hasPrelude)
+        if(schedule[0].Groups["delay"].Value=="delay" && !knownPrelude)
             return new("REFUSED","DVC_UI_DELAY_VARIABLE_UNPROVEN",null,0,0);
         if(initialized.Count==1 && 
            initialized[0].Index<carry[0].Index)
@@ -195,6 +229,14 @@ internal static class DigitalVixenUiDormancyPass
                 return new("REFUSED","DVC_UI_UNOWNED_INIT_STATE",null,0,0);
         }
         var edits=new List<Edit>();
+        if(legacy is not null)
+        {
+            var span=legacy.Value;
+            string replacement=newline+"    "+
+                StatusPrelude.Replace("\n",newline+"    ").TrimEnd();
+            edits.Add(new(call.Open+span.Start,call.Open+span.End,
+                replacement));
+        }
         if(field.Count==0){
             var gi=Regex.Match(text,@"\bpublic\s+let\s+gi\s*:\s*GameInstance\s*;");
             if(!gi.Success || gi.Index<cl.Index || gi.Index>call.Open)
@@ -203,7 +245,7 @@ internal static class DigitalVixenUiDormancyPass
             edits.Add(new(gi.Index+gi.Length,gi.Index+gi.Length,
                 newline+"  public let initialized: Bool;"));
         }
-        if(!hasPrelude){
+        if(!knownPrelude){
             string prefix=newline+"    "+
                 prelude.Replace("\n",newline+"    ").TrimEnd()+newline+"    ";
             edits.Add(new(call.Open+updates[0].Index,
@@ -227,7 +269,7 @@ internal static class DigitalVixenUiDormancyPass
         if(edits.Count==0)return new("COMPLETE",null,null,0,1);
         // Multiple insertions at the same source index are composed
         // explicitly, so a fresh prelude never nests inside its new guard.
-        if(!hasPrelude && !isConditional){
+        if(!knownPrelude && !isConditional){
             edits.RemoveAll(x=>x.Start==call.Open+updates[0].Index &&
                 x.End==x.Start);
             string old=updates[0].Value;
