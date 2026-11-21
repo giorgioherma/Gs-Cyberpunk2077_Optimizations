@@ -206,7 +206,7 @@ internal static class BrowserExtensionJournalCachePass
                     @"\blet\s+(?<local>[A-Za-z_]\w*)\s*:\s*wref\s*<\s*JournalQuest\s*>\s*=\s*" + questQuery + @"\s*;");
                 if (!m.Success)
                     return ("REFUSED", "BEX_JOURNAL_ENTRY_DRIFT:" + name, null, 0);
-                string query = current[m.Groups["path"].Index..m.Groups["path"].Index + m.Groups["path"].Length];
+                string query = current[m.Groups["path"].Index..(m.Groups["path"].Index + m.Groups["path"].Length)];
                 string replacement = "if !IsDefined(this." + field + ") {\n" +
                     "      this." + field + " = " + journalName +
                     ".GetEntryByString(" + query + ", \"gameJournalQuest\") as JournalQuest;\n" +
