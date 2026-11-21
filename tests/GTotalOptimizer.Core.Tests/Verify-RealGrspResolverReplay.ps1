@@ -2045,6 +2045,81 @@ try {
         $cqReport.status+' edits='+[int]$cqReport.appliedEdits+
         ' legacyEngineFallbackAndGenericPreserved=true')
 
+    # Independent semantic reference composition for newly admitted historical
+    # ports. These use the same already-generic source and current *effective*
+    # overlay as the production Stage, without copying historical files.
+    # The strict file-count and byte-for-byte source comparison below remain
+    # mandatory and catch omitted generators, duplicated owners or lost edits.
+    $historicalPorts = @(
+      @{ Id='quickhack-direct-tags'; Order=18; Command='phase2-quickhack-tags';
+         Rule='QUICKHACK_FIXES_DIRECT_TAG_PREDICATE_V1'; Owner='Quickhack_Fixes' },
+      @{ Id='redwindows-widget-lookup'; Order=19; Command='phase2-redwindows-find';
+         Rule='REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1'; Owner='RedWindows' }
+    )
+    $historicalReferences = @()
+    foreach ($port in $historicalPorts) {
+      $portOutput = Join-Path $work ('gco-phase2-reference-'+$port.Order)
+      $portLog = Join-Path $work ('gco-phase2-reference-'+$port.Order+'.log')
+      & dotnet $dll $port.Command --game $game --base-overlay $callbackFolder --out $portOutput *> $portLog
+      if ($LASTEXITCODE -ne 0) {
+        throw ('GCO_HISTORICAL_REFERENCE_GENERATOR_FAILED: '+$port.Id)
+      }
+      $reportPath = Join-Path $portOutput 'phase2-result.json'
+      if (!(Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+        throw ('GCO_HISTORICAL_REFERENCE_REPORT_MISSING: '+$port.Id)
+      }
+      $portReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+      if ($portReport.ruleId -ne $port.Rule -or
+          $portReport.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+        throw ('GCO_HISTORICAL_REFERENCE_STATUS_INVALID: '+$port.Id)
+      }
+      $portFiles = @()
+      $portScripts = Join-Path $portOutput 'r6/scripts'
+      if (Test-Path -LiteralPath $portScripts -PathType Container) {
+        $portFiles = @(Get-ChildItem -LiteralPath $portScripts -File -Recurse -Filter '*.reds')
+      }
+      if ($portReport.status -eq 'APPLIED') {
+        if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
+          throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        foreach ($file in $portFiles) {
+          $rel = [IO.Path]::GetRelativePath($portScripts, $file.FullName)
+          $relUnix = $rel.Replace([IO.Path]::DirectorySeparatorChar, '/')
+          if ([IO.Path]::IsPathRooted($rel) -or $relUnix.StartsWith('..') -or
+              !$relUnix.StartsWith(($port.Owner+'/'),[StringComparison]::Ordinal) -or
+              !$relUnix.EndsWith('.reds',[StringComparison]::OrdinalIgnoreCase)) {
+            throw ('GCO_HISTORICAL_OWNER_PATH_UNSAFE: '+$port.Id)
+          }
+          $dest = Join-Path (Join-Path $callbackFolder 'r6/scripts') $rel
+          $new = Get-Content -LiteralPath $file.FullName -Raw
+          if (Test-Path -LiteralPath $dest -PathType Leaf) {
+            $old = Get-Content -LiteralPath $dest -Raw
+            foreach ($marker in @([regex]::Matches($old,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$new.Contains($marker,[StringComparison]::Ordinal)) {
+                throw ('GCO_HISTORICAL_REFERENCE_GENERIC_LOST: '+$port.Id)
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+        }
+      }
+      elseif ($portFiles.Count -gt 0 -or [int]$portReport.appliedEdits -ne 0) {
+        throw ('GCO_HISTORICAL_UNEXPECTED_OUTPUT_FOR_SKIP: '+$port.Id)
+      }
+      $historicalReferences += @{
+        Id=$port.Id; Order=$port.Order;
+        Status=$portReport.status; Edits=[int]$portReport.appliedEdits;
+        Files=$portFiles.Count
+      }
+      Write-Host ('PASS Phase 2 '+$port.Id+' independent reference: status='+
+          $portReport.status+' edits='+[int]$portReport.appliedEdits+
+          ' files='+$portFiles.Count)
+    }
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
@@ -2114,6 +2189,24 @@ try {
           [int]$cqFamily[0].order -ne 16 -or
           [int]$cqFamily[0].rewrittenExpressions -ne 1) {
         throw 'GCO_CQ_INPUT_CANONICAL_GENERATION_NOT_CONNECTED'
+      }
+    }
+    foreach ($reference in $historicalReferences) {
+      $actual = @($stageReport.completed | Where-Object { $_.id -eq $reference.Id })
+      if ($reference.Status -eq 'APPLIED') {
+        if ($actual.Count -ne $reference.Files -or
+            @($actual | Where-Object { $_.order -ne $reference.Order }).Count -gt 0 -or
+            [int](($actual | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne
+              $reference.Edits) {
+          throw ('GCO_HISTORICAL_REFERENCE_CANONICAL_COUNT_DIFF: '+$reference.Id)
+        }
+      }
+      elseif ($actual.Count -ne 0) {
+        throw ('GCO_HISTORICAL_REFERENCE_UNEXPECTED_CANONICAL: '+$reference.Id)
+      }
+      if ($reference.Status -eq 'REFUSED' -and
+          @($stageReport.skipped | Where-Object { $_.id -eq $reference.Id }).Count -eq 0) {
+        throw ('GCO_HISTORICAL_REFERENCE_MISSING_REFUSAL: '+$reference.Id)
       }
     }
     # Every ordered generated REDscript source must match the independent
