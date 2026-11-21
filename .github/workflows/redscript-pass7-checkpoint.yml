@@ -105,8 +105,9 @@ jobs:
           $targets=@(
             @{ order=700; id='pass7-ncr-spawn-guards'; path='r6/scripts/NightCityRemembers/NCR_SpawnCulling.reds' },
             @{ order=701; id='pass7-stealth-detection-gate'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
-            @{ order=702; id='pass7-runningman-double-sprint'; path='r6/scripts/RunningMan/double_sprint.reds' },
-            @{ order=703; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' }
+            @{ order=702; id='pass7-stealth-player-cache'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
+            @{ order=703; id='pass7-runningman-double-sprint'; path='r6/scripts/RunningMan/double_sprint.reds' },
+            @{ order=704; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' }
           )
           foreach($target in $targets) {
             $matches=@($staged.completed | Where-Object { $_.id -eq $target.id })
@@ -123,7 +124,7 @@ jobs:
               throw ('PASS7_CANONICAL_ONE_PASS_BYTE_PARITY_DIFF:'+ $target.id)
             }
           }
-          Write-Host 'PASS Pass 7 production one-pass: four independent source files and exact output parity'
+          Write-Host 'PASS Pass 7 production one-pass: five operations in four independently composed source files and exact output parity'
 
       - name: Official SCC 0.5.31 on full canonical generic plus semantic output
         shell: pwsh
