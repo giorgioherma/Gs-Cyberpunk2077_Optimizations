@@ -50,6 +50,7 @@ jobs:
       PHASE2_DVC_UI_OUTPUT: ${{ github.workspace }}/.phase2-dvc-ui
       PHASE2_BROWSER_JOURNAL_OUTPUT: ${{ github.workspace }}/.phase2-browser-journal
       PHASE2_BROWSER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-browser-input
+      PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -875,6 +876,48 @@ jobs:
           }
           Write-Host 'PASS BrowserExtension InputHub with exclusive player engine fallback'
 
+      - name: Generate Enhanced Vehicle System Pass 2.0 PS local reuse
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-evs-ps --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_EVS_PS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_EVS_PS_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_EVS_PS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'EVS_ONACTION_PS_HANDLE_REUSE_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -lt 100) {
+            throw ('PHASE2_EVS_PS_HOTPATH_NOT_REWRITTEN: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/Enhanced Vehicle System/Enhanced Vehicle System.reds'
+          $src=Join-Path $env:PHASE2_EVS_PS_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_EVS_PS_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('let gcoOnActionPS: ref<VehicleComponentPS> = this.GetPS();') -or
+              !$content.Contains('!IsDefined(gcoOnActionPS) || gcoOnActionPS.GetIsDestroyed()') -or
+              !$content.Contains('GCO-GENERIC:SHARED_PLAYER_SIGNAL_V1') -or
+              !$content.Contains('GCO-GENERIC:ACTION_EVENT_SNAPSHOT_V1') -or
+              !$content.Contains('AudiowareIsInstalled')) {
+            throw 'PHASE2_EVS_PS_LOST_GENERIC_OR_CURRENT_OWNER_BEHAVIOR'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_EVS_PS_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS EVS OnAction one stable PS handle with current generic and audio behavior'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1091,6 +1134,17 @@ jobs:
                 throw ('PHASE2_BROWSER_INPUT_ONE_PASS_REFERENCE_DIFF:'+ $file)
               }
             }
+            $evs=@($result.completed | Where-Object { $_.id -eq 'evs-onaction-ps' })
+            $evsRel='r6/scripts/Enhanced Vehicle System/Enhanced Vehicle System.reds'
+            $evsRef=Join-Path $env:PHASE2_EVS_PS_OUTPUT $evsRel
+            $evsActual=Join-Path (Join-Path $stage 'effective-preview') $evsRel
+            if ($evs.Count -ne 1 -or [int]$evs[0].order -ne 30 -or
+                [int]$evs[0].rewrittenExpressions -lt 100 -or
+                !(Test-Path -LiteralPath $evsActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $evsRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_EVS_PS_ONE_PASS_REFERENCE_DIFF'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1129,7 +1183,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
