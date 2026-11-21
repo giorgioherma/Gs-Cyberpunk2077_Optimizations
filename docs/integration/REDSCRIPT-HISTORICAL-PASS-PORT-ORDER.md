@@ -10,6 +10,17 @@
 - Preserve original groups as the work breakdown. Within each group, identify each independent operation and its dependencies. An already-implemented operation is recorded as COMPLETE without regenerating it; add compatible missing work only, using source-structural matching.
 - Apply historical 7.1 / 7.2 / 7.2r1 behavior corrections **in the original owners**; never as follow-up repair generators.
 
+## Mandatory absent-owner generic-first gate
+
+When a historical optimization targets a mod **not present in the user's effective installed collection**, do not jump directly to a custom semantic generator:
+
+1. Obtain inspectable baseline source for that mod (prefer an available current upstream source; historical originals may establish historical behavior but cannot prove a newer installed version). Record source provenance and dependencies. If no trustworthy source is available, classify `ABSENT / SOURCE_UNAVAILABLE`, with no generation.
+2. **First audit the mod against all ten existing generic rules**, using their actual eligibility/structural checks on that source, not just names or pass labels. Report each operation as `GENERIC_COVERED`, `GENERIC_ELIGIBLE`, `ALREADY_PRESENT` or `NOT_APPLICABLE / UNPROVEN`. If there is reusable generic work to extend, evaluate it through the generic-first acceptance and SCC contracts before creating a bespoke semantic.
+3. Compare the historical source-level optimizations only to the **remaining uncovered operations**. Implement a targeted semantic only where a worthwhile optimization remains and dependencies, lifecycle, runtime equivalence and partial/complete/version-drift behavior can be proven. A historical mod missing from the current collection is not by itself permission to add its files or its dependencies.
+4. **Never generate absent mods into the player's ZIP.** A reusable source-aware generator may be added for future installations, but it must discover the owner from the live effective sources, apply the ten generics first, and return `NOT_APPLICABLE` without output when the mod is absent. If available evidence supports only a historical source shape, do not claim current-version compatibility until structurally verified.
+
+This gate applies to **every** absent historical owner, including Street Vendors, Exodus and Repeatable Psychos, rather than letting pass order override generic-first source eligibility.
+
 ## Group-by-group source inventory and preliminary disposition
 
 | Main pass | Source operations and actual owner coverage | Preliminary status after #27 |
