@@ -132,7 +132,7 @@ internal static class RedscriptHistoricalIntegration
                 var r = RunningManDoubleSprintPass.Generate(g, o, b);
                 return new Pass8CanonicalComposition.Outcome(
                     r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths,
-                    r.Status == "REFUSED" && !string.IsNullOrWhiteSpace(r.Reason)
+                    !string.IsNullOrWhiteSpace(r.Reason)
                         ? [r.Reason] : []);
             });
 
