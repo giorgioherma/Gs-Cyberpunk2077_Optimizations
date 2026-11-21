@@ -45,6 +45,7 @@ jobs:
       PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
       PHASE2_RW_CURSORS_OUTPUT: ${{ github.workspace }}/.phase2-rw-cursors
       PHASE2_RW_RENDER_OUTPUT: ${{ github.workspace }}/.phase2-rw-render
+      PHASE2_DF_AGGRESSIVE_OUTPUT: ${{ github.workspace }}/.phase2-df-aggressive
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -627,6 +628,52 @@ jobs:
           }
           Write-Host 'PASS RedWindows effective visibility dormancy in three owner files'
 
+      - name: Generate historical Dark Future aggressive 10 6 6 throttles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-dark-future-aggressive --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DF_AGGRESSIVE_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DF_AGGRESSIVE_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 3) {
+            throw ('PHASE2_DF_AGGRESSIVE_THREE_THROTTLES_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/Dark Future/UI/DFBaseGameUIOverrides.reds'
+          $src=Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_DF_AGGRESSIVE_OWNER_FILE_MISSING'
+          }
+          $body=Get-Content -LiteralPath $src -Raw
+          foreach ($marker in @('m_gredBuffUpdatePhase < 10',
+              'm_gredEffectUpdatePhase < 6',
+              'm_gredRenderPhase < 6',
+              'm_gredLastTimeLeft == -1.00',
+              'm_gcoDfInfiniteTagValid',
+              'm_gcoDfIconCadenceInitialized',
+              '__gcoDfIconVisualDue',
+              'currBuffLoc.SetStatusEffectRecord(null);',
+              'this.FillOutroAnimationStart();')) {
+            if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+              throw ('PHASE2_DF_AGGRESSIVE_MISSING_HISTORICAL_OR_PREVIOUS:'+$marker)
+            }
+          }
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $dst -PathType Leaf)) {
+            throw 'PHASE2_DF_AGGRESSIVE_EXPECTED_PREVIOUS_OWNER'
+          }
+          $old=Get-Content -LiteralPath $dst -Raw
+          foreach ($marker in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+            if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+              throw 'PHASE2_DF_AGGRESSIVE_LOST_GENERIC'
+            }
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS Dark Future game-tested 10/6/6 throttles; existing icon and tag optimizations preserved'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -765,6 +812,17 @@ jobs:
                 throw ('PHASE2_RW_RENDER_REFERENCE_BYTES_DIFF:'+ $file)
               }
             }
+            $dfa=@($result.completed | Where-Object { $_.id -eq 'dark-future-aggressive-throttles' })
+            $dfaRel='r6/scripts/Dark Future/UI/DFBaseGameUIOverrides.reds'
+            $dfaRef=Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT $dfaRel
+            $dfaActual=Join-Path (Join-Path $stage 'effective-preview') $dfaRel
+            if ($dfa.Count -ne 1 -or [int]$dfa[0].order -ne 25 -or
+                [int]$dfa[0].rewrittenExpressions -ne 3 -or
+                !(Test-Path -LiteralPath $dfaActual) -or
+                (Get-FileHash -LiteralPath $dfaActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $dfaRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_DF_AGGRESSIVE_ONE_PASS_DIFFERS_FROM_INDEPENDENT'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -803,7 +861,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

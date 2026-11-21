@@ -2064,7 +2064,9 @@ try {
       @{ Id='redwindows-shape-label-cursors'; Order=23; Command='phase2-redwindows-cursors';
          Rule='REDWINDOWS_SHAPE_LABEL_CURSORS_V1'; Owner='RedWindows' },
       @{ Id='redwindows-render-dormancy'; Order=24; Command='phase2-redwindows-render';
-         Rule='REDWINDOWS_RENDER_AWARE_DORMANCY_V1'; Owner='RedWindows' }
+         Rule='REDWINDOWS_RENDER_AWARE_DORMANCY_V1'; Owner='RedWindows' },
+      @{ Id='dark-future-aggressive-throttles'; Order=25; Command='phase2-dark-future-aggressive';
+         Rule='DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1'; Owner='Dark Future' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

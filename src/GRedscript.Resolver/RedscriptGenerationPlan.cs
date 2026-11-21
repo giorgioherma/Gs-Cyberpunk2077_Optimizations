@@ -1158,6 +1158,73 @@ public static class RedscriptGenerationPlan
             skipped.Add(new(24,"redwindows-render-dormancy",1,
                 rwRender.Reason));
 
+        // Historical Dark Future Pass 6/7: broad 10/6/6 UI callback
+        // throttles, explicitly requested by the owner for the game-tested
+        // aggressive behavior. Existing 400ms tagged icon cadence and
+        // immutable infinite-tag cache remain independently implemented.
+        string dfAggressiveRoot = Path.Combine(output, "_stages",
+            "25-dark-future-aggressive-throttles");
+        var dfAggressive = DarkFutureHistoricalThrottlePass.Generate(game,
+            dfAggressiveRoot, Directory.Exists(final) ? final : null);
+        if (dfAggressive.Status == "APPLIED")
+        {
+            string rel = dfAggressive.SourcePath ??
+                throw new InvalidDataException("DF_AGGRESSIVE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(dfAggressiveRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/Dark Future/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, dfAggressiveRoot) ||
+                !IsInside(target, final) || !File.Exists(source) ||
+                dfAggressive.AppliedEdits is < 1 or > 3)
+                throw new InvalidDataException("DF_AGGRESSIVE_STAGE_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string old = File.ReadAllText(target);
+                string rewritten = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    old, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !rewritten.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException(
+                        "DF_AGGRESSIVE_LOST_GENERIC");
+                // Preserve the two already accepted Dark Future semantics,
+                // even if a partially optimized source has either one.
+                foreach (string needed in new[]
+                {
+                    "m_gcoDfInfiniteTagValid",
+                    "m_gcoDfIconCadenceInitialized",
+                    "__gcoDfIconVisualDue"
+                })
+                {
+                    if (old.Contains(needed, StringComparison.Ordinal) &&
+                        !rewritten.Contains(needed, StringComparison.Ordinal))
+                        throw new InvalidDataException(
+                            "DF_AGGRESSIVE_LOST_PRIOR_SEMANTIC:" + needed);
+                }
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += dfAggressive.AppliedEdits;
+            results.Add(new(25, "dark-future-aggressive-throttles",
+                dfAggressive.AppliedEdits, existed ? 0 : 1,
+                existed ? 1 : 0, []));
+        }
+        else if (dfAggressive.Status == "REFUSED")
+            skipped.Add(new(25, "dark-future-aggressive-throttles", 1,
+                dfAggressive.Reason ?? "DF_AGGRESSIVE_SOURCE_INCOMPATIBLE"));
+        else if (dfAggressive.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("DF_AGGRESSIVE_UNKNOWN_STATUS");
+        if (dfAggressive.Status == "APPLIED" && dfAggressive.Reason is not null)
+            skipped.Add(new(25, "dark-future-aggressive-throttles", 1,
+                dfAggressive.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

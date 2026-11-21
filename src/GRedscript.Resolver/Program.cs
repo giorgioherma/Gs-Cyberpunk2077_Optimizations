@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
                 return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-dark-future-aggressive")
+                return RunPhase2DarkFutureAggressive(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-redwindows-render")
                 return RunPhase2RedWindowsRender(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-redwindows-cursors")
@@ -640,6 +642,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2DarkFutureAggressive(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Dark Future aggressive pass requires --game --out [--base-overlay]");
+        var result = DarkFutureHistoricalThrottlePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Dark Future 10/6/6: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 
