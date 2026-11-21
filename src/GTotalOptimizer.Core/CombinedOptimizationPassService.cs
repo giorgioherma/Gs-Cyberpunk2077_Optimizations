@@ -74,8 +74,16 @@ public sealed class CombinedOptimizationPassService
             token.ThrowIfCancellationRequested();
 
             string planOutput = Path.Combine(temp, "redscript-stage");
+            string frameworkOwner = Path.Combine(package, "components",
+                "redruntime", "owner");
+            // The runtime is bundled into THIS pass after REDscript staging.
+            // Supply its verified declarations to semantic ABI admission now,
+            // without changing the original-source plan fingerprint.
+            string? providedFramework = Directory.Exists(frameworkOwner)
+                ? frameworkOwner : null;
             var red = await Task.Run(() =>
-                RedscriptGenerationPlan.Stage(game, plan, analysis, planOutput),
+                RedscriptGenerationPlan.Stage(game, plan, analysis, planOutput,
+                    providedFramework),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
@@ -93,12 +101,10 @@ public sealed class CombinedOptimizationPassService
             // installed framework that may have local source modifications.
             if (redFiles > 0)
             {
-                string framework = Path.Combine(package, "components",
-                    "redruntime", "owner");
                 // Experimental REDscript FAR/subscriber generation is retired.
                 // CET owner-native output is independent and remains untouched.
                 if (RequiresGRedRuntime(overlay))
-                    _ = CopyMissingFramework(game, overlay, framework, owners);
+                    _ = CopyMissingFramework(game, overlay, frameworkOwner, owners);
 
                 // Official SCC compilation belongs to the existing GitHub CI
                 // real-source validation lane, not the player-side generator.

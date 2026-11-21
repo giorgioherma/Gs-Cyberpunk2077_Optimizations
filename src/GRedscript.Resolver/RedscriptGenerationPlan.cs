@@ -231,7 +231,8 @@ public static class RedscriptGenerationPlan
     }
 
     public static StageResult Stage(string gameRoot,
-        string planFile, string analysisFile, string outputRoot)
+        string planFile, string analysisFile, string outputRoot,
+        string? packagedRuntimeOwnerRoot = null)
     {
         string game = Path.GetFullPath(gameRoot),
             planPath = Path.GetFullPath(planFile),
@@ -242,6 +243,11 @@ public static class RedscriptGenerationPlan
             !File.Exists(planPath) || !File.Exists(analysis))
             throw new InvalidDataException("REDSCRIPT_PLAN_STAGE_OUTPUT_OR_INPUT_INVALID");
 
+        // Source hash, plan and capture remain anchored to the ORIGINAL
+        // installed game. Only ABI admission may consult missing framework
+        // files verified to be included by this same combined pass.
+        using var providedRuntime =
+            ProvidedRuntimeSourceScope.Enter(game, packagedRuntimeOwnerRoot);
         var document = JsonSerializer.Deserialize<Document>(
             File.ReadAllText(planPath), JsonOptions)
             ?? throw new InvalidDataException("REDSCRIPT_PLAN_INVALID_DOCUMENT");
