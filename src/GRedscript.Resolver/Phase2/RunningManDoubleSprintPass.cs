@@ -128,6 +128,8 @@ public static class RunningManDoubleSprintPass
         @"\(\s*stateContext\s*,\s*scriptInterface\s*\)\s*;", Opt);
     private static readonly Regex Wrapped = new(
         @"\bwrappedMethod\s*\(\s*stateContext\s*,\s*scriptInterface\s*\)\s*;", Opt);
+    private static readonly Regex TimedWrapped = new(
+        @"\bwrappedMethod\s*\(\s*timeDelta\s*,\s*stateContext\s*,\s*scriptInterface\s*\)\s*;", Opt);
     private static readonly Regex UpdateGuard = new(
         @"\bif\s+this\s*\.\s*" + SprintField + @"\s*\|\|\s*" +
         @"this\s*\.\s*m_isInSecondSprint\s*\{\s*" +
@@ -159,7 +161,7 @@ public static class RunningManDoubleSprintPass
         if (update is null || enter is null || evaluate is null)
             return new("REFUSED", "RM_SPRINT_OWNER_METHODS_NOT_UNIQUE", result);
         string ub = Body(src, update), eb = Body(src, enter), vb = Body(src, evaluate);
-        if (Wrapped.Matches(ub).Count != 1 ||
+        if (TimedWrapped.Matches(ub).Count != 1 ||
             Wrapped.Matches(eb).Count != 1 ||
             SprintEvaluate.Matches(ub).Count != 1 ||
             !Regex.IsMatch(vb,
@@ -189,7 +191,7 @@ public static class RunningManDoubleSprintPass
                     initializers[0].Groups["expr"].Value : null;
         if (expr is null ||
             !expr.Contains("Body_Left_Milestone_1", StringComparison.Ordinal) ||
-            !expr.Contains("scriptInterface.executionOwner", StringComparison.Ordinal))
+            !Regex.IsMatch(expr, @"scriptInterface\s*\.\s*executionOwner"))
             return new("REFUSED", "RM_SPRINT_PERK_SOURCE_QUERY_MISSING", result);
         if (evalLocals.Count == 1 && enterLocals.Count == 1 &&
             Shape(evalLocals[0].Groups["expr"].Value) !=
@@ -269,8 +271,8 @@ public static class RunningManDoubleSprintPass
     }
 
     private static readonly Regex StandGuard = new(
-        @"\bif\s+(?<cached>!\s*this\s*\.\s*" + StandField +
-        @"\s*&&\s*)?this\s*\.\s*GetInStateTime\s*\(\s*\)\s*>=\s*0\.10\s*\{",
+        @"\bif\s+(?<cond>(?<cached>!\s*this\s*\.\s*" + StandField +
+        @"\s*&&\s*)?this\s*\.\s*GetInStateTime\s*\(\s*\)\s*>=\s*0\.10)\s*\{",
         Opt);
     private static readonly Regex StandReset = new(
         @"\bthis\s*\.\s*" + StandField + @"\s*=\s*false\s*;", Opt);
@@ -285,7 +287,7 @@ public static class RunningManDoubleSprintPass
         if (update is null)
             return new("REFUSED", "RM_STAND_UPDATE_METHOD_NOT_UNIQUE", result);
         string ub = Body(src, update);
-        if (Wrapped.Matches(ub).Count != 1 ||
+        if (TimedWrapped.Matches(ub).Count != 1 ||
             !ub.Contains("RunningMan_ResumeSecondSprint", StringComparison.Ordinal) ||
             !Regex.IsMatch(ub,
                 @"stateContext\s*\.\s*SetPermanentBoolParameter\s*\(\s*" +
@@ -318,8 +320,8 @@ public static class RunningManDoubleSprintPass
             return new("REFUSED","RM_STAND_DUPLICATE_COMPLETION",result);
         if (!guarded)
         {
-            result.Add(new(update.BodyStart+guard.Index+3,
-                update.BodyStart+guard.Index+3,
+            result.Add(new(update.BodyStart+guard.Groups["cond"].Index,
+                update.BodyStart+guard.Groups["cond"].Index,
                 "!this." + StandField + " && "));
         }
         if (checks.Count == 0)
