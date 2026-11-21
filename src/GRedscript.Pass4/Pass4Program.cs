@@ -31,13 +31,14 @@ internal static class Pass4Program
     // This same source-aware generator is used by the production plan.
     // The production build has no second CLI entry point.
     internal static void Generate(string gameRoot,string outputRoot,
-        string? baseOverlayRoot=null)
+        string? baseOverlayRoot=null, bool uniqueGeometryOnly=false)
     {
         var args=new List<string> {"pass4","--game",gameRoot,"--out",outputRoot};
         if(baseOverlayRoot is not null) {
             args.Add("--base-overlay");
             args.Add(baseOverlayRoot);
         }
+        if(uniqueGeometryOnly) args.Add("--integration-geometry-only");
         Run(args.ToArray());
     }
 
@@ -140,10 +141,16 @@ internal static class Pass4Program
                     .OrderBy(x=>x,StringComparer.OrdinalIgnoreCase).ToArray()));
         }
 
-        RunOwner("STEALTHRUNNER_NPC_PLAYER_CACHE_V1",
-            (s,_)=>StealthRunnerPass.Rewrite(s));
-        RunOwner("CHIPWARE_PERK_RELEVANCE_GATE_V1",
-            (s,_)=>ChipwarePass.Rewrite(s));
+        // Integration uses Pass 7's equivalent player cache and Pass 8's
+        // equivalent source-derived perk admission. Never emit duplicates.
+        // The standalone Pass 4 generator still exposes all three owners.
+        if (!args.Contains("--integration-geometry-only",StringComparer.Ordinal))
+        {
+            RunOwner("STEALTHRUNNER_NPC_PLAYER_CACHE_V1",
+                (s,_)=>StealthRunnerPass.Rewrite(s));
+            RunOwner("CHIPWARE_PERK_RELEVANCE_GATE_V1",
+                (s,_)=>ChipwarePass.Rewrite(s));
+        }
         RunOwner("REINFORCEMENTS_PREPARED_QUAD_CACHE_V1",
             (s,_)=>ReinforcementsPass.RewriteSystem(s));
 

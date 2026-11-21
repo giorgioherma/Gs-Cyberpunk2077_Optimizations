@@ -18,23 +18,23 @@ internal static class Pass8CanonicalComposition
         string game, string output, string final,
         List<RedscriptGenerationPlan.OutputItem> completed,
         List<RedscriptGenerationPlan.SkippedRule> skipped,
-        ref int files, ref int expressions)
+        ref int files, ref int expressions, int firstOrder = 37)
     {
-        Run(37, "pass8-chipware-throughput", "zzy_bChipwareExpansion",
+        Run(firstOrder, "pass8-chipware-throughput", "zzy_bChipwareExpansion",
             game, output, final, completed, skipped, ref files, ref expressions,
             (g, o, b) =>
             {
                 var r = Pass8ThroughputPass.Generate(g, o, b);
                 return new(r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
             });
-        Run(38, "pass8-chipware-combat-cache", "zzy_bChipwareExpansion",
+        Run(firstOrder + 1, "pass8-chipware-combat-cache", "zzy_bChipwareExpansion",
             game, output, final, completed, skipped, ref files, ref expressions,
             (g, o, b) =>
             {
                 var r = Pass8ChipwareCombatCachePass.Generate(g, o, b);
                 return new(r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
             });
-        Run(39, "pass8-immersive-cyberware", "ImmersiveCyberware",
+        Run(firstOrder + 2, "pass8-immersive-cyberware", "ImmersiveCyberware",
             game, output, final, completed, skipped, ref files, ref expressions,
             (g, o, b) =>
             {
@@ -92,8 +92,8 @@ internal static class Pass8CanonicalComposition
             // The first three segments must be r6/scripts/<owner or nested
             // owner>. Do not permit output from an unrelated mod.
             if (parts.Length < 4 || parts[0] != "r6" || parts[1] != "scripts" ||
-                !parts.Skip(2).Take(parts.Length - 3)
-                    .Contains(owner, StringComparer.OrdinalIgnoreCase) ||
+                !parts.Skip(2).Take(parts.Length - 3).Any(x =>
+                    owner.Split('|').Contains(x, StringComparer.OrdinalIgnoreCase)) ||
                 !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
                 !paths.Contains(rel, StringComparer.Ordinal) ||
                 !produced.Add(rel))
