@@ -38,7 +38,8 @@ static Dictionary<string, string> ReadCurrent(string root)
     {
         ["ncr"] = ("NightCityRemembers", "NCR_CullChanceForTier"),
         ["sr"] = ("StealthRunner", "OnPlayerDetectionChangedEvent"),
-        ["rm"] = ("RunningMan", "EvaluateTwoStepSprint")
+        ["rm"] = ("RunningMan", "EvaluateTwoStepSprint"),
+        ["dir"] = ("RunningMan", "@replaceMethod(SprintDecisions)")
     };
     var result = new Dictionary<string, string>();
     foreach (var sample in samples)
@@ -64,7 +65,8 @@ static string MakeGame(string temp, string label,
     {
         ["ncr"] = "NightCityRemembers/NCR_SpawnCulling.reds",
         ["sr"] = "StealthRunner/npc_puppet.reds",
-        ["rm"] = "RunningMan/double_sprint.reds"
+        ["rm"] = "RunningMan/double_sprint.reds",
+        ["dir"] = "RunningMan/sprint_direction.reds"
     };
     foreach (var entry in sources)
     {
@@ -96,8 +98,8 @@ static void CheckContent(Dictionary<string, string> original, string output,
     bool relocated = false)
 {
     var files = GeneratedFiles(output);
-    Require(files.Length == 3, "EXPECTED_THREE_OUTPUTS");
-    foreach (var key in new[] { "ncr", "sr", "rm" })
+    Require(files.Length == 4, "EXPECTED_FOUR_OUTPUTS");
+    foreach (var key in new[] { "ncr", "sr", "rm", "dir" })
     {
         string owner = key switch
         {
@@ -105,8 +107,16 @@ static void CheckContent(Dictionary<string, string> original, string output,
             "sr" => "StealthRunner",
             _ => "RunningMan"
         };
-        var candidates = files.Where(f => f.Replace('\\', '/').Contains(
-            "/r6/scripts/" + owner + "/", StringComparison.Ordinal)).ToArray();
+        var ownerName = key switch
+        {
+            "ncr" => "NCR_SpawnCulling.reds",
+            "sr" => "npc_puppet.reds",
+            "rm" => "double_sprint.reds",
+            _ => "sprint_direction.reds"
+        };
+        var candidates = files.Where(f =>
+            f.Replace('\\', '/').Contains("/r6/scripts/" + owner + "/", StringComparison.Ordinal) &&
+            f.EndsWith(ownerName, StringComparison.Ordinal)).ToArray();
         Require(candidates.Length == 1, "EXPECTED_OWNER_FILE:" + key);
         string content = File.ReadAllText(candidates[0]);
         foreach (string marker in PreservedMarkers(original[key]))
@@ -143,7 +153,7 @@ static void CheckContent(Dictionary<string, string> original, string output,
             Require(content.Contains("wrappedMethod(evt);",
                 StringComparison.Ordinal), "STEALTH_WRAPPED_METHOD_LOST");
         }
-        else
+        else if (key == "rm")
         {
             Require(Regex.Matches(content, @"private let m_gredRunningManDoubleRunPerk").Count == 1,
                 "RM_DUPLICATE_CACHE_FIELD");
@@ -153,6 +163,19 @@ static void CheckContent(Dictionary<string, string> original, string output,
                 StringComparison.Ordinal), "RM_EVALUATOR_NOT_CACHED");
             Require(content.Contains("SetPermanentBoolParameter",
                 StringComparison.Ordinal), "RM_RESUME_TRANSITIONS_CHANGED");
+        }
+        else
+        {
+            Require(Regex.Matches(content, @"private let m_gredRunningManSprintDirectionPerk").Count == 1,
+                "RM_DIRECTION_DUPLICATE_PERK_FIELD");
+            Require(Regex.Matches(content, @"private let m_gredRunningManSprintDirectionValid").Count == 1,
+                "RM_DIRECTION_DUPLICATE_VALID_FIELD");
+            Require(content.Contains("if !this.m_gredRunningManSprintDirectionValid",
+                StringComparison.Ordinal), "RM_DIRECTION_OPTIONAL_MODULE_FALLBACK_LOST");
+            Require(content.Contains("@if(!ModuleExists(\"EasierControllerSprint\"))",
+                StringComparison.Ordinal), "RM_DIRECTION_MODULE_EXCLUSION_LOST");
+            Require(Regex.Matches(content, @"IsNewPerkBought").Count == 2,
+                "RM_DIRECTION_ENTRY_AND_FALLBACK_PREDICATES_NOT_PRESERVED");
         }
     }
 }
@@ -170,7 +193,7 @@ static void Run(string baseline)
         string result = Path.Combine(temp, "generated");
         var report = Pass7ChaseFrameFloorPass.Generate(game, result);
         Require(report.AppliedEdits >= 7, "STOCK_BATCH_EDITS");
-        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN" })
+        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION" })
             AssertStatus(report, id, "APPLIED");
         CheckContent(originals, result);
         Require(Sha(string.Join("|", ReadCurrent(game)
@@ -183,7 +206,9 @@ static void Run(string baseline)
         {
             string norm = file.Replace('\\', '/');
             string key = norm.Contains("/NightCityRemembers/") ? "ncr" :
-                norm.Contains("/StealthRunner/") ? "sr" : "rm";
+                norm.Contains("/StealthRunner/") ? "sr" :
+                norm.EndsWith("/sprint_direction.reds", StringComparison.Ordinal) ?
+                "dir" : "rm";
             completed[key] = File.ReadAllText(file);
         }
         var fullGame = MakeGame(temp, "complete", completed);
@@ -216,6 +241,8 @@ static void Run(string baseline)
             StringComparison.Ordinal);
         partial["rm"] = "@addField(SprintEvents)\nprivate let m_gredRunningManDoubleRunPerk: Bool;\n\n"
             + partial["rm"];
+        partial["dir"] = "@addField(SprintDecisions)\nprivate let m_gredRunningManSprintDirectionPerk: Bool;\n\n"
+            + partial["dir"];
         var partialReport = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "partial", partial), Path.Combine(temp, "partial-out"));
         foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN" })
@@ -245,9 +272,25 @@ static void Run(string baseline)
             Path.Combine(temp, "incompatible-out"));
         AssertStatus(bad, "STEALTH_RUNNER", "REFUSED");
         AssertStatus(bad, "NCR_SPAWN", "APPLIED");
-        AssertStatus(bad, "RUNNING_MAN", "APPLIED");
-        Require(GeneratedFiles(Path.Combine(temp, "incompatible-out")).Length == 2,
+        AssertStatus(bad, "RUNNING_MAN_SPRINT_ENTRY", "APPLIED");
+        AssertStatus(bad, "RUNNING_MAN_SPRINT_DIRECTION", "APPLIED");
+        Require(GeneratedFiles(Path.Combine(temp, "incompatible-out")).Length == 3,
             "INCOMPATIBLE_SCOPE_TOO_BROAD");
+
+        // When EasierControllerSprint integration changes, refuse the affected
+        // direction cache without suppressing independent RunningMan work.
+        var changedModule = new Dictionary<string, string>(originals);
+        changedModule["dir"] = changedModule["dir"].Replace(
+            "@if(!ModuleExists(\"EasierControllerSprint\"))",
+            "@if(!ModuleExists(\"ChangedSprintOwner\"))",
+            StringComparison.Ordinal);
+        var moduleReport = Pass7ChaseFrameFloorPass.Generate(
+            MakeGame(temp, "changed-module", changedModule),
+            Path.Combine(temp, "changed-module-out"));
+        AssertStatus(moduleReport, "RUNNING_MAN_SPRINT_DIRECTION", "REFUSED");
+        AssertStatus(moduleReport, "RUNNING_MAN_SPRINT_ENTRY", "APPLIED");
+        Require(GeneratedFiles(Path.Combine(temp, "changed-module-out")).Length == 3,
+            "CHANGED_MODULE_REFUSAL_SCOPE_TOO_BROAD");
 
         var absent = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "absent", new()), Path.Combine(temp, "absent-out"));
