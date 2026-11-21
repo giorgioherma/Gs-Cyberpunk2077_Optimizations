@@ -220,7 +220,7 @@ internal static class ReinforcementsPass
                !prefix.Contains("<100000.0",StringComparison.Ordinal)||
                !CallsOnly(quadBody[..sorted[0].Index],"AbsF","Sign")||
                SourceAdmission.ReadTokens(quadBody[..sorted[0].Index]).Any(t =>
-                   Regex.IsMatch(t.Value,@"^[A-Za-z_]\\w*$") &&
+                   Regex.IsMatch(t.Value,@"^[A-Za-z_]\w*$") &&
                    !new[]{"p","sq","outside","a","b","c","d","X","Y",
                        "let","if","return","false","AbsF","Sign"}
                        .Contains(t.Value,StringComparer.Ordinal)))
@@ -253,7 +253,7 @@ internal static class ReinforcementsPass
            !CallsOnly(centerBody,"Vector2")||
            Regex.IsMatch(centerBody,@"\bthis\b|\bGameInstance\b")||
            SourceAdmission.ReadTokens(centerBody).Any(t =>
-               Regex.IsMatch(t.Value,@"^[A-Za-z_]\\w*$") &&
+               Regex.IsMatch(t.Value,@"^[A-Za-z_]\w*$") &&
                !new[]{"sq","a","b","c","d","X","Y","Vector2","new","return"}
                    .Contains(t.Value,StringComparer.Ordinal)))
             return "RS_SORT_CENTER_HELPER_NOT_PURE";
