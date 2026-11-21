@@ -4,6 +4,31 @@
 **Base:** verified `96d66c66642ac52dd13fd4001416572b9169bace` (do not merge unfinished handoff/Pass4/Pass5 work).
 **Scope:** isolated GCO-owned source-aware REDscript generation, source-state tests and branch-scoped official SCC. The app's existing two-page workflow, CET and GRSP profiler owners, and shared G-REDruntime services remain untouched.
 
+
+## 2026-11-21 — Complete remaining historical Pass 7 owner review (production branch-local)
+
+**Branch-only source integration:** `dev/redscript/pass7`, never merged into `main` or another active agent's branch. Canonical `RedscriptGenerationPlan.Stage` now records **11 independently scoped Pass 7 operations** in provisional #700–710; 10 expected compatible operations, one deliberately refused unsafe historical perk-result TTL. The current CI run is the explicitly marker-triggered [focused Pass 7 #12](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908307127); confirm its conclusion before treating this checkpoint as validated.
+
+| Stage | Owner and operation | Branch-local disposition |
+| --- | --- | --- |
+| 700 | NightCityRemembers spawn guards | Existing source-aware port; no change |
+| 701 | StealthRunner quest detection | Existing early quest-negative gate; no change |
+| 702 | StealthRunner weak player handle | Existing cache/reattach/detach/fallback; **same field/behavior as Pass 4**, must reconcile on merge |
+| 703 | RunningMan sprint-entry perk | Existing conditional entry cache |
+| 704 | RunningMan direction perk | Existing optional module live fallback |
+| 705 | LizziesBDs performer attach | Existing fast non-performer gate |
+| 706 | LizziesBDs performer index | **New** per-NPC identity-to-index memo in existing `LizziesBDsIsEnt()`; every invocation reads the **current** `GetRecordID()`, returns cache only when record matches, otherwise runs the original classifier and stores the exact indexed result (including -1); seven performer records, all existing appearance, position and event callsites reuse the same helper; no duplicate attach/extra callbacks |
+| 707 | ReinforcementsCall stimulus | **New**: after original `wrappedMethod(stimData)`, null-check the task, reject defined non-player/non-approved source stimuli ahead of mod-owned NPC/stat work; approved CombatHit, Explosion, Gunshot, HijackVehicle, CarryBody, Bullet; null cached event follows historical path; preserves original mod callsite |
+| 708 | ReinforcementsCall police prevention | **New**: after owner resolution and null check, suppress *additional* reinforcement probe for prevention/police NPCs; vanilla wrapped police pursuit remains unchanged, original calls are retained |
+| 709 | ReinforcementsCall burst probe | **New**: original historical 100 ms per-`ReactionManagerComponent` engine-time gate, after stimulus and police checks, before stats; duplicate field prevention and time rewind recovery guard; do not throttle `wrappedMethod` |
+| 710 | Chipware 24-perk result memoization | **Narrow `REFUSED`**, not silently emitted: neither Pass 4 nor Pass 8 proves a complete invalidation epoch covering perk purchase/reset, equipment-stat/charges, mod gameplay state **and the mutable vanilla `wrappedMethod(perkType)` fallback result**. Historical 100 ms timed memo can return stale results. Do not introduce a second competing cache or assume mutable values constant; keep Pass 4 source-derived relevance gate and Pass 8 combat/cheap-path caches intact |
+
+**Coexistence:** Pass 4 `ReinforcementsSystem/Utils.reds` and `ReinforcementSystem.reds` geometry source files are independent of this branch's `ReinforcementsCall.reds`; integrate both against effective staged sources without replacing either. Pass 4 StealthRunner and Pass 7 #702 own the **same** `m_stealthRunnerPlayer` field, OnActivate/OnDetach/fallback; consolidation must select a single implementation or structurally converge once (not duplicate). Chipware Pass 4/8 already optimize the same perk wrapper; #710 never modifies it. Other historical work fully covered by baseline semantic stages: Dark Future #25, DVCore #27, DisablePositionReveal #21, Quickhack Fixes #18. Pass 9 RunningMan dormancy remains a separate pass, not part of these remaining Pass 7 gates.
+
+**Acceptance / limits:** source-state cases cover post-generic stock, manual partial/complete, custom/moved, narrow incompatible, missing owner, repeat no-op, source immutability. Canonical Generate composes the current post-generic effective preview and emits only owner-local files. Official SCC compilation verifies the combined generated REDscript **in CI**, not on a player installation. Fresh in-game A/B validation still required for wanted-level chases with police/non-police, reinforcement pacing, NPC attach/detach and Lizzie appearance/positioning/events, plus perk/equipment gameplay transitions for the independently cached Pass 4/8 operations. Do not assert measured speed gains or a stable-main release.
+
+---
+
 ## Integrated on this branch
 
 The canonical `RedscriptGenerationPlan.Stage` now invokes `Pass7ChaseFrameFloorPass.Generate` **after the ten generics and existing Phase 2 semantic stages**. It composes against effective previously staged source, never an old whole-file ZIP, and produces only owner-local game-relative files. Reserved semantic operation slots 700–705 deliberately avoid collision with other agents' active 37+ sequences; the integration lead may renumber when combining branches.
