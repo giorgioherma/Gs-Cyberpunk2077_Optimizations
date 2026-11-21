@@ -79,6 +79,13 @@ static string MakeGame(string temp, string label,
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, entry.Value, new UTF8Encoding(false));
     }
+    if (sources.Count == 0)
+    {
+        string unrelated = Path.Combine(scripts, "Unrelated", "Unrelated.reds");
+        Directory.CreateDirectory(Path.GetDirectoryName(unrelated)!);
+        File.WriteAllText(unrelated, "module Unrelated\npublic class UnrelatedSystem {}\n",
+            new UTF8Encoding(false));
+    }
     return game;
 }
 static string[] GeneratedFiles(string output) =>
