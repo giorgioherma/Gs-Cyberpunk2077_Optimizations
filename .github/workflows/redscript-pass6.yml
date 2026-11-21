@@ -88,24 +88,36 @@ jobs:
           if (!(Test-Path (Join-Path $staged 'r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'))) {
             throw 'PASS6_PRIOR_SEMANTICS_MISSING'
           }
-          & dotnet $dll phase2-vad-spawn --game $game --base-overlay $staged --out $vad
-          if ($LASTEXITCODE -ne 0) { throw 'PASS6_VAD_GENERATOR_FAILED' }
+          # Production Stage owns the rewrite. Generate a standalone
+          # reference solely for byte-identical comparison, never for copying.
+          $stageReport=Get-Content -LiteralPath (Join-Path $stage 'stage-result.json') -Raw | ConvertFrom-Json
+          $vadStage=@($stageReport.completed | Where-Object { $_.id -eq 'virtual-atelier-spawn-pacing' })
+          if ($vadStage.Count -ne 1 -or [int]$vadStage[0].order -ne 37 -or
+              [int]$vadStage[0].rewrittenExpressions -lt 1) {
+            throw 'PASS6_VAD_MISSING_FROM_PRODUCTION_ONE_PASS_STAGE'
+          }
+          & dotnet $dll phase2-vad-spawn --game $game --out $vad
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_INDEPENDENT_VAD_GENERATOR_FAILED' }
           $report=Get-Content -LiteralPath (Join-Path $vad 'phase2-result.json') -Raw | ConvertFrom-Json
           if ($report.ruleId -ne 'VIRTUAL_ATELIER_DROPPOINT_SPAWN_PACING_V1' -or
-              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 7) {
-            throw ('PASS6_VAD_NO_SOURCE_EDIT: '+$report.status+' '+$report.reason)
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -ne [int]$vadStage[0].rewrittenExpressions) {
+            throw ('PASS6_REFERENCE_MISMATCH: '+$report.status+' '+$report.reason)
           }
           $rel=[string]$report.sourcePath
-          if (!$rel.StartsWith('r6/scripts/VirtualAtelierDelivery/',[StringComparison]::Ordinal) -or
+          if (!$rel.StartsWith('r6/scripts/',[StringComparison]::Ordinal) -or
               !$rel.EndsWith('.reds',[StringComparison]::OrdinalIgnoreCase)) {
             throw ('PASS6_VAD_WRONG_OWNER_PATH: '+$rel)
           }
           $src=Join-Path $vad $rel
           $dst=Join-Path $staged $rel
-          if (!(Test-Path -LiteralPath $src -PathType Leaf) -or (Test-Path -LiteralPath $dst)) {
-            throw 'PASS6_VAD_SOURCE_MISSING_OR_COLLIDES'
+          if (!(Test-Path -LiteralPath $src -PathType Leaf) -or
+              !(Test-Path -LiteralPath $dst -PathType Leaf) -or
+              (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash) {
+            throw 'PASS6_PRODUCTION_ONE_PASS_OUTPUT_NOT_BYTE_IDENTICAL'
           }
-          $compiledSource=Get-Content -LiteralPath $src -Raw
+          $compiledSource=Get-Content -LiteralPath $dst -Raw
           foreach($required in @(
             'GcoAtelierSpawnBatchCallback extends DelayCallback',
             'DelayCallback(cb, 0.05, false)',
@@ -116,9 +128,7 @@ jobs:
               throw ('PASS6_GENERATED_BEHAVIOR_MISSING: '+$required)
             }
           }
-          New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
-          Copy-Item -LiteralPath $src -Destination $dst
-          Write-Host ('PASS Pass 6 staged with existing semantics; edits='+$report.appliedEdits)
+          Write-Host ('PASS production one-pass VAD #37; edits='+$report.appliedEdits)
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot $game -CompilerRoot '.pass6-private/Compiler' -ResolverDll $dll -SemanticOverlayRoot $staged
           if (!$?) { throw 'PASS6_COMBINED_EFFECTIVE_SCC_FAILED' }
 
