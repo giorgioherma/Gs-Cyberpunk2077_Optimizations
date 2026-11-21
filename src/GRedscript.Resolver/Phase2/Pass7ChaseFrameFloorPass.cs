@@ -479,17 +479,30 @@ public static class Pass7ChaseFrameFloorPass
         if (classification is null)
             return new("REFUSED", null, 0, 0, "LIZZIES_RECORD_HELPER_MISSING");
         string chooser = source[classification.Start..classification.End];
+        // The index memo below rewrites the classifier's repeated
+        // GetRecordID() comparisons to a single per-call record local.
+        // Both forms must remain recognized as the same source-proven
+        // performer set when the attach gate is already complete.
+        bool cachedIndex = Has(chooser,
+            @"\blet\s+__gcoLizzieCurrentRecord\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(\s*\)") &&
+            Has(chooser, @"\bif\s+this\s*\.\s*m_gredLizzieIndexValid\s*&&") &&
+            Has(chooser, @"\bthis\s*\.\s*m_gredLizzieIndexValue\s*=");
         var records = Regex.Matches(chooser,
-            @"\bthis\s*\.\s*GetRecordID\s*\(\s*\)\s*==\s*" +
+            @"(?:\bthis\s*\.\s*GetRecordID\s*\(\s*\)|\b__gcoLizzieCurrentRecord)\s*==\s*" +
             @"(?:TDBID\s*\.\s*Create\s*\(\s*""(?<id>[^""]+)""\s*\)|t""(?<id>[^""]+)"")" +
-            @"\s*\{\s*return\s+-?\d+\s*;", Rx)
+            @"\s*\{\s*(?:this\s*\.\s*m_gredLizzieIndexValue\s*=\s*-?\d+\s*;\s*" +
+            @"this\s*\.\s*m_gredLizzieIndexRecord\s*=\s*__gcoLizzieCurrentRecord\s*;\s*" +
+            @"this\s*\.\s*m_gredLizzieIndexValid\s*=\s*true\s*;\s*)?" +
+            @"return\s+-?\d+\s*;", Rx)
             .Select(m => m.Groups["id"].Value).ToArray();
-        if (records.Length < 1 || records.Distinct(StringComparer.Ordinal).Count() !=
-            records.Length ||
-            Regex.Matches(chooser, @"\bthis\s*\.\s*GetRecordID\s*\(\s*\)", Rx).Count !=
-            records.Length ||
+        int recordLookups = Regex.Matches(chooser,
+            @"\bthis\s*\.\s*GetRecordID\s*\(\s*\)", Rx).Count;
+        if (records.Length < 1 ||
+            records.Distinct(StringComparer.Ordinal).Count() != records.Length ||
+            (cachedIndex ? recordLookups != 1 : recordLookups != records.Length) ||
             !Has(chooser, @"\breturn\s+-1\s*;"))
-            return new("REFUSED", null, 0, 0, "LIZZIES_PERFORMER_CLASSIFIER_INCOMPATIBLE");
+            return new("REFUSED", null, 0, 0,
+                "LIZZIES_PERFORMER_CLASSIFIER_INCOMPATIBLE");
 
         var prefix = Regex.Match(body,
             @"\bwrappedMethod\s*\(\s*\)\s*;", Rx);
