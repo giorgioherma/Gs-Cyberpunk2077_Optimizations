@@ -1791,6 +1791,62 @@ public static class RedscriptGenerationPlan
         else if (vad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("VAD_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 6.0 EVS: remove four redundant camera-axis
+        // subscriptions only after #30 has completed the same-owner PS
+        // optimization. Keep wrappedMethod and other input actions untouched.
+        string evsCameraRoot = Path.Combine(output, "_stages",
+            "38-evs-camera-input");
+        var evsCamera = EnhancedVehicleCameraRegistrationPass.Generate(game,
+            evsCameraRoot, Directory.Exists(final) ? final : null);
+        if (evsCamera.Status == "APPLIED")
+        {
+            if (evsCamera.AppliedEdits is < 1 or > 4 ||
+                string.IsNullOrWhiteSpace(evsCamera.SourcePath))
+                throw new InvalidDataException("EVS_CAMERA_STAGE_EDIT_COUNT_UNSAFE");
+            string rel = evsCamera.SourcePath;
+            string source = Path.GetFullPath(Path.Combine(evsCameraRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string dest = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, evsCameraRoot) || !IsInside(dest, final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("EVS_CAMERA_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(dest);
+            if (existed)
+            {
+                string old = File.ReadAllText(dest);
+                string rewritten = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    old, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(m => !rewritten.Contains(
+                    m, StringComparison.Ordinal)))
+                    throw new InvalidDataException("EVS_CAMERA_STAGE_LOST_GENERIC");
+                foreach (string required in new[] {
+                    "gcoOnActionPS", "GetIsDestroyed()"
+                })
+                {
+                    if (old.Contains(required, StringComparison.Ordinal) &&
+                        !rewritten.Contains(required, StringComparison.Ordinal))
+                        throw new InvalidDataException(
+                            "EVS_CAMERA_STAGE_LOST_PRIOR_SEMANTIC:" + required);
+                }
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(source, dest, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += evsCamera.AppliedEdits;
+            results.Add(new(38, "evs-unused-camera-registrations",
+                evsCamera.AppliedEdits, existed ? 0 : 1, existed ? 1 : 0, []));
+        }
+        else if (evsCamera.Status == "REFUSED")
+            skipped.Add(new(38, "evs-unused-camera-registrations", 1,
+                evsCamera.Reason ?? "EVS_CAMERA_SOURCE_INCOMPATIBLE"));
+        else if (evsCamera.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("EVS_CAMERA_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
