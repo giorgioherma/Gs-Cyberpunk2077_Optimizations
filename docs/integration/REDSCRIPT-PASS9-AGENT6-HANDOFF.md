@@ -1,7 +1,7 @@
 # Agent 6 — Historical Pass 9 isolated implementation
 
 **Branch:** `dev/redscript/pass9` (started from verified `96d66c66642ac52dd13fd4001416572b9169bace`).  
-**Ownership:** GCO Phase 2 source-aware semantic generator. No edits to `RedscriptGenerationPlan.cs`, central stage numbering, shared workflows, CET, GRSP, or G-REDruntime core. Do **not** merge to `main`.
+**Ownership:** GCO source-aware semantic generator and the branch-local production one-pass `RedscriptGenerationPlan.Stage` integration. Full GCO workflow is enabled on this isolated branch. No CET, GRSP or G-REDruntime changes. Do **not** merge to `main`.
 
 ## Historical portfolio audit
 
@@ -47,3 +47,15 @@ Each operation admits/refuses separately. Recognize partial and complete version
 Pass 9 source-state tests and SCC are mandatory gates. Independent one-run output must be merged with the other semantic stages and validated using full GCO and final ZIP/rollback CI by the handoff integrator; this isolated branch does **not** declare product integration complete.
 
 No fresh in-game parity or performance capture is available. Do not claim measured frame-time benefits, gameplay approval, or production acceptance solely from compilation.
+
+## Production integration update (21 November 2026)
+
+**Current branch-local state:** Production `RedscriptGenerationPlan.Stage` includes `runningman-pass9` at semantic order `#37` after prior #36. The staged game-relative source is copied by the existing `CombinedOptimizationPassService` into its single ZIP and external ownership sidecar; no new packaging logic, player-side SCC, standalone runtime or WPF control was added.
+
+- One invocation directly from post-generic stock generates both eligible RunningMan operations, even when zero generic edits are otherwise required.
+- Already-optimized and compatible partials are recognized; handwritten whitespace is preserved (semantic rather than byte-identical convergence). Completely optimized sources yield zero new changes.
+- Missing sprint or stand wrappers are narrow refusals: the other eligible operation continues independently. Source/hash/relative path and earlier generic markers are validated at composition.
+- Actual `plan-redscript` → `stage-redscript-plan` tests cover generic + semantic composition, partial completion, repeat no-op, complete, missing generic candidates and independent incompatibility. Isolated CI additionally compares canonical RunningMan output bytes to an independent reference against 2,331 real post-generic files, then compiles the entire effective stack with official SCC 0.5.31 in CI.
+- **Evidence:** Full GCO #1088 SUCCESS at previous stage commit `25db95ee`; latest isolated #8 and full package #1091 pending. Stage number #37 is branch-local and must be reconciled with concurrently developed Pass 4–8 when merging.
+- No stable `main` merge, real-game parity or measured performance data. Remaining integration acceptance: latest fast/full CI green and coordinator's final merged all-agent SCC + game tests.
+
