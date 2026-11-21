@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 9 production Stage wired on isolated Agent 6 branch
+
+- `dev/redscript/pass9`: `RunningManDoubleSprintPass.Generate` now composes through the production one-pass `RedscriptGenerationPlan.Stage`, using actual current post-generic source and optional prior effective overlay. Branch-local stage `#37 runningman-pass9` records edits, game-relative owner output, narrowly scoped refusals, source preservation and idempotence.
+- Existing historical Pass 9 coverage remains `#27` DigitalVixenCore UI, `#15` FlushingEtiquette pins, `#19/#24` RedWindows; do not duplicate. Pass 7 RunningMan perk cache is recognized and completed only when missing. Independent sprint/stand logic remains eligible even when the other wrapper is removed.
+- Independent SCC #2 previously passed on 2,331-file source; integrated full GCO #1088 passed before latest contract refinements; canonical integrated fast #8 and full package #1091 are pending. Latest evidence: `docs/integration/REDSCRIPT-PASS9-AGENT6-HANDOFF.md`. No gameplay or performance result claimed.
+
+
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
 
 - NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.
