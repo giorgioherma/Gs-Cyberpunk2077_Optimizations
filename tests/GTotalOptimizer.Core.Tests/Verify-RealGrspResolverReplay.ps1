@@ -2074,7 +2074,9 @@ try {
       @{ Id='browser-extension-journal'; Order=28; Command='phase2-browser-journal';
          Rule='BROWSER_EXTENSION_JOURNAL_HANDLES_V1'; Owner='BrowserExtension' },
       @{ Id='browser-extension-input'; Order=29; Command='phase2-browser-input';
-         Rule='BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1'; Owner='BrowserExtension' }
+         Rule='BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1'; Owner='BrowserExtension' },
+      @{ Id='evs-onaction-ps'; Order=30; Command='phase2-evs-ps';
+         Rule='EVS_ONACTION_PS_HANDLE_REUSE_V1'; Owner='Enhanced Vehicle System' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2101,6 +2103,19 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'evs-onaction-ps') {
+          if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 2) {
+            throw 'GCO_EVS_PS_REFERENCE_SOURCE_NOT_APPLIED'
+          }
+          $file=Get-Content -LiteralPath $portFiles[0].FullName -Raw
+          if (!$file.Contains('gcoOnActionPS: ref<VehicleComponentPS>') -and
+              !$file.Contains('let ps: ref<VehicleComponentPS>')) {
+            throw 'GCO_EVS_PS_LOCAL_HANDLE_NOT_PRESENT'
+          }
+          if (!$file.Contains('GetIsDestroyed()')) {
+            throw 'GCO_EVS_PS_GUARD_LOST'
+          }
         }
         if ($port.Id -eq 'browser-extension-input') {
           if ($portFiles.Count -lt 1 -or $portFiles.Count -gt 2 -or
