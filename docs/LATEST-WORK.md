@@ -1,11 +1,11 @@
 # Latest work / evidence status
 
-## 2026-11-21 — Agent 5 Pass 7: remaining semantic owners integrated, focused checkpoint #12 running
+## 2026-11-21 — Agent 5 Pass 7: all compatible remaining operations integrated, official SCC green
 
 - **Branch only:** `dev/redscript/pass7`; no merges or changes to other agents. Canonical one-pass pipeline now composes **#700–709**: existing six operators plus new Lizzie performer-index cache (#706), reinforcement chase stimulus admission (#707), 7.1 police/prevention safeguard (#708) and 100-ms burst probe (#709) from the actual post-generic effective source, owner-local and partial-aware.
 - **#710 Chipware 24-perk result memoization: precise operation-only refusal** — no invalidation epoch spans mutable perks/equipment/chip charges and wrapped vanilla perk results; Pass 4 relevance and Pass 8 hot-path caches retained without duplicate cache helper.
 - Pass 4 reinforcement geometry files are separate from Pass 7's ReinforcementsCall wrapper; Pass 4/7 StealthRunner own the **same** weak `m_stealthRunnerPlayer` lifecycle field and must be consolidated once; Pass 4/8 Chipware source owns the wrapper. Historical DF #25, DVCore #27, DPR #21, Quickhack #18 already covered, not recopied.
-- Explicit source-only [Pass 7 checkpoint #12](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908307127) triggered by `tests/Pass7.Checkpoint/CI-TRIGGER.txt` once for full new batch; **result pending at this documentation commit**. Earlier six-operation dedicated #11/full #1098 were green and do **not** validate new ops. No full package rerun requested; gameplay, measured CPU/frame benefit and cross-agent merge pending. See `docs/integration/REDSCRIPT-PASS7-ISOLATED-HANDOFF.md`.
+- **[Focused Pass 7 CI #15 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908744794)** at source SHA `3ebbc66f4e706f97dd6f94ee22c5d3588000afd6`: stock/partial/complete/custom/incompatible/absent/repeat source-state tests; 46 edits / six owner files / 10 accepted operations and one scoped refusal; canonical one-pass exact byte parity; official SCC 0.5.31 on **2,331 post-generic files + 35 semantic overlays**, **43,514,188 compiled bytes**, source untouched. Initial #12–#14 exposed source-state composition, commented-fixture and inverted assertion issues, corrected at source/tests; no repair stage. Earlier full #1098 applies only to the six-op batch. Full expanded product/package CI and game A/B belong to integration owner; no performance claim. See `docs/integration/REDSCRIPT-PASS7-ISOLATED-HANDOFF.md`.
 
 
 
