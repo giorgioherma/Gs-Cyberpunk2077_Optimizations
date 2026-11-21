@@ -2346,10 +2346,38 @@ try {
     }
     $stageFiles = @(Get-ChildItem -LiteralPath $stageScripts -Recurse -Filter *.reds -File)
     $manualFiles = @(Get-ChildItem -LiteralPath $manualScripts -Recurse -Filter *.reds -File)
-    if ($stageFiles.Count -ne [int]$stageReport.generatedFiles -or
-        $stageFiles.Count -ne $manualFiles.Count) {
-        throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_FILE_COUNT_DIFF'
+    # The independent reference above covers previously integrated owners.
+    # Newer source-aware stages may legitimately add files or compose on those
+    # same owners. Verify every new/changed final file has a real producing
+    # stage, and preserve the independent reference's generic work.
+    if ($stageFiles.Count -ne [int]$stageReport.generatedFiles) {
+        throw ('GCO_REDSCRIPT_ORDERED_REPORT_FILE_COUNT_DIFF: actual='+
+            $stageFiles.Count+' reported='+[int]$stageReport.generatedFiles)
     }
+    $laterProducer=@{}
+    $stageOwners=Join-Path $orderedStage '_stages'
+    foreach($folder in @(Get-ChildItem -LiteralPath $stageOwners -Directory)) {
+        if ($folder.Name -notmatch '^(\d+)-') { continue }
+        $stageOrder=[int]$Matches[1]
+        if ($stageOrder -le 33) { continue }
+        $stageSourceRoot=Join-Path $folder.FullName 'r6/scripts'
+        if (!(Test-Path -LiteralPath $stageSourceRoot -PathType Container)) { continue }
+        foreach($produced in @(Get-ChildItem -LiteralPath $stageSourceRoot -File -Recurse -Filter '*.reds')) {
+            $path=[IO.Path]::GetRelativePath($stageSourceRoot,$produced.FullName)
+            if ([IO.Path]::IsPathRooted($path) -or $path.StartsWith('..')) {
+                throw 'GCO_LATER_STAGE_PRODUCER_PATH_ESCAPE'
+            }
+            $entry=@{ Order=$stageOrder; File=$produced.FullName;
+                Sha=(Get-FileHash -LiteralPath $produced.FullName -Algorithm SHA256).Hash }
+            if (!$laterProducer.ContainsKey($path) -or
+                $stageOrder -gt $laterProducer[$path].Order) {
+                $laterProducer[$path]=$entry
+            } elseif ($stageOrder -eq $laterProducer[$path].Order) {
+                throw ('GCO_LATER_STAGE_OWNER_COLLISION:'+ $path)
+            }
+        }
+    }
+
     if ($dfReport.status -eq 'APPLIED') {
       $darkFamily=@($stageReport.completed | Where-Object { $_.id -eq 'dark-future-infinite-tag' })
       if ($darkFamily.Count -ne 1 -or
@@ -2425,10 +2453,25 @@ try {
             $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
             throw 'GCO_RETIRED_LOCATION_RULE_EMITTED_SOURCE'
         }
-        if (!(Test-Path -LiteralPath $manual -PathType Leaf) -or
-            (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -ne
-            (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash) {
-            throw 'GCO_REDSCRIPT_ORDERED_GENERATOR_SOURCE_DIFF'
+        $finalHash=(Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash
+        $manualPresent=Test-Path -LiteralPath $manual -PathType Leaf
+        $referenceEqual=$manualPresent -and
+            (Get-FileHash -LiteralPath $manual -Algorithm SHA256).Hash -eq $finalHash
+        if (!$referenceEqual) {
+            if (!$laterProducer.ContainsKey($rel) -or
+                $laterProducer[$rel].Sha -ne $finalHash) {
+                throw ('GCO_REDSCRIPT_UNEXPLAINED_POST_REFERENCE_CHANGE:'+ $rel)
+            }
+            if ($manualPresent) {
+                $earlier=Get-Content -LiteralPath $manual -Raw
+                foreach($marker in @([regex]::Matches($earlier,
+                    '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                    ForEach-Object Value | Sort-Object -Unique)) {
+                    if (!$text.Contains($marker,[StringComparison]::Ordinal)) {
+                        throw ('GCO_REDSCRIPT_COMPOSED_GENERIC_LOST:'+ $rel)
+                    }
+                }
+            }
         }
     }
     Write-Host ('PASS GCO REDscript Resolver-to-generator order: rules=' +
@@ -2452,10 +2495,16 @@ try {
     # Retired REDscript native FAR/subscriber experiments must not be present
     # in either generated overlay or the independent composed source. CET's
     # native player/location contract is tested only by its source owner.
-    if ($stageFiles.Count -ne $manualFiles.Count) {
-        throw 'GCO_RETIRED_NATIVE_LOCATION_EXTRA_STAGED_FILE'
+    foreach($f in $manualFiles) {
+        $rel=[IO.Path]::GetRelativePath($manualScripts,$f.FullName)
+        $final=Join-Path $stageScripts $rel
+        if (!(Test-Path -LiteralPath $final -PathType Leaf)) {
+            throw ('GCO_REDSCRIPT_EARLIER_OWNER_MISSING_FROM_FINAL:'+ $rel)
+        }
     }
-    Write-Host 'PASS default REDscript ZIP excludes native FAR groups, adapters and optional RTTI bridge'
+    Write-Host ('PASS current REDscript ZIP: '+$stageFiles.Count+
+        ' source files; later changes source-owned by '+$laterProducer.Count+
+        ' approved stage producers; native FAR groups absent')
 
     # GRSP owns the actual isolated SCC 0.5.31 dual-compile contract.
     # The GCO harness must not duplicate its compiler logic or publish output.
