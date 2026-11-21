@@ -68,11 +68,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'PASS7_CANONICAL_GENERATION_FAILED' }
           $result=Get-Content -LiteralPath (Join-Path $out 'pass7-result.json') -Raw | ConvertFrom-Json
           $changed=@(Get-ChildItem -LiteralPath (Join-Path $out 'r6/scripts') -Recurse -File -Filter '*.reds')
-          if ($changed.Count -ne 4 -or [int]$result.appliedEdits -lt 9 -or
+          if ($changed.Count -ne 5 -or [int]$result.appliedEdits -lt 11 -or
               @($result.operations | Where-Object { $_.status -ne 'APPLIED' }).Count -ne 0) {
             throw ('PASS7_CANONICAL_OWNER_OUTPUT_INCOMPLETE files='+$changed.Count)
           }
-          Write-Host ('PASS7 four source-aware owner files, edits='+$result.appliedEdits)
+          Write-Host ('PASS7 five source-aware owner files, edits='+$result.appliedEdits)
 
       - name: Verify canonical one-pass generator and independently equal Pass 7 source
         shell: pwsh
@@ -107,7 +107,8 @@ jobs:
             @{ order=701; id='pass7-stealth-detection-gate'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
             @{ order=702; id='pass7-stealth-player-cache'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
             @{ order=703; id='pass7-runningman-double-sprint'; path='r6/scripts/RunningMan/double_sprint.reds' },
-            @{ order=704; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' }
+            @{ order=704; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' },
+            @{ order=705; id='pass7-lizzies-performer-gate'; path='r6/scripts/LizziesBDs/NPCPuppet.reds' }
           )
           foreach($target in $targets) {
             $matches=@($staged.completed | Where-Object { $_.id -eq $target.id })
@@ -124,7 +125,7 @@ jobs:
               throw ('PASS7_CANONICAL_ONE_PASS_BYTE_PARITY_DIFF:'+ $target.id)
             }
           }
-          Write-Host 'PASS Pass 7 production one-pass: five operations in four independently composed source files and exact output parity'
+          Write-Host 'PASS Pass 7 production one-pass: six operations in five independently composed source files and exact output parity'
 
       - name: Official SCC 0.5.31 on full canonical generic plus semantic output
         shell: pwsh
