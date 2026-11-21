@@ -148,6 +148,20 @@ internal static class NightCityRemembersTickPass
         if (!periodMatch.Success)
             return new("REFUSED", "NCR_TICK_INTERVAL_UNPROVEN", null, 0);
         string period = periodMatch.Groups["period"].Value;
+        // The declared type alone does not prove that the original callback
+        // is instantiated and passed to DelaySystem. A different instance
+        // or changed callback breaks the fallback's gameplay equivalence.
+        var initializers = Regex.Matches(body(original),
+            @"\blet\s+(?<name>[A-Za-z_]\w*)\s*:\s*ref\s*<\s*NCRTickCallback\s*>\s*=\s*new\s+NCRTickCallback\s*\(\s*\)\s*;");
+        if (initializers.Count != 1)
+            return new("REFUSED", "NCR_ORIGINAL_CALLBACK_CONSTRUCTION_UNPROVEN", null, 0);
+        string callbackName = Regex.Escape(initializers[0].Groups["name"].Value);
+        if (!Has(body(original), @"\b" + callbackName +
+                @"\s*\.\s*m_system\s*=\s*this\s*;") ||
+            !Has(body(original), @"\bDelayCallback\s*\(\s*" + callbackName +
+                @"\s*,\s*" + Regex.Escape(period) + @"\s*,\s*false\s*\)"))
+            return new("REFUSED", "NCR_CALLBACK_BINDING_OR_SCHEDULE_UNPROVEN", null, 0);
+
         string nl = NL(source);
         var edits = new List<Edit>();
         void Add(int start, int endAt, string text) =>
