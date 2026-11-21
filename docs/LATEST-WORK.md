@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Historical Pass 2.0 BrowserExtension InputHub #29
+
+- Source-aware `BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1` added after BrowserExtension journal #28 in canonical generic-first one-ZIP generation. Two original owner files: the BrowserGameController initialize/uninitialize wrappers and homepage listener. Action-specific InputHub `UI_MoveUp/Down` routing with complete partial-subscription rollback; original engine `OnAction` retained as exclusive fallback; generic `ACTION_EVENT_SNAPSHOT_V1` remains intact. Both detach paths explicitly clean up; no new runtime or callbacks outside the original owner. No source overwrite or perf claim.
+- The generator recognizes stock, partial handwritten historical output, complete, relocated owner/custom source, missing framework and incompatible callback; idempotence and atomic two-file semantics have source-state tests. Runtime lookup has been refined to detect the actual `GRedRuntime` module/API instead of a fixed folder.
+- [Fast SCC #158 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44861851685): canonical one-pass comparison, 2,331 post-generic real REDscript files and official SCC compilation pass. [Fast #160](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44862150490) contains the relocated-framework compatibility proof and is pending at this record. [Full GCO #1068](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44861868234) includes independently generated captured-source reference and is pending full integration/package result at this record. Gameplay parity and measured savings unverified.
+- Pass 2.0 is still open: Enhanced Vehicle System current source is ~8,133 lines and historical pass changes local `GetPS()`/action/vehicle reads; it must preserve post-generic shared-player/action snapshots, current Audioware logic and controller state. FlushingEtiquette InputHub migration is also outstanding. Do not copy either historical whole file.
+
+
 ## 2026-11-21 — Systematic historical pass port: BrowserExtension journal #28
 
 - [Historical ten-group implementation order](integration/REDSCRIPT-HISTORICAL-PASS-PORT-ORDER.md) now uses cumulative per-file source diffs: ten primary stages (2.0, 2.1, 2.2, 3, 4, 5, 6, 7, 8, 9), with 7.1/7.2/7.2r1 corrections incorporated into their owning behavior. This is an operation-level plan, not a pass ZIP transplant or rigid version list.
