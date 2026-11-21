@@ -1521,6 +1521,50 @@ public static class RedscriptGenerationPlan
         else if(feHub.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("FE_HUB_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 2.1 GearRecoverySystem: keep the original input
+        // listener as a fallback and publish consumed only after actual
+        // recovery success. Source-backed state, no duplicate gameplay.
+        string grsInputRoot=Path.Combine(output,"_stages","32-grs-input-hub");
+        var grsInput=GearRecoveryInputHubPass.Generate(game,
+            grsInputRoot,Directory.Exists(final)?final:null);
+        if(grsInput.Status=="APPLIED")
+        {
+            if(grsInput.AppliedEdits<3 || string.IsNullOrWhiteSpace(grsInput.SourcePath))
+                throw new InvalidDataException("GRS_HUB_EMPTY_STAGE");
+            string rel=grsInput.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(grsInputRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/GearRecoverySystem/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,grsInputRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("GRS_HUB_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("GRS_HUB_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=grsInput.AppliedEdits;
+            results.Add(new(32,"gear-recovery-input-hub",grsInput.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(grsInput.Status=="REFUSED")
+            skipped.Add(new(32,"gear-recovery-input-hub",1,
+                grsInput.Reason ?? "GRS_HUB_INCOMPATIBLE_SOURCE"));
+        else if(grsInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("GRS_HUB_UNKNOWN_STAGE_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
