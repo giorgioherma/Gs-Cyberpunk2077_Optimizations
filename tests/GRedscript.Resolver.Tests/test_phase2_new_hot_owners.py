@@ -285,6 +285,55 @@ class NewHotOwnerTests(unittest.TestCase):
         self.assertEqual(report["status"], "REFUSED")
         self.assertFalse(staged)
 
+    def test_all_three_staged_by_one_production_generate(self):
+        self.index += 1
+        game = self.home / f"full{self.index}"
+        files = {APT: APT_SRC, NA_MAIN: NA_MAIN_SRC,
+                 NA_CHOICE: NA_CHOICE_SRC, SC: SC_SRC}
+        for rel, source in files.items():
+            p = game / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(source, "utf8")
+        plan = self.home / f"plan{self.index}.json"
+        analysis = self.home / f"analysis{self.index}.json"
+        out = self.home / f"stage{self.index}"
+        p = subprocess.run(["dotnet", str(DLL), "plan-redscript",
+                            "--game", str(game), "--out", str(plan)],
+                           text=True, capture_output=True, timeout=100)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        document = json.loads(plan.read_text("utf8"))
+        analysis.write_text(json.dumps({
+            "schemaVersion": "grsp.resolver.input.v1",
+            "generationAuthorized": False,
+            "capture": {"collectionProvenance": "GCO_INDEXED_COLLECTED_BYTES_VERIFIED"},
+            "source": {"sourceStackSha256": document["sourceStackSha256"]}
+        }), "utf8")
+        p = subprocess.run(["dotnet", str(DLL), "stage-redscript-plan",
+                            "--game", str(game), "--plan", str(plan),
+                            "--analysis", str(analysis), "--out", str(out)],
+                           text=True, capture_output=True, timeout=160)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        report = json.loads((out / "stage-result.json").read_text("utf8"))
+        found = {entry["id"]: entry for entry in report["completed"]
+                 if entry["order"] in (52, 53, 54)}
+        expected = {
+            "apartment-choice-input-gate": (52, 1),
+            "negotiable-affection-action-gates": (53, 2),
+            "shattered-chrome-dot-row-bound": (54, 1)
+        }
+        self.assertEqual(set(found), set(expected), report)
+        for name, (order, edits) in expected.items():
+            self.assertEqual(found[name]["order"], order)
+            self.assertEqual(found[name]["rewrittenExpressions"], edits)
+        for rel, source in files.items():
+            output = out / "effective-preview" / rel
+            self.assertTrue(output.is_file(), rel)
+            self.assertNotEqual(output.read_text("utf8"), source)
+            self.assertEqual((game / rel).read_text("utf8"), source)
+        self.assertIn("GCO-GENERIC:SYSTEM_READ_AFTER_ACTION_GUARD_V1",
+                      (out / "effective-preview" / NA_MAIN).read_text("utf8"))
+        self.assertFalse(list(out.rglob("*.zip")))
+
     def test_missing_mod_is_not_applicable(self):
         for kind in ("apartment", "negotiable", "shattered"):
             report, staged = self.generate(
