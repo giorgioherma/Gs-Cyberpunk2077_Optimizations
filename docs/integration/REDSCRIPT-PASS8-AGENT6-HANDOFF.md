@@ -9,7 +9,20 @@
 
 ## Scope / ownership
 
-This is a **standalone source-aware implementation branch**, not the canonical release order. Do not merge it directly to stable `main`. A central integration owner must bring the rules into the existing `RedscriptGenerationPlan` after generics and previous compatible semantics, assign canonical stage IDs, update full integration validation, and separately run the GCO Windows application/combined ZIP workflow.
+This branch originally held only standalone generators. It now **also contains the actual canonical GCO one-pass integration** as stages #37–#39. No change was made to the central handoff branch or stable `main`. Subsequent multi-agent integration must reconcile any overlapping Pass 4/5 operations and later stage numbering, preserving structural guards and one-pass behavior.
+
+## Canonical one-pass integration (21 November 2026)
+
+- **#37 `pass8-chipware-throughput`:** source-local chipware perk admission and two cheap combat gates.
+- **#38 `pass8-chipware-combat-cache`:** 8 Kerenzikov/WreckingBall/Flash combat callbacks plus source-owned cache helper.
+- **#39 `pass8-immersive-cyberware`:** ammo/FocusScanner source paths plus helper.
+- `RedscriptGenerationPlan.Stage` invokes `Pass8CanonicalComposition` directly after existing generics and stages #11–#36. Each stage generates against the previously composed effective-preview and merges only declared owner source files. It records partial refusals independently, preserves generic markers, rejects path escapes, unexpected paths, empty/unchanged outputs and output count drift.
+- `CombinedOptimizationPassService` automatically includes the canonical effective-preview, completed stage metadata and source-local refusal reasons in its existing single game-only ZIP/external ownership sidecar, without client-side SCC.
+- `tests/GRedscript.Pass8.Checkpoint/Verify-CanonicalPass8.ps1` compares all 8 Pass 8 owner/helper source files **byte-for-byte** with independently generated output and compiles the full combined source using official SCC 0.5.31. **Pass 8 CI #12 SUCCESS** ([run](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876279303)), 21 Nov 2026.
+- Full GCO replay `Verify-RealGrspResolverReplay.ps1` independently composes stages #34–#39, checks canonical count/refusal/byte parity, and verifies the existing game-relative ZIP contract. Full app workflow now runs on this isolated branch.
+- **Full GCO CI #1095 FAILED at test setup only:** full workflow omitted building the independent Pass 8 runner before Python source-state tests. The workflow now builds the runner first at commit `7f1b8276`. **Full #1097 is pending final status** ([run](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876498602)).
+- Remaining: 24-perk timed memoization still unported for insufficient state/fallback proof; no freshly generated game-side behavioral or measured performance validation. Do not call this a stable release or merge it into `main`.
+
 
 Historical Pass 8 contains four owner groups:
 - `custom_quickslots`: automatic input-device cache #17 already implemented, **not duplicated**.
@@ -44,4 +57,4 @@ The output is **not** a player ZIP, new gameplay/performance capture, full `.NET
 3. At canonical integration, order cheap chipware gates **before** combat cache, then Immersive; compose all with the current post-generic source and previously staged semantics. Preserve prior generic markers, all newer/custom owner code, and narrowly scoped refusal reasons. If Pass 4/5 other agents touched the same chipware owner, independently compare semantic operations rather than discarding either.
 4. Add the canonical one-invocation `RedscriptGenerationPlan` output/source-state and combined game-relative CET+REDscript ZIP/ownership contract. Run integrated full GCO CI and actual in-game A/B captures. Do not modify `main`, CET/GRSP/G-REDruntime owners, REDscript client SCC policy or the shared stage sequence on this isolation branch.
 
-**Verified current status:** isolated historical Pass 8 throughput subset implemented, compiled, and tested. **Canonical acceptance and behavioral equivalence remain pending.**
+**Verified status:** original isolated operations and the canonical one-pass source overlay passed fast SCC #12. Full application/package acceptance and gameplay/performance validation remain separate gates.
