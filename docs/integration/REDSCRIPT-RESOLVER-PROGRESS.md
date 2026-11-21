@@ -4,7 +4,7 @@
 
 - #22 HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1: source-aware material-path cache, early event gate, hoisted color/emissive, pass #131 SCC GREEN.
 - #23 REDWINDOWS_SHAPE_LABEL_CURSORS_V1: safe live-array index cursors for shapes and labels, pass #131 SCC GREEN.
-- #24 REDWINDOWS_RENDER_AWARE_DORMANCY_V1: logical IsVisible preserved, effective visibility gates Builder and Logs work, manager-absent overlay-only fix; #133 pending, full GCO packaging pending.
+- #24 REDWINDOWS_RENDER_AWARE_DORMANCY_V1: logical IsVisible preserved, effective visibility gates Builder and Logs work, manager-absent overlay-only fix; #134 post-generic/SCC SUCCESS; full GCO #1058 real-source replay/combined ZIP pending.
 - These compose after current 10 generics and prior semantic operations with no historical file transplantation, helper duplication or game writes. Refusal is per affected operation. Gameplay and measured benefits remain unverified. 19 historical present owners still have no dedicated semantic generator.
 
 
