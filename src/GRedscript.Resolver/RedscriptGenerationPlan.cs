@@ -1433,6 +1433,50 @@ public static class RedscriptGenerationPlan
         else if(browserInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("BEX_INPUT_UNKNOWN_STATUS");
 
+        // Historical Pass 2.0 EVS: one synchronous PS handle inside the
+        // actual VehicleComponent.OnAction. Keep all generic player/action
+        // code and dynamic PS state; no historical source-file replacement.
+        string evsRoot=Path.Combine(output,"_stages","30-evs-onaction-ps");
+        var evs=EnhancedVehicleOnActionPsPass.Generate(game,
+            evsRoot,Directory.Exists(final)?final:null);
+        if(evs.Status=="APPLIED")
+        {
+            if(evs.AppliedEdits<2 || string.IsNullOrWhiteSpace(evs.SourcePath))
+                throw new InvalidDataException("EVS_PS_STAGE_MISSING_EFFECTIVE_SOURCE");
+            string rel=evs.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(evsRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/Enhanced Vehicle System/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,evsRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("EVS_PS_STAGE_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("EVS_PS_STAGE_LOST_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=evs.AppliedEdits;
+            results.Add(new(30,"evs-onaction-ps",evs.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(evs.Status=="REFUSED")
+            skipped.Add(new(30,"evs-onaction-ps",1,
+                evs.Reason ?? "EVS_PS_SOURCE_INCOMPATIBLE"));
+        else if(evs.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("EVS_PS_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
