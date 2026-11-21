@@ -1477,6 +1477,50 @@ public static class RedscriptGenerationPlan
         else if(evs.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("EVS_PS_UNKNOWN_STATUS");
 
+        // Historical Pass 2.0 FE: atomically route owned action/modifier
+        // names through the existing InputHub. Preserve #14 generic-first
+        // early name gate, original OnAction fallback and status compile guard.
+        string feHubRoot=Path.Combine(output,"_stages","31-fe-input-hub");
+        var feHub=FlushingEtiquetteInputHubPass.Generate(game,
+            feHubRoot,Directory.Exists(final)?final:null);
+        if(feHub.Status=="APPLIED")
+        {
+            if(feHub.AppliedEdits<3 || string.IsNullOrWhiteSpace(feHub.SourcePath))
+                throw new InvalidDataException("FE_HUB_STAGE_EMPTY_OR_PARTIAL");
+            string rel=feHub.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(feHubRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/FlushingEtiquette/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,feHubRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("FE_HUB_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("FE_HUB_LOST_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=feHub.AppliedEdits;
+            results.Add(new(31,"flushing-etiquette-input-hub",feHub.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(feHub.Status=="REFUSED")
+            skipped.Add(new(31,"flushing-etiquette-input-hub",1,
+                feHub.Reason ?? "FE_HUB_SOURCE_INCOMPATIBLE"));
+        else if(feHub.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("FE_HUB_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
