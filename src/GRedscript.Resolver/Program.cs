@@ -77,6 +77,8 @@ public static class Program
                 return RunPhase2GrsPoll(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-sc-jobs")
                 return RunPhase2ScJobs(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-new-hot-owner")
+                return RunPhase2NewHotOwner(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-ncr-tick")
                 return RunPhase2NcrTick(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-drugdealer-input")
@@ -863,6 +865,31 @@ public static class Program
         Console.WriteLine("REDscript Phase 2 GRS polling: status=" +
             result.Status + " edits=" + result.AppliedEdits +
             (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2NewHotOwner(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not
+            ("--game" or "--out" or "--base-overlay" or "--kind")))
+            throw new ArgumentException(
+                "Hot owner stage requires --kind --game --out [--base-overlay]");
+        var kind = Required(options, "--kind") switch
+        {
+            "apartment" => NewHotOwnerSemanticPass.Owner.Apartment,
+            "negotiable" => NewHotOwnerSemanticPass.Owner.Negotiable,
+            "shattered" => NewHotOwnerSemanticPass.Owner.Shattered,
+            _ => throw new ArgumentException("Unknown hot-owner stage kind")
+        };
+        var result = NewHotOwnerSemanticPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null, kind);
+        Console.WriteLine("REDscript hot-owner semantic: " + result.RuleId +
+            " status=" + result.Status + " edits=" + result.AppliedEdits +
+            " refusals=" + string.Join(" | ", result.Refusals));
         return 0;
     }
 

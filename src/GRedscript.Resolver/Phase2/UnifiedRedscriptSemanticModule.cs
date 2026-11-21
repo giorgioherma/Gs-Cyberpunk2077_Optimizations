@@ -144,5 +144,34 @@ internal static class UnifiedRedscriptSemanticModule
                 return new RedscriptSemanticStageComposer.Outcome(
                     r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
             });
+        // New profiler-ranked operations. Each is independent, source-aware
+        // and composed into this SAME player-side Generate; no second ZIP.
+        RedscriptSemanticStageComposer.Run(52, "apartment-choice-input-gate",
+            "gt_8ug_apt", game, output, final, completed, skipped,
+            ref files, ref expressions, (g, o, b) =>
+            {
+                var r = NewHotOwnerSemanticPass.Generate(g, o, b,
+                    NewHotOwnerSemanticPass.Owner.Apartment);
+                return new RedscriptSemanticStageComposer.Outcome(
+                    r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
+            });
+        RedscriptSemanticStageComposer.Run(53, "negotiable-affection-action-gates",
+            "negotiableaffection", game, output, final, completed, skipped,
+            ref files, ref expressions, (g, o, b) =>
+            {
+                var r = NewHotOwnerSemanticPass.Generate(g, o, b,
+                    NewHotOwnerSemanticPass.Owner.Negotiable);
+                return new RedscriptSemanticStageComposer.Outcome(
+                    r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
+            });
+        RedscriptSemanticStageComposer.Run(54, "shattered-chrome-dot-row-bound",
+            "ShatteredChrome", game, output, final, completed, skipped,
+            ref files, ref expressions, (g, o, b) =>
+            {
+                var r = NewHotOwnerSemanticPass.Generate(g, o, b,
+                    NewHotOwnerSemanticPass.Owner.Shattered);
+                return new RedscriptSemanticStageComposer.Outcome(
+                    r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
+            });
     }
 }
