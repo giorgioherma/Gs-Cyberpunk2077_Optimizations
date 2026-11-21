@@ -531,6 +531,11 @@ public static class Pass7ChaseFrameFloorPass
                 if (File.Exists(fromPreview))
                     source = File.ReadAllText(fromPreview, Encoding.UTF8);
             }
+            // Independently discovered operations may share an owner file on
+            // a customized installation. Complete each against the current
+            // effective bytes instead of creating competing overlay files.
+            if (staged.TryGetValue(relative, out string? earlier))
+                source = earlier;
             var decision = rewrite(source);
             if (decision.Changed is not null)
             {
@@ -539,7 +544,7 @@ public static class Pass7ChaseFrameFloorPass
                     if (!decision.Changed.Contains(marker.Value,
                         StringComparison.Ordinal))
                         throw new InvalidDataException("PASS7_GENERIC_LOST");
-                staged.Add(relative, decision.Changed);
+                staged[relative] = decision.Changed;
             }
             statuses.Add(new(id, decision.Status, decision.Edits,
                 decision.Complete, relative, decision.Reason));
