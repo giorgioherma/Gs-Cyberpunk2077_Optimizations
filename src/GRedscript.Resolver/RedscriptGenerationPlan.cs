@@ -1773,7 +1773,7 @@ public static class RedscriptGenerationPlan
             if(found.Length!=expected.Length)
                 throw new InvalidDataException("PASS4_STAGE_OWNER_COUNT_CHANGED");
             var reportedPaths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int countedEdits=0,appliedOwners=0,completedOwners=0;
+            int countedEdits=0,appliedOwners=0;
             foreach(var expectedOwner in expected)
             {
                 var rows=found.Where(x=>ReadString(x,"ruleId")==expectedOwner.Rule).ToArray();
@@ -1841,7 +1841,6 @@ public static class RedscriptGenerationPlan
                 {
                     if(editCount!=0||paths.Length!=0)
                         throw new InvalidDataException("PASS4_COMPLETE_OWNER_GENERATED_SOURCE");
-                    completedOwners++;
                 }
                 else throw new InvalidDataException("PASS4_UNKNOWN_OWNER_STATUS");
             }
@@ -1851,9 +1850,9 @@ public static class RedscriptGenerationPlan
                ReadInt(root,"appliedEdits")!=countedEdits||
                root.GetProperty("status").GetString()!=
                     (appliedOwners>0?"APPLIED":
-                     completedOwners==3?"COMPLETE":
+                     found.Any(x=>ReadString(x,"status")=="REFUSED")?"REFUSED":
                      found.All(x=>ReadString(x,"status")=="NOT_APPLICABLE")?
-                        "NOT_APPLICABLE":"REFUSED"))
+                        "NOT_APPLICABLE":"COMPLETE"))
                 throw new InvalidDataException("PASS4_STAGE_REPORT_OR_FILE_MISMATCH");
         }
 

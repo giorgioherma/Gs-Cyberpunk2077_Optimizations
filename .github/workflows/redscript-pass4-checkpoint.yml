@@ -120,8 +120,80 @@ jobs:
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass4-private/base_after_generic' -CompilerRoot '.pass4-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass4-generated'
           if ($LASTEXITCODE -ne 0) { throw 'PASS4_OFFICIAL_SCC_FAILED' }
 
+      - name: Verify canonical GCO one-generation stage includes all Pass 4 operations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.pass4-private/base_after_generic'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $plan='.pass4-plan.json'
+          $analysis='.pass4-analysis.json'
+          $stage='.pass4-canonical-stage'
+          & dotnet $dll plan-redscript --game $game --out $plan
+          if($LASTEXITCODE -ne 0 -or !(Test-Path $plan -PathType Leaf)) {
+            throw 'PASS4_CANONICAL_PLAN_FAILED'
+          }
+          $manifest=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+          if([int]$manifest.implementedRuleCount -ne 10 -or
+             [string]::IsNullOrWhiteSpace($manifest.sourceStackSha256)) {
+            throw 'PASS4_CANONICAL_GENERIC_PLAN_CHANGED'
+          }
+          @{
+            schemaVersion='grsp.resolver.input.v1'
+            generationAuthorized=$false
+            capture=@{collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED'}
+            source=@{sourceStackSha256=$manifest.sourceStackSha256}
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+          & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $stage
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_CANONICAL_ONE_RUN_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $stage 'stage-result.json') -Raw | ConvertFrom-Json
+          if($report.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+             $report.productionZipAuthorized -ne $false) {
+            throw 'PASS4_CANONICAL_REPORT_INVALID'
+          }
+          $expect=@(
+            @{order=37;id='stealthrunner-npc-player-cache';file='r6/scripts/StealthRunner/npc_puppet.reds'},
+            @{order=38;id='chipware-perk-relevance-gate';file='r6/scripts/zzy_bChipwareExpansion/chipsScripts/chipPerkUnlock.reds'},
+            @{order=39;id='reinforcements-prepared-quad-cache';file='r6/scripts/ReinforcementsSystem/Utils.reds'},
+            @{order=39;id='reinforcements-prepared-quad-cache';file='r6/scripts/ReinforcementsSystem/ReinforcementSystem.reds'}
+          )
+          foreach($item in $expect) {
+            $row=@($report.completed | Where-Object { $_.order -eq $item.order -and $_.id -eq $item.id })
+            if($row.Count -lt 1) { throw ('PASS4_CANONICAL_STAGE_MISSING:'+ $item.id) }
+            $actual=Join-Path (Join-Path $stage 'effective-preview') $item.file
+            $isolated=Join-Path '.pass4-generated' $item.file
+            if(!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+               !(Test-Path -LiteralPath $isolated -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $isolated -Algorithm SHA256).Hash) {
+              throw ('PASS4_CANONICAL_COMPOSITION_BYTES_DIFFER:'+ $item.file)
+            }
+          }
+          if(@($report.completed | Where-Object {
+             $_.order -in @(37,38,39) }).Count -ne 4 -or
+             @($report.skipped | Where-Object { $_.order -in @(37,38,39) }).Count -ne 0) {
+            throw 'PASS4_CANONICAL_OWNER_COUNT_OR_REFUSAL_INVALID'
+          }
+          Write-Host 'PASS canonical one-run 10 generics + all existing semantics + 3 Pass 4 owners; independent bytes equal'
+
+      - name: Compile full canonical GCO one-run semantic output using official SCC 0.5.31
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass4-private/base_after_generic' -CompilerRoot '.pass4-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass4-canonical-stage/effective-preview'
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_CANONICAL_FULL_SEMANTIC_SCC_FAILED' }
+
+      - name: Verify production .NET 10 Core/App compilation and tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -c Release --nologo
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_APP_BUILD_FAILED' }
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release --no-restore
+          if($LASTEXITCODE -ne 0) { throw 'PASS4_PRODUCTION_CORE_TESTS_FAILED' }
+
       - name: Remove private stack, compiler and generated source
         if: always()
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force '.pass4-private','.pass4-generated','.pass4-repeated' -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force '.pass4-private','.pass4-generated','.pass4-repeated','.pass4-canonical-stage','.pass4-plan.json','.pass4-analysis.json' -ErrorAction SilentlyContinue
