@@ -85,7 +85,8 @@ class BrowserInputTests(unittest.TestCase):
         self.serial = 0
 
     def generate(self, controller=CONTROLLER, listener=LIST,
-                 include_runtime=True, custom_ctrl=CTRL, custom_listener=LISTENER):
+                 include_runtime=True, custom_ctrl=CTRL, custom_listener=LISTENER,
+                 framework_path=RUNTIME):
         self.serial += 1
         game = self.root / f"game{self.serial}"
         expected = {custom_ctrl: controller, custom_listener: listener}
@@ -94,7 +95,7 @@ class BrowserInputTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf8")
         if include_runtime:
-            target = game / RUNTIME
+            target = game / framework_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(FRAMEWORK, encoding="utf8")
         out = self.root / f"output{self.serial}"
@@ -174,6 +175,12 @@ class BrowserInputTests(unittest.TestCase):
         self.assertIn('func NewTabCustom()', out[cp])
         self.assertIn('userCustomColor', out[lp])
         self.check_complete(out[cp], out[lp])
+
+    def test_relocated_framework_module_is_admitted(self):
+        path = 'r6/scripts/AlternateModules/GRedInputCustom.reds'
+        result, outputs = self.generate(framework_path=path)
+        self.assertEqual(result['status'], 'APPLIED', result)
+        self.check_complete(outputs[CTRL], outputs[LISTENER])
 
     def test_incompatible_event_handler_refuses_both_files(self):
         wrong = LIST.replace('HomePageScrollDown()', 'HomePageScrollLeft()')
