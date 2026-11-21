@@ -2393,12 +2393,20 @@ try {
       } elseif ($portFiles.Count -ne 0 -or [int]$portResult.appliedEdits -ne 0) {
         throw ('GCO_SOURCE_REFERENCE_NONAPPLIED_OUTPUT:'+$port.Id)
       }
+      # Legacy #34-#36 Result records carry a singular Reason, while
+      # Pass 8 Result records report per-operation Refusals. StrictMode
+      # forbids accessing an absent property; preserve both report schemas.
+      $operationRefusals = @()
+      if ($portResult.PSObject.Properties['refusals']) {
+        $operationRefusals = @($portResult.refusals |
+          Where-Object { $null -ne $_ -and $_ -ne '' })
+      }
       $remainingReferences += @{
         Id=$port.Id; Order=[int]$port.Order;
         Status=[string]$portResult.status;
         Edits=[int]$portResult.appliedEdits;
         Files=$portFiles.Count;
-        Refusals=@($portResult.refusals | Where-Object { $null -ne $_ -and $_ -ne '' })
+        Refusals=$operationRefusals
       }
       Write-Host ('PASS independent source reference '+$port.Id+
         ' status='+$portResult.status+' edits='+$portResult.appliedEdits+
