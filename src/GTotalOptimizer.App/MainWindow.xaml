@@ -922,7 +922,7 @@
                                       HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
-                            <TextBlock x:Name="StatusText" Foreground="#BFE0E6"
+                            <TextBlock x:Name="StatusText" Foreground="{StaticResource Cyan}"
                                        Width="{Binding ViewportWidth, ElementName=CaptureConsoleScroll}"
                                        FontSize="12.5" LineHeight="16.5"
                                        TextWrapping="Wrap"
@@ -959,7 +959,7 @@
                             <TextBlock Text="ANALYZE &amp; OPTIMIZE" Foreground="#FFF000"
                                        FontFamily="{StaticResource Oxanium}"
                                        FontSize="23" FontWeight="ExtraBold"/>
-                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="#FFF000"
+                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Cyan}"
                                        TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
                                        Margin="0,7,0,0" Text="Restoration status pending."/>
                             <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
