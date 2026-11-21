@@ -146,7 +146,7 @@ class DrugDealerInputTests(unittest.TestCase):
         s=files['CrackhouseInputListener']
         s=s.replace('@addField(PlayerPuppet)\nprivate let gcoCrackhouseInputListenerEngineFallback: Bool;\n','')
         self.assertNotEqual(s,files['CrackhouseInputListener'])
-        rep,out=self.generate(changes={'CrackhouseInputListener':s})
+        rep,out=self.generate(changes={**files, 'CrackhouseInputListener':s})
         self.assertEqual(rep['status'],'APPLIED',rep)
         self.assertIn('gcoCrackhouseInputListenerEngineFallback: Bool',out['CrackhouseInputListener'])
         self.assertEqual(len(out),1)
