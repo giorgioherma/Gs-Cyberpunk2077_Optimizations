@@ -1385,6 +1385,54 @@ public static class RedscriptGenerationPlan
         else if(browser.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("BEX_JOURNAL_UNKNOWN_STATUS");
 
+        // Historical Pass 2.0 BrowserExtension: migrate homepage scroll
+        // to the existing action-specific InputHub only when both routes
+        // subscribe, retaining the original engine callback as fallback.
+        string browserInputRoot=Path.Combine(output,"_stages",
+            "29-browser-extension-input");
+        var browserInput=BrowserExtensionInputHubPass.Generate(game,
+            browserInputRoot,Directory.Exists(final)?final:null);
+        if(browserInput.Status=="APPLIED")
+        {
+            if(browserInput.AppliedEdits is < 1 or > 2 ||
+               browserInput.SourcePaths.Length!=browserInput.AppliedEdits)
+                throw new InvalidDataException("BEX_INPUT_STAGE_PARTIAL_OUTPUT_INVALID");
+            foreach(string rel in browserInput.SourcePaths.Order(StringComparer.Ordinal))
+            {
+                string src=Path.GetFullPath(Path.Combine(browserInputRoot,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                string dest=Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                if(!rel.StartsWith("r6/scripts/BrowserExtension/",StringComparison.Ordinal) ||
+                   !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                   !IsInside(src,browserInputRoot) || !IsInside(dest,final) ||
+                   !File.Exists(src))
+                    throw new InvalidDataException("BEX_INPUT_STAGE_PATH_UNSAFE");
+                bool existed=File.Exists(dest);
+                if(existed)
+                {
+                    string before=File.ReadAllText(dest);
+                    string after=File.ReadAllText(src);
+                    var markers=System.Text.RegularExpressions.Regex.Matches(
+                        before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                    if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                        throw new InvalidDataException("BEX_INPUT_LOST_GENERIC");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(src,dest,overwrite:existed);
+                files+=existed?0:1;
+                results.Add(new(29,"browser-extension-input",1,
+                    existed?0:1,existed?1:0,[]));
+            }
+            expressions+=browserInput.AppliedEdits;
+        }
+        else if(browserInput.Status=="REFUSED")
+            skipped.Add(new(29,"browser-extension-input",1,
+                browserInput.Reason ?? "BEX_INPUT_SOURCE_INCOMPATIBLE"));
+        else if(browserInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("BEX_INPUT_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
