@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Agent 3 Pass 5 integration: HoloTravel #37 on isolated branch
+
+- `dev/redscript/pass5` adds only the previously uncovered historical Pass 5 HoloTravel material-event operation; other Pass 5 files are covered by earlier semantics, explicitly excluded for pooled controller safety, or reserved for source-specific proof / Pass 4 owner coordination. See `REDSCRIPT-PASS5-AGENT-HANDOFF.md` for file-level disposition.
+- `HQ_HOLOTRAVEL_MATERIAL_EVENT_FASTPATH_V1` is now ordered **#37** in the GCO production one-pass `RedscriptGenerationPlan.Stage()` after #36, running directly over the post-generic effective source. No old whole-file transplant, no corrective pass, no duplicated listener, no player-side SCC. The stage emits only an admitted owner-local file with preserved generic markers; absent and complete sources emit nothing and incompatible operations record an exact narrow skip.
+- Focused standalone fast [#207 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874654298) passed 197 source-state tests including HoloTravel and real 2,331-source official SCC. Integrated fast [#215](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875328295) asserts independent-vs-canonical byte parity and combined SCC; full app/ZIP [#1087](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875337791) are **pending result**. No gameplay or performance claims.
+
+
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
 
 - NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.
