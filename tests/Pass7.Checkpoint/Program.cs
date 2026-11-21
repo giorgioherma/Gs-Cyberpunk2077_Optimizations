@@ -422,7 +422,7 @@ static void Run(string baseline)
         var missingReport = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "partial-record-guard", incompleteRecords),
             Path.Combine(temp, "partial-record-out"));
-        AssertStatus(missingReport, "LIZZIES_BDS_PERFORMER", "APPLIED");
+        AssertStatus(missingReport, "LIZZIES_BDS_PERFORMER_ATTACH_GATE", "APPLIED");
         CheckContent(incompleteRecords, Path.Combine(temp, "partial-record-out"));
 
         // Relocation and custom independent code must survive.
