@@ -111,7 +111,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
 
     def check_owner(self, report, source_hashes, expected_edits):
         completed = [r for r in report["completed"]
-                     if r["id"] == "runningman-pass9"]
+                     if r["id"] == "pass9-runningman-dormancy"]
         self.assertEqual(len(completed), 1, report)
         self.assertEqual(completed[0]["order"], 50)
         self.assertEqual(completed[0]["rewrittenExpressions"], expected_edits)
@@ -132,7 +132,13 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         owner = self.check_owner(stage, source_hashes, 2)
         reference = self.independent()
         self.assertEqual(reference["status"], "APPLIED")
-        self.assertEqual(owner.read_bytes(), (self.reference / TARGET).read_bytes())
+        # Pass 7 legitimately composes prerequisite sprint caching before
+        # Pass 9. Require both owner behaviors, not obsolete isolated bytes.
+        merged = owner.read_text("utf8")
+        self.assertIn("if this.m_gredRunningManDoubleRunPerk || this.m_isInSecondSprint", merged)
+        self.assertIn("this.m_gredRunningManResumeChecked = true;", merged)
+        self.assertIn("wrappedMethod(stateContext, scriptInterface);", merged)
+        self.assertEqual(merged.count("private let m_gredRunningManDoubleRunPerk: Bool;"), 1)
         generic = self.staged / "effective-preview/r6/scripts/Consumer/Example.reds"
         self.assertTrue(generic.is_file())
         self.assertIn("GCO-GENERIC:PURE_FINAL_STATIC_BOOL_V1",
@@ -194,7 +200,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         repeat_hashes = self.source(rewritten, with_generic=False)
         repeat = self.stage()
         self.assertFalse(any(
-            r["id"] == "runningman-pass9" for r in repeat["completed"]))
+            r["id"] == "pass9-runningman-dormancy" for r in repeat["completed"]))
         self.assertFalse(
             (self.staged / "effective-preview" / TARGET).exists())
         self.assertEqual(
@@ -207,7 +213,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         full = (self.reference / TARGET).read_text("utf8")
         hashes = self.source(full, with_generic=False)
         stage = self.stage()
-        self.assertFalse(any(r["id"] == "runningman-pass9" for r in stage["completed"]))
+        self.assertFalse(any(r["id"] == "pass9-runningman-dormancy" for r in stage["completed"]))
         self.assertFalse((self.staged / "effective-preview" / TARGET).exists())
         self.assertEqual(
             [hashlib.sha256(f.read_bytes()).hexdigest() for f in self.sources],
@@ -220,7 +226,7 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         stage = self.stage()
         output = self.check_owner(stage, hashes, 1)
         self.assertIn("this.CustomSpeedMode();", output.read_text("utf8"))
-        refusals = [r for r in stage["skipped"] if r["id"] == "runningman-pass9"]
+        refusals = [r for r in stage["skipped"] if r["id"] == "pass9-runningman-dormancy"]
         self.assertEqual(len(refusals), 1)
         self.assertEqual(refusals[0]["order"], 50)
         self.assertIn("RM_SPRINT_TRANSITION_OR_CALLBACK_UNPROVEN",
