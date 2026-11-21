@@ -1,5 +1,11 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — DigitalVixenCore Pass 9 #27 fully accepted for development package
+
+- Game-tested BodyMap hidden/unpinned early gate and IsRendered; ItemEditor/StatusWindow adaptive 2.0 / 0.5 / 0.25s loops with original callbacks and pinned status refresh. Stock/partial/markerless historic/custom/incompatible/idempotent source proof passed.
+- Focused post-generic official SCC **CI #146 SUCCESS**; full real-capture GCO replay, one clean source ZIP and Windows package **CI #1062 SUCCESS**, downloadable dev artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1062-a1`. No main merge, gameplay test or performance measurement claimed.
+
+
 ## 2026-11-21 — DigitalVixenCore UI historical port #27
 
 - BodyMap early hidden/unpinned fast exit and IsRendered gating; ItemEditor and StatusWindow adaptive 2.0/0.5/0.25s loops, initial registration, and pinned StatusWindow visibility preserved. Complete missing work from current post-generic source in one generation without interfering with Footsteps and RedWindows. Source-state and SCC/full app checks added; results pending.
