@@ -1046,6 +1046,32 @@ public static class Pass7ChaseFrameFloorPass
         return new("APPLIED", changed, edits.Count, already, null);
     }
 
+
+    // Pass 8's historical 24-entry/100 ms result table has no proven
+    // invalidation for perk purchase/reset, equipment-stat and chip-charge
+    // mutation, and even caches wrappedMethod's mutable vanilla result.
+    // Pass 4's relevance guard and Pass 8's source-local combat cache remain
+    // independent and are never superseded by an unsafe competing cache.
+    private static Decision ChipwarePerkResultMemoization(string source)
+    {
+        var method = Find(source, "PlayerDevelopmentData",
+            "IsNewPerkBought", "wrapMethod");
+        if (method is null)
+            return new("REFUSED", null, 0, 0,
+                "CHIPWARE_PERK_MEMO_WRAPPER_MISSING");
+        string body = source[method.Start..method.End];
+        if (!Has(body, @"\bwrappedMethod\s*\(\s*perkType\s*\)") ||
+            !Has(source, @"\bgamedataNewPerkType\b"))
+            return new("REFUSED", null, 0, 0,
+                "CHIPWARE_PERK_FALLBACK_OR_ENUM_UNPROVEN");
+        if (Has(body, @"\bTryGetPerkResult\s*\(") ||
+            Has(body, @"\bStorePerkResult\s*\("))
+            return new("REFUSED", null, 0, 0,
+                "CHIPWARE_MEMO_PRESENT_BUT_100MS_RESULT_INVALIDATION_UNPROVEN");
+        return new("REFUSED", null, 0, 0,
+            "CHIPWARE_24_PERK_RESULT_MEMO_REFUSED_NO_PERK_PURCHASE_EQUIPMENT_CHARGE_OR_WRAPPED_RESULT_INVALIDATION_EPOCH");
+    }
+
     private static readonly Regex DirectionLocal = new(
         @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
@@ -1217,7 +1243,18 @@ public static class Pass7ChaseFrameFloorPass
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
                 "@replaceMethod(SprintDecisions)", (Func<string, Decision>)SprintDirection),
             ("LIZZIES_BDS_PERFORMER_ATTACH_GATE_V1", "LizziesBDs",
-                "LizziesBDsIsEnt", (Func<string, Decision>)LizziePerformerGate)
+                "LizziesBDsIsEnt", (Func<string, Decision>)LizziePerformerGate),
+            ("LIZZIES_BDS_PERFORMER_INDEX_MEMO_V1", "LizziesBDs",
+                "LizziesBDsZmenitObleceni", (Func<string, Decision>)LizziePerformerIndex),
+            ("REINFORCEMENTS_CHASE_STIMULUS_GATE_V1", "ReinforcementsSystem",
+                "HandleStimEvent", (Func<string, Decision>)ReinforcementStimulus),
+            ("REINFORCEMENTS_PREVENTION_POLICE_GATE_V1", "ReinforcementsSystem",
+                "HandleStimEvent", (Func<string, Decision>)ReinforcementPrevention),
+            ("REINFORCEMENTS_100MS_STIMULUS_PROBE_V1", "ReinforcementsSystem",
+                "HandleStimEvent", (Func<string, Decision>)ReinforcementBurstThrottle),
+            ("CHIPWARE_24_PERK_RESULT_MEMO_V1", "zzy_bChipwareExpansion",
+                "@wrapMethod(PlayerDevelopmentData)",
+                (Func<string, Decision>)ChipwarePerkResultMemoization)
         };
         var statuses = new List<Operation>();
         var staged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
