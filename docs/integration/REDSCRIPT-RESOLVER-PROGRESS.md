@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Unified REDscript production module; no historical Pass 10
+
+- Historical pass archive ends at **Pass 9**. The separately proven 100 ms Chipware perk-result memoization is an **approved operation within Chipware**, now reported as `chipware-perk-result-memo` (#51) rather than a fictitious Pass 10.
+- `dev/redscript/integration` integrates the original Pass 4–9 source-owner generators into a single `UnifiedRedscriptSemanticModule`; the existing `RedscriptGenerationPlan.Stage` remains the one invocation used by the GCO .NET 10 main app. Generic-first #1–41 remain intact.
+- Production compilation excludes overlapping historical Pass 4 StealthRunner/Chipware generator implementations; Pass 7 and Pass 8 respectively own the optimized behavior, and Pass 9 finishes only missing RunningMan work. Pass 4's standalone reference tests remain intact. Shared stage provenance is managed in `RedscriptSemanticStageComposer`.
+- [Combined SCC #220 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991) on the previous, logically equivalent combined source before this cleanup. **The current refactored HEAD is not yet CI verified.** [Full product #1105](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44914500712) started before this refactor; inspect its exact SHA and result. Do not claim installed-game gameplay parity, FPS improvement, or a shippable ZIP until combined final SCC, full GCO packaging/real-source replay and gameplay checks pass.
+- One meaningful focused SCC and one full product milestone after all remaining changes; no per-edit CI, no irrelevant exact-code assertions, no changes to stable `main`.
+
 ## 2026-11-21 — Pass 4–10 integration branch and approved 100 ms Chipware cache
 
 - **Owned branch:** `dev/redscript/integration` based on handoff #41. Imported source-owner Pass 4–10 generators and source-state tests without merging historical `RedscriptGenerationPlan.cs` copies. One `RedscriptHistoricalIntegration.Apply()` appends #42–51 to the existing generic-first production `Stage` and GCO ZIP path.

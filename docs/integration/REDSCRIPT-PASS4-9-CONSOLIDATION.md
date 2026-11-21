@@ -1,6 +1,12 @@
 # REDscript Pass 4–9 consolidation audit — 2026-11-21
 
-**Coordinator branch:** `dev/redscript/integration`, created from `dev/redscript/resolver_handoff` code/docs HEAD `b4b668931d9521f72396a2b57f93ec5b7cafe4dc`. **Status: Pass 4–10 source integration is implemented; combined SCC and GCO full-package acceptance are pending.** Do not treat individual isolated CI passes as proof of the consolidated ZIP.
+**Current status:** Historical Passes 4–9 and the user-approved Chipware 100 ms perk-result cache are composed in **one source-aware production module**, `UnifiedRedscriptSemanticModule`, invoked by `RedscriptGenerationPlan.Stage` in the existing GCO app. The archive contains **no historical Pass 10**: an isolated `pass10` branch was used only to validate the extra approved Chipware operation. It is now a Chipware owner rule (`chipware-perk-result-memo`, #51), not a separate runtime pass.
+
+**De-duplication:** Pass 4's StealthRunner NPC player cache is superseded by the compatible Pass 7 owner; its Chipware relevance gate is superseded by Pass 8's source-derived filter. The production Resolver does not compile either duplicate Pass 4 generator; Pass 4's independent test host still validates the historical reference. Pass 7 runs once, Pass 9 fills missing RunningMan work once, and Chipware result memoization extends the **single** Pass 8 helper. Every generated source remains owned, game-relative, generic-first and source-state aware.
+
+**Evidence:** [Unified SCC #220 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991) on the pre-refactor integrated commit `a38427d8` (combined source-state suites, one invocation, independent source composition, official SCC). Refactor commit `4c529f6` requires a fresh consolidated checkpoint; [full GCO #1105](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44914500712) was launched on prior commit `f764c480` and must **not** be mistaken for validation of the refactored HEAD. No verified gameplay/benchmark or production-main merge is claimed.
+
+**Original coordinator baseline:** `dev/redscript/resolver_handoff` at `b4b668931d9521f72396a2b57f93ec5b7cafe4dc`. The following six-branch table is retained as **historical isolated-branch evidence**, not a current staging plan.
 
 | Pass | Exact audited branch HEAD | Latest source-code CI and scope | Production stage wiring in isolated branch | Handoff |
 | --- | --- | --- | --- | --- |
