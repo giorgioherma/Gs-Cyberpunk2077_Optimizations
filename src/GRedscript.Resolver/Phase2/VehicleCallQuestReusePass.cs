@@ -66,6 +66,7 @@ internal static class VehicleCallQuestReusePass
         const string story="q001_ripperdoc_done",standalone="ep1_standalone";
         string nl=NL(source);
         var edits=new List<Edit>();
+        void Add(int start,int end,string value)=>edits.Add(new(start,end,value));
         var refused=new List<string>();
         int already=0;
         foreach(string name in Targets)
