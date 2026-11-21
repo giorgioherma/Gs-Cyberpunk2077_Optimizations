@@ -1655,6 +1655,50 @@ public static class RedscriptGenerationPlan
         else if(ncr.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("NCR_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 2.2 ShatteredChrome: preserve original independent
+        // main/HUD delay callbacks as runtime-absent or registration-failed
+        // fallbacks while using the existing Scheduler for accepted jobs.
+        string scRoot=Path.Combine(output,"_stages","35-sc-periodic-jobs");
+        var sc=ShatteredChromeJobsPass.Generate(game,
+            scRoot,Directory.Exists(final)?final:null);
+        if(sc.Status=="APPLIED")
+        {
+            if(sc.AppliedEdits<5 || string.IsNullOrWhiteSpace(sc.SourcePath))
+                throw new InvalidDataException("SC_JOBS_EMPTY_STAGE");
+            string rel=sc.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(scRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/ShatteredChrome/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,scRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("SC_JOBS_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("SC_JOBS_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=sc.AppliedEdits;
+            results.Add(new(35,"shattered-chrome-periodic-jobs",sc.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(sc.Status=="REFUSED")
+            skipped.Add(new(35,"shattered-chrome-periodic-jobs",1,
+                sc.Reason ?? "SC_JOBS_INCOMPATIBLE_SOURCE"));
+        else if(sc.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("SC_JOBS_UNKNOWN_STAGE_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

@@ -53,6 +53,7 @@ jobs:
       PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
       PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
       PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_SC_JOBS_OUTPUT: ${{ github.workspace }}/.phase2-sc-jobs
       PHASE2_NCR_TICK_OUTPUT: ${{ github.workspace }}/.phase2-ncr-tick
       PHASE2_DRUGDEALER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-drugdealer-input
     steps:
@@ -1102,6 +1103,46 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS NCR 30-second scheduler + DelaySystem fallback + detach/session cleanup'
 
+      - name: Generate historical Pass 2.2 ShatteredChrome main and HUD jobs with exclusive fallbacks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-sc-jobs --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_SC_JOBS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_SC_JOBS_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_SC_JOBS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'SHATTERED_CHROME_JOBS_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 5) {
+            throw ('PHASE2_SC_JOBS_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/ShatteredChrome/SC.reds'
+          $src=Join-Path $env:PHASE2_SC_JOBS_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_SC_JOBS_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('SCGCOMaintenanceJob extends ScheduledJob') -or
+              !$content.Contains('SCGCOHudJob extends ScheduledJob') -or
+              !$content.Contains('this.ScheduleNextTick();') -or
+              !$content.Contains('this.ScheduleHUDTick();') -or
+              !$content.Contains('this.m_gcoScheduler.Unregister(')) {
+            throw 'PHASE2_SC_JOBS_FALLBACK_LOST'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_SC_JOBS_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS ShatteredChrome independent main/HUD registered jobs and DelaySystem fallback'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1380,6 +1421,17 @@ jobs:
                 (Get-FileHash -LiteralPath $ncrRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_NCR_ONE_PASS_BYTE_PARITY_DIFF'
             }
+            $scJobs=@($result.completed | Where-Object { $_.id -eq 'shattered-chrome-periodic-jobs' })
+            $scRel='r6/scripts/ShatteredChrome/SC.reds'
+            $scRef=Join-Path $env:PHASE2_SC_JOBS_OUTPUT $scRel
+            $scActual=Join-Path (Join-Path $stage 'effective-preview') $scRel
+            if ($scJobs.Count -ne 1 -or [int]$scJobs[0].order -ne 35 -or
+                [int]$scJobs[0].rewrittenExpressions -lt 5 -or
+                !(Test-Path -LiteralPath $scActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $scActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $scRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_SC_JOBS_ONE_PASS_BYTE_PARITY_DIFF'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1418,7 +1470,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
