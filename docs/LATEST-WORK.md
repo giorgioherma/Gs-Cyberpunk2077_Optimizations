@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Agent 5 Pass 7: remaining semantic owners integrated, focused checkpoint #12 running
+
+- **Branch only:** `dev/redscript/pass7`; no merges or changes to other agents. Canonical one-pass pipeline now composes **#700–709**: existing six operators plus new Lizzie performer-index cache (#706), reinforcement chase stimulus admission (#707), 7.1 police/prevention safeguard (#708) and 100-ms burst probe (#709) from the actual post-generic effective source, owner-local and partial-aware.
+- **#710 Chipware 24-perk result memoization: precise operation-only refusal** — no invalidation epoch spans mutable perks/equipment/chip charges and wrapped vanilla perk results; Pass 4 relevance and Pass 8 hot-path caches retained without duplicate cache helper.
+- Pass 4 reinforcement geometry files are separate from Pass 7's ReinforcementsCall wrapper; Pass 4/7 StealthRunner own the **same** weak `m_stealthRunnerPlayer` lifecycle field and must be consolidated once; Pass 4/8 Chipware source owns the wrapper. Historical DF #25, DVCore #27, DPR #21, Quickhack #18 already covered, not recopied.
+- Explicit source-only [Pass 7 checkpoint #12](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44908307127) triggered by `tests/Pass7.Checkpoint/CI-TRIGGER.txt` once for full new batch; **result pending at this documentation commit**. Earlier six-operation dedicated #11/full #1098 were green and do **not** validate new ops. No full package rerun requested; gameplay, measured CPU/frame benefit and cross-agent merge pending. See `docs/integration/REDSCRIPT-PASS7-ISOLATED-HANDOFF.md`.
+
+
+
 ## 2026-11-21 — Isolated Agent 5 historical Pass 7, six semantic operations compiled in canonical one-pass
 
 - Dedicated `dev/redscript/pass7` starts at green `96d66c66`; no commits to stable `main` or the concurrent `dev/redscript/resolver_handoff` / Pass 4 / Pass 5 branches. The production `RedscriptGenerationPlan.Stage` on **this branch** now runs the source-aware Pass 7 generator after ten generics and earlier semantic rules, composing six operations (#700–705) into five owner files.
