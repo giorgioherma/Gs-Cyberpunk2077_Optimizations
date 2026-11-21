@@ -46,21 +46,22 @@ EVS camera listener operation:
 - Uses version-fluid code matching and staged effective source; no old file
   wholesale replacement and no independent ZIP.
 
-**CI evidence:** isolated [Pass 6 #3 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875368392)
-validated #37 with 196 source-state contracts and official SCC 0.5.31
-on 2,331 originals plus 30 semantic files, 43,514,581 compiled bytes.
-Expanded Pass 6 CI #6 tests #37 and #38 together;
-full GCO CI #1092 was launched for integration and product ZIP validation.
-Do not label #38 accepted until #6 SCC succeeds and do not label the whole
-integrated application accepted until full CI passes.
+**CI evidence:**
 
-## Implemented candidate
+- [Isolated Pass 6 #3 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875368392) verified the VAD-only stage: 196 tests and official SCC 0.5.31, 2,331 original files + 30 semantic files, 43,514,581 compiled bytes.
+- [**Expanded Pass 6 #6 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875675607) verified **both** owner generators integrated into the production one-pass Stage: 202 source-state tests, exact independent byte parity, 2,331 real post-generic files, 30 effective semantic overlays and official SCC 0.5.31, **43,514,477 compiled bytes**. Original source unchanged.
+- [**Full GCO #1092 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875742283): 361 application/install/CLI/ZIP source contracts, one shared .NET 10 runtime, actual owner integrations, WPF and source/rollback validation. Artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1092-a1` (ID `14696061829`, 90,569,864 bytes).
+- Production integration commit: `e2e248bb2a2c71c95f3a70f34d32a355d8f8f044`; final semantic code fix: `a83cc6efea3551bbe9cb8746d836148becbe6b0a`. All changes remain branch-local. The integration branch's independent stage numbers require reconciliation when these files are brought across.
 
-- `src/GRedscript.Resolver/Phase2/VirtualAtelierSpawnPacingPass.cs`: one source-aware pass `VIRTUAL_ATELIER_DROPPOINT_SPAWN_PACING_V1`.
-- Isolated CLI entry `phase2-vad-spawn --game ... --out ... [--base-overlay ...]`.
-- `tests/GRedscript.Resolver.Tests/test_phase2_vad_spawn_pacing.py`: stock, partial (field/callback), complete, relocate/custom, prior overlay, incompatible, absent and idempotence.
-- Independent `.github/workflows/redscript-pass6.yml` validates the post-generic source plus the existing GCO one-pass semantic overlay and official SCC 0.5.31. Do not ship SCC to users.
+## Implemented, stage-owned files
 
-**Integration status:** Isolated branch candidate; central GCO generator stage and numbering are **intentionally untouched**. After independent CI succeeds, the integrating owner must add this source-aware pass to the canonical one-generation stage after reconciling any overlapping work, rerun combined SCC/full app CI, and obtain in-game gameplay/performance evidence before claiming speedups.
+- `src/GRedscript.Resolver/Phase2/VirtualAtelierSpawnPacingPass.cs` — `VIRTUAL_ATELIER_DROPPOINT_SPAWN_PACING_V1`.
+- `src/GRedscript.Resolver/Phase2/EnhancedVehicleCameraRegistrationPass.cs` — `EVS_UNUSED_CAMERA_INPUT_REGISTRATIONS_V1`.
+- Canonical integration in `src/GRedscript.Resolver/RedscriptGenerationPlan.cs` — source-aware after generic #1–#10 and existing semantic #11–#36. The two branches of game runtime processing are NOT applied via separate corrective passes.
+- `src/GRedscript.Resolver/Program.cs` contains independent test/reference commands `phase2-vad-spawn` and `phase2-evs-camera`; player Generate invokes the one-pass Stage, not these commands in sequence.
+- Source-state tests: `tests/GRedscript.Resolver.Tests/test_phase2_vad_spawn_pacing.py`, `test_phase2_evs_camera.py`; independent CI `.github/workflows/redscript-pass6.yml`; full branch GCO packaging CI is enabled without modifying `main`.
+- No game ZIP contains SCC, profiler binaries or historical whole-file copies.
 
-**No current generated overlay has been verified by a new in-game capture.**
+**Integration status:** **Production one-pass generator implemented and green on isolated `dev/redscript/pass6`**. The two stage numbers #37/#38 are branch-local placeholders because concurrent agents have allocated stages 37+ in `dev/redscript/resolver_handoff`. Do not force-push, cherry-pick the entire central plan, or merge to stable `main`; migrate these two generator calls after the latest shared semantic stages, reconcile numbering and rerun full combined SCC/application CI.
+
+**Gameplay status:** Not verified with fresh in-game tests or comparable before/after capture. Successful SCC and packaging do not constitute gameplay or FPS/CPU evidence.
