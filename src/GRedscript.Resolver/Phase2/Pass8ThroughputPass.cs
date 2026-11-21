@@ -80,7 +80,14 @@ public static class Pass8ThroughputPass
         string body = source[(method.Open + 1)..method.Close];
         var branches = PerkBranch.Matches(body);
         if (branches.Count == 0)
+        {
+            // Historical/manual switch dispatch is already independently
+            // classified before mutable stats are read.
+            if (Regex.IsMatch(body, @"\bswitch\s+perkType\b") &&
+                Regex.IsMatch(body, @"\bdefault\s*:\s*return\s+wrappedMethod\s*\(\s*perkType\s*\)"))
+                return new("COMPLETE", null, null);
             return new("REFUSED", null, "PASS8_PERK_CLASSIFICATION_MISSING");
+        }
         var names = branches.Select(m => m.Groups["perk"].Value)
             .Distinct(StringComparer.Ordinal).ToArray();
         if (names.Length < 2 || !Regex.IsMatch(body,
@@ -113,7 +120,10 @@ public static class Pass8ThroughputPass
                     body[(existing.Index + existing.Length)..];
                 return new("APPLIED", ReplaceBody(source, method, updated), null);
             }
-            if (prefix.Trim().Length != 0)
+            // Comments and generic markers are inert and remain in place.
+            string commentFree = Regex.Replace(prefix,
+                @"//[^\r\n]*|/\*[\s\S]*?\*/", "");
+            if (commentFree.Trim().Length != 0)
                 return new("REFUSED", null, "PASS8_PERK_SETUP_NOT_FIRST");
             // Refuse a newer/custom body that has any other perkType-dependent
             // behavior not represented by the recognized 24-style branches.
