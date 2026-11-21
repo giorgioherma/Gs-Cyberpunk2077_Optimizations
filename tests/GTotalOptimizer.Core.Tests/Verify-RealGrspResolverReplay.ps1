@@ -2058,7 +2058,9 @@ try {
       @{ Id='trigger-mode-literal-tags'; Order=20; Command='phase2-trigger-mode-tags';
          Rule='TRIGGER_MODE_LITERAL_TAG_NAMES_V1'; Owner='TriggerModeControl' },
       @{ Id='disable-position-tracing'; Order=21; Command='phase2-disable-position-tracing';
-         Rule='DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1'; Owner='DisablePositionReveal' }
+         Rule='DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1'; Owner='DisablePositionReveal' },
+      @{ Id='hologirl-material-event'; Order=22; Command='phase2-hologirl-material';
+         Rule='HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1'; Owner='HQ_HoloGirl' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

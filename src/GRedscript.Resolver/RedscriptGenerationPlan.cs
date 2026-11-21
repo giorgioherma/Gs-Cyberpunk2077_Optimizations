@@ -1004,6 +1004,53 @@ public static class RedscriptGenerationPlan
         if (tracing.Status == "APPLIED" && tracing.Reason is not null)
             skipped.Add(new(21, "disable-position-tracing", 1, tracing.Reason));
 
+        // Game-tested HQ_HoloGirl Pass 4/5, from the installed owner's
+        // generic-first source: event early rejection, cached material
+        // path and one color/emissive evaluation per matching callback.
+        string hologirlRoot = Path.Combine(output, "_stages",
+            "22-hologirl-material-event");
+        var hologirl = HqHoloGirlMaterialEventPass.Generate(game, hologirlRoot,
+            Directory.Exists(final) ? final : null);
+        if (hologirl.Status == "APPLIED")
+        {
+            string rel = hologirl.SourcePath ??
+                throw new InvalidDataException("HQ_HOLOGIRL_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(hologirlRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/HQ_HoloGirl/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, hologirlRoot) || !IsInside(target, final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("HQ_HOLOGIRL_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string previous = File.ReadAllText(target);
+                string updated = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    previous, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !updated.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException("HQ_HOLOGIRL_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source,target,overwrite:existed);
+            files += existed ? 0 : 1;
+            expressions += hologirl.AppliedEdits;
+            results.Add(new(22,"hologirl-material-event",
+                hologirl.AppliedEdits,existed ? 0 : 1,
+                existed ? 1 : 0,[]));
+        }
+        else if (hologirl.Status == "REFUSED")
+            skipped.Add(new(22,"hologirl-material-event",1,
+                hologirl.Reason ?? "HQ_HOLOGIRL_SOURCE_INCOMPATIBLE"));
+        else if (hologirl.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("HQ_HOLOGIRL_STATUS_UNKNOWN");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

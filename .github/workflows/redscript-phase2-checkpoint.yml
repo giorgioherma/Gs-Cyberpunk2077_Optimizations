@@ -42,6 +42,7 @@ jobs:
       PHASE2_REDWINDOWS_OUTPUT: ${{ github.workspace }}/.phase2-redwindows-find
       PHASE2_TRIGGER_OUTPUT: ${{ github.workspace }}/.phase2-trigger-tags
       PHASE2_DPR_OUTPUT: ${{ github.workspace }}/.phase2-dpr-tracing
+      PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -498,6 +499,40 @@ jobs:
           Copy-Item -LiteralPath $source -Destination $target -Force
           Write-Host 'PASS DisablePositionReveal three state guards, original callbacks intact'
 
+      - name: Generate HQ HoloGirl historical material event fast path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-hologirl-material --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_HOLOGIRL_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_HQ_HOLOGIRL_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_HOLOGIRL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_HQ_HOLOGIRL_EXPECTED_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/HQ_HoloGirl/Engine/HoloGirl.reds'
+          $file=Join-Path $env:PHASE2_HOLOGIRL_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw 'PHASE2_HQ_HOLOGIRL_OUTPUT_MISSING'
+          }
+          $now=Get-Content -LiteralPath $file -Raw
+          if (!$now.Contains('this.holoBaseRR = HQRes("holo_base.mi");') -or
+              !$now.Contains('ResourceRef.GetPath(mtl.baseMaterial) != this.holoBaseRR') -or
+              !$now.Contains('let color = this.ResolveColor(this.holo.txColor);') -or
+              !$now.Contains('let emissive = this.GetEmissive();') -or
+              !$now.Contains('BindCallbackTRL(this, n"UpdateHQHolo"') -or
+              !$now.Contains('HoloGirl.Get().UpdateAll();')) {
+            throw 'PHASE2_HQ_HOLOGIRL_CALLBACK_OR_HOIST_MISSING'
+          }
+          $target=Join-Path $env:PHASE2_OUTPUT $rel
+          if (Test-Path -LiteralPath $target -PathType Leaf) {
+            throw 'PHASE2_HQ_HOLOGIRL_UNEXPECTED_OWNER_COLLISION'
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          Copy-Item -LiteralPath $file -Destination $target
+          Write-Host 'PASS HQ_HoloGirl cached material target and event-local color/emissive'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -584,6 +619,17 @@ jobs:
                 (Get-FileHash -LiteralPath $dprRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_DPR_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
             }
+            $hq=@($result.completed | Where-Object { $_.id -eq 'hologirl-material-event' })
+            $hqRel='r6/scripts/HQ_HoloGirl/Engine/HoloGirl.reds'
+            $hqRef=Join-Path $env:PHASE2_HOLOGIRL_OUTPUT $hqRel
+            $hqActual=Join-Path (Join-Path $stage 'effective-preview') $hqRel
+            if ($hq.Count -ne 1 -or [int]$hq[0].order -ne 22 -or
+                [int]$hq[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $hqActual) -or
+                (Get-FileHash -LiteralPath $hqActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $hqRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_HQ_HOLOGIRL_CANONICAL_DIFFERS_FROM_REFERENCE'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -622,7 +668,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

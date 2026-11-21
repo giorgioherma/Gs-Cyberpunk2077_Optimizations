@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
                 return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-hologirl-material")
+                return RunPhase2HoloGirlMaterial(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-disable-position-tracing")
                 return RunPhase2DisablePositionTracing(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-trigger-mode-tags")
@@ -634,6 +636,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2HoloGirlMaterial(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "HQ HoloGirl pass needs --game --out [--base-overlay]");
+        var result = HqHoloGirlMaterialEventPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 HQ HoloGirl material: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 
