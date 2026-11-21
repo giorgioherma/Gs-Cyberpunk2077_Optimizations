@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Pass 2.1 GearRecoverySystem input migration #32
+
+- `GEAR_RECOVERY_INPUT_HUB_FALLBACK_V1` completes historical GRS input routing on actual post-generic installed source through one combined generator after #31. Original `GRSRecoverInputListener.OnAction` and exact successful-action consumption survive; `OnGRedInput` reuses the original recovery checks from `GRSPerformRecover()` and sets `evt.consumed = true` only for successful recovery. One action-specific InputHub subscription, original engine fallback if unavailable/failed, exact cleanup on detach. No duplicated gameplay, timers, ownership changes or absent mod output.
+- Recognizes stock/partial/complete/custom/relocated/absent/incompatible/repeated source. [Fast #177 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44865374769): source-state tests, current real 2,331 post-generic source, independent one-pass bytes and official SCC 0.5.31 compilation. [Full #1077](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44865386837) was still validating captured-source replay and integrated app/ZIP when recorded. No in-game verification or measured improvement claimed.
+- Next is present DrugDealer input in historical 2.1: five independent owner listeners, each already covered by generic `ACTION_LITERAL_MEMBERSHIP_V1`; retain original hold-complete consumption and engine fallbacks while porting action-specific subscriptions. Historical Street Vendors is absent and unoptimized baseline unavailable: audit all ten generics on trustworthy source before any semantics; no output while absent.
+
 ## 2026-11-21 — Historical Pass 2.0 FlushingEtiquette input routing #31
 
 - `FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1` is connected after the ten generics and semantic #14/#15 in the canonical one-Generate output. Only live owner `r6/scripts/FlushingEtiquette/FE_Input.reds` is rewritten. The original `FEInput.Handle(player, ListenerAction)` retains the early unrelated-name gate; the gameplay body is shared by InputHub `OnGRedInput` via `HandleValues(player,name,type)`, without duplicated gameplay logic.
