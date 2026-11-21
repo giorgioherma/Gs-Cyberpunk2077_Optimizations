@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
                 return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-redwindows-setters")
+                return RunPhase2RedWindowsSetters(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-dark-future-aggressive")
                 return RunPhase2DarkFutureAggressive(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-redwindows-render")
@@ -642,6 +644,24 @@ public static class Program
             " candidateEdits=" + result.AppliedEdits +
             " passes=" + result.Completed.Length +
             " productionZip=false");
+        return 0;
+    }
+
+    private static int RunPhase2RedWindowsSetters(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "RedWindows setter optimization requires --game --out [--base-overlay]");
+        var result = RedWindowsRedundantSettersPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 RedWindows setter guards: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
     }
 

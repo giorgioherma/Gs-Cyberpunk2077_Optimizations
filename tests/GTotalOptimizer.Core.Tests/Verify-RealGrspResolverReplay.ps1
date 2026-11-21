@@ -2066,7 +2066,9 @@ try {
       @{ Id='redwindows-render-dormancy'; Order=24; Command='phase2-redwindows-render';
          Rule='REDWINDOWS_RENDER_AWARE_DORMANCY_V1'; Owner='RedWindows' },
       @{ Id='dark-future-aggressive-throttles'; Order=25; Command='phase2-dark-future-aggressive';
-         Rule='DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1'; Owner='Dark Future' }
+         Rule='DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1'; Owner='Dark Future' },
+      @{ Id='redwindows-redundant-setters'; Order=26; Command='phase2-redwindows-setters';
+         Rule='REDWINDOWS_HISTORICAL_REDUNDANT_SETTERS_V1'; Owner='RedWindows' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

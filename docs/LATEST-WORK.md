@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Historical Dark Future aggressive + RedWindows redundant setters
+
+- Owner expressly approved importing aggressive historical Dark Future throttles if worthwhile and game-tested; don't reject simply for cadence severity. Historical final Pass 6/7 source shows buff/debuff layout every tenth same-count callback, cooldown wheel every sixth callback, individual cooldown visuals every sixth non-urgent callback, and static infinite-duration repeat suppression; count/stack/outro urgency exceptions remain.
+- **#25 DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1:** three independently repairable operations, effective post-generic source after existing infinite tag #12 and 400ms icon #13. Source-state stock/partial/complete/custom/refusal/repeated tests; **post-generic CI #137 SUCCESS** (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44852944165), official SCC 0.5.31 and canonical one-pass independent source bytes passed. Full .NET10 combined ZIP #1059 is running at document update; don't claim final package acceptance before completion.
+- **#26 REDWINDOWS_HISTORICAL_REDUNDANT_SETTERS_V1:** historical Pass 8/9 SetShapeColor (owner SameColor), SetShapeOpacity and SetShapeBorderOpacity (historical 0.001 tolerance), SetWidgetColor text tint no-op when unchanged. Four independently recognized source-local edits; staged over already-generated RedWindows retained Find #19 and render helper #24, without duplicate resources or loss of prior generics. Focused CI and full app/ZIP results pending; generated code not yet gameplay-tested.
+- **Validation safety:** The original historical ZIP was game tested, but the new generated overlays still require in-game validation. No FPS, allocation or frame-time gain claimed. Other historical present mod owners unchanged; 19 still lack dedicated generators. Rules are generic-first, partial-complete, idempotent, version-fluid, narrowly incompatible only, and one clean game-relative ZIP.
+
+
 ## 2026-11-21 — HQ_HoloGirl #22 and RedWindows #23/#24 historical source-aware ports
 
 - **Previous full application CI #1054 SUCCESS:** https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44848801508 confirmed TriggerModeControl #20 + DisablePositionReveal #21 in the canonical GCO source/ZIP and Windows .NET10 packaging.
