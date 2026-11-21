@@ -143,6 +143,16 @@
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#FFF000"/>
                             </Trigger>
+                            <!-- Apply the same scene-space neon field as the Page 1 cards
+                                 only to enabled Page 2 action buttons. Disabled
+                                 buttons retain their original quiet outline. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="SpatialNeon"/>
+                                    <Condition Property="IsEnabled" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ButtonFrame" Property="SpatialStroke" Value="True"/>
+                            </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#788588"/>
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#304347"/>
@@ -156,6 +166,13 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <!-- Page 2 uses Page 1's scene-space yellow-left / skyline-cyan-right
+             neon on enabled controls; Page 1 buttons are not restyled. -->
+        <Style x:Key="ResultsActionButton" TargetType="Button"
+               BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Tag" Value="SpatialNeon"/>
+            <Setter Property="BorderBrush" Value="{StaticResource NeonStroke}"/>
         </Style>
         <!-- Owner-standardized 760x112 SVGs: active yellow v2.9, inactive v3.3,
              restore v1.4. One shared shell, uniform scaling, live WPF text. -->
@@ -322,6 +339,15 @@
                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <!-- Page 2 CLOSE shares the color field; Page 1 CONTINUE
+                                 keeps its owner-approved gold border. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="SpatialNeon"/>
+                                    <Condition Property="IsEnabled" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ContinueShape" Property="SpatialStroke" Value="True"/>
+                            </MultiTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ContinueShape" Property="Stroke" Value="#00E2F2"/>
                                 <Setter TargetName="ContinueShape" Property="Fill" Value="{StaticResource GoldenMetalHot}"/>
@@ -943,7 +969,8 @@
                                  console BELOW the action buttons, not under the
                                  restored status and three capture indicators. -->
                             <Grid Margin="0,12,0,0">
-                                <fx:ChamferOutline Fill="#081012" Stroke="#36535B"
+                                <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
+                                                   SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
@@ -971,7 +998,8 @@
                                 </StackPanel>
                             </Grid>
                             <Grid Margin="0,10,0,0">
-                                <fx:ChamferOutline Fill="#081012" Stroke="#36535B"
+                                <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
+                                                   SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
                                 <StackPanel Margin="12">
@@ -992,13 +1020,13 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="0,0,4,0"
                                         Click="Analyze_Click"/>
                                 <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE OPTIMIZATION ZIP"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="4,0,4,0"
                                         Click="GenerateCetPass_Click"/>
                                 <Button x:Name="OpenFolderButton" Grid.Column="2" Content="OPEN FOLDER"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
                             <!-- Short installation guidance remains in two rows. -->
@@ -1039,7 +1067,7 @@
                         <Button x:Name="CloseAfterGenerationButton" Grid.Column="1"
                                 Content="CLOSE" Width="160" Height="49" Visibility="Collapsed"
                                 VerticalAlignment="Center"
-                                Style="{StaticResource ContinueStyle}"
+                                Style="{StaticResource ContinueStyle}" Tag="SpatialNeon"
                                 Click="CloseAfterGeneration_Click"/>
                     </Grid>
                 </Grid>
