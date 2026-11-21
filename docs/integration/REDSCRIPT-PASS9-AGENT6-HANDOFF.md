@@ -33,6 +33,17 @@ Each operation admits/refuses separately. Recognize partial and complete version
 - `tests/GRedscript.Resolver.Tests/test_phase2_runningman_pass9.py` — untouched, partial, complete, older/historical Pass 7, modified/relocated, incompatible, absent and repeated generation.
 - `.github/workflows/redscript-phase2-pass9.yml` — standalone branch-specific on-push SCC checkpoint using the authoritative 2,331-file post-generic source and official compiler 0.5.31, with no unapproved source in artifacts.
 
+## Verified CI (21 November 2026)
+
+- [**Isolated Pass 9 CI #2: SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875066403), source commit `fbd71cfcbbd56f328c39a8cbb5349bfe47cc02e5`.
+- .NET 10 owner resolver plus isolated CLI: **build successful, 0 warnings**.
+- **11 / 11 source-state tests passed**: untouched, partial, complete, historical Pass7 predecessor, custom/relocated, incompatible, absent, repeat and safe overlay behavior.
+- Official real post-generic source: **2,331** `.reds` files, **2** separately verified semantic operations, **1** game-relative RunningMan output; unchanged original source SHA256.
+- Repeated generation: `COMPLETE`, **0** additional edits.
+- Official SCC **0.5.31: SUCCESS** on effective post-generic stack plus Pass9 owner; **43,481,974 compiled bytes**; no player-side SCC.
+- [CI #1 failed](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874896087) because the generator initially validated timed `OnUpdate` with the two-argument `OnEnter` wrapper signature. Fixed at source in `fbd71cf` before CI #2. No repair stage.
+- Latest branch handoff documentation commit is separate from compiled source; this note does not change generator output.
+
 Pass 9 source-state tests and SCC are mandatory gates. Independent one-run output must be merged with the other semantic stages and validated using full GCO and final ZIP/rollback CI by the handoff integrator; this isolated branch does **not** declare product integration complete.
 
 No fresh in-game parity or performance capture is available. Do not claim measured frame-time benefits, gameplay approval, or production acceptance solely from compilation.
