@@ -72,6 +72,37 @@ jobs:
           $scripts=@(Get-ChildItem -LiteralPath '.phase2-pass8/r6/scripts' -Recurse -File -Filter '*.reds')
           if ($scripts.Count -ne 3) { throw "PASS8_UNEXPECTED_FILE_COUNT:$($scripts.Count)" }
           Write-Host "PASS8 source operations: $($r.appliedEdits), changed files: $($scripts.Count)"
+      - name: Generate and join ImmersiveCyberware Pass 8 operations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='tests/GRedscript.Pass8.Checkpoint/bin/Release/net10.0/GRedscript.Pass8.Checkpoint.dll'
+          & dotnet $dll --owner immersive --game '.phase2-private/base_after_generic' --base-overlay '.phase2-pass8' --out '.phase2-immersive'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS8_IMMERSIVE_GENERATION_FAILED' }
+          $r=Get-Content -LiteralPath '.phase2-immersive/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($r.ruleId -ne 'IMMERSIVE_CYBERWARE_PASS8_HOTPATH_V1' -or
+              $r.status -ne 'APPLIED' -or $r.appliedEdits -ne 3 -or
+              @($r.refusals).Count -ne 0) {
+            throw ("PASS8_IMMERSIVE_STOCK_SOURCE_NOT_COMPLETE: "+($r | ConvertTo-Json -Compress))
+          }
+          $files=@(Get-ChildItem -LiteralPath '.phase2-immersive/r6/scripts' -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 3) {
+            throw "PASS8_IMMERSIVE_FILE_COUNT_UNEXPECTED:$($files.Count)"
+          }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath((Resolve-Path '.phase2-immersive').Path,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw "PASS8_IMMERSIVE_PATH_ESCAPE:$rel"
+            }
+            $dest=Join-Path '.phase2-pass8' $rel
+            if (Test-Path -LiteralPath $dest) {
+              throw "PASS8_IMMERSIVE_CHIPWARE_OWNER_COLLISION:$rel"
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $dest
+          }
+          Write-Host "PASS8 ImmersiveCyberware operations: $($r.appliedEdits), merged scripts: $($files.Count)"
+
       - name: Compile authoritative source plus actual Pass 8 overlay using official SCC 0.5.31
         shell: pwsh
         run: |
@@ -82,7 +113,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach($p in @('.phase2-private','.phase2-pass8')) {
+          foreach($p in @('.phase2-private','.phase2-pass8','.phase2-immersive')) {
             if (Test-Path -LiteralPath $p) {
               Remove-Item -LiteralPath $p -Recurse -Force
             }
