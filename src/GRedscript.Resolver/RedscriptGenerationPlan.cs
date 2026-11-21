@@ -1751,7 +1751,7 @@ public static class RedscriptGenerationPlan
         string pass7Root = Path.Combine(output, "_stages", "700-pass7-chase");
         var pass7 = Pass7ChaseFrameFloorPass.Generate(game, pass7Root,
             Directory.Exists(final) ? final : null);
-        if (pass7.Operations.Length != 5 ||
+        if (pass7.Operations.Length != 6 ||
             pass7.AppliedEdits != pass7.Operations.Sum(x => x.AppliedEdits))
             throw new InvalidDataException("PASS7_STAGE_REPORT_INCONSISTENT");
 
@@ -1766,7 +1766,9 @@ public static class RedscriptGenerationPlan
             ("RUNNING_MAN_SPRINT_ENTRY_PERK_CACHE_V1", "RunningMan",
                 "pass7-runningman-double-sprint"),
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
-                "pass7-runningman-direction")
+                "pass7-runningman-direction"),
+            ("LIZZIES_BDS_PERFORMER_ATTACH_GATE_V1", "LizziesBDs",
+                "pass7-lizzies-performer-gate")
         };
         var copiedPass7 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int idx = 0; idx < expectedPass7.Length; idx++)
