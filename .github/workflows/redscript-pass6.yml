@@ -8,8 +8,11 @@ on:
     paths:
       - '.github/workflows/redscript-pass6.yml'
       - 'src/GRedscript.Resolver/Phase2/VirtualAtelierSpawnPacingPass.cs'
+      - 'src/GRedscript.Resolver/Phase2/EnhancedVehicleCameraRegistrationPass.cs'
+      - 'src/GRedscript.Resolver/RedscriptGenerationPlan.cs'
       - 'src/GRedscript.Resolver/Program.cs'
       - 'tests/GRedscript.Resolver.Tests/test_phase2_vad_spawn_pacing.py'
+      - 'tests/GRedscript.Resolver.Tests/test_phase2_evs_camera.py'
 
 permissions:
   contents: read
@@ -129,6 +132,46 @@ jobs:
             }
           }
           Write-Host ('PASS production one-pass VAD #37; edits='+$report.appliedEdits)
+          # The same one-pass Stage also applies the independent EVS
+          # camera subscriptions change to the owner file already
+          # transformed by #30. Generate an independent #30->#38 reference.
+          $evsRows=@($stageReport.completed | Where-Object { $_.id -eq 'evs-unused-camera-registrations' })
+          if ($evsRows.Count -ne 1 -or [int]$evsRows[0].order -ne 38 -or
+              [int]$evsRows[0].rewrittenExpressions -ne 4 -or
+              [int]$evsRows[0].composedFiles -ne 1) {
+            throw 'PASS6_EVS_MISSING_OR_NOT_COMPOSED_WITH_PS_STAGE'
+          }
+          $psRef='.pass6-evs-ps-ref'
+          $cameraRef='.pass6-evs-camera-ref'
+          & dotnet $dll phase2-evs-ps --game $game --out $psRef
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_INDEPENDENT_EVS_PS_FAILED' }
+          & dotnet $dll phase2-evs-camera --game $game --base-overlay $psRef --out $cameraRef
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_INDEPENDENT_EVS_CAMERA_FAILED' }
+          $camReport=Get-Content -LiteralPath (Join-Path $cameraRef 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($camReport.ruleId -ne 'EVS_UNUSED_CAMERA_INPUT_REGISTRATIONS_V1' -or
+              $camReport.status -ne 'APPLIED' -or [int]$camReport.appliedEdits -ne 4) {
+            throw ('PASS6_EVS_CAMERA_GENERATION_REFUSED: '+$camReport.status+' '+$camReport.reason)
+          }
+          $camSrc=Join-Path $cameraRef $camReport.sourcePath
+          $camDest=Join-Path $staged $camReport.sourcePath
+          if (!(Test-Path -LiteralPath $camSrc -PathType Leaf) -or
+              !(Test-Path -LiteralPath $camDest -PathType Leaf) -or
+              (Get-FileHash -LiteralPath $camSrc -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $camDest -Algorithm SHA256).Hash) {
+            throw 'PASS6_EVS_CAMERA_NOT_ONE_PASS_BYTE_PARITY'
+          }
+          $camContent=Get-Content -LiteralPath $camDest -Raw
+          foreach($required in @(
+            'gcoOnActionPS',
+            'wrappedMethod();',
+            'player.RegisterInputListener(this, n"CycleDoor")',
+            'player.RegisterInputListener(this, n"CycleWindow")')) {
+            if (!$camContent.Contains($required,[StringComparison]::Ordinal)) {
+              throw ('PASS6_EVS_CAMERA_DROPPED_PREVIOUS_OPERATION: '+$required)
+            }
+          }
+          Write-Host 'PASS production one-pass EVS camera #38: prior #30 and all native/other input preserved'
+
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot $game -CompilerRoot '.pass6-private/Compiler' -ResolverDll $dll -SemanticOverlayRoot $staged
           if (!$?) { throw 'PASS6_COMBINED_EFFECTIVE_SCC_FAILED' }
 
@@ -138,7 +181,8 @@ jobs:
         run: |
           foreach ($path in @(
             '.pass6-private', '.pass6-plan.json', '.pass6-analysis.json',
-            '.pass6-existing-stage', '.pass6-vad')) {
+            '.pass6-existing-stage', '.pass6-vad',
+            '.pass6-evs-ps-ref', '.pass6-evs-camera-ref')) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Recurse -Force
             }
