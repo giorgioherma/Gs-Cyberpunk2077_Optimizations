@@ -158,7 +158,7 @@ internal static class GcoProfilerDigest
         html.AppendLine("</div>");
 
         html.AppendLine("<h2>Notable moments on the shared timeline</h2>");
-        html.AppendLine("<p class=\"muted\">Largest <em>present intervals</em> in distinct 50 ms windows, with measured CET and REDscript work in those same coarse windows. Select a time to inspect it in the three-track graph. <strong>No sample</strong> means that source had no measurement aligned to that particular 50 ms bucket; it is not zero work or evidence that the overall capture failed.</p>");
+        html.AppendLine("<p class=\"muted\">Largest <em>present intervals</em> in distinct 50 ms windows, with measured CET and REDscript work in those same coarse windows. Select a time to inspect it in the three-track graph.</p>");
         html.AppendLine("<div class=\"digest-panel table-scroll\"><table class=\"digest-table windows\"><thead><tr><th>Time</th><th>PresentMon worst interval</th><th>CET work / bucket</th><th>REDscript work / bucket</th><th>CPU busy max</th></tr></thead><tbody>");
         foreach (var row in worstWindows)
         {
@@ -166,9 +166,9 @@ internal static class GcoProfilerDigest
                 .Append(row.TimeMs.ToString("0.###", CultureInfo.InvariantCulture))
                 .Append("\"><td>").Append(F(row.TimeMs / 1000, 2)).Append(" s</td><td>")
                 .Append(F(row.IntervalMs, 1)).Append(" ms</td><td>")
-                .Append(BucketCell(row.CetMs)).Append("</td><td>")
-                .Append(BucketCell(row.RedMs)).Append("</td><td>")
-                .Append(BucketCell(row.CpuMs)).AppendLine("</td></tr>");
+                .Append(F(row.CetMs, 1)).Append(" ms</td><td>")
+                .Append(F(row.RedMs, 1)).Append(" ms</td><td>")
+                .Append(F(row.CpuMs, 1)).AppendLine(" ms</td></tr>");
         }
         if (worstWindows.Count == 0)
             html.AppendLine("<tr><td colspan=\"5\">PresentMon chronology was not captured; no correlation is claimed.</td></tr>");
@@ -335,13 +335,6 @@ internal static class GcoProfilerDigest
         n is double value && double.IsFinite(value)
             ? value.ToString("N" + decimals, CultureInfo.InvariantCulture)
             : "NOT_CAPTURED";
-
-    // A null is a missing observation for THIS bucket, not a failed recording.
-    // Do not append "ms" to a missing value.
-    private static string BucketCell(double? value) =>
-        value is double v && double.IsFinite(v)
-            ? F(v, 1) + " ms"
-            : "<span title=\"No measurement aligned to this 50 ms window; not zero work or a failed capture\">No sample</span>";
 
     private static string H(string value) => WebUtility.HtmlEncode(value);
 }

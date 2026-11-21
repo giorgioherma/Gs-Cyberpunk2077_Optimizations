@@ -820,10 +820,10 @@ canvas.addEventListener('mousemove',e=>{
  const t=xmin+ratio*(xmax-xmin);let lo=0,hi=data.length-1;
  while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}
  const p=data[Math.max(0,lo-1)];if(!p)return;
- const fmt=v=>v==null?'No sample':v.toFixed(3)+' ms';
+ const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
  const near=spikes.filter(s=>Math.abs(s.timeMs-p.timeMs)<75).sort((a,b)=>b.exclusiveMs-a.exclusiveMs).slice(0,2);
  const markerText=near.length?'\nNearby profiler marker(s): '+near.map(s=>s.domain+' '+s.owner+' '+s.exclusiveMs.toFixed(2)+' ms').join(' | '):'';
- tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresent interval max: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' presents)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET exclusive: '+fmt(p.cetExclusiveMeasuredMs)+'\nREDscript instrumented: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED outgoing calls: '+(p.redscriptCalls??'No sample')+markerText;
+ tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresent interval max: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' presents)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET exclusive: '+fmt(p.cetExclusiveMeasuredMs)+'\nREDscript instrumented: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED outgoing calls: '+(p.redscriptCalls??'NOT_CAPTURED')+markerText;
  tip.style.display='block';tip.style.left=Math.max(4,Math.min(r.width-305,e.clientX-r.left+9))+'px';
  tip.style.top=Math.max(5,e.clientY-r.top-115)+'px';
 });
