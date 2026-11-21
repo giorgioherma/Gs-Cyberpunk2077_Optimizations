@@ -92,7 +92,7 @@ internal static class DrugDealerInputHubPass
     private static bool RuntimeAbi(string root)
     {
         bool r=false,h=false,l=false,e=false;
-        foreach(string file in Directory.EnumerateFiles(root,"*.reds",SearchOption.AllDirectories))
+        foreach(string file in ProvidedRuntimeSourceScope.Files(root))
         {
             string s=File.ReadAllText(file,Encoding.UTF8);
             if(!Has(s,@"\bmodule\s+GRedRuntime\b"))continue;

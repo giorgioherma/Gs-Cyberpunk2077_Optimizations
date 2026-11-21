@@ -179,7 +179,7 @@ internal static class FlushingEtiquetteInputHubPass
         // Check actual declared GRedRuntime APIs; never an exact folder,
         // framework version or historical file location.
         bool runtime = false, input = false;
-        foreach (string f in Directory.EnumerateFiles(scripts,"*.reds",SearchOption.AllDirectories))
+        foreach (string f in ProvidedRuntimeSourceScope.Files(scripts))
         {
             var v = File.ReadAllText(f,Encoding.UTF8);
             if (!Present(v,@"\bmodule\s+GRedRuntime\b")) continue;

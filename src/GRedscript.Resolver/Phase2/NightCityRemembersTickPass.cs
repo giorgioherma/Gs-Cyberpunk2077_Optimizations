@@ -85,8 +85,7 @@ internal static class NightCityRemembersTickPass
     internal static bool RuntimeAbi(string scripts)
     {
         bool runtime = false, scheduler = false, job = false;
-        foreach (string file in Directory.EnumerateFiles(
-            scripts, "*.reds", SearchOption.AllDirectories))
+        foreach (string file in ProvidedRuntimeSourceScope.Files(scripts))
         {
             string source = File.ReadAllText(file, Encoding.UTF8);
             if (!Has(source, @"\bmodule\s+GRedRuntime\b")) continue;

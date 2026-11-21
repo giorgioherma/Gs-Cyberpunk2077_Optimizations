@@ -72,8 +72,7 @@ internal static class GearRecoveryStateCachePass
     private static bool Abi(string scripts)
     {
         bool runtime=false,state=false;
-        foreach(string file in Directory.EnumerateFiles(
-            scripts,"*.reds",SearchOption.AllDirectories))
+        foreach(string file in ProvidedRuntimeSourceScope.Files(scripts))
         {
             string s=File.ReadAllText(file,Encoding.UTF8);
             if(!Has(s,@"\bmodule\s+GRedRuntime\b"))continue;

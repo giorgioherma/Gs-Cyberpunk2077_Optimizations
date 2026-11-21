@@ -338,7 +338,7 @@ internal static class VehicleMileageSchedulerPass
         int edits=0,complete=0,owners=0;
         string root=Path.Combine(scripts,"VehicleMileage");
         bool runtime=NightCityRemembersTickPass.RuntimeAbi(scripts);
-        bool reschedule=Directory.EnumerateFiles(scripts,"*.reds",SearchOption.AllDirectories)
+        bool reschedule=ProvidedRuntimeSourceScope.Files(scripts)
             .Any(f=>Has(File.ReadAllText(f,Encoding.UTF8),
                 @"\bmodule\s+GRedRuntime\b") &&
                 Has(File.ReadAllText(f,Encoding.UTF8),

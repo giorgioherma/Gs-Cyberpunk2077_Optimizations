@@ -426,8 +426,7 @@ internal static class BrowserExtensionInputHubPass
             "func IsReady(", "func GetInputHub(", "static func Get("
         ];
         var found = new bool[needed.Length];
-        foreach (string f in Directory.EnumerateFiles(scripts, "*.reds",
-            SearchOption.AllDirectories))
+        foreach (string f in ProvidedRuntimeSourceScope.Files(scripts))
         {
             string code = File.ReadAllText(f, Encoding.UTF8);
             // Framework ownership is determined by the declared module/API,

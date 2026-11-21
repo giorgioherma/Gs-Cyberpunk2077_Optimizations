@@ -54,7 +54,7 @@ internal static class GearRecoveryInputHubPass
     internal static bool RuntimeAbi(string scripts)
     {
         bool r=false,h=false,l=false,e=false;
-        foreach(var f in Directory.EnumerateFiles(scripts,"*.reds",SearchOption.AllDirectories)){
+        foreach(var f in ProvidedRuntimeSourceScope.Files(scripts)){
             string s=File.ReadAllText(f,Encoding.UTF8);
             if(!Has(s,@"\bmodule\s+GRedRuntime\b"))continue;
             if(Has(s,@"\bclass\s+Runtime\b") && Has(s,@"\bfunc\s+IsReady\s*\(") &&

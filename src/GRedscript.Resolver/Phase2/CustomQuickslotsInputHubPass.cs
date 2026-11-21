@@ -689,8 +689,7 @@ public class CustomQuickslotsDeviceListener extends InputDeviceListener {
         var found = new Dictionary<string,
             (IReadOnlyList<SourceAdmission.Token> Tokens, Block Scope)>(
             StringComparer.Ordinal);
-        foreach (string path in Directory.EnumerateFiles(scripts, "*.reds",
-            SearchOption.AllDirectories))
+        foreach (string path in ProvidedRuntimeSourceScope.Files(scripts))
         {
             string source = File.ReadAllText(path, Encoding.UTF8);
             if (!source.Contains("GRedRuntime", StringComparison.Ordinal))
