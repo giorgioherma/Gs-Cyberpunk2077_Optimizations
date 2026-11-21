@@ -276,6 +276,19 @@ class FeHubTests(unittest.TestCase):
         self.assertEqual(report['status'],'NOT_APPLICABLE',report)
         self.assertIsNone(output)
 
+    def test_plain_postgeneric_without_prior_semantic_gate_still_applies(self):
+        early = '    if !Equals(name, n"ShowStatusEffects") && !Equals(name, n"FEM_Flush_Relief") && !Equals(name, n"FEM_Flush_VehicleRelief") && !Equals(name, n"FEM_Flush_WashHands") && !Equals(name, n"Flush_Relief") && !Equals(name, n"Flush_VehicleRelief") && !Equals(name, n"Flush_WashHands") { return false; }\n'
+        plain = SOURCE.replace(early, '')
+        self.assertNotEqual(plain, SOURCE)
+        report, output = self.generate(plain)
+        self.assertEqual(report['status'], 'APPLIED', report)
+        self.assertIn('return FEInput.HandleValues(player, name, type);', output)
+        self.assertIn('return sys.TryWashHands(player);', output)
+        self.assertIn('GCO-GENERIC:CNAME_FIXED_INDEX_V1', output)
+        repeated, none = self.generate(output)
+        self.assertEqual(repeated['status'], 'COMPLETE', repeated)
+        self.assertIsNone(none)
+
     def test_missing_framework_refuses(self):
         report, output=self.generate(framework=False)
         self.assertEqual(report['status'],'REFUSED',report)
