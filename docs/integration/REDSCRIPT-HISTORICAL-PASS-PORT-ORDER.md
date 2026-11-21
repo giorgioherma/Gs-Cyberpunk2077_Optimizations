@@ -1,5 +1,12 @@
 # GCO Phase 2 — systematic historical REDscript port order
 
+## Parallel Pass 7 branch — standalone production integration (2026-11-21)
+
+- On `dev/redscript/pass7` from `96d66c66`: six *independent* historical Pass 7 operations implemented in source-aware generator and wired into **canonical one-pass Stage** after generic+existing semantics. Reserved slots 700–705 avoid occupying the handoff/Pass4/Pass5 agents' stage-number ranges; merge owner renumbers only after their branches converge. No stable or shared development branch edits.
+- Source-backed owners: NightCityRemembers spawn guards; StealthRunner quest detection and attach/detach player handle; RunningMan double sprint and conditional direction perk state; LizziesBDs performer attach guard. Previous DF/DVCore/DPR/Quickhack operations remain COMPLETE, not duplicated.
+- Separate `redscript-pass7-checkpoint.yml` source-state / full combined SCC CI runs as a batch. **CI verdict pending** at this checkpoint. Remaining ReinforcementsCall/7.1, zzy chipware and broader Lizzies index changes are not claimed implemented; coordinate their owning operations with parallel branches. See `REDSCRIPT-PASS7-ISOLATED-HANDOFF.md`.
+
+
 **Established:** 21 November 2026. **Branch:** `dev/redscript/resolver_handoff`.
 
 ## Source and method
