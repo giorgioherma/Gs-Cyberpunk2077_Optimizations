@@ -223,6 +223,38 @@ class DigitalVixenDormancyTests(unittest.TestCase):
         self.assertIn("custom user-owned layout",files[
             "DVCore_BodyMapWindow.reds"])
 
+    def test_complete_historical_status_loop_upgrades_pinned_behavior(self):
+        import re
+        _,fully_optimized=self.run_generation()
+        legacy=dict(fully_optimized)
+        status=legacy["DVCore_StatusWindow.reds"]
+        match=re.search(
+            r'let shouldUpdate: Bool = !this.initialized;[\\s\\S]*?(?=if shouldUpdate \\{)',
+            status)
+        self.assertIsNotNone(match)
+        old=match.group(0)
+        original_historical='''let shouldUpdate: Bool = !this.initialized;
+    let delay: Float = 2.0;
+    let mgr: ref<RWManager> = RWManager.Get(this.gi);
+    if this.initialized && IsDefined(mgr) && mgr.IsOverlay() {
+      delay = 0.5;
+      let win: ref<RWWindow> = mgr.FindWindow(n"DigitalVixenCore.Status");
+      shouldUpdate = IsDefined(win) && win.IsRendered();
+      if shouldUpdate { delay = 0.25; }
+    }
+    '''
+        legacy["DVCore_StatusWindow.reds"]=status.replace(
+            old,original_historical,1)
+        report,files=self.run_generation(legacy)
+        self.assertEqual(report["status"],"APPLIED",report)
+        self.assertEqual(report["appliedEdits"],1,report)
+        self.assertEqual(list(files),["DVCore_StatusWindow.reds"])
+        self.assertIn("if this.initialized && IsDefined(mgr) {",
+                      files["DVCore_StatusWindow.reds"])
+        self.assertIn("if mgr.IsOverlay() { delay = 0.5; }",
+                      files["DVCore_StatusWindow.reds"])
+        self.assertEqual(self.run_generation(files)[0]["status"],"COMPLETE")
+
     def test_incompatible_single_loop_skips_only_that_operation(self):
         sources=dict(ORIGINAL)
         sources["DVCore_ItemEditor.reds"]=ITEM.replace(
