@@ -1743,6 +1743,12 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 8: independent source-proven throughput/caching owners.
+        // The shared production Generate applies the whole compatible batch
+        // after generics and existing semantics, without separate ZIPs/passes.
+        Pass8CanonicalComposition.Apply(game, output, final, results,
+            skipped, ref files, ref expressions);
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
