@@ -912,7 +912,7 @@
                         <!-- Lift only the capture console text; footer button and
                              capture content keep their original positions. -->
                         <Grid.RenderTransform>
-                            <TranslateTransform Y="-28"/>
+                            <TranslateTransform Y="-14"/>
                         </Grid.RenderTransform>
                         <!-- Restore multiple visible guidance rows; allow scrolling
                              if all five framework gates fail at once. Keep the
@@ -1066,7 +1066,7 @@
                                       MaxHeight="68" MinHeight="34" Margin="0,0,12,0">
                             <!-- Align the Analyze console higher without moving DONE. -->
                             <ScrollViewer.RenderTransform>
-                                <TranslateTransform Y="-28"/>
+                                <TranslateTransform Y="-14"/>
                             </ScrollViewer.RenderTransform>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        Width="{Binding ViewportWidth, ElementName=ResultsConsoleScroll}"
