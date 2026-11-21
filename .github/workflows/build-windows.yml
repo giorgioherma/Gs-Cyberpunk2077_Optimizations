@@ -165,6 +165,13 @@ jobs:
           $ErrorActionPreference='Stop'
           dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_BUILD_FAILED' }
+          # Pass 8 source-state contracts invoke the independent runner DLL.
+          # Build it before test discovery; otherwise tests fail because the
+          # executable is absent, not because the source contract is unsafe.
+          if ($env:GITHUB_REF -eq 'refs/heads/dev/redscript/pass8') {
+            dotnet build tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj -c Release --nologo
+            if ($LASTEXITCODE -ne 0) { throw 'GCO_PASS8_TEST_RUNNER_BUILD_FAILED' }
+          }
           python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_SAFETY_TESTS_FAILED' }
           $runtime = Get-Content src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.runtimeconfig.json -Raw
