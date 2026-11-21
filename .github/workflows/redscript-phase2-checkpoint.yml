@@ -1429,9 +1429,24 @@ jobs:
             if ($grsHub.Count -ne 1 -or [int]$grsHub[0].order -ne 32 -or
                 [int]$grsHub[0].rewrittenExpressions -lt 3 -or
                 !(Test-Path -LiteralPath $grsHubActual -PathType Leaf) -or
-                (Get-FileHash -LiteralPath $grsHubActual -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $grsHubRef -Algorithm SHA256).Hash) {
-              throw 'PHASE2_GRS_HUB_ONE_PASS_BYTE_PARITY_DIFF'
+                !(Test-Path -LiteralPath $grsHubRef -PathType Leaf)) {
+              throw 'PHASE2_GRS_HUB_SOURCE_OR_STAGE_MISSING'
+            }
+            # #36 subsequently edits the same GRS owner file. Preserve #32
+            # held-action consumption, runtime subscription and engine fallback.
+            # The exact resulting bytes are checked against the independently
+            # composed #32 -> #36 file in PHASE2_GRS_POLL_ONE_PASS_BYTE_PARITY_DIFF.
+            $grsInputFinal=Get-Content -LiteralPath $grsHubActual -Raw
+            $grsInputRef=Get-Content -LiteralPath $grsHubRef -Raw
+            foreach($invariant in @(
+                'class GRSRecoverInputListener extends InputListener',
+                'this.GRSPerformRecover();',
+                'm_grsFallbackRegistered',
+                'this.m_grsInputHub.Unsubscribe(this.m_grsInputSubscription);')) {
+              if (!$grsInputRef.Contains($invariant,[StringComparison]::Ordinal) -or
+                  !$grsInputFinal.Contains($invariant,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_GRS_INPUT_LOST_AFTER_POLL:'+ $invariant)
+              }
             }
             $dd=@($result.completed | Where-Object { $_.id -eq 'drugdealer-input-hub' })
             if ($dd.Count -ne 5 -or @($dd | Where-Object { [int]$_.order -ne 33 }).Count -ne 0) {
