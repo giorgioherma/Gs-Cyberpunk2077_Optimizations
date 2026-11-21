@@ -50,8 +50,14 @@ internal static class CyberwareExInputHubPass
             string body=s[(tokens[open].Start+1)..tokens[close].Start];
             if(!body.Contains(witness,StringComparison.Ordinal)){i=close;continue;}
             string prior=s[Math.Max(0,tokens[i].Start-240)..tokens[i].Start];
+            // CyberwareEx also wraps the quickhacks UI OnAction. It shares
+            // TryToCycleOverclockedState but is not a PlayerPuppet hook.
+            // Continue scanning rather than rejecting a valid sibling.
             if(!Has(prior,@"@wrapMethod\s*\(\s*PlayerPuppet\s*\)\s*protected\s+cb\s*$"))
-                return null;
+            {
+                i=close;
+                continue;
+            }
             if(found is not null)return null;
             found=new(tokens[i].Start,tokens[open].Start,tokens[close].Start);
             i=close;
