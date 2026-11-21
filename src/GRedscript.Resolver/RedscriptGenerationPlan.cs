@@ -1966,6 +1966,12 @@ public static class RedscriptGenerationPlan
         if(vcp.Status is not ("APPLIED" or "REFUSED" or "COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("VCP_QUEST_STAGE_UNKNOWN_STATUS");
 
+        // Source-first historical Passes 4-10. A single Generate performs
+        // every compatible missing operation after all ten generic rules
+        // and earlier semantic stages, preserving owner-local fallbacks.
+        RedscriptHistoricalIntegration.Apply(game, output, final, results,
+            skipped, ref files, ref expressions);
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
