@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Accepted historical Dark Future and RedWindows setter rules
+
+- #25 Dark Future historical 10/6/6 aggressive UI throttles, current generic-first source and prior tag/icon rules preserved. Focused CI #137 SCC GREEN; full GCO #1059 pending.
+- #26 RedWindows four historical redundant shape/tint/opacity setters, including intentional 0.001 tolerance. Focused CI #138 SCC GREEN; full GCO #1060 pending.
+- Current MapWaypointBugFixes explicitly forbids per-controller visibility-edge caching due pooled controller identity. Historical cache withheld as genuinely incompatible; current safe visibility synchronization retained. DigitalVixenCore hidden-window UI is next eligible candidate.
+
+
 ## 2026-11-21 — HQ_HoloGirl and RedWindows historical semantic coverage
 
 - #22 HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1: source-aware material-path cache, early event gate, hoisted color/emissive, pass #131 SCC GREEN.
