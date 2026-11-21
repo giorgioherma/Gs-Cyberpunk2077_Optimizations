@@ -31,6 +31,9 @@ on:
       - '!src/GRedscript.Resolver/Phase2/**'
       - 'tests/GRedscript.Resolver.Tests/**'
       - '!tests/GRedscript.Resolver.Tests/test_phase2_*.py'
+      # This branch modifies production one-pass staging: keep its real
+      # source-state/integration tests in the full GCO/package gate.
+      - 'tests/GRedscript.Resolver.Tests/test_phase2_runningman*.py'
       - 'tests/GTotalOptimizer.Core.Tests/**'
 
 permissions:
