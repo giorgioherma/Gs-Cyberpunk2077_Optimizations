@@ -1,6 +1,7 @@
 name: REDscript Pass 7 - Isolated Chase and Sprint Checkpoint
 
 # Validated in grouped branch-only batches, not individual generator edits.
+# One isolated rerun validates all six operations after correcting the absent-source fixture.
 # Runs once when this dedicated workflow is first committed or explicitly
 # revalidated. No shared-phase CI concurrency and no per-edit automatic runs.
 on:
