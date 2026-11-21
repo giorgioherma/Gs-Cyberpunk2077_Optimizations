@@ -411,10 +411,15 @@ public static class RunningManDoubleSprintPass
             SearchOption.AllDirectories)
             .Where(f=>{
                 string s=File.ReadAllText(f,Encoding.UTF8);
-                return s.Contains("EvaluateTwoStepSprint",StringComparison.Ordinal) &&
-                    s.Contains("RunningMan_ResumeSecondSprint",StringComparison.Ordinal) &&
-                    s.Contains("StandEvents",StringComparison.Ordinal) &&
-                    s.Contains("SprintEvents",StringComparison.Ordinal);
+                // Both operations are independent. A compatible
+                // version may remove the sprint wrapper or the standing
+                // wrapper; do not block the remaining eligible operation.
+                // Structural method proofs below decide admission.
+                return s.Contains("RunningMan_ResumeSecondSprint",StringComparison.Ordinal) &&
+                    ((s.Contains("EvaluateTwoStepSprint",StringComparison.Ordinal) &&
+                      s.Contains("SprintEvents",StringComparison.Ordinal)) ||
+                     (s.Contains("StandEvents",StringComparison.Ordinal) &&
+                      s.Contains("GetInStateTime",StringComparison.Ordinal)));
             }).ToArray();
         string? reason=null, status="NOT_APPLICABLE";
         int applied=0,complete=0;
