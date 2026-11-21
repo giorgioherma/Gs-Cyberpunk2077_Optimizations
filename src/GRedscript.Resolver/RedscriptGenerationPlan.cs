@@ -1772,7 +1772,7 @@ public static class RedscriptGenerationPlan
                 !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
                 !IsInside(live, game) || !File.Exists(live) ||
                 !IsInside(src, runningManRoot) || !File.Exists(src) ||
-                !IsInside(dest, final) || !Directory.Exists(final))
+                !IsInside(dest, final))
                 throw new InvalidDataException(
                     "RUNNINGMAN_PASS9_OWNER_OUTPUT_UNSAFE");
             bool existed = File.Exists(dest);
