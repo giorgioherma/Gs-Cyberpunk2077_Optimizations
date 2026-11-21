@@ -797,6 +797,69 @@ public static class RedscriptGenerationPlan
         else if (dpad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CQ_DPAD_STATUS_UNRECOGNIZED");
 
+        // Historical Pass 7 Quickhack_Fixes: replace temporary status
+        // effect arrays with direct CommsNoiseIgnore membership predicates.
+        // Compose on the effective generic + semantic owner files, never
+        // transplant the historical complete source.
+        string quickhackRoot = Path.Combine(output, "_stages",
+            "18-quickhack-tag-predicate");
+        var quickhack = QuickhackTagPredicatePass.Generate(game,
+            quickhackRoot, Directory.Exists(final) ? final : null);
+        if (quickhack.Status == "APPLIED")
+        {
+            if (quickhack.AppliedEdits < 1 ||
+                quickhack.SourcePaths.Length == 0)
+                throw new InvalidDataException("QHF_GENERATOR_EMPTY_APPLIED");
+            foreach (string rel in quickhack.SourcePaths)
+            {
+                string src = Path.GetFullPath(Path.Combine(quickhackRoot,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                string dest = Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                if (!rel.StartsWith("r6/scripts/Quickhack_Fixes/",
+                        StringComparison.Ordinal) ||
+                    !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                    !IsInside(src, quickhackRoot) ||
+                    !IsInside(dest, final) || !File.Exists(src))
+                    throw new InvalidDataException("QHF_STAGE_PATH_UNSAFE");
+                bool existed = File.Exists(dest);
+                if (existed)
+                {
+                    string earlier = File.ReadAllText(dest);
+                    string rewritten = File.ReadAllText(src);
+                    var markers = System.Text.RegularExpressions.Regex.Matches(
+                        earlier, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                    if (markers.Any(x => !rewritten.Contains(x,
+                        StringComparison.Ordinal)))
+                        throw new InvalidDataException("QHF_STAGE_LOST_GENERIC");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(src, dest, overwrite: existed);
+                if (!existed) files++;
+                results.Add(new(18, "quickhack-direct-tags",
+                    0, existed ? 0 : 1, existed ? 1 : 0, []));
+            }
+            expressions += quickhack.AppliedEdits;
+            // Count method-local operations separately from produced files.
+            if (quickhack.SourcePaths.Length > 0)
+            {
+                var previous = results[^1];
+                results[^1] = previous with
+                {
+                    RewrittenExpressions = quickhack.AppliedEdits
+                };
+            }
+        }
+        else if (quickhack.Status == "REFUSED")
+            skipped.Add(new(18, "quickhack-direct-tags", 1,
+                quickhack.Reason ?? "QHF_SOURCE_INCOMPATIBLE"));
+        else if (quickhack.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("QHF_UNKNOWN_STATUS");
+        if (quickhack.Status == "APPLIED" && quickhack.Reason is not null)
+            skipped.Add(new(18, "quickhack-direct-tags", 1,
+                quickhack.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
