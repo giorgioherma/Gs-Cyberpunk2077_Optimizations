@@ -377,7 +377,7 @@ try {
       $helper=Get-Content -LiteralPath $canonicalFile -Raw
       if (!$helper.Contains('class '+$contract.Type,[StringComparison]::Ordinal) -or
           !$helper.Contains('@addMethod(PlayerPuppet)',[StringComparison]::Ordinal) -or
-          !$helper.Contains('GRedHotpathCache',[StringComparison]::Ordinal) -or
+          !$helper.Contains('@addField(PlayerPuppet)',[StringComparison]::Ordinal) -or
           ([IO.File]::GetAttributes($canonicalFile) -band [IO.FileAttributes]::ReparsePoint)) {
         throw ('R6_ADDITIVE_HELPER_ABI_UNPROVEN:'+$contract.Id)
       }
