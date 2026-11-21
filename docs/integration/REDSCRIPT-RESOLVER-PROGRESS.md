@@ -4,7 +4,7 @@
 
 - `dev/redscript/pass9`: `RunningManDoubleSprintPass.Generate` now composes through the production one-pass `RedscriptGenerationPlan.Stage`, using actual current post-generic source and optional prior effective overlay. Branch-local stage `#37 runningman-pass9` records edits, game-relative owner output, narrowly scoped refusals, source preservation and idempotence.
 - Existing historical Pass 9 coverage remains `#27` DigitalVixenCore UI, `#15` FlushingEtiquette pins, `#19/#24` RedWindows; do not duplicate. Pass 7 RunningMan perk cache is recognized and completed only when missing. Independent sprint/stand logic remains eligible even when the other wrapper is removed.
-- Independent SCC #2 previously passed on 2,331-file source; integrated full GCO #1088 passed before latest contract refinements; canonical integrated fast #8 and full package #1091 are pending. Latest evidence: `docs/integration/REDSCRIPT-PASS9-AGENT6-HANDOFF.md`. No gameplay or performance result claimed.
+- **Canonical integrated [fast CI #8 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875735836)** on code `2560732b`: 18 tests, one-pass 30 `.reds` output files, 2,331 post-generic input scripts, independent RunningMan byte parity and SCC 0.5.31 compilation (43,512,447 bytes). **[Full GCO #1091 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875735837)** on the same source: 361 contracts, combined package v1.2.5, artifact `14695658499`. Latest evidence: `docs/integration/REDSCRIPT-PASS9-AGENT6-HANDOFF.md`. No gameplay or performance result claimed.
 
 
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
