@@ -344,6 +344,65 @@ static void Run(string baseline)
         CheckContent(partial, Path.Combine(temp, "partial-out"));
         AssertStatus(partialReport, "CHIPWARE_24_PERK", "REFUSED");
 
+        // Manually pre-added one out of three performer cache fields: only
+        // missing fields and original return-path stores may be emitted.
+        var partialIndex = new Dictionary<string, string>(originals);
+        partialIndex["lizzies"] = partialIndex["lizzies"].Replace(
+            "private let lizziesBDsIsNaked: Bool = false;",
+            "private let lizziesBDsIsNaked: Bool = false;\n\n" +
+            "@addField(NPCPuppet)\nprivate let m_gredLizzieIndexRecord: TweakDBID;",
+            StringComparison.Ordinal);
+        var indexReport = Pass7ChaseFrameFloorPass.Generate(
+            MakeGame(temp, "partial-index-field", partialIndex),
+            Path.Combine(temp, "partial-index-field-out"));
+        AssertStatus(indexReport, "LIZZIES_BDS_PERFORMER_INDEX", "APPLIED");
+        string indexed = File.ReadAllText(GeneratedFiles(
+            Path.Combine(temp, "partial-index-field-out"))
+            .Single(x => x.Contains("LizziesBDs", StringComparison.Ordinal)));
+        Require(Regex.Matches(indexed,
+            @"private let m_gredLizzieIndexRecord").Count == 1,
+            "LIZZIES_PARTIAL_DUPLICATED_EXISTING_FIELD");
+
+        // A pre-existing stimulus selector with a missing allowed case, and
+        // a partial police guard, are completed without touching already
+        // present throttling or the other five owners.
+        var partialChase = new Dictionary<string, string>(completed);
+        partialChase["rs"] = partialChase["rs"]
+            .Replace("case gamedataStimType.Bullet:", "", StringComparison.Ordinal)
+            .Replace("if Equals(ownerPuppet.GetAttitudeAgent().GetAttitudeGroup(), n\"police\") { return; }",
+                "", StringComparison.Ordinal);
+        var chaseReport = Pass7ChaseFrameFloorPass.Generate(
+            MakeGame(temp, "partial-stimulus-police", partialChase),
+            Path.Combine(temp, "partial-stimulus-police-out"));
+        AssertStatus(chaseReport, "REINFORCEMENTS_CHASE_STIMULUS", "APPLIED");
+        AssertStatus(chaseReport, "REINFORCEMENTS_PREVENTION", "APPLIED");
+        AssertStatus(chaseReport, "REINFORCEMENTS_100MS", "COMPLETE");
+        Require(GeneratedFiles(Path.Combine(temp,
+            "partial-stimulus-police-out")).Length == 1,
+            "RS_PARTIAL_MUST_ONLY_REWRITE_ONE_OWNER");
+        string chaseFixed = File.ReadAllText(GeneratedFiles(
+            Path.Combine(temp, "partial-stimulus-police-out")).Single());
+        Require(Regex.Matches(chaseFixed, @"case gamedataStimType.Bullet:").Count == 1 &&
+            Regex.Matches(chaseFixed, @"private let grt_rs_nextReinforcementProbe").Count == 1,
+            "RS_PARTIAL_DUPLICATED_CASE_OR_THROTTLE");
+
+        // A custom nonstandard cached-event binding refuses the stimulus
+        // transformation only; independent police and probe work still runs.
+        var customStim = new Dictionary<string, string>(originals);
+        customStim["rs"] = customStim["rs"].Replace(
+            "wrappedMethod(stimData);",
+            "wrappedMethod(stimData);\n  let unsafeCustomEvent = stimData.cachedEvt;",
+            StringComparison.Ordinal);
+        var customStimReport = Pass7ChaseFrameFloorPass.Generate(
+            MakeGame(temp, "custom-stimulus-refusal", customStim),
+            Path.Combine(temp, "custom-stimulus-refusal-out"));
+        AssertStatus(customStimReport, "REINFORCEMENTS_CHASE_STIMULUS", "REFUSED");
+        AssertStatus(customStimReport, "REINFORCEMENTS_PREVENTION", "APPLIED");
+        AssertStatus(customStimReport, "REINFORCEMENTS_100MS", "APPLIED");
+        Require(GeneratedFiles(Path.Combine(temp,
+            "custom-stimulus-refusal-out")).Length == 6,
+            "RS_STIMULUS_REFUSAL_MUST_NOT_SKIP_OTHER_OWNERS");
+
         // Handwritten but incomplete record switch: keep the pre-existing
         // first identity and append only the six missing performer identities.
         var incompleteRecords = new Dictionary<string, string>(originals);
