@@ -1,1 +1,1 @@
-checkpoint=integrated-pass4-10-evs-owner-composition-scc
+checkpoint=unified-semantic-module-passes4-9-approved-chipware-memo-final
