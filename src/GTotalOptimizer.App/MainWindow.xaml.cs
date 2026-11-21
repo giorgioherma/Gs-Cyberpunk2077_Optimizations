@@ -2163,10 +2163,10 @@ public partial class MainWindow : Window
                 report.Unresolved - report.MaterialRemaining);
             CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
                 " | Callback families: " + report.MeasuredCallbackFamilies +
-                " | Measured callbacks: " + report.RankedCallbacks + Environment.NewLine +
+                " | Measured callbacks: " + report.RankedCallbacks + " | " +
                 "Generic candidates: " + report.GenericCandidates +
                 " | Semantic rules: " + report.SemanticCandidates +
-                " | Already optimized: " + report.AlreadySatisfied + Environment.NewLine +
+                " | Already optimized: " + report.AlreadySatisfied + " | " +
                 "Priority unresolved callbacks: " + report.MaterialRemaining +
                 " | Below-threshold callbacks: " + lowImpact;
             // REDscript is no longer reported as absent: use the actual
@@ -2218,27 +2218,25 @@ public partial class MainWindow : Window
                 // stages #11–#54 exist in the production one-pass generator,
                 // but their owner/source compatibility is decided at Generate.
                 redPlanStatus = "REDscript source files: " + planned.SourceFiles +
-                    " | Generic source groups: " + affected + Environment.NewLine +
+                    " | Generic source groups: " + affected + " | " +
                     "Generic candidates: " + ready.Length +
                     " | Semantic stages: " +
                     RedscriptGenerationPlan.ConfiguredSemanticStages +
-                    " configured" + Environment.NewLine +
+                    " configured | " +
                     "Eligible generic edits: " + planned.EligibleSourceEdits +
-                    " | Already optimized: " + alreadyComplete + Environment.NewLine +
+                    " | Already optimized: " + alreadyComplete + " | " +
                     "Semantic compatibility checked against installed source.";
                 var sourceRefused = planned.Rules.Where(rule =>
                     rule.Status == "SOURCE_REFUSED").ToArray();
                 if (sourceRefused.Length > 0)
-                    redPlanStatus += Environment.NewLine +
-                        "Source-specific rules skipped: " + sourceRefused.Length +
+                    redPlanStatus += " | Source-specific rules skipped: " + sourceRefused.Length +
                         " (" + string.Join(", ", sourceRefused.Select(x => x.Id)) + ").";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 redscriptPlanReady = false;
                 redPlanStatus = "REDscript current-source generation plan unavailable: " +
-                    ex.Message + Environment.NewLine +
-                    "Existing generated source rules remain preview-only.";
+                    ex.Message + " | Existing generated source rules remain preview-only.";
                 Trace.TraceWarning("REDscript Resolver plan: " + ex);
             }
             if (redscriptPlanReady)
@@ -2352,8 +2350,7 @@ public partial class MainWindow : Window
             if (pass.HotscenesEnglishOnlyRequested &&
                 (pass.HotscenesEnglishOnlyEdits > 0 ||
                  !HasCompletedHotscenesEnglishOnly(game)))
-                CetReportText.Text += Environment.NewLine +
-                    "Hotscenes ENG-only: " +
+                CetReportText.Text += " | Hotscenes ENG-only: " +
                     (pass.HotscenesEnglishOnlyEdits > 0
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
                         : "not applied (see pass details)");
@@ -2363,15 +2360,13 @@ public partial class MainWindow : Window
             int unavailableRuleFamilies = pass.RedscriptSkipped
                 .Select(item => item.Id)
                 .Distinct(StringComparer.Ordinal).Count();
-            string sourceSummary = RedReportText.Text
-                .Split([Environment.NewLine], StringSplitOptions.None)[0];
-            RedReportText.Text = sourceSummary + Environment.NewLine +
-                "Generic rules applied: " + pass.GenericRedscriptRules +
+            string sourceSummary = string.Join(" | ", RedReportText.Text
+                .Split(" | ", StringSplitOptions.None).Take(2));
+            RedReportText.Text = sourceSummary + " | Generic rules applied: " + pass.GenericRedscriptRules +
                 " | Semantic rules applied: " + pass.SemanticRedscriptRules +
-                Environment.NewLine +
-                "Generic edits: " + pass.GenericRedscriptEdits +
+                " | Generic edits: " + pass.GenericRedscriptEdits +
                 " | Semantic edits: " + pass.SemanticRedscriptEdits +
-                " | Output files: " + pass.RedscriptFiles + Environment.NewLine +
+                " | Output files: " + pass.RedscriptFiles + " | " +
                 (pass.RedscriptSkipped.Length == 0
                     ? "No refused REDscript operations."
                     : "Unavailable: " + unavailableRuleFamilies +
@@ -2380,14 +2375,14 @@ public partial class MainWindow : Window
             string summary = "ZIP generated. CET: " + pass.CetTransforms +
                 " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
             if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
-                summary += Environment.NewLine + "Unavailable: CET " +
+                summary += " | Unavailable: CET " +
                     pass.CetSkipped + " entries | REDscript " +
                     unavailableRuleFamilies + " rule families (" +
                     pass.RedscriptSkipped.Length + " operations).";
             if (pass.HotscenesEnglishOnlyRequested &&
                 pass.HotscenesEnglishOnlyEdits == 0 &&
                 !HasCompletedHotscenesEnglishOnly(game))
-                summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
+                summary += " | Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;

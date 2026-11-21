@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Progress rail cleared from chassis border; reports use natural wrapping
+
+- Capture console: reserved a bounded, clipped scroll viewport above the shared progress strip without changing CONTINUE/card positions. Analyze console: raised its footer clearance without affecting the DONE visibility/width behavior. Shared 6-DIP progress rail sits fully inside the content area rather than on the decorated outer border.
+- CET and REDscript analysis and generation summaries now use inline separators and TextBox natural wrapping instead of forced early line breaks. Preserved detailed refusal/skip text and the Generate source/group preamble.
+- Added real WPF layout assertions for saturated console content on both pages and in-frame progress placement. This is a cosmetic change only; no profiler, Resolver, generated ZIP or GC changes.
+- Validation: source inspection and edit contract only. No full GCO CI marker was changed for this minor UI batch; Windows packaged WPF rendering is not yet validated.
+
 ## 2026-11-21 — Optimized-stack repeat Generate: support-only ZIP refusal and complete framework contract
 
 **Verified user evidence:** the repeated Analyze/Generate on an already-optimized installation reported CET generic 0, semantic 0 and REDscript 0 new edits, but still produced a 15-file game-relative pass. The supplied ownership sidecar verified **14/15 files byte-identical to live installed source**, with only `G-GC/threshold.lua` changed (per-capture calibration); all 11 0-Engine files, the G-GC runtime and both CET native-location assets were identical. The screenshot's one CET "transform" is the source owner's `GC_CONTROLLER` transform, **not** another gameplay/source optimization. No REDscript source files were emitted. Three independent source refusals remain explicitly unproven: `late-system-read` (partial/drifted generated marker), `flushing-etiquette-input` (action order/receiver), and `pass8-chipware-throughput` (perk fallback). Do not silently classify these as complete without source proof.

@@ -475,6 +475,29 @@ internal static class Program
                         $"Console does not fill available width: text={window.StatusText.ActualWidth:F1}, " +
                         $"viewport={viewportWidth:F1}");
 
+                // Saturated console content must stay above the shared rail;
+                // use measured WPF bounds rather than hardcoded pixel positions.
+                var priorCaptureText = window.StatusText.Text;
+                window.StatusText.Text = string.Join(Environment.NewLine,
+                    Enumerable.Repeat("Lengthy profiler guidance remains scrollable.", 8));
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var captureRailTop = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).Y;
+                var captureConsoleBottom = window.CaptureConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, window.CaptureConsoleScroll.ActualHeight), root).Y;
+                var railBottom = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, window.WorkflowProgressHost.ActualHeight), root).Y;
+                var contentBottom = window.ContentRegion.TranslatePoint(
+                    new System.Windows.Point(0, window.ContentRegion.ActualHeight), root).Y;
+                if (captureConsoleBottom > captureRailTop ||
+                    railBottom >= contentBottom)
+                    throw new InvalidOperationException(
+                        "Capture console overlaps progress or progress reaches the outer frame.");
+                window.StatusText.Text = priorCaptureText;
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
+
                 // The taller multiline-console footer must not enlarge Continue
                 // or pull it into the workflow cards. Its intrinsic height stays
                 // compact, but enabled/disabled gating and keyboard focus remain.
@@ -668,6 +691,24 @@ internal static class Program
                     window.OpenFolderButton.IsEnabled)
                     throw new InvalidOperationException(
                         "Analyze BACK must match REFRESH; DONE is hidden and OPEN FOLDER disabled before generation.");
+
+                // Long Analyze messages scroll inside the footer and never
+                // extend into the dedicated shared progress strip.
+                var priorAnalyzeText = window.ResultsStatusText.Text;
+                window.ResultsStatusText.Text = string.Join(Environment.NewLine,
+                    Enumerable.Repeat("Lengthy REDscript source diagnostics remain scrollable.", 8));
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var analyzeRailTop = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).Y;
+                var analyzeConsoleBottom = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, window.ResultsConsoleScroll.ActualHeight), root).Y;
+                if (analyzeConsoleBottom > analyzeRailTop)
+                    throw new InvalidOperationException(
+                        "Analyze console overlaps the dedicated progress strip.");
+                window.ResultsStatusText.Text = priorAnalyzeText;
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
 
                 // DONE shares the footer row with the console. Simulating its
                 // visibility must not shift status messages or overlap them.
