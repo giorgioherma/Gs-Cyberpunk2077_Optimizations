@@ -142,7 +142,7 @@ static void CheckContent(Dictionary<string, string> original, string output,
         {
             Require(Regex.Matches(content, @"private let m_gredRunningManDoubleRunPerk").Count == 1,
                 "RM_DUPLICATE_CACHE_FIELD");
-            Require(Regex.Matches(content, @"IsNewPerkBought").Count == 1,
+            Require(Regex.Matches(content, @"IsNewPerkBought").Count == 2,
                 "RM_PERK_NOT_SAMPLED_ON_ENTRY_ONCE");
             Require(content.Contains("if this.m_gredRunningManDoubleRunPerk",
                 StringComparison.Ordinal), "RM_EVALUATOR_NOT_CACHED");
