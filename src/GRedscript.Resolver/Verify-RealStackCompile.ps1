@@ -9,7 +9,8 @@ param(
   [Parameter(Mandatory=$true)][string]$ResolverDll,
   [string]$CallbackPreviewRoot = '',
   [string]$FrameworkPreviewRoot = '',
-  [string]$FrameworkRoot = ''
+  [string]$FrameworkRoot = '',
+  [string]$ApprovedAdditiveStageRoot = ''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -327,6 +328,63 @@ try {
       }
     }
   }
+  # This optional CI-only proof is sourced from the independently verified
+  # canonical one-pass Stage. Additive helper files must come from exactly the
+  # two source-owned Pass 8 helper-producing stages; no arbitrary new .reds,
+  # historical ZIP, location adapter or player-side compiler exception.
+  $approvedAdditions=@{}
+  if (![string]::IsNullOrWhiteSpace($ApprovedAdditiveStageRoot)) {
+    if ([string]::IsNullOrWhiteSpace($FrameworkPreviewRoot)) {
+      throw 'R6_ADDITIVE_PROOF_REQUIRES_COMBINED_PREVIEW'
+    }
+    $stageHome=(Resolve-Path -LiteralPath $ApprovedAdditiveStageRoot -ErrorAction Stop).Path
+    $stageReportFile=Join-Path $stageHome 'stage-result.json'
+    $effectiveStage=Join-Path $stageHome 'effective-preview/r6/scripts'
+    if (!(Test-Path -LiteralPath $stageReportFile -PathType Leaf) -or
+        !(Test-Path -LiteralPath $effectiveStage -PathType Container)) {
+      throw 'R6_ADDITIVE_CANONICAL_STAGE_MISSING'
+    }
+    $stageReport=Get-Content -LiteralPath $stageReportFile -Raw | ConvertFrom-Json
+    if ($stageReport.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+        $stageReport.sourceStackSha256 -ne [string]$plan.sourceStackSha256) {
+      throw 'R6_ADDITIVE_STAGE_SOURCE_NOT_ATTESTED'
+    }
+    $additiveContracts=@(
+      @{ Id='pass8-chipware-combat-cache'; Order=38;
+         Relative='zzy_bChipwareExpansion/chipsScripts/GRedHotpathCache.reds';
+         Owner='zzy_bChipwareExpansion'; Type='GRedChipwareHotpathCache' },
+      @{ Id='pass8-immersive-cyberware'; Order=39;
+         Relative='ImmersiveCyberware/GRedHotpathCache.reds';
+         Owner='ImmersiveCyberware'; Type='GRedICHotpathCache' }
+    )
+    foreach($contract in $additiveContracts) {
+      $entry=@($stageReport.completed | Where-Object { $_.id -eq $contract.Id })
+      if ($entry.Count -ne 1 -or [int]$entry[0].order -ne $contract.Order -or
+          [int]$entry[0].newFiles -ne 1 -or [int]$entry[0].rewrittenExpressions -lt 2) {
+        throw ('R6_ADDITIVE_STAGE_RULE_NOT_PROVEN:'+$contract.Id)
+      }
+      $owner=Join-Path $liveSources $contract.Owner
+      if (!(Test-Path -LiteralPath $owner -PathType Container) -or
+          @(Get-ChildItem -LiteralPath $owner -Filter '*.reds' -File -Recurse).Count -lt 1) {
+        throw ('R6_ADDITIVE_OWNER_ABSENT:'+$contract.Owner)
+      }
+      $relative=$contract.Relative.Replace('/',[IO.Path]::DirectorySeparatorChar)
+      $canonicalFile=Join-Path $effectiveStage $relative
+      if (!(Test-Path -LiteralPath $canonicalFile -PathType Leaf) -or
+          (Test-Path -LiteralPath (Join-Path $liveSources $relative) -PathType Leaf)) {
+        throw ('R6_ADDITIVE_SOURCE_NOT_NEW:'+$contract.Id)
+      }
+      $helper=Get-Content -LiteralPath $canonicalFile -Raw
+      if (!$helper.Contains('class '+$contract.Type,[StringComparison]::Ordinal) -or
+          !$helper.Contains('@addMethod(PlayerPuppet)',[StringComparison]::Ordinal) -or
+          !$helper.Contains('GRedHotpathCache',[StringComparison]::Ordinal) -or
+          ([IO.File]::GetAttributes($canonicalFile) -band [IO.FileAttributes]::ReparsePoint)) {
+        throw ('R6_ADDITIVE_HELPER_ABI_UNPROVEN:'+$contract.Id)
+      }
+      $approvedAdditions[$relative]=
+        (Get-FileHash -LiteralPath $canonicalFile -Algorithm SHA256).Hash
+    }
+  }
   # Owner-owned G-REDruntime files are compiled in a separate isolated
   # workspace, never inserted into original private source or previews.
   $frameworkFiles=@()
@@ -404,6 +462,7 @@ try {
     # Only already-installed author source files may be rewritten by the
     # nine default generic rules. No generated location subscriber or optional
     # native bridge is accepted as a new source file.
+    $addedSemanticHelpers=0
     if ($scenario -eq 'optimized-callback-preview' -or $scenario -eq 'framework-all-generics-preview') {
       $selected=if ($scenario -eq 'framework-all-generics-preview' -and
                      $frameworkOverlay.Count -gt 0) { $frameworkOverlay } else { $callbackOverlay }
@@ -417,7 +476,17 @@ try {
         }
         $target=Join-Path $scripts $relative
         if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
-          throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          # Existing owner files are rewritten in place. Missing paths are
+          # accepted only when an independently generated canonical Stage
+          # proves the exact owned additive helper bytes and original owner.
+          if ($scenario -ne 'framework-all-generics-preview' -or
+              !$approvedAdditions.ContainsKey($relative) -or
+              (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne
+                $approvedAdditions[$relative]) {
+            throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          }
+          $addedSemanticHelpers++
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
         }
         $text=Get-Content -LiteralPath $file.FullName -Raw
         if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' -or
@@ -451,7 +520,12 @@ try {
       }
     }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne ($liveCount+$addedFrameworkFiles)) {
+    if ($scenario -eq 'framework-all-generics-preview' -and
+        $approvedAdditions.Count -gt 0 -and
+        $addedSemanticHelpers -ne $approvedAdditions.Count) {
+      throw 'R6_ADDITIVE_HELPER_INVENTORY_INCOMPLETE'
+    }
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$addedSemanticHelpers)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
