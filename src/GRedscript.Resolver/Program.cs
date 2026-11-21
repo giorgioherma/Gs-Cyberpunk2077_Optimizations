@@ -61,6 +61,8 @@ public static class Program
                 return RunPhase2FeInput(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-fe-input-hub")
                 return RunPhase2FeInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-grs-input-hub")
+                return RunPhase2GrsInputHub(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-fe-pins")
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
@@ -670,6 +672,24 @@ public static class Program
             options.TryGetValue("--base-overlay", out string? prior)
                 ? Path.GetFullPath(prior) : null);
         Console.WriteLine("REDscript Phase 2 EVS OnAction PS: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2GrsInputHub(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "GearRecoverySystem InputHub needs --game --out [--base-overlay]");
+        var result = GearRecoveryInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 GRS InputHub: status=" +
             result.Status + " edits=" + result.AppliedEdits +
             (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
