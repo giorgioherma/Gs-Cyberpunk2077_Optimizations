@@ -982,7 +982,7 @@
                             <TextBlock Text="ANALYZE &amp; OPTIMIZE" Foreground="#FFF000"
                                        FontFamily="{StaticResource Oxanium}"
                                        FontSize="23" FontWeight="ExtraBold"/>
-                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Cyan}"
+                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Yellow}"
                                        TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
                                        Margin="0,7,0,0" Text="Restoration status pending."/>
                             <StackPanel Orientation="Horizontal" Margin="0,7,0,0">

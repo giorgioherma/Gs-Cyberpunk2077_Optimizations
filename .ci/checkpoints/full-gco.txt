@@ -1,1 +1,1 @@
-checkpoint=gco-repeat-pass-noop-full-redruntime-20261121
+checkpoint=gco-repeat-pass-noop-ui-restoration-pending-yellow-20261121
