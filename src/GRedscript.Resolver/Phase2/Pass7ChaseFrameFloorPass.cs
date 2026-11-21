@@ -619,10 +619,23 @@ public static class Pass7ChaseFrameFloorPass
                 "                break;" + nl +
                 "            default:" + nl + "                return;" + nl +
                 "        }" + nl + "    }" + nl;
+            int insertion = wrapped.Index + wrapped.Length;
+            if (nullable)
+            {
+                // A handwritten partial null check must execute before any
+                // cachedEvt dereference. Append the remaining filter after it.
+                var firstGuard = Regex.Match(body,
+                    @"\bif\s*!\s*IsDefined\s*\(\s*stimData\s*\)\s*\{\s*return\s*;\s*\}", Rx);
+                if (!firstGuard.Success || firstGuard.Index < wrapped.Index ||
+                    firstGuard.Index > call.Index)
+                    return new("REFUSED", null, 0, 0,
+                        "RS_STIMULUS_NULL_GUARD_ORDER_UNPROVEN");
+                insertion = firstGuard.Index + firstGuard.Length;
+            }
             string updated = Apply(source,
             [
-                new Edit(span.Start + wrapped.Index + wrapped.Length,
-                    span.Start + wrapped.Index + wrapped.Length, addition)
+                new Edit(span.Start + insertion,
+                    span.Start + insertion, addition)
             ]);
             if (ReinforcementStimulus(updated).Status != "COMPLETE")
                 throw new InvalidDataException("RS_STIMULUS_POSTCONDITION");
