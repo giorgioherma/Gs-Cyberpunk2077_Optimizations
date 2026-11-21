@@ -126,7 +126,7 @@ internal static class VehicleCallQuestReusePass
                 expression=direct[0].Groups["receiver"].Value;
                 // Insert at the start of the FIRST direct read's statement;
                 // only accept two adjacent assignments in the same block.
-                int before=direct[0].Index;
+                int before=direct[0].Groups["receiver"].Index;
                 int lineStart=body.LastIndexOf('\n',Math.Max(0,before-1))+1;
                 string leading=body[lineStart..before];
                 if(!Regex.IsMatch(leading,@"^\s*let\s+[A-Za-z_]\w*(?:\s*:\s*Bool)?\s*=\s*$"))

@@ -99,6 +99,6 @@ class GrsStateCacheTests(unittest.TestCase):
         self.assertEqual(rr['status'],'REFUSED',rr)
         self.assertEqual(rr['reason'],'GRS_STATE_RUNTIME_ABI_MISSING');self.assertIsNone(ss)
     def test_absent_owner(self):
-        rr,ss=self.gen('module Other\npublic class Other {}\n','r6/scripts/Other/Other.reds')
+        rr,ss=self.gen('module Other\npublic class Other {}\n',path='r6/scripts/Other/Other.reds')
         self.assertEqual(rr['status'],'NOT_APPLICABLE');self.assertIsNone(ss)
 if __name__=='__main__':unittest.main()
