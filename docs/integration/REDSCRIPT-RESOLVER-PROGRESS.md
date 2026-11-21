@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 8 canonical one-run integration, isolated `dev/redscript/pass8`
+
+- Three **already source-tested** standalone Pass 8 generators now compose in GCO's authoritative `RedscriptGenerationPlan.Stage` after existing #36: **#37 chipware source-local hot-path gates**, **#38 chipware combat cached stats (8 callbacks/helper)**, **#39 ImmersiveCyberware ammo/FocusScanner updates (2 callbacks/helper)**. No duplicate Quickslots #17 or RedWindows #19/#23/#26. No new generic rules.
+- The new `Pass8CanonicalComposition` composes on the current effective-preview, never historical ZIP source, checks file ownership/path, marker preservation and report/output parity; isolated operation refusals remain visible while compatible work completes. The production combined ZIP and external ownership sidecar automatically use the resulting staged files and metadata.
+- **Fast Pass 8 CI #12 SUCCESS** (run 44876279303): all standalone state suites, eight independently generated source-file hashes matched canonical one-pass output, official SCC 0.5.31 compiled complete post-generic + previous semantics + Pass 8 effective source. Source-state proof is not gameplay evidence.
+- The **full GCO replay** now independently composes #34–#39 and verifies canonical source bytes, stage counts, refusals and one ZIP. Initial full #1095 failed because its Python tests did not have the Pass 8 runner DLL; fixed by building the runner first. Full **#1097** awaiting final CI verdict; do not label release accepted until passing. Historical 24-perk timed result cache still deferred for insufficient state proof; real gameplay/performance capture still absent.
+
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
 
 - NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.
