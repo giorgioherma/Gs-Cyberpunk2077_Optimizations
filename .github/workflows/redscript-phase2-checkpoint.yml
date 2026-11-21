@@ -1,4 +1,5 @@
-name: REDscript Phase 2 - Post-generic checkpoint
+name: REDscript | Post-generic SCC validation
+run-name: REDscript SCC checkpoint | ${{ github.ref_name }}
 
 # Chronological GCO generation checkpoints:
 # 1. Generic source optimization (existing owner CI).
@@ -1803,6 +1804,16 @@ jobs:
           $ErrorActionPreference='Stop'
           & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot $env:PHASE2_OUTPUT
           if (!$?) { throw 'PHASE2_CHECKPOINT_FAILED' }
+
+      - name: Summarize changes covered by this SCC checkpoint
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (Test-Path -LiteralPath 'scripts/ci/Write-CheckpointSummary.ps1' -PathType Leaf) {
+            & 'scripts/ci/Write-CheckpointSummary.ps1' -WorkflowFile 'redscript-phase2-checkpoint.yml' -CheckpointFile '.ci/checkpoints/redscript.txt'
+          }
 
       - name: Remove private source and compiler after validation
         if: always()

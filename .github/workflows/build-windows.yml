@@ -1,4 +1,5 @@
-name: Gs-Cyberpunk2077_Optimizer
+name: GCO | Full integration validation
+run-name: GCO full checkpoint | ${{ github.ref_name }}
 # Product version changes only on an explicit user request; keep fixed otherwise.
 
 on:
@@ -1098,6 +1099,16 @@ jobs:
           if (Test-Path -LiteralPath '.gco-ci-private-cet') {
             Remove-Item -LiteralPath '.gco-ci-private-cet' -Recurse -Force -ErrorAction Stop
           }
+      - name: Summarize changes covered by this GCO checkpoint
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (Test-Path -LiteralPath 'unified/scripts/ci/Write-CheckpointSummary.ps1' -PathType Leaf) {
+            & 'unified/scripts/ci/Write-CheckpointSummary.ps1' -WorkflowFile 'build-windows.yml' -CheckpointFile 'unified/.ci/checkpoints/full-gco.txt'
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
