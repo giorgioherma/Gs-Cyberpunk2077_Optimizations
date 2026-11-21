@@ -2092,6 +2092,33 @@ try {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
         }
+        if ($port.Id -eq 'redwindows-render-dormancy') {
+          # This full-source integration check must prove that all three
+          # dependent outputs were composed over #19 and current generic
+          # source, not merely that the stage reported a success count.
+          if ($portFiles.Count -ne 3) {
+            throw 'GCO_RW_RENDER_REFERENCE_THREE_FILES_REQUIRED'
+          }
+          $w=Join-Path $portScripts 'RedWindows/RW_Window.reds'
+          $b=Join-Path $portScripts 'RedWindows/RW_Builder.reds'
+          $l=Join-Path $portScripts 'RedWindows/RW_Logs.reds'
+          if (!(Test-Path -LiteralPath $w -PathType Leaf) -or
+              !(Test-Path -LiteralPath $b -PathType Leaf) -or
+              !(Test-Path -LiteralPath $l -PathType Leaf)) {
+            throw 'GCO_RW_RENDER_REFERENCE_OWNER_MISSING'
+          }
+          $wt=Get-Content -LiteralPath $w -Raw
+          $bt=Get-Content -LiteralPath $b -Raw
+          $lt=Get-Content -LiteralPath $l -Raw
+          if (!$wt.Contains('return !this.overlayOnly;') -or
+              !$wt.Contains('this.m_findCursor = idx + 1;') -or
+              !$bt.Contains('builder.IsRendered()') -or
+              !$bt.Contains('gallery.IsRendered()') -or
+              !$bt.Contains('GCO-GENERIC:STABLE_ARRAY_BOUND_V1') -or
+              !$lt.Contains('win.IsRendered() && RedLogger.Available()')) {
+            throw 'GCO_RW_RENDER_REFERENCE_LOST_LOOKUP_GENERIC_OR_LIFECYCLE'
+          }
+        }
         foreach ($file in $portFiles) {
           $rel = [IO.Path]::GetRelativePath($portScripts, $file.FullName)
           $relUnix = $rel.Replace([IO.Path]::DirectorySeparatorChar, '/')

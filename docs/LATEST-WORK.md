@@ -1,5 +1,16 @@
 # Latest work / evidence status
 
+## 2026-11-21 — HQ_HoloGirl #22 and RedWindows #23/#24 historical source-aware ports
+
+- **Previous full application CI #1054 SUCCESS:** https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44848801508 confirmed TriggerModeControl #20 + DisablePositionReveal #21 in the canonical GCO source/ZIP and Windows .NET10 packaging.
+- **#22 HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1:** historical Pass 4/5 optimization uses a cached material resource path, rejects unrelated type-wide material loaded events before holo state/callback caching, hoists color/emissive computation outside the matching material parameter loop; leaves random holo selection, resource bindings, player/district callbacks and unrelated additions intact. Exact service class recognition avoids names beginning with HoloGirl in addon files. Partial/complete/modified/incompatible/idempotent source-state contracts. **Focused post-generic SCC CI #131 SUCCESS**: https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44850719528.
+- **#23 REDWINDOWS_SHAPE_LABEL_CURSORS_V1:** historical Pass 8 uses bounded wraparound lookup-start indices for current shape and label arrays, and keeps live-array scans rather than stale object refs after Clear/rebuild. Supports stock, partial, markerless complete, relocated/custom source and narrow refusal. **Focused post-generic SCC CI #131 SUCCESS**.
+- **#24 REDWINDOWS_RENDER_AWARE_DORMANCY_V1:** historical Pass 9 adapted to correct no-manager overlay-only behavior. The RWWindow helper mirrors RefreshVisibility without changing IsVisible; Builder and Logs background polling consult IsRendered while preserving their existing 1.0/0.1/0.25-second schedules, overlay callbacks and lifecycle. Three owner files compose after RedWindows lookup #19; partial/manual complete/custom refusal handled independently. An incompatible helper reports REFUSED (not NOT_APPLICABLE), corrected after focused #132 exposed the status defect. **Focused CI #133 in progress** at documentation checkpoint: https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44851157017.
+- All stages are automatically included in **one generic-first GCO Generate**, not sequential pass archives. Previous semantic output and generic markers retained. Full GCO real-source replay test now separately verifies the #24 three-file composition and generic/lookup retention. Full .NET10+combined ZIP verdict for #24 requires a new run; earlier green #1054 only covered prior operations.
+- **Remaining:** 19 historical present mod owners have no semantic generator, and existing RedWindows setter color/opacity write reductions are not yet ported. Historical reference passes were game-tested; newly generated source still requires actual gameplay validation. No invented frame time, FPS, allocations or GPU gains.
+
+
+
 ## 2026-11-21 — Historical semantics #20 TriggerModeControl and #21 DisablePositionReveal (focused SCC GREEN)
 
 - Previous **full GCO CI #1052 SUCCESS** (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44846907486): canonical generators #18 Quickhack_Fixes and #19 RedWindows had independently identical source, official SCC and game-only ZIP/.NET10 packaging verified.
