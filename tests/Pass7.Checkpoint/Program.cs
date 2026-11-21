@@ -59,6 +59,7 @@ static string MakeGame(string temp, string label,
 {
     string game = Path.Combine(temp, label);
     string scripts = Path.Combine(game, "r6", "scripts");
+    Directory.CreateDirectory(scripts);
     var paths = new Dictionary<string, string>
     {
         ["ncr"] = "NightCityRemembers/NCR_SpawnCulling.reds",
