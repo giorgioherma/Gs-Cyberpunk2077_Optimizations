@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Source-aware historical optimization admission #18/#19
+
+- Port missing historical operations from the separate-pass history only where current generic/semantic work does not already implement a better equivalent. Generated sources start from *current* post-generic owner files, never historical whole-file overwrite; honor partial/complete/custom/version-fluid and narrow refusal rules.
+- Rule 18 Quickhack_Fixes direct CommsNoiseIgnore status-tag query (two independent callbacks), with preserved wrapper fallbacks: fast post-generic CI #113 SUCCESS, SCC 0.5.31.
+- Rule 19 RedWindows private append-only retained-widget Find (Pass 9 last-hit + predicted cursor; no duplicate cache), other UI optimizations remain pending: fast post-generic CI #118 SUCCESS, SCC 0.5.31.
+- Fixed source-owned full GCO reference harness to include both newly generated owners without weakening independently composed file/byte parity; full CI #1052 pending. No gameplay proof, no measured performance credit. Branch dev/redscript/resolver_handoff, do not overwrite main.
+
+
 ## 2026-11-21 — Quickslots pass-8 changed to automatic input-state detection
 
 - **Owner clarification supersedes earlier manual-UI plans below.** No extra GCO checkbox, persisted Quickslots preference, or `--quickslots-dpad` Stage option. Current Quickslots phase 2 #17 is applied automatically after #16, when structurally compatible, directly from post-generic stock in one Generate. Physical controller connection is irrelevant; runtime cache uses original `PlayerLastUsedPad()` last-input predicate, and re-evaluates on existing device/held-modifier/configuration transitions. Controller/KBM input remains fully enabled; no new timer or polling. The game-tested handmade ZIP supplies the concept only.
