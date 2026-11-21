@@ -1,18 +1,31 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
-## 2026-11-21 — Unified REDscript production module; no historical Pass 10
+## 2026-11-21 — CURRENT integration acceptance ledger (verified, not yet game-tested)
 
-- Historical pass archive ends at **Pass 9**. The separately proven 100 ms Chipware perk-result memoization is an **approved operation within Chipware**, now reported as `chipware-perk-result-memo` (#51) rather than a fictitious Pass 10.
-- `dev/redscript/integration` integrates the original Pass 4–9 source-owner generators into a single `UnifiedRedscriptSemanticModule`; the existing `RedscriptGenerationPlan.Stage` remains the one invocation used by the GCO .NET 10 main app. Generic-first #1–41 remain intact.
-- Production compilation excludes overlapping historical Pass 4 StealthRunner/Chipware generator implementations; Pass 7 and Pass 8 respectively own the optimized behavior, and Pass 9 finishes only missing RunningMan work. Pass 4's standalone reference tests remain intact. Shared stage provenance is managed in `RedscriptSemanticStageComposer`.
-- [Combined SCC #220 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991) on the previous, logically equivalent combined source before this cleanup. **The current refactored HEAD is not yet CI verified.** [Full product #1105](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44914500712) started before this refactor; inspect its exact SHA and result. Do not claim installed-game gameplay parity, FPS improvement, or a shippable ZIP until combined final SCC, full GCO packaging/real-source replay and gameplay checks pass.
-- One meaningful focused SCC and one full product milestone after all remaining changes; no per-edit CI, no irrelevant exact-code assertions, no changes to stable `main`.
+**Working branch lineage:** `main` → `dev/redscript/resolver_handoff` (REDscript working baseline) → `dev/redscript/integration` (combined resolver integration). The coordinator continues from the handoff/integration line. Production `main` stays unchanged until in-game acceptance and explicit promotion approval; do not treat branch divergence as authorization to merge.
 
-## 2026-11-21 — Pass 4–10 integration branch and approved 100 ms Chipware cache
+**Implementation:** one `UnifiedRedscriptSemanticModule` and `RedscriptSemanticStageComposer` feed the existing GCO `RedscriptGenerationPlan.Stage()`. Ten approved generics run first, semantic #11–41 are retained, then the following combined stage ownership is verified:
 
-- **Owned branch:** `dev/redscript/integration` based on handoff #41. Imported source-owner Pass 4–10 generators and source-state tests without merging historical `RedscriptGenerationPlan.cs` copies. One `RedscriptHistoricalIntegration.Apply()` appends #42–51 to the existing generic-first production `Stage` and GCO ZIP path.
-- **Overlap control:** Pass 4 Reinforcements geometry only (StealthRunner NPC weak player cache from Pass 7; chipware early classification from Pass 8); Pass 5 HoloTravel; Pass 6 VirtualAtelier and EVS camera; Pass 7 chase/StealthRunner/Lizzies/RunningMan/Reinforcements; Pass 8 cheap chip checks + 50 ms combat and ImmersiveCyberware caching; Pass 9 StandEvents/sprint; Pass 10 approved 100 ms Chipware 24-perk memoization. Pass 10 isolated [SCC #14 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44911716216).
-- **In progress:** combined canonical source and SCC [checkpoint #220](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991). No combined SUCCESS or final ZIP claim yet. Real GRSP capture replay's source provenance, additive helper attestation and full GCO build need a successful milestone run. Preserve actual historical gameplay behavior, native owner boundaries, SCC correctness and clean ZIP. No extra repair pass, no `main` promotion.
+| Stage | Unique owner / work | Overlap policy |
+| --- | --- | --- |
+| #42 | Pass 4 ReinforcementsSystem prepared quad geometry | Geometry only; no duplicate StealthRunner or Chipware producer |
+| #43 | Pass 5 HQ_HoloTravel material/event | Source-admitted independent operation |
+| #44–45 | Pass 6 VirtualAtelier delivery pacing; Enhanced Vehicle System camera admission | Preserve previous/current-owner output |
+| #46 | Pass 7 chase/frame-floor family (StealthRunner, ReinforcementsCall, LizziesBDs, RunningMan, other supported owners) | Own shared StealthRunner and reinforcement processing |
+| #47–49 | Pass 8 Chipware throughput; Chipware combat cache; ImmersiveCyberware | Own Chipware relevance/combat; compose after Pass 7 |
+| #50 | Pass 9 RunningMan sprint/dormancy | Only missing compatible work after Pass 7 |
+| #51 | Approved 100 ms Chipware perk-result memo | Chipware operation, **not** historical Pass 10 |
+
+Historical archive ends with Pass 9. The isolated Chipware memo branch was called `pass10` during development; this label is not a missing historical operation. Preserve independent Pass 4 reference tests but do not compile duplicate overlapping production generators.
+
+**Automated proof (latest):**
+- [Focused REDscript #221 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44914781236) at `87efdea336b522cc95a4e5fae1d06d356d57c448`: refactored one-pass source-state/idempotence/composition contract and official SCC 0.5.31. Only a checkpoint marker and build workflow changed before the full-checkpoint commit.
+- [Full GCO #1106 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44915314847) at `3f0b7f05230ec5930ecf657807197fe505946ec4`: 361 application/package contracts, verified GRSP native ownership and sealed real capture replay, CET owner integration, repeat generation zero edits, 110-source-file game-relative REDscript ZIP topology, source-ownership/rollback verification, full .NET 10 package. Build artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1106-a1` / `14712151685`.
+- [#220 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44913962991) is the earlier pre-cleanup integrated checkpoint; [full #1105 FAILURE](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44914500712) is an older superseded attempt.
+
+**Pending acceptance:** actual installed game + mod-stack generation, gameplay and controller/pad/KBM/fallback/lifecycle parity, game-side restore, and comparable measured performance if a performance claim is desired. CI validates code/output and packaging, not gameplay. Do not promote to `main` yet. No profiler or compiler binaries in the **player-generated REDscript optimization ZIP**; do not confuse it with the downloadable GCO application artifact.
+
+**Validation cadence:** keep checkpoint-trigger-only CI. This documentation-only commit must not touch `.ci/checkpoints/`, generated code, `main`, or independent agent branches. Older entries below record point-in-time progress and do not override this verified status.
 
 ## 2026-11-21 — Checkpoint-driven CI for uninterrupted REDscript batches
 
