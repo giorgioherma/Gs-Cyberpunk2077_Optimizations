@@ -169,8 +169,37 @@ class RunningManCanonicalStageTests(unittest.TestCase):
         hashes = self.source(partial, with_generic=False)
         stage = self.stage()
         output = self.check_owner(stage, hashes, 2)
-        self.assertEqual(output.read_text("utf8"), full)
+        rewritten = output.read_text("utf8")
+        # Partial handwritten files need semantic convergence, not byte equality:
+        # preserve user's original whitespace and unrelated custom edits.
+        self.assertEqual(rewritten.count(
+            "private let m_gredRunningManDoubleRunPerk: Bool;"), 1)
+        self.assertEqual(rewritten.count(
+            "private let m_gredRunningManResumeChecked: Bool;"), 1)
+        self.assertEqual(rewritten.count(
+            "this.m_gredRunningManResumeChecked = true;"), 1)
+        self.assertIn(
+            "if this.m_gredRunningManDoubleRunPerk || this.m_isInSecondSprint",
+            rewritten)
+        self.assertEqual(rewritten.count("@wrapMethod(StandEvents)"), 2)
         self.assertNotEqual(hashes, original_hashes)
+        # Re-run the real plan on the already-optimized effective owner.
+        # The same semantics must remain complete without a duplicate stage.
+        self.game = self.base / "game-repeat"
+        self.running = self.game / TARGET
+        self.running.parent.mkdir(parents=True, exist_ok=True)
+        self.plan = self.base / "repeat-plan.json"
+        self.analysis = self.base / "repeat-analysis.json"
+        self.staged = self.base / "repeat-stage"
+        repeat_hashes = self.source(rewritten, with_generic=False)
+        repeat = self.stage()
+        self.assertFalse(any(
+            r["id"] == "runningman-pass9" for r in repeat["completed"]))
+        self.assertFalse(
+            (self.staged / "effective-preview" / TARGET).exists())
+        self.assertEqual(
+            [hashlib.sha256(f.read_bytes()).hexdigest()
+             for f in self.sources], repeat_hashes)
 
     def test_fully_optimized_owner_no_duplicate_or_output(self):
         self.source(with_generic=False)
