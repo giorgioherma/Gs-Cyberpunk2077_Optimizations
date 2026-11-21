@@ -9,7 +9,8 @@ on:
       - '.github/workflows/redscript-phase2-pass9.yml'
       - 'src/GRedscript.Resolver/Phase2/RunningManDoubleSprintPass.cs'
       - 'tools/Pass9/**'
-      - 'tests/GRedscript.Resolver.Tests/test_phase2_runningman_pass9.py'
+      - 'tests/GRedscript.Resolver.Tests/test_phase2_runningman*.py'
+      - 'src/GRedscript.Resolver/RedscriptGenerationPlan.cs'
   workflow_dispatch:
 
 permissions:
@@ -61,7 +62,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_runningman_pass9.py' -v
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_runningman*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'PASS9_SOURCE_STATE_TEST_FAILED' }
 
       - name: Generate on actual 2331-file post-generic stack in one invocation
@@ -126,18 +127,65 @@ jobs:
           }
           Write-Host 'PASS Pass9 idempotence, no duplicate fields or callbacks'
 
+      - name: Verify production one-pass plan and exact independent RunningMan bytes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.pass9-private/base_after_generic'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $plan='.pass9-plan.json'
+          $analysis='.pass9-analysis.json'
+          dotnet $dll plan-redscript --game $game --out $plan
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_PRODUCTION_PLAN_FAILED' }
+          $p=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+          if ([int]$p.implementedRuleCount -ne 10 -or
+              [string]::IsNullOrWhiteSpace($p.sourceStackSha256)) {
+            throw 'PASS9_GENERIC_FIRST_PLAN_INVALID'
+          }
+          @{
+            schemaVersion='grsp.resolver.input.v1'
+            generationAuthorized=$false
+            capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+            source=@{ sourceStackSha256=$p.sourceStackSha256 }
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+          dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out '.pass9-canonical'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS9_PRODUCTION_ONE_PASS_FAILED' }
+          $result=Get-Content '.pass9-canonical/stage-result.json' -Raw | ConvertFrom-Json
+          $rm=@($result.completed | Where-Object { $_.id -eq 'runningman-pass9' })
+          if ($result.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+              $result.productionZipAuthorized -ne $false -or
+              $rm.Count -ne 1 -or [int]$rm[0].order -ne 37 -or
+              [int]$rm[0].rewrittenExpressions -ne 2) {
+            throw 'PASS9_NOT_INCLUDED_IN_PRODUCTION_ONE_PASS_SEQUENCE'
+          }
+          $rel='r6/scripts/RunningMan/double_sprint.reds'
+          $independent=Join-Path '.pass9-overlay' $rel
+          $production=Join-Path '.pass9-canonical/effective-preview' $rel
+          if (!(Test-Path -LiteralPath $production -PathType Leaf) -or
+              !(Test-Path -LiteralPath $independent -PathType Leaf) -or
+              (Get-FileHash -LiteralPath $production -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $independent -Algorithm SHA256).Hash) {
+            throw 'PASS9_PRODUCTION_SOURCE_DIFFERS_FROM_INDEPENDENT_REFERENCE'
+          }
+          $all=@(Get-ChildItem '.pass9-canonical/effective-preview/r6/scripts' -Recurse -File -Filter '*.reds')
+          if ($all.Count -lt 20) {
+            throw 'PASS9_PRODUCTION_DID_NOT_COMPOSE_OTHER_SEMANTIC_OWNERS'
+          }
+          Write-Host ('PASS production one Generate with all existing semantics: '+
+            $all.Count+' owner source files, independent Pass9 bytes identical')
+
       - name: Official SCC 0.5.31 - complete post-generic stack plus Pass9
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass9-private/base_after_generic' -CompilerRoot '.pass9-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass9-overlay'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.pass9-private/base_after_generic' -CompilerRoot '.pass9-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.pass9-canonical/effective-preview'
           if (!$?) { throw 'PASS9_OFFICIAL_SCC_FAILED' }
 
       - name: Cleanup private owner sources compiler and overlays
         if: always()
         shell: pwsh
         run: |
-          foreach($p in @('.pass9-private','.pass9-overlay','.pass9-reinput','.pass9-noop')) {
+          foreach($p in @('.pass9-private','.pass9-overlay','.pass9-reinput','.pass9-noop','.pass9-canonical','.pass9-plan.json','.pass9-analysis.json')) {
             if(Test-Path -LiteralPath $p) {
               Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
             }
