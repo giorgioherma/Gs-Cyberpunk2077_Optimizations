@@ -1,1 +1,1 @@
-checkpoint=integrated-redscript-pass4-10-final-gco-app-zip-and-real-source-replay
+checkpoint=unified-semantic-module-final-real-grsp-replay-clean-zip
