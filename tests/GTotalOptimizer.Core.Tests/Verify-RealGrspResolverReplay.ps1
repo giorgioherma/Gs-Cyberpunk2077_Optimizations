@@ -2056,7 +2056,9 @@ try {
       @{ Id='redwindows-widget-lookup'; Order=19; Command='phase2-redwindows-find';
          Rule='REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1'; Owner='RedWindows' },
       @{ Id='trigger-mode-literal-tags'; Order=20; Command='phase2-trigger-mode-tags';
-         Rule='TRIGGER_MODE_LITERAL_TAG_NAMES_V1'; Owner='TriggerModeControl' }
+         Rule='TRIGGER_MODE_LITERAL_TAG_NAMES_V1'; Owner='TriggerModeControl' },
+      @{ Id='disable-position-tracing'; Order=21; Command='phase2-disable-position-tracing';
+         Rule='DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1'; Owner='DisablePositionReveal' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

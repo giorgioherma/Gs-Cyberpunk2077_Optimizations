@@ -955,6 +955,55 @@ public static class RedscriptGenerationPlan
         else if (trigger.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("TMC_TAG_STATUS_UNKNOWN");
 
+        // Historical DisablePositionReveal Pass 7: skip redundant
+        // SetIsTracing(false) in three independent NPC callbacks.
+        // Preserve original wrappedMethod/super ordering and all generic work.
+        string tracingRoot = Path.Combine(output, "_stages",
+            "21-disable-position-tracing");
+        var tracing = DisablePositionRevealTracingPass.Generate(game, tracingRoot,
+            Directory.Exists(final) ? final : null);
+        if (tracing.Status == "APPLIED")
+        {
+            string rel = tracing.SourcePath ??
+                throw new InvalidDataException("DPR_SOURCE_PATH_MISSING");
+            string source = Path.GetFullPath(Path.Combine(tracingRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string target = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/DisablePositionReveal/",
+                    StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(source, tracingRoot) || !IsInside(target, final) ||
+                !File.Exists(source))
+                throw new InvalidDataException("DPR_STAGE_PATH_UNSAFE");
+            bool existed = File.Exists(target);
+            if (existed)
+            {
+                string previous = File.ReadAllText(target);
+                string updated = File.ReadAllText(source);
+                var markers = System.Text.RegularExpressions.Regex.Matches(
+                    previous, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(x => x.Value).Distinct(StringComparer.Ordinal);
+                if (markers.Any(x => !updated.Contains(x,
+                    StringComparison.Ordinal)))
+                    throw new InvalidDataException("DPR_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += tracing.AppliedEdits;
+            results.Add(new(21, "disable-position-tracing",
+                tracing.AppliedEdits, existed ? 0 : 1,
+                existed ? 1 : 0, []));
+        }
+        else if (tracing.Status == "REFUSED")
+            skipped.Add(new(21, "disable-position-tracing", 1,
+                tracing.Reason ?? "DPR_SOURCE_INCOMPATIBLE"));
+        else if (tracing.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("DPR_STATUS_UNKNOWN");
+        if (tracing.Status == "APPLIED" && tracing.Reason is not null)
+            skipped.Add(new(21, "disable-position-tracing", 1, tracing.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
