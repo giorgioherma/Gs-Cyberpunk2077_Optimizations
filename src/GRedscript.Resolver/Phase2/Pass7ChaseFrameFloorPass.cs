@@ -781,10 +781,27 @@ public static class Pass7ChaseFrameFloorPass
             "        if ownerPuppet.IsPrevention() { return; }");
         if (!police) missing.Append(nl).Append(
             "        if Equals(ownerPuppet.GetAttitudeAgent().GetAttitudeGroup(), n\"police\") { return; }");
+        // Complete handwritten null/prevention-only guards *after* the
+        // existing null check, never before it. That protects mixed partial
+        // installations from dereferencing an absent NPC owner.
+        int insertion = owner.Index + owner.Length;
+        var presentNull = Regex.Match(region,
+            @"\bif\s*!\s*IsDefined\s*\(\s*ownerPuppet\s*\)\s*\{\s*return\s*;\s*\}", Rx);
+        if (presentNull.Success)
+            insertion = Math.Max(insertion,
+                owner.Index + owner.Length + presentNull.Index + presentNull.Length);
+        var presentPrevention = Regex.Match(region,
+            @"\bif\s+ownerPuppet\s*\.\s*IsPrevention\s*\(\s*\)\s*\{\s*return\s*;\s*\}", Rx);
+        if (presentPrevention.Success)
+            insertion = Math.Max(insertion,
+                owner.Index + owner.Length + presentPrevention.Index +
+                presentPrevention.Length);
+        // A combined historical if has its own safe guard and still counts as
+        // present without being rewritten into two duplicate tests.
         string changed = Apply(source,
         [
-            new Edit(span.Start + owner.Index + owner.Length,
-                span.Start + owner.Index + owner.Length, missing.ToString())
+            new Edit(span.Start + insertion,
+                span.Start + insertion, missing.ToString())
         ]);
         if (ReinforcementPrevention(changed).Status != "COMPLETE")
             throw new InvalidDataException("RS_PREVENTION_POSTCONDITION");
