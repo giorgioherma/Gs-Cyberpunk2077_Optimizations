@@ -187,7 +187,6 @@ public final func GRedChipwareHotpathCache() -> ref<GRedChipwareHotpathCache> {
             Regex.Matches(body,@"\bstatsSystem\b").Count!=4 ||
             KerenNames.Any(name=>Regex.Matches(body,@"\b"+name+@"\b").Count!=2))
             return new("REFUSED",null,"PASS8_KEREN_OTHER_STAT_USE");
-        string nl=source.Contains("\r\n",StringComparison.Ordinal)?"\r\n":"\n";
         // Transform in reverse offset order to protect the original statement
         // and condition positioning. All unrelated state-machine code is kept.
         var edits=new List<(int Start,int End,string Text)>();
