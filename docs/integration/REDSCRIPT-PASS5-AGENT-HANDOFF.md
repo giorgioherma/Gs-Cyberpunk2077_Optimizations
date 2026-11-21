@@ -1,7 +1,7 @@
 # REDscript Agent 3 — historical Pass 5.0 isolated implementation handoff
 
 Branch: `dev/redscript/pass5`. Forked from green SHA `96d66c66642ac52dd13fd4001416572b9169bace`.
-Owner: Pass 5.0 only. Do not merge into `main` or register stage numbers independently of the integration agent.
+Owner: Pass 5.0 only. The user explicitly authorized branch-local production one-pass integration on 21 November 2026. No merge into `main` or another agent's active development branch.
 
 ## Audit of all eight historical Pass 5 files
 
@@ -26,15 +26,15 @@ Executable baseline: `scriptsliveAFTERgeneric.zip` and authoritative private `or
 - `tests/GRedscript.Resolver.Tests/test_phase2_pass5_holotravel.py`
 - Existing workflow branch trigger expanded for `dev/redscript/pass*`; existing stage order and central `RedscriptGenerationPlan.cs`/main product CI unchanged.
 
-The test harness invokes the **production C# generator via reflection**, without duplicating its implementation or touching central stage registration. Source-state tests: post-generic stock, partially guarded, partially hoisted, missing holo guard, fully complete/idempotence, compatible relocated/custom source, unsafe filter/validation scoped refusal and absent mod. In GitHub CI, the independent candidate overlay is compiled with the existing official `Verify-Phase2Checkpoint.ps1` and SCC 0.5.31 against the complete 2,331-file private post-generic source.
+The test harness invokes the **production C# generator via reflection**, without duplicating its implementation. The production `RedscriptGenerationPlan.Stage()` now also invokes the same generator as ordered semantic #37. A public `phase2-holotravel-material` CLI exposes independent generation for exact one-pass parity verification. Source-state tests: post-generic stock, partially guarded, partially hoisted, missing holo guard, fully complete/idempotence, compatible relocated/custom source, unsafe filter/validation scoped refusal and absent mod. In GitHub CI, the independent candidate overlay is compiled with the existing official `Verify-Phase2Checkpoint.ps1` and SCC 0.5.31 against the complete 2,331-file private post-generic source.
 
 ## Validation and integration status
 
 - **Final fast Phase 2 [#207 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874654298)** at source/test commit `0424771bfdd8c5778cf70a4d775db29fee560a12`: **197 source-state tests passed**, including ten HoloTravel cases, now explicitly rejecting custom impure color resolvers. The candidate independently emitted one HoloTravel file from the real 2,331-file post-generic source, passed **official SCC 0.5.31** using the existing checkpoint verifier, and repeated generation returned COMPLETE with no extra output. The existing canonical stages independently passed combined SCC with **29 currently registered semantic overlays / 43,512,293 compiled bytes**. That canonical stack **does not yet include HoloTravel** because central stage registration belongs to the integration owner. Previous [#202 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874209829) covered the earlier nine-case implementation before strengthening pure-color proof.
-- No full GCO integrated ZIP/build CI for this independent Pass 5 candidate, no in-game generated overlay proof and no performance claim. Branch-local handoff documentation commit does not change the tested code.
+- Full GCO product/ZIP CI [#1087](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875337791) is running for this branch. No in-game generated overlay proof or performance claim. Product release remains gated on completed CI.
 
-- This branch is an **isolated candidate**, not yet a canonical Generate stage. Main integration owner must add one ordered stage and the canonical combined source/ZIP tests after merging.
-- The focused fast CI outcome must be recorded from the newest branch run before marking source/SCC green; no player-side SCC distribution or gameplay/FPS claim.
+- **Canonical branch-local Generate stage #37 integrated:** `RedscriptGenerationPlan.Stage()` calls the same source-aware generator on the effective post-generic overlay, stages only accepted owner-local `.reds`, preserves prior generic markers, records `holotravel-material-event` applied or a narrow skipped reason, and includes it in the normal combined ZIP and ownership accounting. Stages #11–#36 remain in place.
+- Added independent `phase2-holotravel-material` CLI output to the fast checkpoint with source-level contract, **byte-for-byte comparison against the canonical one-pass Stage #37**, and combined official SCC (without player-side SCC). Fast [#215](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875328295) is the integrated checkpoint; result pending at this edit.
 - Do not cherry-pick historical `.reds` files into an installed game or overwrite a current mod. Prefer cherry-picking the isolated generator/tests into the integration branch.
 - Cross-pass conflicts: Pass 4 owns zzy chipware and potentially HQ_HoloGirl; integration owner decides combined code in a source-aware single-stage composition.
 
