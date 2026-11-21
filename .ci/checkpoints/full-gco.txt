@@ -1,1 +1,1 @@
-checkpoint=bundled-redruntime-abi-provided-with-generated-pass-20261121
+checkpoint=runtime-aware-redscript-gco-wpf-footer-smoke-corrected-20261121
