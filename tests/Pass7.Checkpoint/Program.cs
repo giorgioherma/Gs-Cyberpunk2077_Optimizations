@@ -152,6 +152,15 @@ static void CheckContent(Dictionary<string, string> original, string output,
                 "STEALTH_QUEST_GUARD_MISSING");
             Require(content.Contains("wrappedMethod(evt);",
                 StringComparison.Ordinal), "STEALTH_WRAPPED_METHOD_LOST");
+            Require(Regex.Matches(content,
+                @"private let m_stealthRunnerPlayer\s*:\s*wref").Count == 1,
+                "STEALTH_PLAYER_CACHE_FIELD_DUPLICATED");
+            Require(content.Contains("npc.m_stealthRunnerPlayer = player;",
+                StringComparison.Ordinal), "STEALTH_PLAYER_INIT_CACHE_MISSING");
+            Require(content.Contains("this.m_stealthRunnerPlayer = null;",
+                StringComparison.Ordinal), "STEALTH_PLAYER_DETACH_CLEAR_MISSING");
+            Require(content.Contains("let player: wref<PlayerPuppet> = this.m_stealthRunnerPlayer;",
+                StringComparison.Ordinal), "STEALTH_PLAYER_CACHED_READ_MISSING");
         }
         else if (key == "rm")
         {
@@ -194,7 +203,7 @@ static void Run(string baseline)
         string result = Path.Combine(temp, "generated");
         var report = Pass7ChaseFrameFloorPass.Generate(game, result);
         Require(report.AppliedEdits >= 7, "STOCK_BATCH_EDITS");
-        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION" })
+        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER_QUEST_DETECTION", "STEALTH_RUNNER_PLAYER_HANDLE", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION" })
             AssertStatus(report, id, "APPLIED");
         CheckContent(originals, result);
         Require(Sha(string.Join("|", ReadCurrent(game)
@@ -237,9 +246,10 @@ static void Run(string baseline)
             .Replace("    let player: ref<PlayerPuppet> = GetPlayer(gi);",
                 q + "\n    let player: ref<PlayerPuppet> = GetPlayer(gi);",
                 StringComparison.Ordinal);
-        partial["sr"] = partial["sr"].Replace("  wrappedMethod(evt);",
-            "  wrappedMethod(evt);\n  if !IsDefined(this.m_stealthRunnerStatus) { return false; }",
-            StringComparison.Ordinal);
+        partial["sr"] = "@addField(NPCPuppet)\nprivate let m_stealthRunnerPlayer: wref<PlayerPuppet>;\n" +
+            partial["sr"].Replace("  wrappedMethod(evt);",
+                "  wrappedMethod(evt);\n  if !IsDefined(this.m_stealthRunnerStatus) { return false; }",
+                StringComparison.Ordinal);
         partial["rm"] = "@addField(SprintEvents)\nprivate let m_gredRunningManDoubleRunPerk: Bool;\n\n"
             + partial["rm"];
         partial["dir"] = "@addField(SprintDecisions)\nprivate let m_gredRunningManSprintDirectionPerk: Bool;\n\n"
@@ -271,7 +281,8 @@ static void Run(string baseline)
         var bad = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "incompatible", incompatible),
             Path.Combine(temp, "incompatible-out"));
-        AssertStatus(bad, "STEALTH_RUNNER", "REFUSED");
+        AssertStatus(bad, "STEALTH_RUNNER_QUEST_DETECTION", "REFUSED");
+        AssertStatus(bad, "STEALTH_RUNNER_PLAYER_HANDLE", "REFUSED");
         AssertStatus(bad, "NCR_SPAWN", "APPLIED");
         AssertStatus(bad, "RUNNING_MAN_SPRINT_ENTRY", "APPLIED");
         AssertStatus(bad, "RUNNING_MAN_SPRINT_DIRECTION", "APPLIED");
