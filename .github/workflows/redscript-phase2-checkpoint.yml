@@ -350,7 +350,8 @@ jobs:
           if ($files.Count -ne 1) { throw 'PHASE2_QHF_EXPECTED_SINGLE_OWNER_FILE' }
           foreach ($file in $files) {
             $relative=[IO.Path]::GetRelativePath((Join-Path $env:PHASE2_QUICKHACK_OUTPUT 'r6/scripts'),$file.FullName)
-            if ($relative.StartsWith('..') -or !$relative.StartsWith('Quickhack_Fixes/')) {
+            $ownerRelative=$relative.Replace([IO.Path]::DirectorySeparatorChar, '/')
+            if ($ownerRelative.StartsWith('..') -or !$ownerRelative.StartsWith('Quickhack_Fixes/')) {
               throw 'PHASE2_QHF_OWNER_PATH_UNSAFE'
             }
             $body=Get-Content -LiteralPath $file.FullName -Raw
