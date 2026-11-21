@@ -1049,6 +1049,22 @@
                                     <Run Text="&quot;\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods&quot; and &quot;\Cyberpunk 2077\r6\scripts&quot;"/>
                                 </TextBlock>
                             </StackPanel>
+                            <!-- Successful generated ZIP guidance below the existing manual
+                                 backup/Vortex instructions and above the live console. -->
+                            <StackPanel x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,10,0,0">
+                                <TextBlock Text="PASS READY — Optimization ZIP generated"
+                                           Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
+                                           FontWeight="Bold" FontSize="13"/>
+                                <TextBlock x:Name="GeneratedPassLocation"
+                                           Foreground="{StaticResource Cyan}" FontSize="12.5"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                <TextBlock Foreground="#B7CED6" FontSize="12.5"
+                                           TextWrapping="Wrap" Margin="0,3,0,0">
+                                    <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
+                                    <Run Text="If installing manually, BACK UP first."
+                                         Foreground="#FFF000" FontWeight="Bold"/>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                     <!-- Analyze console and CLOSE share a single footer row.
