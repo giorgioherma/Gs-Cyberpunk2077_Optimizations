@@ -336,6 +336,7 @@ public static class Pass7ChaseFrameFloorPass
         @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
     private const string DirectionField = "m_gredRunningManSprintDirectionPerk";
+    private const string DirectionValid = "m_gredRunningManSprintDirectionValid";
 
     private static Decision SprintDirection(string source)
     {
@@ -347,77 +348,114 @@ public static class Pass7ChaseFrameFloorPass
             enterBody = source[enter.Start..enter.End];
         var oldStand = DirectionLocal.Matches(standBody);
         var oldEnter = DirectionLocal.Matches(enterBody);
-        var useStand = Regex.Matches(standBody,
-            @"\bif\s+hasSprintDirectionPerk\s*\{", Rx);
-        var useEnter = Regex.Matches(enterBody,
-            @"\bif\s+hasSprintDirectionPerk\s*\{", Rx);
-        bool cachedStand = Has(standBody, @"\bif\s+this\s*\.\s*" + DirectionField + @"\s*\{"),
-            cachedEnter = Has(enterBody, @"\bif\s+this\s*\.\s*" + DirectionField + @"\s*\{"),
-            assigned = Has(enterBody, @"\bthis\s*\.\s*" + DirectionField +
-                @"\s*=\s*PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\(");
-        if ((oldStand.Count != (cachedStand ? 0 : 1)) ||
-            (oldEnter.Count != (assigned ? 0 : 1)) ||
-            useStand.Count != (cachedStand ? 0 : 1) ||
-            useEnter.Count != (cachedEnter ? 0 : 1) ||
-            (cachedEnter && !assigned))
+        var standUse = Regex.Matches(standBody, @"\bif\s+hasSprintDirectionPerk\s*\{", Rx);
+        var enterUse = Regex.Matches(enterBody, @"\bif\s+hasSprintDirectionPerk\s*\{", Rx);
+        bool standby = Has(standBody,
+            @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*this\s*\.\s*" +
+            DirectionField + @"\s*;") &&
+            Has(standBody, @"\bif\s*!\s*this\s*\.\s*" + DirectionValid +
+                @"\s*\{\s*hasSprintDirectionPerk\s*=\s*PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\(");
+        bool assigned = Has(enterBody, @"\bthis\s*\.\s*" + DirectionField +
+            @"\s*=\s*PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\(");
+        bool validSet = Has(enterBody, @"\bthis\s*\.\s*" + DirectionValid + @"\s*=\s*true\s*;");
+        bool cachedEnter = Has(enterBody, @"\bif\s+this\s*\.\s*" + DirectionField + @"\s*\{");
+        if (oldStand.Count != (standby ? 0 : 1) ||
+            oldEnter.Count != (assigned ? 0 : 1) ||
+            standUse.Count != 1 || enterUse.Count != (cachedEnter ? 0 : 1) ||
+            (assigned && !cachedEnter) || (validSet && !assigned))
             return new("REFUSED", null, 0, 0, "RM_DIRECTION_PERK_FLOW_INCOMPATIBLE");
+
         string? expression = oldEnter.Count == 1 ?
             oldEnter[0].Groups["expr"].Value.Trim() :
             oldStand.Count == 1 ? oldStand[0].Groups["expr"].Value.Trim() : null;
         if (expression is not null &&
-            (!Has(expression, @"Body_Left_Milestone_1") ||
-             !Has(expression, @">\s*0\s*$")))
+            (!Has(expression, @"Body_Left_Milestone_1") || !Has(expression, @">\s*0\s*$")))
             return new("REFUSED", null, 0, 0, "RM_DIRECTION_PERK_ID_CHANGED");
         if (oldStand.Count == 1 && oldEnter.Count == 1 &&
             Regex.Replace(oldStand[0].Groups["expr"].Value, @"\s+", "") !=
             Regex.Replace(oldEnter[0].Groups["expr"].Value, @"\s+", ""))
             return new("REFUSED", null, 0, 0, "RM_DIRECTION_PERK_QUERIES_DIFFER");
-        if (!assigned && expression is null)
+
+        // The author's EnterCondition is absent when EasierControllerSprint
+        // is installed. In that configuration, ToStand must keep querying
+        // the original live perk predicate rather than trust an uninitialized
+        // cache. The optional conditional must be verified in this source.
+        if (!Has(source, @"@\s*if\s*\(\s*!\s*ModuleExists\s*\(\s*""EasierControllerSprint""\s*\)\s*\)"))
+            return new("REFUSED", null, 0, 0, "RM_DIRECTION_OPTIONAL_ENTRY_CONDITION_UNKNOWN");
+        if (!standby && expression is null)
             return new("REFUSED", null, 0, 0, "RM_DIRECTION_PERK_QUERY_UNAVAILABLE");
-        var field = Regex.Matches(source,
-            @"@\s*addField\s*\(\s*SprintDecisions\s*\)\s*private\s+let\s+" +
-            DirectionField + @"\s*:\s*Bool\s*;", Rx);
-        if (field.Count > 1 || (field.Count == 0 &&
-            Has(source, @"\blet\s+" + DirectionField + @"\b")))
-            return new("REFUSED", null, 0, 0, "RM_DIRECTION_FIELD_COLLISION");
 
         var edits = new List<Edit>();
-        if (field.Count == 0)
-            edits.Add(new(0, 0,
-                "@addField(SprintDecisions)" + Newline(source) +
-                "private let " + DirectionField + ": Bool;" +
-                Newline(source) + Newline(source)));
+        int complete = 0;
+        foreach (string fieldName in new[] { DirectionField, DirectionValid })
+        {
+            var decl = Regex.Matches(source,
+                @"@\s*addField\s*\(\s*SprintDecisions\s*\)\s*private\s+let\s+" +
+                fieldName + @"\s*:\s*Bool\s*;", Rx);
+            if (decl.Count > 1 || (decl.Count == 0 &&
+                Has(source, @"\blet\s+" + fieldName + @"\b")))
+                return new("REFUSED", null, 0, complete,
+                    "RM_DIRECTION_FIELD_COLLISION:" + fieldName);
+            if (decl.Count == 0)
+                edits.Add(new(0, 0, "@addField(SprintDecisions)" + Newline(source) +
+                    "private let " + fieldName + ": Bool;" +
+                    Newline(source) + Newline(source)));
+            else complete++;
+        }
+
         if (oldStand.Count == 1)
         {
-            edits.Add(new(stand.Start + oldStand[0].Index,
-                stand.Start + oldStand[0].Index + oldStand[0].Length, ""));
+            var old = oldStand[0];
+            string replacement =
+                "let hasSprintDirectionPerk: Bool = this." + DirectionField + ";" +
+                Newline(source) +
+                "  if !this." + DirectionValid + " {" + Newline(source) +
+                "    hasSprintDirectionPerk = " + old.Groups["expr"].Value.Trim() +
+                ";" + Newline(source) + "  };";
+            edits.Add(new(stand.Start + old.Index,
+                stand.Start + old.Index + old.Length, replacement));
         }
-        if (useStand.Count == 1)
-        {
-            edits.Add(new(stand.Start + useStand[0].Index,
-                stand.Start + useStand[0].Index + useStand[0].Length,
-                "if this." + DirectionField + " {"));
-        }
+        else complete++;
+
         if (oldEnter.Count == 1)
         {
-            edits.Add(new(enter.Start + oldEnter[0].Index,
-                enter.Start + oldEnter[0].Index + oldEnter[0].Length,
-                "this." + DirectionField + " = " + expression + ";"));
+            var old = oldEnter[0];
+            string replacement =
+                "this." + DirectionField + " = " + old.Groups["expr"].Value.Trim() +
+                ";" + (validSet ? "" : Newline(source) +
+                "  this." + DirectionValid + " = true;");
+            edits.Add(new(enter.Start + old.Index,
+                enter.Start + old.Index + old.Length, replacement));
         }
-        if (useEnter.Count == 1)
+        else complete++;
+
+        if (!validSet && oldEnter.Count == 0 && assigned)
         {
-            edits.Add(new(enter.Start + useEnter[0].Index,
-                enter.Start + useEnter[0].Index + useEnter[0].Length,
+            var assignment = Regex.Match(enterBody,
+                @"\bthis\s*\.\s*" + DirectionField +
+                @"\s*=\s*PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?\s*;", Rx);
+            if (!assignment.Success)
+                return new("REFUSED", null, 0, complete,
+                    "RM_DIRECTION_ASSIGNMENT_PARTIAL_UNPROVEN");
+            edits.Add(new(enter.Start + assignment.Index + assignment.Length,
+                enter.Start + assignment.Index + assignment.Length,
+                Newline(source) + "  this." + DirectionValid + " = true;"));
+        }
+        else if (validSet) complete++;
+
+        if (enterUse.Count == 1)
+        {
+            var use = enterUse[0];
+            edits.Add(new(enter.Start + use.Index, enter.Start + use.Index + use.Length,
                 "if this." + DirectionField + " {"));
         }
+        else complete++;
         if (edits.Count == 0)
-            return new("COMPLETE", null, 0, 4, null);
+            return new("COMPLETE", null, 0, complete, null);
         string changed = Apply(source, edits);
         if (SprintDirection(changed).Status != "COMPLETE")
             throw new InvalidDataException("RM_DIRECTION_POSTCONDITION_FAILED");
-        return new("APPLIED", changed, edits.Count,
-            (field.Count > 0 ? 1 : 0) + (cachedStand ? 1 : 0) +
-            (cachedEnter ? 1 : 0) + (assigned ? 1 : 0), null);
+        return new("APPLIED", changed, edits.Count, complete, null);
     }
 
     private static bool Inside(string child, string root) =>
