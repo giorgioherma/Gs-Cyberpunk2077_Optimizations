@@ -1004,7 +1004,7 @@
                             <!-- Short installation guidance remains in two rows. -->
                             <StackPanel Margin="3,8,0,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="OptimizationFooterFirstLine" Text="CET + REDscript  One clean zip with optimized files."
+                                    <TextBlock x:Name="OptimizationFooterFirstLine" Text="CET + REDscript  One clean zip with optimization files."
                                                Foreground="#98A9B1" FontSize="12.5" Margin="0,0,20,0"/>
                                     <TextBlock x:Name="OptimizationFooterVortex" Text="Use Vortex for easy file management"
                                                Foreground="#98A9B1" FontSize="12.5"/>
