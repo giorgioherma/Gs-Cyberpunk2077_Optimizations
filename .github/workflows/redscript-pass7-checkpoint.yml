@@ -1,0 +1,95 @@
+name: REDscript Pass 7 - Isolated Chase and Sprint Checkpoint
+
+# Runs once when this dedicated workflow is first committed or explicitly
+# revalidated. No shared-phase CI concurrency and no per-edit automatic runs.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/redscript/pass7
+    paths:
+      - '.github/workflows/redscript-pass7-checkpoint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redscript-pass7-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pass7-source-and-scc:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated Pass 7 implementation
+        uses: actions/checkout@v4
+
+      - name: Checkout authoritative post-generic source and CI-only SCC
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .phase2-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+
+      - name: Configure .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build isolated generator and test runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build tests/Pass7.Checkpoint/Pass7.Checkpoint.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS7_BUILD_FAILED' }
+
+      - name: Test source states and one-run convergence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet run --no-build -c Release --project tests/Pass7.Checkpoint/Pass7.Checkpoint.csproj -- selftest '.phase2-private/base_after_generic'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS7_SOURCE_STATE_CONTRACT_FAILED' }
+
+      - name: Generate one independent Pass 7 batch from real post-generic stock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $game='.phase2-private/base_after_generic'
+          $out='.pass7-generated'
+          dotnet run --no-build -c Release --project tests/Pass7.Checkpoint/Pass7.Checkpoint.csproj -- generate $game $out
+          if ($LASTEXITCODE -ne 0) { throw 'PASS7_CANONICAL_GENERATION_FAILED' }
+          $result=Get-Content -LiteralPath (Join-Path $out 'pass7-result.json') -Raw | ConvertFrom-Json
+          $changed=@(Get-ChildItem -LiteralPath (Join-Path $out 'r6/scripts') -Recurse -File -Filter '*.reds')
+          if ($changed.Count -ne 3 -or [int]$result.appliedEdits -lt 7 -or
+              @($result.operations | Where-Object { $_.status -ne 'APPLIED' }).Count -ne 0) {
+            throw ('PASS7_CANONICAL_OWNER_OUTPUT_INCOMPLETE files='+$changed.Count)
+          }
+          Write-Host ('PASS7 three source-aware owner files, edits='+$result.appliedEdits)
+
+      - name: Official SCC 0.5.31 combined-source compilation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 `
+            -PostGenericRoot '.phase2-private/base_after_generic' `
+            -CompilerRoot '.phase2-private/Compiler' `
+            -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' `
+            -SemanticOverlayRoot '.pass7-generated'
+          if (!$?) { throw 'PASS7_OFFICIAL_SCC_FAILED' }
+
+      - name: Remove source and SCC fixtures
+        if: always()
+        shell: pwsh
+        run: |
+          foreach($item in @('.phase2-private','.pass7-generated')) {
+            if(Test-Path -LiteralPath $item) {
+              Remove-Item -LiteralPath $item -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
