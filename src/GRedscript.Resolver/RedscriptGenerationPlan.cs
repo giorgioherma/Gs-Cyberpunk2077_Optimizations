@@ -1743,6 +1743,88 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Isolated historical Pass 7 combat/chase/frame-floor operations.
+        // Numeric 700-series slots avoid consuming the handoff/Pass 4/5
+        // stage-number ranges while those branches are developed in parallel.
+        // Production one-pass generation composes against ALL earlier generic
+        // and semantic effective files, not an old historical ZIP.
+        string pass7Root = Path.Combine(output, "_stages", "700-pass7-chase");
+        var pass7 = Pass7ChaseFrameFloorPass.Generate(game, pass7Root,
+            Directory.Exists(final) ? final : null);
+        if (pass7.Operations.Length != 4 ||
+            pass7.AppliedEdits != pass7.Operations.Sum(x => x.AppliedEdits))
+            throw new InvalidDataException("PASS7_STAGE_REPORT_INCONSISTENT");
+
+        var expectedPass7 = new[]
+        {
+            ("NCR_SPAWN_EARLY_CULL_GUARDS_V1", "NightCityRemembers",
+                "pass7-ncr-spawn-guards"),
+            ("STEALTH_RUNNER_QUEST_DETECTION_GATE_V1", "StealthRunner",
+                "pass7-stealth-detection-gate"),
+            ("RUNNING_MAN_SPRINT_ENTRY_PERK_CACHE_V1", "RunningMan",
+                "pass7-runningman-double-sprint"),
+            ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
+                "pass7-runningman-direction")
+        };
+        var copiedPass7 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int idx = 0; idx < expectedPass7.Length; idx++)
+        {
+            var expected = expectedPass7[idx];
+            var op = pass7.Operations[idx];
+            int order = 700 + idx;
+            if (op.Id != expected.Item1)
+                throw new InvalidDataException("PASS7_STAGE_OPERATION_ORDER_DRIFT");
+            if (op.Status == "APPLIED")
+            {
+                if (op.AppliedEdits < 1 || string.IsNullOrWhiteSpace(op.SourcePath))
+                    throw new InvalidDataException("PASS7_STAGE_EMPTY_OPERATION");
+                string rel = op.SourcePath;
+                string src = Path.GetFullPath(Path.Combine(pass7Root,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                string dest = Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/', Path.DirectorySeparatorChar)));
+                if (!rel.StartsWith("r6/scripts/" + expected.Item2 + "/",
+                        StringComparison.Ordinal) ||
+                    !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                    !IsInside(src, pass7Root) || !IsInside(dest, final) ||
+                    !File.Exists(src))
+                    throw new InvalidDataException("PASS7_STAGE_OWNER_PATH_UNSAFE:" +
+                        expected.Item1);
+                bool previouslyStaged = File.Exists(dest);
+                if (previouslyStaged)
+                {
+                    string beforeText = File.ReadAllText(dest);
+                    string afterText = File.ReadAllText(src);
+                    var markers = System.Text.RegularExpressions.Regex.Matches(
+                        beforeText, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                    if (markers.Any(m => !afterText.Contains(m,
+                            StringComparison.Ordinal)))
+                        throw new InvalidDataException("PASS7_STAGE_GENERIC_LOST:" +
+                            expected.Item1);
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                // Two independent operations may share a relocated owner
+                // file. The Pass 7 source generator has already composed both
+                // into its final bytes, so copy once and report each operation.
+                if (copiedPass7.Add(rel))
+                {
+                    File.Copy(src, dest, overwrite: previouslyStaged);
+                    files += previouslyStaged ? 0 : 1;
+                }
+                expressions += op.AppliedEdits;
+                results.Add(new(order, expected.Item3, op.AppliedEdits,
+                    previouslyStaged ? 0 : 1,
+                    previouslyStaged ? 1 : 0, []));
+            }
+            else if (op.Status == "REFUSED")
+                skipped.Add(new(order, expected.Item3, 1,
+                    op.Reason ?? "PASS7_OPERATION_INCOMPATIBLE"));
+            else if (op.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+                throw new InvalidDataException("PASS7_STAGE_UNKNOWN_STATUS:" +
+                    expected.Item1);
+        }
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
