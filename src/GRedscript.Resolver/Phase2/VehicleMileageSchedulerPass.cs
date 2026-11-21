@@ -178,6 +178,17 @@ internal static class VehicleMileageSchedulerPass
                 "    this."+spec.Armed+" = false;",
                 spec.Variable?"    this.tickToken += 1;":"",
                 spec.Owner=="fuel-gauge"?"    this.callbackGeneration += 1;":"",
+                spec.Owner=="3d-odo"?"    this.HideLastWidget();":"",
+                spec.Owner=="fuel-available"?"    ArrayClear(this.targets);":"",
+                spec.Owner=="price-sign"?"    ArrayClear(this.targetWidgets);":"",
+                spec.Owner=="fuel-gauge"?"": 
+                    "    if this.registered && IsDefined(this.callbackSystem) {",
+                spec.Owner=="fuel-gauge"?"": 
+                    "      this.callbackSystem.UnregisterCallback(n\"Entity/Assemble\", this, n\""+
+                    (spec.Owner=="3d-odo"?"OnVehicleAssemble":"OnEntityAssemble")+"\");",
+                spec.Owner=="fuel-gauge"?"":"    };",
+                spec.Owner=="fuel-gauge"?"":"    this.registered = false;",
+                spec.Owner=="fuel-gauge"?"":"    this.callbackSystem = null;",
                 "  }",
                 ""
             }.Where(x=>x.Length>0))+nl;
