@@ -118,7 +118,11 @@ internal static class VirtualAtelierSpawnPacingPass
         // piece-by-piece. Required names are owner-scoped; no duplicates.
         if (!Has(src, @"\bclass\s+GcoAtelierSpawnBatchCallback\b"))
         {
-            add(owner.Start, owner.Start, string.Join(nl, new[]
+            int classLine = src.LastIndexOf('\n', Math.Max(0, owner.Start - 1)) + 1;
+            string classPrefix = src[classLine..owner.Start];
+            if (!Regex.IsMatch(classPrefix, @"^\s*(?:(?:public|protected|private)\s+)?$"))
+                return new("REFUSED", "VAD_CLASS_INSERTION_PREFIX_UNPROVEN", null, 0);
+            add(classLine, classLine, string.Join(nl, new[]
             {
                 "public class GcoAtelierSpawnBatchCallback extends DelayCallback {",
                 "  public let spawner: wref<AtelierDropPointsSpawner>;",
@@ -207,7 +211,11 @@ internal static class VirtualAtelierSpawnPacingPass
             ["QueueGcoVadSpawnTick"] = string.Join(nl, new[]
             {
                 "  private final func QueueGcoVadSpawnTick() -> Void {",
-                "    if this.m_gcoVadSpawnQueued || ArraySize(this.m_gcoVadSpawnQueue) <= 0 { return; };",
+                "    if this.m_gcoVadSpawnQueued { return; };",
+                "    if ArraySize(this.m_gcoVadSpawnQueue) <= 0 {",
+                "      ArrayClear(this.m_gcoVadPendingTags);",
+                "      return;",
+                "    };",
                 "    if !IsDefined(this.delaySystem) { this.FlushGcoVadSpawnQueue(); return; };",
                 "    let cb = new GcoAtelierSpawnBatchCallback();",
                 "    cb.spawner = this;",
@@ -225,7 +233,7 @@ internal static class VirtualAtelierSpawnPacingPass
                 "      ArrayClear(this.m_gcoVadPendingTags);",
                 "      return;",
                 "    };",
-                "    if !IsDefined(this.entitySystem) { return; };",
+                "    if !IsDefined(this.entitySystem) { this.CancelGcoVadSpawnBatch(); return; };",
                 "    let instance = this.m_gcoVadSpawnQueue[0];",
                 "    ArrayErase(this.m_gcoVadSpawnQueue, 0);",
                 "    if IsDefined(instance) && !this.entitySystem.IsPopulated(instance.uniqueTag) {",
