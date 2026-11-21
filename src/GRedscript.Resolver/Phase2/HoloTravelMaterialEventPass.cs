@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -176,6 +175,9 @@ internal static class HoloTravelMaterialEventPass
             return ("REFUSED", "HOLOTRAVEL_COLOR_LOCAL_AMBIGUOUS", null);
         if (OldColor.IsMatch(result))
         {
+            // Replace the call inside the loop first; otherwise the inserted
+            // declaration would become "let color = color".
+            result = OldColor.Replace(result, "color", 1);
             if (!hasColor)
             {
                 var loop = LoopStart.Match(result);
@@ -183,7 +185,6 @@ internal static class HoloTravelMaterialEventPass
                     "let color = this.ResolveColor(this.svc.holo.particleColor);" +
                     nl + "        ");
             }
-            result = OldColor.Replace(result, "color", 1);
         }
         else if (!hasColor)
             return ("REFUSED", "HOLOTRAVEL_COLOR_USE_INCOMPATIBLE", null);
