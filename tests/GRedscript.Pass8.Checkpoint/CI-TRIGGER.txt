@@ -1,1 +1,1 @@
-2026-11-21 Pass 8 canonical one-pass integration checkpoint: independent byte parity plus full SCC.
+checkpoint=pass10-chipware-memo-canonical-source-state-scc
