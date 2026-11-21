@@ -124,7 +124,7 @@ class BrowserJournalTests(unittest.TestCase):
                                'journal.GetEntryState(this.GetCustomQuest());', 1)
         state, output = self.generate(unsafe)
         self.assertEqual('REFUSED', state['status'], state)
-        self.assertIn('BEX_JOURNAL_STATE_QUERY_UNPROVEN', state['reason'])
+        self.assertIn('BEX_JOURNAL_ENTRY_HAS_OTHER_READERS', state['reason'])
         self.assertIsNone(output)
 
     def test_absent_owner_not_applicable(self):
