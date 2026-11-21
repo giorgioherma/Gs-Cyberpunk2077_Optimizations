@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Agent 6 historical Pass 8 integrated into canonical GCO Generate (isolated branch only)
+
+- Branch `dev/redscript/pass8` forked from verified `96d66c66`. Implemented canonical ordered **#37 chipware cheap paths, #38 chipware 50 ms combat stat cache, #39 ImmersiveCyberware scanner/ammo cache** using existing post-generic source-aware Pass 8 generators. Previous generics and semantics remain in the one-pass output; no independent player ZIP or code changes to `main`, CET, GRSP or G-REDruntime.
+- New `Pass8CanonicalComposition` verifies owner path boundaries, exact changed-file manifests, retained generic markers, and individual refusal reporting. Actual combined effective-preview automatically flows to the existing combined CET+REDscript game-relative ZIP/ownership sidecar.
+- [**Isolated canonical CI #12 SUCCESS**](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876279303): separate Pass 8 source-state suite, authoritative post-generic SCC, all eight Pass 8 owner/helper output files byte-identical to canonical one-invocation GCO staging, and complete effective-source official SCC 0.5.31 PASS. No gameplay/performance gain claimed.
+- Long GCO source/ZIP replay now independently composes 34–39 and tests stage metadata + byte parity. [Full GCO #1095 FAILED](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876236287) from a missing Pass 8 test runner build in the long workflow; workflow setup corrected in `7f1b8276`; [full #1097 pending](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876498602). Do not claim full build/package acceptance until its outcome is verified.
+- Historical 24-perk result memoization still lacks safe lifecycle/fallback proof. A fresh game-run behavioral check and comparable capture remain outstanding. Multi-agent integration must resolve stage numbers and overlap with Pass 4/5; this branch must not be merged directly to stable `main`.
+
 ## 2026-11-21 — Historical Pass 2.2 scheduling batch #34–#36
 
 - **#34 NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1:** current post-generic `NCRSystem` retains its original `NCRTickCallback` + source-defined DelaySystem period when GRedRuntime Scheduler is unavailable or registration fails. The new recurring `NCRGCOMaintenanceJob` prevents duplicate requeues and is unregistered on session end/detach; faction, pending kills, daily decay and original callbacks remain untouched. Original callback creation, binding and DelayCallback arguments are proven, not just its declared type.
