@@ -124,7 +124,8 @@ class VehicleMileageTests(unittest.TestCase):
             if p.exists():generated[n]=p.read_text('utf8')
         return report,generated
     def check(self,out):
-        self.assertIn('this.m_gcoVMScheduler.Register(this.m_gcoVMJob)',out)
+        self.assertIn('vmScheduler.Register(vmJob)',out)
+        self.assertIn('this.m_gcoVMJob = vmJob;',out)
         self.assertIn('this.m_gcoVMScheduler.Unregister(this.m_gcoVMJobID)',out)
         self.assertIn('GCOStopVMJob()',out)
         self.assertIn('DelayCallback(',out)
