@@ -23,6 +23,37 @@ owner source, not copied into the game ZIP.
 | VirtualAtelierDelivery | **Independent candidate implemented**: source-local, 50 ms, one-drop-point-per-tick queue; original synchronous operation when DelaySystem missing; duplicate-tag protection, cancellation on despawn/detach, attach generation invalidation. Original mappin/notification logic is unchanged. |
 | zzy_bChipwareExpansion | Historical Pass 6 rewrites perk override condition evaluation. Also touched by Pass 5; defer independent analysis to avoid conflicting optimization of the same function. |
 
+## Production one-pass integration on this isolated branch
+
+Both independent Pass 6 operations are now wired directly into the production
+`RedscriptGenerationPlan.Stage` behind the ten generic rules and existing
+semantics: **#37 Virtual Atelier spawn pacing** and **#38 EVS camera registration
+removal**. Stage numbers are provisional for branch integration because the
+concurrent `dev/redscript/resolver_handoff` owner has since introduced new
+stages 37+ on its own branch. Reconcile numbering during the eventual merge,
+not by modifying their branch from this agent.
+
+EVS camera listener operation:
+- Removes only `CameraX`, `CameraY`, `CameraMouseX` and `CameraMouseY`
+  `player.RegisterInputListener(this, ...)` lines in the proven
+  `@wrapMethod(VehicleComponent) RegisterInputListener` wrapper when the
+  corresponding action is never read elsewhere in the source.
+- Preserves both `wrappedMethod()` calls (unsupported-vehicle branch and
+  normal branch), all non-camera vehicle controls, current action snapshot
+  generics, and existing #30 `OnAction` local PS reuse.
+- Detects partial already-removed registrations and avoids reapplying
+  changes; unknown camera use refuses only this operation.
+- Uses version-fluid code matching and staged effective source; no old file
+  wholesale replacement and no independent ZIP.
+
+**CI evidence:** isolated [Pass 6 #3 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875368392)
+validated #37 with 196 source-state contracts and official SCC 0.5.31
+on 2,331 originals plus 30 semantic files, 43,514,581 compiled bytes.
+Expanded Pass 6 CI #6 tests #37 and #38 together;
+full GCO CI #1092 was launched for integration and product ZIP validation.
+Do not label #38 accepted until #6 SCC succeeds and do not label the whole
+integrated application accepted until full CI passes.
+
 ## Implemented candidate
 
 - `src/GRedscript.Resolver/Phase2/VirtualAtelierSpawnPacingPass.cs`: one source-aware pass `VIRTUAL_ATELIER_DROPPOINT_SPAWN_PACING_V1`.
