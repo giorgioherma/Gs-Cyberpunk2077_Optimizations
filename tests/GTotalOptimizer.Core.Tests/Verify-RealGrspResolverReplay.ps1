@@ -2324,6 +2324,87 @@ try {
           ' files='+$portFiles.Count)
     }
 
+    # The canonical plan now contains source-proven stages #34-#39. Recover
+    # their independent outputs from the same effective post-generic source,
+    # then demand exact byte parity with the single production Generate.
+    # Do not re-run old historical ZIPs or assume absent owners are present.
+    $remainingPorts = @(
+      @{ Id='ncr-maintenance-scheduler'; Order=34; Command='phase2-ncr-tick' },
+      @{ Id='shattered-chrome-periodic-jobs'; Order=35; Command='phase2-sc-jobs' },
+      @{ Id='gear-recovery-poll-scheduler'; Order=36; Command='phase2-grs-poll' },
+      @{ Id='pass8-chipware-throughput'; Order=37; Pass8='chipware' },
+      @{ Id='pass8-chipware-combat-cache'; Order=38; Pass8='combat' },
+      @{ Id='pass8-immersive-cyberware'; Order=39; Pass8='immersive' }
+    )
+    $pass8Runner = Join-Path $work 'Pass8Runner.dll'
+    & dotnet build 'tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj' -c Release --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'GCO_PASS8_REFERENCE_RUNNER_BUILD_FAILED' }
+    $pass8Runner = 'tests/GRedscript.Pass8.Checkpoint/bin/Release/net10.0/GRedscript.Pass8.Checkpoint.dll'
+    $remainingReferences = @()
+    foreach($port in $remainingPorts) {
+      $referenceOutput = Join-Path $work ('gco-source-reference-'+$port.Order)
+      $referenceLog = Join-Path $work ('gco-source-reference-'+$port.Order+'.log')
+      if ($port.ContainsKey('Pass8')) {
+        & dotnet $pass8Runner --owner $port.Pass8 --game $game --base-overlay $callbackFolder --out $referenceOutput *> $referenceLog
+      } else {
+        & dotnet $dll $port.Command --game $game --base-overlay $callbackFolder --out $referenceOutput *> $referenceLog
+      }
+      if ($LASTEXITCODE -ne 0) {
+        throw ('GCO_SOURCE_REFERENCE_GENERATOR_FAILED:'+$port.Id)
+      }
+      $reportFile = Join-Path $referenceOutput 'phase2-result.json'
+      if (!(Test-Path -LiteralPath $reportFile -PathType Leaf)) {
+        throw ('GCO_SOURCE_REFERENCE_REPORT_MISSING:'+$port.Id)
+      }
+      $portResult = Get-Content -LiteralPath $reportFile -Raw | ConvertFrom-Json
+      if ($portResult.status -notin @('APPLIED','COMPLETE','NOT_APPLICABLE','REFUSED')) {
+        throw ('GCO_SOURCE_REFERENCE_REPORT_BAD_STATUS:'+$port.Id)
+      }
+      $portFiles = @()
+      if (Test-Path -LiteralPath (Join-Path $referenceOutput 'r6/scripts') -PathType Container) {
+        $portFiles = @(Get-ChildItem -LiteralPath (Join-Path $referenceOutput 'r6/scripts') -Recurse -File -Filter '*.reds')
+      }
+      if ($portResult.status -eq 'APPLIED') {
+        if ($portFiles.Count -lt 1 -or [int]$portResult.appliedEdits -le 0) {
+          throw ('GCO_SOURCE_REFERENCE_NO_APPLIED_FILES:'+$port.Id)
+        }
+        foreach ($file in $portFiles) {
+          $rel = [IO.Path]::GetRelativePath($referenceOutput,$file.FullName)
+          if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..') -or
+              !$rel.StartsWith('r6'+[IO.Path]::DirectorySeparatorChar+'scripts'+[IO.Path]::DirectorySeparatorChar)) {
+            throw ('GCO_SOURCE_REFERENCE_PATH_ESCAPE:'+$port.Id+':'+$rel)
+          }
+          $dest = Join-Path $callbackFolder $rel
+          if (Test-Path -LiteralPath $dest -PathType Leaf) {
+            $previous = Get-Content -LiteralPath $dest -Raw
+            $updated = Get-Content -LiteralPath $file.FullName -Raw
+            foreach($marker in @([regex]::Matches($previous,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$updated.Contains($marker,[StringComparison]::Ordinal)) {
+                throw ('GCO_SOURCE_REFERENCE_LOST_GENERIC:'+$port.Id+':'+$marker)
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $file.FullName -Destination $dest -Force
+        }
+      } elseif ($portFiles.Count -ne 0 -or [int]$portResult.appliedEdits -ne 0) {
+        throw ('GCO_SOURCE_REFERENCE_NONAPPLIED_OUTPUT:'+$port.Id)
+      }
+      $remainingReferences += @{
+        Id=$port.Id; Order=[int]$port.Order;
+        Status=[string]$portResult.status;
+        Edits=[int]$portResult.appliedEdits;
+        Files=$portFiles.Count;
+        Refusals=@($portResult.refusals)
+      }
+      Write-Host ('PASS independent source reference '+$port.Id+
+        ' status='+$portResult.status+' edits='+$portResult.appliedEdits+
+        ' files='+$portFiles.Count)
+    }
+
     $orderedStage = Join-Path $work 'gco-ordered-redscript-preview'
     $orderedStageLog = Join-Path $work 'gco-ordered-redscript-preview.log'
     & dotnet $dll stage-redscript-plan --game $game --plan $orderedPlanFile --analysis $result --out $orderedStage *> $orderedStageLog
