@@ -203,9 +203,9 @@ internal static class NewHotOwnerSemanticPass
             string wanted = Regex.Replace(filter, @"\s+", "");
             if (current == wanted)
                 return new("COMPLETE", null, null);
-            string changed = source[..listener.Open + existing.Groups["expr"].Index] +
-                filter + source[listener.Open + existing.Groups["expr"].Index +
-                existing.Groups["expr"].Length..];
+            string changed = source[..(listener.Open + existing.Groups["expr"].Index)] +
+                filter + source[(listener.Open + existing.Groups["expr"].Index +
+                existing.Groups["expr"].Length)..];
             return new("APPLIED", null, changed);
         }
         if (!string.IsNullOrWhiteSpace(before))
@@ -268,7 +268,7 @@ internal static class NewHotOwnerSemanticPass
             string changed = betweenEarly[..guard.Groups["expr"].Index] +
                 missing + betweenEarly[(guard.Groups["expr"].Index +
                 guard.Groups["expr"].Length)..];
-            string updated = body[..name.Index + name.Length] + changed +
+            string updated = body[..(name.Index + name.Length)] + changed +
                 body[quest.Index..];
             return new("APPLIED", null,
                 source[..method.Open] + updated + source[method.Close..]);
@@ -277,8 +277,8 @@ internal static class NewHotOwnerSemanticPass
             return new("REFUSED", "NA_MAIN_PRE_QUEST_FLOW_CHANGED", null);
         string added = nl + indent + "if " + Filter("actionName", actions) +
             " { return result; }" + nl + indent;
-        return new("APPLIED", null, source[..method.Open + name.Index + name.Length] +
-            added + source[method.Open + name.Index + name.Length..]);
+        return new("APPLIED", null, source[..(method.Open + name.Index + name.Length)] +
+            added + source[(method.Open + name.Index + name.Length)..]);
     }
 
     private static Decision NAChoice(string source)
@@ -403,8 +403,8 @@ internal static class NewHotOwnerSemanticPass
         if (Has(loop2.Value, @"\b" + Regex.Escape(counter) + @"\s*-=\s*1\s*;"))
             return new("COMPLETE", null, null);
         int close = loop2.Value.LastIndexOf('}');
-        string changed2 = body[..loop2.Index + close] + counter +
-            " -= 1; " + body[loop2.Index + close..];
+        string changed2 = body[..(loop2.Index + close)] + counter +
+            " -= 1; " + body[(loop2.Index + close)..];
         return new("APPLIED", null,
             source[..m.Open] + changed2 + source[m.Close..]);
     }
