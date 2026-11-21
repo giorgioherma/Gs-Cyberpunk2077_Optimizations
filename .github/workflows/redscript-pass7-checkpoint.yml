@@ -75,7 +75,7 @@ jobs:
               }).Count -ne 0 -or
               @($result.operations | Where-Object {
                 $_.id -eq 'CHIPWARE_24_PERK_RESULT_MEMO_V1' -and
-                ($_.status -ne 'REFUSED' -or $_.reason -notmatch 'INVALIDATION_EPOCH')
+                $_.status -eq 'REFUSED' -and $_.reason -match 'INVALIDATION_EPOCH'
               }).Count -ne 1) {
             throw ('PASS7_CANONICAL_OWNER_OUTPUT_INCOMPLETE files='+$changed.Count)
           }
