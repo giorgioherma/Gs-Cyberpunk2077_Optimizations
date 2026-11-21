@@ -867,6 +867,185 @@ public static class Pass7ChaseFrameFloorPass
         return new("APPLIED", changed, edits.Count, 0, null);
     }
 
+
+    // Reuse the existing classifier from appearance, placement and NPC events,
+    // rather than copying the archived Pass 7 whole-file index rewrite. The
+    // current record is rechecked on EVERY call, so reused NPC/identity changes
+    // invalidate immediately; unrelated quest and outfit facts stay live.
+    private static Decision LizziePerformerIndex(string source)
+    {
+        var method = Find(source, "NPCPuppet", "LizziesBDsIsEnt", "addMethod");
+        if (method is null)
+        {
+            // A game-tested historical/full handwritten owner can replace the
+            // classifier with an index populated by OnGameAttached. Never add
+            // a competing field/cache to that independently complete shape.
+            var attached = Find(source, "NPCPuppet", "OnGameAttached", "wrapMethod");
+            string attachBody = attached is null ? "" :
+                source[attached.Start..attached.End];
+            string[] mapped = ["0", "1", "2", "3", "4", "5", "100"];
+            var assigned = Regex.Matches(attachBody,
+                @"\bthis\s*\.\s*lizziesBDsNPC\s*=\s*(?<id>\d+)\s*;", Rx)
+                .Select(m => m.Groups["id"].Value).ToArray();
+            if (Has(source, @"@\s*addField\s*\(\s*NPCPuppet\s*\)\s*private\s+let\s+lizziesBDsNPC\s*:\s*Int32") &&
+                mapped.All(x => assigned.Contains(x, StringComparer.Ordinal)) &&
+                Has(source, @"\bLizziesBDsZmenitObleceni\b") &&
+                Has(source, @"\bLizziesBDsNastavitPozici\b") &&
+                Has(source, @"\bOnLizziesBDsNPCEvent\b") &&
+                Has(source, @"\bthis\s*\.\s*lizziesBDsNPC\b"))
+                return new("COMPLETE", null, 0, 1, null);
+            return new("REFUSED", null, 0, 0,
+                "LIZZIES_INDEX_CLASSIFIER_ABSENT_OR_HISTORICAL_CACHE_UNPROVEN");
+        }
+
+        string body = source[method.Start..method.End];
+        const string record = "__gcoLizzieCurrentRecord";
+        const string recordField = "m_gredLizzieIndexRecord";
+        const string valueField = "m_gredLizzieIndexValue";
+        const string validField = "m_gredLizzieIndexValid";
+        var identities = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Character.LizziesBDs_Performer"] = "0",
+            ["Character.LizziesBDs_Performer_2"] = "1",
+            ["Character.LizziesBDs_Performer_3"] = "2",
+            ["Character.LizziesBDs_Performer_4"] = "3",
+            ["Character.LizziesBDs_Performer_5"] = "4",
+            ["Character.LizziesBDs_Performer_6"] = "5",
+            ["Character.LizziesBDs_Performer_Preview"] = "100"
+        };
+        // Only classify side-effect-free identity-return branches; a custom
+        // helper with other actions cannot be safely memoized.
+        var cases = Regex.Matches(body,
+            @"(?:(?:this\s*\.\s*GetRecordID\s*\(\s*\))|" + record +
+            @")\s*==\s*(?:TDBID\s*\.\s*Create\s*\(\s*""(?<id>[^""]+)""\s*\)|t""(?<id>[^""]+)"")\s*\{(?<branch>[^{}]*)\}", Rx);
+        if (cases.Count != identities.Count ||
+            cases.Cast<Match>().Select(x => x.Groups["id"].Value)
+                .Distinct(StringComparer.Ordinal).Count() != identities.Count ||
+            cases.Cast<Match>().Any(x =>
+                !identities.TryGetValue(x.Groups["id"].Value, out string? expected) ||
+                !Has(x.Groups["branch"].Value,
+                    @"\breturn\s+" + expected + @"\s*;")))
+            return new("REFUSED", null, 0, 0,
+                "LIZZIES_INDEX_RECORD_TO_VALUE_MAPPING_UNPROVEN");
+        var other = Regex.Match(body,
+            @"\belse\s*\{\s*(?<branch>[^{}]*\breturn\s+-1\s*;[^{}]*)\}", Rx);
+        if (!other.Success ||
+            Regex.Matches(body, @"\breturn\s+-?\d+\s*;", Rx).Count != 8)
+            return new("REFUSED", null, 0, 0,
+                "LIZZIES_INDEX_FALLBACK_OR_CUSTOM_RETURN_UNPROVEN");
+
+        string nl = Newline(source);
+        var edits = new List<Edit>();
+        int already = 0;
+        // Treat a pre-existing field individually. Never add a duplicate or
+        // reinterpret an unrelated custom field with the same name.
+        (string Name, string Type)[] fields =
+        [
+            (recordField, "TweakDBID"), (valueField, "Int32"),
+            (validField, "Bool")
+        ];
+        var absent = new List<(string Name, string Type)>();
+        foreach (var field in fields)
+        {
+            string rx = @"@\s*addField\s*\(\s*NPCPuppet\s*\)\s*private\s+let\s+" +
+                field.Name + @"\s*:\s*" + field.Type + @"\s*;";
+            int count = Regex.Matches(source, rx, Rx).Count;
+            if (count > 1 || (count == 0 &&
+                Has(source, @"\b" + field.Name + @"\b")))
+                return new("REFUSED", null, 0, already,
+                    "LIZZIES_INDEX_FIELD_COLLISION:" + field.Name);
+            if (count == 0) absent.Add(field);
+            else already++;
+        }
+        if (absent.Count > 0)
+        {
+            var declaration = Regex.Match(source,
+                @"@\s*addField\s*\(\s*NPCPuppet\s*\)\s*private\s+let\s+lizziesBDsIsNaked\s*:\s*Bool\s*=\s*false\s*;", Rx);
+            if (!declaration.Success)
+                return new("REFUSED", null, 0, already,
+                    "LIZZIES_INDEX_FIELD_DECLARATION_ANCHOR_MISSING");
+            edits.Add(new(declaration.Index + declaration.Length,
+                declaration.Index + declaration.Length,
+                nl + nl + string.Join(nl + nl,
+                    absent.Select(x => "@addField(NPCPuppet)" + nl +
+                        "private let " + x.Name + ": " + x.Type + ";"))));
+        }
+
+        var current = Regex.Match(body,
+            @"\blet\s+" + record +
+            @"\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(\s*\)\s*;", Rx);
+        var fast = Regex.Match(body, @"\bif\s+this\s*\.\s*" + validField +
+            @"\s*&&\s*this\s*\.\s*" + recordField +
+            @"\s*==\s*" + record +
+            @"\s*\{\s*return\s+this\s*\.\s*" + valueField + @"\s*;\s*\}", Rx);
+        if (current.Success != fast.Success ||
+            (current.Success && (current.Index > fast.Index ||
+                current.Index > cases[0].Index)) ||
+            (!current.Success && Has(body, @"\b" + record + @"\b")))
+            return new("REFUSED", null, 0, already,
+                "LIZZIES_INDEX_PARTIAL_FASTPATH_UNPROVEN");
+        if (!current.Success)
+        {
+            string header = nl +
+                "    let " + record + ": TweakDBID = this.GetRecordID();" + nl +
+                "    if this." + validField + " && this." + recordField +
+                " == " + record + " {" + nl +
+                "        return this." + valueField + ";" + nl +
+                "    }" + nl;
+            edits.Add(new(method.Start, method.Start, header));
+        }
+        else already++;
+
+        foreach (var c in cases.Cast<Match>().Append(other))
+        {
+            string branch = c.Groups["branch"].Value;
+            var value = Regex.Match(branch, @"\breturn\s+(?<id>-?\d+)\s*;", Rx);
+            if (!value.Success ||
+                (c != other && value.Groups["id"].Value !=
+                    identities[c.Groups["id"].Value]))
+                return new("REFUSED", null, 0, already,
+                    "LIZZIES_INDEX_BRANCH_RESULT_DRIFT");
+            string v = value.Groups["id"].Value;
+            string[] post =
+            [
+                "this." + valueField + " = " + v + ";",
+                "this." + recordField + " = " + record + ";",
+                "this." + validField + " = true;"
+            ];
+            string cleaned = Regex.Replace(branch, @"//[^\r\n]*|/\*[\s\S]*?\*/", "");
+            cleaned = Regex.Replace(cleaned, @"\breturn\s+-?\d+\s*;", "");
+            foreach (var statement in post)
+                cleaned = cleaned.Replace(statement, "", StringComparison.Ordinal);
+            if (!string.IsNullOrWhiteSpace(cleaned))
+                return new("REFUSED", null, 0, already,
+                    "LIZZIES_INDEX_BRANCH_HAS_OTHER_SIDE_EFFECTS");
+            string[] missing = post.Where(s =>
+                !branch.Contains(s, StringComparison.Ordinal)).ToArray();
+            if (missing.Length == 0) { already++; continue; }
+            int at = method.Start + c.Groups["branch"].Index + value.Index;
+            edits.Add(new(at, at, string.Join(nl + "        ", missing) +
+                nl + "        "));
+        }
+
+        foreach (var c in cases.Cast<Match>())
+        {
+            string condition = c.Value[..c.Value.IndexOf('{')];
+            var lookup = Regex.Match(condition,
+                @"this\s*\.\s*GetRecordID\s*\(\s*\)", Rx);
+            if (!lookup.Success) { already++; continue; }
+            edits.Add(new(method.Start + c.Index + lookup.Index,
+                method.Start + c.Index + lookup.Index + lookup.Length, record));
+        }
+        if (edits.Count == 0)
+            return new("COMPLETE", null, 0, already, null);
+        string changed = Apply(source, edits);
+        // Verify all cache elements, correct identity mapping and caller reuse.
+        var verified = LizziePerformerIndex(changed);
+        if (verified.Status != "COMPLETE")
+            throw new InvalidDataException("LIZZIES_INDEX_POSTCONDITION:" + verified.Reason);
+        return new("APPLIED", changed, edits.Count, already, null);
+    }
+
     private static readonly Regex DirectionLocal = new(
         @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
