@@ -269,7 +269,10 @@ internal static class RedWindowsRenderDormancyPass
                 string windowSource=Effective(windowFile);
                 var windowState=Window(windowSource);
                 if (windowState.Status=="REFUSED")
+                {
                     refusals.Add(windowState.Reason ?? "RW_RENDER_WINDOW_UNPROVEN");
+                    status="REFUSED";
+                }
                 else
                 {
                     var accepted=new List<(string Full,string Content)>();
