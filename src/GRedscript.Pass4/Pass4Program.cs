@@ -16,6 +16,7 @@ internal static class Pass4Program
         IReadOnlyList<string> SourcePaths, string SourceStackSha256,
         bool SourceUnchanged, bool CompilerValidated, bool GameplayValidated);
 
+#if PASS4_CLI
     private static int Main(string[] args)
     {
         try { Run(args); return 0; }
@@ -24,6 +25,20 @@ internal static class Pass4Program
             Console.Error.WriteLine("PASS4_GENERATION_FAILED: " + ex);
             return 1;
         }
+    }
+#endif
+
+    // This same source-aware generator is used by the production plan.
+    // The production build has no second CLI entry point.
+    internal static void Generate(string gameRoot,string outputRoot,
+        string? baseOverlayRoot=null)
+    {
+        var args=new List<string> {"pass4","--game",gameRoot,"--out",outputRoot};
+        if(baseOverlayRoot is not null) {
+            args.Add("--base-overlay");
+            args.Add(baseOverlayRoot);
+        }
+        Run(args.ToArray());
     }
 
     private static void Run(string[] args)

@@ -1743,6 +1743,120 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+
+        // Historical Pass 4.0: three independently source-proven combat
+        // operations. This invokes the SAME owner generators as isolated
+        // tests, against the effective post-generic + prior semantic files.
+        // No historical source replacement, second runtime generation or
+        // corrective stage. Each refusal remains owner-local.
+        string pass4Root=Path.Combine(output,"_stages","37-39-combat-pass4");
+        Pass4Program.Generate(game,pass4Root,Directory.Exists(final)?final:null);
+        using(var pass4Doc=JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(pass4Root,"pass4-result.json"))))
+        {
+            var root=pass4Doc.RootElement;
+            if(ReadString(root,"schemaVersion")!="gco.phase2.pass4.isolated.v1"||
+               !root.GetProperty("sourceUnchanged").GetBoolean()||
+               !string.Equals(ReadString(root,"sourceStackSha256"),
+                    document.SourceStackSha256,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("PASS4_STAGE_REPORT_OR_SOURCE_DRIFT");
+            var expected=new (int Order,string Id,string Rule,string Prefix)[]
+            {
+                (37,"stealthrunner-npc-player-cache",
+                    "STEALTHRUNNER_NPC_PLAYER_CACHE_V1","r6/scripts/StealthRunner/"),
+                (38,"chipware-perk-relevance-gate",
+                    "CHIPWARE_PERK_RELEVANCE_GATE_V1","r6/scripts/zzy_bChipwareExpansion/"),
+                (39,"reinforcements-prepared-quad-cache",
+                    "REINFORCEMENTS_PREPARED_QUAD_CACHE_V1","r6/scripts/ReinforcementsSystem/")
+            };
+            var found=root.GetProperty("operations").EnumerateArray().ToArray();
+            if(found.Length!=expected.Length)
+                throw new InvalidDataException("PASS4_STAGE_OWNER_COUNT_CHANGED");
+            var reportedPaths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int countedEdits=0,appliedOwners=0,completedOwners=0;
+            foreach(var expectedOwner in expected)
+            {
+                var rows=found.Where(x=>ReadString(x,"ruleId")==expectedOwner.Rule).ToArray();
+                if(rows.Length!=1)
+                    throw new InvalidDataException("PASS4_STAGE_OWNER_MISSING_OR_DUPLICATED");
+                var row=rows[0];
+                string status=ReadString(row,"status");
+                int editCount=ReadInt(row,"appliedEdits");
+                int completeCount=ReadInt(row,"alreadyComplete");
+                if(editCount<0||completeCount<0)
+                    throw new InvalidDataException("PASS4_STAGE_NEGATIVE_COUNTS");
+                var paths=row.GetProperty("sourcePaths").EnumerateArray()
+                    .Select(x=>x.GetString()??"").ToArray();
+                if(status=="APPLIED")
+                {
+                    if(editCount==0||paths.Length==0||
+                       paths.Length>(expectedOwner.Order==39?2:1))
+                        throw new InvalidDataException("PASS4_STAGE_PARTIAL_OUTPUT_INVALID");
+                    for(int i=0;i<paths.Length;i++)
+                    {
+                        string rel=paths[i];
+                        if(!rel.StartsWith(expectedOwner.Prefix,StringComparison.Ordinal)||
+                           !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase)||
+                           rel.Split('/').Any(part=>part is "." or "..")||
+                           !reportedPaths.Add(rel))
+                            throw new InvalidDataException("PASS4_STAGE_OWNER_PATH_UNSAFE");
+                        string source=Path.GetFullPath(Path.Combine(pass4Root,
+                            rel.Replace('/',Path.DirectorySeparatorChar)));
+                        string target=Path.GetFullPath(Path.Combine(final,
+                            rel.Replace('/',Path.DirectorySeparatorChar)));
+                        if(!IsInside(source,pass4Root)||!IsInside(target,final)||
+                           !File.Exists(source))
+                            throw new InvalidDataException("PASS4_STAGE_OUTPUT_MISSING");
+                        bool existed=File.Exists(target);
+                        if(existed)
+                        {
+                            string before=File.ReadAllText(target);
+                            string after=File.ReadAllText(source);
+                            var priorMarkers=System.Text.RegularExpressions.Regex
+                                .Matches(before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                                .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                            if(priorMarkers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                                throw new InvalidDataException("PASS4_STAGE_LOST_GENERIC");
+                        }
+                        else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                        File.Copy(source,target,overwrite:existed);
+                        files+=existed?0:1;
+                        results.Add(new(expectedOwner.Order,expectedOwner.Id,
+                            i==0?editCount:0,existed?0:1,existed?1:0,[]));
+                    }
+                    expressions+=editCount;
+                    countedEdits+=editCount;
+                    appliedOwners++;
+                }
+                else if(status=="REFUSED")
+                {
+                    if(editCount!=0||paths.Length!=0)
+                        throw new InvalidDataException("PASS4_REFUSED_OWNER_GENERATED_SOURCE");
+                    string reason=ReadString(row,"reason");
+                    if(string.IsNullOrWhiteSpace(reason))
+                        throw new InvalidDataException("PASS4_REFUSAL_REASON_MISSING");
+                    skipped.Add(new(expectedOwner.Order,expectedOwner.Id,1,reason));
+                }
+                else if(status is "COMPLETE" or "NOT_APPLICABLE")
+                {
+                    if(editCount!=0||paths.Length!=0)
+                        throw new InvalidDataException("PASS4_COMPLETE_OWNER_GENERATED_SOURCE");
+                    completedOwners++;
+                }
+                else throw new InvalidDataException("PASS4_UNKNOWN_OWNER_STATUS");
+            }
+            var totalPaths=root.GetProperty("sourcePaths").EnumerateArray()
+                .Select(x=>x.GetString()??"").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if(totalPaths.Count!=reportedPaths.Count||!totalPaths.SetEquals(reportedPaths)||
+               ReadInt(root,"appliedEdits")!=countedEdits||
+               root.GetProperty("status").GetString()!=
+                    (appliedOwners>0?"APPLIED":
+                     completedOwners==3?"COMPLETE":
+                     found.All(x=>ReadString(x,"status")=="NOT_APPLICABLE")?
+                        "NOT_APPLICABLE":"REFUSED"))
+                throw new InvalidDataException("PASS4_STAGE_REPORT_OR_FILE_MISMATCH");
+        }
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

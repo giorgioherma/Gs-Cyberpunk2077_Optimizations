@@ -18,4 +18,10 @@
     <GenerateDependencyFile Condition="'$(RuntimeIdentifier)' != ''">false</GenerateDependencyFile>
     <IsPublishable>true</IsPublishable>
   </PropertyGroup>
+  <!-- Pass 4 source is compiled into the existing Resolver. This is the
+       same implementation exercised by isolated CI, not a runtime plugin,
+       duplicate parser, repair pass, or second shipped CLI. -->
+  <ItemGroup>
+    <Compile Include="../GRedscript.Pass4/*.cs" Link="Phase2/Pass4/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
