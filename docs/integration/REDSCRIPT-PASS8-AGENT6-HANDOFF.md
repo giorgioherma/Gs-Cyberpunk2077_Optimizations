@@ -28,7 +28,7 @@ Source priority is `original_cet_source/main/base_after_generic/r6/scripts` (2,3
 - `tests/GRedscript.Resolver.Tests/test_pass8_{throughput,combat,immersive}.py`: structural stock, handwritten partial, complete, custom/moved source, absent, localized incompatibility and repeated-generation cases.
 - `.github/workflows/redscript-pass8-checkpoint.yml`: **branch-isolated** test, source generation and SCC checkpoint. Sequentially generates chipware cheap paths, composes combat helper/callbacks against that overlay, joins independent ImmersiveCyberware output, validates actual merged files, compiles whole post-generic source with native dependencies using official CI-only SCC 0.5.31, and deletes private compiler/source before job exit.
 
-## Verified result
+**Checkpoint cadence:** the isolated workflow runs on manual `workflow_dispatch` or a deliberate update to `tests/GRedscript.Pass8.Checkpoint/CI-TRIGGER.txt`; ordinary source/test commits no longer start or cancel CI. Source validation for this handoff is the complete green run #11 above.\n\n## Verified result
 
 - [CI #1 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874902530): original three chipware cheap paths.
 - [CI #5 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875188945): three cheap paths plus two Immersive source methods and one helper.
