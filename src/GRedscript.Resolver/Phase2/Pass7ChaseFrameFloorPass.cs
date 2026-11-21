@@ -629,6 +629,13 @@ public static class Pass7ChaseFrameFloorPass
 
         var edits = new List<Edit>();
         int complete = 0;
+        // REDscript requires the module declaration before any @addField.
+        // Both current and handwritten sources may move the module line
+        // behind comments; never prepend fields blindly at byte zero.
+        var moduleLine = Regex.Match(source,
+            @"^[ \t]*module[ \t]+[A-Za-z_][\w.]*[ \t]*\r?\n", Rx);
+        int fieldInsertion = moduleLine.Success ?
+            moduleLine.Index + moduleLine.Length : 0;
         foreach (string fieldName in new[] { DirectionField, DirectionValid })
         {
             var decl = Regex.Matches(source,
@@ -639,7 +646,7 @@ public static class Pass7ChaseFrameFloorPass
                 return new("REFUSED", null, 0, complete,
                     "RM_DIRECTION_FIELD_COLLISION:" + fieldName);
             if (decl.Count == 0)
-                edits.Add(new(0, 0, "@addField(SprintDecisions)" + Newline(source) +
+                edits.Add(new(fieldInsertion, fieldInsertion, "@addField(SprintDecisions)" + Newline(source) +
                     "private let " + fieldName + ": Bool;" +
                     Newline(source) + Newline(source)));
             else complete++;
