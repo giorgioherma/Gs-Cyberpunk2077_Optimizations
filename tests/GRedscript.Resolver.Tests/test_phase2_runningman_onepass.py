@@ -35,6 +35,17 @@ public class IndependentAuthor extends IScriptable {
 
 
 class RunningManCanonicalStageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        host = REPO / "tools/Pass9/bin/Release/net10.0/Pass9.dll"
+        if not host.is_file():
+            build = subprocess.run(
+                ["dotnet", "build", str(REPO / "tools/Pass9/Pass9.csproj"),
+                 "-c", "Release", "--nologo"],
+                text=True, capture_output=True, timeout=120)
+            if build.returncode != 0:
+                raise RuntimeError(build.stdout + build.stderr)
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
