@@ -115,7 +115,13 @@ private func PointInTriangle(p: Vector2,a: Vector2,b: Vector2,c: Vector2) -> Boo
 public func IsPointInQuad(p: Vector2,sq: SquareArea) -> Bool {
     // GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1
     let pts = SortSquare(sq);
-    return PointInTriangle(p,pts[0],pts[1],pts[2]);
+    if (PointInTriangle(p, pts[0], pts[1], pts[2])) {
+        return true;
+    }
+    if (PointInTriangle(p, pts[0], pts[2], pts[3])) {
+        return true;
+    }
+    return false;
 }
 """
 
@@ -213,13 +219,43 @@ class Pass4IsolatedContracts(unittest.TestCase):
         self.assertIn("if (gcoInsideRestricted)",output[R_SYS])
         self.assertIn("OnPlayerDetach",output[R_SYS])
 
-    def test_reinforcement_missing_generic_narrow_refusal(self):
-        unsafe=REIN_UTIL.replace("GCO-GENERIC:ANGLE_SORT_INVARIANT_V1","OLDER_SORT")
+    def test_markerless_compatible_geometry_is_not_refused(self):
+        # A generic marker is not a code/behavior proof; version-fluid
+        # compatible geometry still participates in the semantic stage.
+        compatible=REIN_UTIL.replace(
+            "GCO-GENERIC:ANGLE_SORT_INVARIANT_V1", "custom sorting comment"
+        ).replace("GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1",
+                  "custom broadphase comment")
+        r,out,_=self.run_pass({R_SYS:REIN_SYS,R_UTIL:compatible,CHIP:CHIP_STOCK})
+        self.assertIn(R_SYS,out,r)
+        self.assertIn(R_UTIL,out,r)
+        self.assertIn(CHIP,out,r)
+        self.assertNotIn("GCO-GENERIC:ANGLE_SORT_INVARIANT_V1",out[R_UTIL])
+
+    def test_changed_triangle_flow_refuses_only_reinforcements(self):
+        unsafe=REIN_UTIL.replace(
+            "    return false;\n}",
+            "    return true;\n}")
         r,out,_=self.run_pass({R_SYS:REIN_SYS,R_UTIL:unsafe,CHIP:CHIP_STOCK})
         self.assertNotIn(R_SYS,out)
         self.assertNotIn(R_UTIL,out)
         self.assertIn(CHIP,out)
-        self.assertEqual(self.owners(r)["REINFORCEMENTS_PREPARED_QUAD_CACHE_V1"]["status"],"REFUSED")
+        self.assertEqual(
+            self.owners(r)["REINFORCEMENTS_PREPARED_QUAD_CACHE_V1"]["reason"],
+            "RS_QUAD_CUSTOM_RESTRICTION_OR_TRIANGLE_FLOW_UNPROVEN")
+
+    def test_side_effectful_sort_is_narrowly_refused(self):
+        unsafe=REIN_UTIL.replace(
+            "    return [sq.a, sq.b, sq.c, sq.d];",
+            "    let randomTie = RandRange(0, 2);\n"
+            "    return [sq.a, sq.b, sq.c, sq.d];")
+        r,out,_=self.run_pass({R_SYS:REIN_SYS,R_UTIL:unsafe,CHIP:CHIP_STOCK})
+        self.assertNotIn(R_SYS,out)
+        self.assertNotIn(R_UTIL,out)
+        self.assertIn(CHIP,out)
+        self.assertEqual(
+            self.owners(r)["REINFORCEMENTS_PREPARED_QUAD_CACHE_V1"]["reason"],
+            "RS_SORT_NONLOCAL_OR_CHANGED_DEPENDENCIES")
 
     def test_relocated_owners_and_unrelated_code_retained(self):
         modified=CHIP_STOCK+"// unrelated patch preserved\n"

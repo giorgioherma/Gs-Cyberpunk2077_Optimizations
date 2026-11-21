@@ -162,6 +162,113 @@ internal static class ReinforcementsPass
             Pass4Rewrite.Applied(source,edits,done);
     }
 
+    // A marker is not a behavior proof. The existing (post-generic or
+    // compatible custom) quad method must have the SAME two-triangle
+    // decision, and its sort must depend only on current quad coordinates.
+    // Otherwise caching could suppress extra custom restrictions or change
+    // side effects. Refuse just the geometry operation.
+    private static string? GeometryProof(string source)
+    {
+        static string WithoutComments(string s) =>
+            Regex.Replace(s,@"//[^\r\n]*|/\*[\s\S]*?\*/","");
+        static string Compact(string s) =>
+            Regex.Replace(WithoutComments(s),@"\s+","");
+        static bool CallsOnly(string body,params string[] allowed)
+        {
+            var tokens=SourceAdmission.ReadTokens(body);
+            for(int i=0;i+1<tokens.Count;i++)
+            {
+                if(tokens[i+1].Value!="(" ||
+                   !Regex.IsMatch(tokens[i].Value,@"^[A-Za-z_]\w*$") ||
+                   tokens[i].Value is "if" or "while" or "switch")
+                    continue;
+                if(!allowed.Contains(tokens[i].Value,StringComparer.Ordinal))
+                    return false;
+            }
+            return true;
+        }
+        var quad=Pass4Source.FindMethod(source,"IsPointInQuad");
+        var sorter=Pass4Source.FindMethod(source,"SortSquare");
+        if(quad is null||sorter is null)
+            return "RS_QUAD_OR_SORT_METHOD_NOT_UNIQUE";
+        string quadBody=WithoutComments(Pass4Source.Body(source,quad));
+        var sorted=Regex.Matches(quadBody,
+            @"\blet\s+pts\s*=\s*SortSquare\s*\(\s*sq\s*\)\s*;");
+        if(sorted.Count!=1)
+            return "RS_QUAD_SORT_CALL_FLOW_CHANGED";
+        string tail=Compact(quadBody[(sorted[0].Index+sorted[0].Length)..]);
+        const string expectedTail=
+            "if(PointInTriangle(p,pts[0],pts[1],pts[2])){returntrue;}"+
+            "if(PointInTriangle(p,pts[0],pts[2],pts[3])){returntrue;}"+
+            "returnfalse;";
+        if(tail!=expectedTail)
+            return "RS_QUAD_CUSTOM_RESTRICTION_OR_TRIANGLE_FLOW_UNPROVEN";
+        // Old compatible code may have no generic AABB at all. If the
+        // generic broadphase is present, it must remain the known strict,
+        // conservative finite/nondegenerate rejection, with no extra calls.
+        string prefix=Compact(quadBody[..sorted[0].Index]);
+        if(prefix.Length>0)
+        {
+            if(!prefix.StartsWith("letoutside=",StringComparison.Ordinal)||
+               !prefix.Contains(";ifoutside&&",StringComparison.Ordinal)||
+               !prefix.EndsWith("{returnfalse;}",StringComparison.Ordinal)||
+               !prefix.Contains("AbsF(Sign(",StringComparison.Ordinal)||
+               !prefix.Contains(")>1.0",StringComparison.Ordinal)||
+               !prefix.Contains("-16.0",StringComparison.Ordinal)||
+               !prefix.Contains("+16.0",StringComparison.Ordinal)||
+               !prefix.Contains("-100000.0",StringComparison.Ordinal)||
+               !prefix.Contains("<100000.0",StringComparison.Ordinal)||
+               !CallsOnly(quadBody[..sorted[0].Index],"AbsF","Sign"))
+                return "RS_QUAD_BROADPHASE_NOT_PROVEN_CONSERVATIVE";
+            foreach(string v in new[]{"a","b","c","d"})
+                if(!prefix.Contains("sq."+v+".X",StringComparison.Ordinal)||
+                   !prefix.Contains("sq."+v+".Y",StringComparison.Ordinal))
+                    return "RS_QUAD_BROADPHASE_VERTEX_INPUT_CHANGED";
+        }
+        string sortBody=WithoutComments(Pass4Source.Body(source,sorter));
+        string compactSort=Compact(sortBody);
+        const string direct="return[sq.a,sq.b,sq.c,sq.d];";
+        if(compactSort==direct)
+            return null; // A structurally proved pure alternate sorter.
+        if(!Regex.IsMatch(sortBody,
+                @"\blet\s+pts\s*:\s*array<Vector2>\s*=\s*\[\s*sq.a\s*,\s*sq.b\s*,\s*sq.c\s*,\s*sq.d\s*\]\s*;")||
+           !Regex.IsMatch(sortBody,
+                @"\blet\s+center\s*=\s*GetCenter\s*\(\s*sq\s*\)\s*;")||
+           !compactSort.EndsWith("returnpts;",StringComparison.Ordinal)||
+           !CallsOnly(sortBody,"GetCenter","AtanF","ArraySize")||
+           Regex.IsMatch(sortBody,@"\bthis\b|\bGameInstance\b"))
+            return "RS_SORT_NONLOCAL_OR_CHANGED_DEPENDENCIES";
+        var center=Pass4Source.FindMethod(source,"GetCenter");
+        if(center is null)
+            return "RS_SORT_CENTER_HELPER_MISSING";
+        string centerBody=WithoutComments(Pass4Source.Body(source,center));
+        string centerText=Compact(centerBody);
+        if(!centerText.StartsWith("returnnewVector2(",StringComparison.Ordinal)||
+           !centerText.EndsWith(");",StringComparison.Ordinal)||
+           !CallsOnly(centerBody,"Vector2")||
+           Regex.IsMatch(centerBody,@"\bthis\b|\bGameInstance\b"))
+            return "RS_SORT_CENTER_HELPER_NOT_PURE";
+        foreach(string v in new[]{"a","b","c","d"})
+            if(!centerText.Contains("sq."+v+".X",StringComparison.Ordinal)||
+               !centerText.Contains("sq."+v+".Y",StringComparison.Ordinal))
+                return "RS_SORT_CENTER_INPUT_CHANGED";
+        // No stateful closure: all identifiers are argument/local/vector
+        // components, accepted pure arithmetic primitives or syntax.
+        var known=new HashSet<string>(StringComparer.Ordinal)
+        {
+            "sq","a","b","c","d","X","Y","center","pts","GetCenter",
+            "ArraySize","AtanF","Vector2","Int32","array","let",
+            "if","while","return","new","true","false"
+        };
+        foreach(Match local in Regex.Matches(sortBody,@"\blet\s+(\w+)"))
+            known.Add(local.Groups[1].Value);
+        foreach(var tok in SourceAdmission.ReadTokens(sortBody))
+            if(Regex.IsMatch(tok.Value,@"^[A-Za-z_]\w*$")&&
+               !known.Contains(tok.Value))
+                return "RS_SORT_NONLOCAL_IDENTIFIER";
+        return null;
+    }
+
     internal static Pass4Rewrite RewriteUtils(string original)
     {
         if(!Regex.IsMatch(original,@"\bstruct\s+SquareArea\b")||
@@ -169,9 +276,9 @@ internal static class ReinforcementsPass
            !Regex.IsMatch(original,@"\bprivate\s+func\s+PointInTriangle\s*\(")||
            Pass4Source.FindMethod(original,"IsPointInQuad") is null)
             return Pass4Rewrite.Refuse("RS_UTILS_ORIGINAL_GEOMETRY_UNPROVEN");
-        if(!original.Contains("GCO-GENERIC:ANGLE_SORT_INVARIANT_V1",StringComparison.Ordinal)||
-           !original.Contains("GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1",StringComparison.Ordinal))
-            return Pass4Rewrite.Refuse("RS_EXPECTED_GENERIC_GEOMETRY_MISSING");
+        string? geometryError=GeometryProof(original);
+        if(geometryError is not null)
+            return Pass4Rewrite.Refuse(geometryError);
 
         string nl=Pass4Source.NewLine(original),source=original;
         int edits=0,done=0;
@@ -238,9 +345,11 @@ internal static class ReinforcementsPass
                 "}"+nl;
             edits++;
         }
+        var originalMarkers=Regex.Matches(original,
+            @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+            .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
         if(!source.Contains("return IsPointInQuad(p, sq);",StringComparison.Ordinal)||
-           !source.Contains("GCO-GENERIC:ANGLE_SORT_INVARIANT_V1",StringComparison.Ordinal)||
-           !source.Contains("GCO-GENERIC:QUAD_SAFE_AABB_BROADPHASE_V1",StringComparison.Ordinal))
+           originalMarkers.Any(m=>!source.Contains(m,StringComparison.Ordinal)))
             throw new InvalidDataException("RS_UTILS_POSTCONDITION");
         return edits==0?Pass4Rewrite.Complete(done):
             Pass4Rewrite.Applied(source,edits,done);
