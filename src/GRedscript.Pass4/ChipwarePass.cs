@@ -33,7 +33,12 @@ internal static class ChipwarePass
         var guards=Guard.Matches(clean);
         if(guards.Count==0)
             return Pass4Rewrite.Refuse("CHIP_PERK_GUARDED_BRANCHES_MISSING");
-        if(Regex.Matches(clean,@"\bEquals\s*\([^)]*\bperkType\b").Count!=guards.Count)
+        // A partially/fully optimized source already has its own relevant
+        // predicate; that expression is NOT another owner gameplay branch.
+        // Count only the original guarded comparisons after removing this
+        // optional generated/handwritten predicate declaration.
+        string originalGuardText=RelevantDecl.Replace(clean,"");
+        if(Regex.Matches(originalGuardText,@"\bEquals\s*\([^)]*\bperkType\b").Count!=guards.Count)
             return Pass4Rewrite.Refuse("CHIP_PERK_UNRECOGNIZED_COMPARISON");
         var names=new List<string>();
         foreach(Match guard in guards) {
