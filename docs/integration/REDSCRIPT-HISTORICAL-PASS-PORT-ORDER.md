@@ -1,0 +1,34 @@
+# GCO Phase 2 — systematic historical REDscript port order
+
+**Established:** 21 November 2026. **Branch:** `dev/redscript/resolver_handoff`.
+
+## Source and method
+
+- Authoritative executable input: installed `r6/scripts` after the ten generic REDscript rules. The current CI parity stack is `original_cet_source/main/base_after_generic/r6/scripts` (2,331 `.reds` files). The older 2,319-file captured fixture remains a separate integration test source.
+- Historical behavioral evidence: `G-RED_optimizatios_seperate_passes.zip` (10 primary pass groups and three corrective stages) and `G-REDruntime_Optimization_All_Mods.zip` (62 final files across 31 owners). The former has 92 `.reds` occurrences; repeated paths are cumulative revisions, not independent patches.
+- Investigate each historic source **diff relative to the same file's previous historical stage**; compare its final intent and dependencies against **current post-generic source plus current semantic generator**. Never replace a newer source with historical full-file bytes.
+- Preserve original groups as the work breakdown. Within each group, identify each independent operation and its dependencies. An already-implemented operation is recorded as COMPLETE without regenerating it; add compatible missing work only, using source-structural matching.
+- Apply historical 7.1 / 7.2 / 7.2r1 behavior corrections **in the original owners**; never as follow-up repair generators.
+
+## Group-by-group source inventory and preliminary disposition
+
+| Main pass | Source operations and actual owner coverage | Preliminary status after #27 |
+|---|---|---|
+| **2.0 — shared input + hot paths** | BrowserExtension (InputHub scroll route, quest/journal handle cache); custom_quickslots (input route); Enhanced Vehicle System (local player/vehicle/PS/game and action metadata reuse); FlushingEtiquette (InputHub registration, events and detach cleanup) | Quickslots InputHub + D-pad covered by #16/#17; FE early gate covered by #14 but historical InputHub remains separate; BrowserExtension journal cache **#28 introduced, CI pending**; BrowserExtension input and EVS still need source proof |
+| **2.1 — input routing consolidation** | DrugDealer's five input owner files (Crackhouse, SellDrugs, Lab, NightMarket, OperationProximity), GearRecoverySystem input handler, Street Vendors | Pending, treat each mod's listener registration/consumption/fallback as coordinated ownership; absent owner never generated |
+| **2.2 — state, context + scheduling** | GearRecoverySystem scheduler/state cache, NightCityRemembers tick, ShatteredChrome scheduler/HUD + callbacks, four VehicleMileage UI jobs, Street Vendors periodic poll | Pending. Use existing G-REDruntime scheduler/state/context APIs only where current source proves lifetime, cleanup and compatibility |
+| **3.0 — wrapper and hot-path elimination** | Quickslots improved device transitions, CyberwareEx input, Dark Future UI, StealthRunner pickpocket, Vehicle Call Plus; negotiableaffection larger change; Exodus and Repeatable Psychos historical owners | Quickslots #16/#17 and several DF operations covered; remaining independent parts pending. negotiableaffection newer source requires minimal edits; absent owners excluded |
+| **4.0 — combat hot paths** | DVCore Footsteps reflection, HQ_HoloGirl material/event path, ReinforcementsSystem polygon geometry/restrictions, StealthRunner NPC checks, zzy_bChipwareExpansion perk path | DVCore #11 and HoloGirl material #22 covered where equivalent; others pending. Preserve Reinforcements RNG, polygon edges and all restrictions |
+| **5.0 — remaining hot owners** | DF cooldown/UI, FE washroom pins, HQ_HoloGirl/HoloTravel, MapWaypointBugFixes, RedWindows, TriggerModeControl, zzy chipware | DF #12/#13/#25, FE #15, TriggerMode #20 and relevant RedWindows #19/#23/#24/#26 partially cover; HoloTravel and chipware remain; MapWaypoint pooled-controller visibility cache not admitted |
+| **6.0 — frame pacing/stutter** | DF cadence, Enhanced Vehicle System, HQ_HoloTravel, MapWaypointBugFixes, Reinforcements scheduling/call, ShatteredChrome, VirtualAtelierDelivery, zzy chipware | DF #25 covered. Other operations remain to compare; event/callback frequency and timing changes require gameplay parity proof |
+| **7.0 — chase/frame floor** | DF throttle, DVCore ItemEditor+StatusWindow, DisablePositionReveal, LizziesBDs, NightCityRemembers spawn culling, Quickhack Fixes, ReinforcementsCall, RunningMan double sprint/direction, StealthRunner, zzy chipware | DF #25, DVCore #27, DisablePositionReveal #21 and Quickhack #18 covered. RunningMan and independent NPC/chase operations remain |
+| **8.0 — throughput/caching** | Quickslots D-pad, ImmersiveCyberware scanner/ammo hotpath helper, RedWindows shape/label/widget cursors+setter guards, zzy chipware cached perk and reflex/software checks | Quickslots #17, relevant RedWindows #19/#23/#26 covered; ImmersiveCyberware and zzy chipware remain significant multi-file coordinated work |
+| **9.0 — UI dormancy/throughput** | DVCore BodyMap/ItemEditor/StatusWindow, FE pins, RedWindows Builder/Logs/window actual render visibility and widget Find, RunningMan standing/double-sprint | DVCore #27, FE #15, RedWindows #19/#24 covered where equivalent; RunningMan remains; existing generated code may already supersede individual historical suboperations |
+
+**Corrections integrated at owners:** 7.1 ReinforcementsCall and MapWaypoint behavior; 7.2 FE session-owned washroom lifecycle (#15) and MapWaypoint; 7.2r1 FE callback compilation (#15). No separate corrective output layer.
+
+## Acceptance and continuous checkpoint
+
+For every operation: inspect actual source and runtime dependencies; categorize `GENERIC_COVERED`, `SEMANTIC_COMPLETE`, `PARTIAL_MISSING`, `ELIGIBLE`, `NEEDS_PROOF`, `NEEDS_NEW_CAPTURE`, `ABSENT`, or `INCOMPATIBLE` with a specific reason. Complete partial states and preserve current custom additions. Require one direct post-generic generation, complete and repeat no-op, compatible drift, incompatibility scoped to the operation, independent source byte parity, current-source official SCC 0.5.31 in fast CI, complete combined ZIP in full CI, and game validation before claiming FPS/CPU gains.
+
+**Implementation sequence:** finish pass 2.0's missing independent operations; continue to 2.1 and 2.2, and so forth. The plan is chronological for completeness, **not** a rule to reintroduce historical code already superseded by a better, source-safe implementation. Maintain the ledger and exact CI result after each meaningful group. Existing #11–#27 semantics stay in one generic-first generator and are never reapplied redundantly.
