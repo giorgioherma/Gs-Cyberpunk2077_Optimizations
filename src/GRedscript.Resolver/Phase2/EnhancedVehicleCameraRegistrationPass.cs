@@ -71,9 +71,13 @@ internal static class EnhancedVehicleCameraRegistrationPass
         if (wrapper is null)
             return new("REFUSED", "EVS_CAMERA_WRAPPER_MISSING_OR_AMBIGUOUS", null, 0);
         string body = source[(wrapper.Open + 1)..wrapper.Close];
-        var wrapped = Regex.Match(body, @"\bwrappedMethod\s*\(\s*\)\s*;");
-        if (!wrapped.Success || Regex.Matches(body, @"\bwrappedMethod\s*\(").Count != 1)
+        var wrappedCalls = Regex.Matches(body, @"\bwrappedMethod\s*\(\s*\)\s*;");
+        // The stock EVS wrapper correctly calls the original registration
+        // once for unsupported vehicle types and once for supported ones.
+        // Preserve both and require camera subscriptions to follow both.
+        if (wrappedCalls.Count is < 1 or > 2)
             return new("REFUSED", "EVS_CAMERA_NATIVE_WRAPPER_UNPROVEN", null, 0);
+        var wrapped = wrappedCalls[^1];
 
         var edits = new List<(int Start, int End)>();
         foreach (string name in Names)
