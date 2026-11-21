@@ -289,6 +289,28 @@ static void Run(string baseline)
             AssertStatus(partialReport, id, "APPLIED");
         CheckContent(partial, Path.Combine(temp, "partial-out"));
 
+        // Handwritten but incomplete record switch: keep the pre-existing
+        // first identity and append only the six missing performer identities.
+        var incompleteRecords = new Dictionary<string, string>(originals);
+        string liz = partial["lizzies"].Replace("\r\n", "\n",
+            StringComparison.Ordinal);
+        string oldCrowd = "\tif !this.IsCrowd() {";
+        string newCrowd =
+            "\tif __gcoLizzieRecordID == t\"Character.LizziesBDs_Performer\" {\n" +
+            oldCrowd;
+        Require(liz.Contains(oldCrowd), "LIZZIES_PARTIAL_CROWD_ANCHOR_MISSING");
+        liz = liz.Replace(oldCrowd, newCrowd, StringComparison.Ordinal);
+        string endCrowd = "\n}\n\n@addMethod(NPCPuppet)";
+        int closing = liz.IndexOf(endCrowd, StringComparison.Ordinal);
+        Require(closing >= 0, "LIZZIES_PARTIAL_WRAPPER_END_MISSING");
+        liz = liz[..closing] + "\n  };" + liz[closing..];
+        incompleteRecords["lizzies"] = liz;
+        var missingReport = Pass7ChaseFrameFloorPass.Generate(
+            MakeGame(temp, "partial-record-guard", incompleteRecords),
+            Path.Combine(temp, "partial-record-out"));
+        AssertStatus(missingReport, "LIZZIES_BDS_PERFORMER", "APPLIED");
+        CheckContent(incompleteRecords, Path.Combine(temp, "partial-record-out"));
+
         // Relocation and custom independent code must survive.
         var custom = originals.ToDictionary(x => x.Key, x =>
             "// user-relocated custom independent comment\n" +
