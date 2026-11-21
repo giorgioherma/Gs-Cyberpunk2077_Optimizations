@@ -1,1 +1,1 @@
-checkpoint=hot-owner-apt-negotiable-shattered-stages52-54-final-20261121
+checkpoint=bundled-redruntime-abi-provided-with-generated-pass-20261121
