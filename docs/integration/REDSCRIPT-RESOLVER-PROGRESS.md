@@ -1,5 +1,12 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Historical TriggerMode #20 / DisablePositionReveal #21
+
+- #20 source-aware TriggerModeControl literal primary/secondary CNames replace three StringToName tag concatenations; original input-hint cadence untouched. Real post-generic official SCC and source-state acceptance: fast #121 SUCCESS.
+- #21 source-aware DisablePositionReveal tracing-off guards in three NPC callbacks, with original wrappedMethod and super preserved and operation-local refusals. Real post-generic official SCC and source-state acceptance: fast #124 SUCCESS.
+- Both stage after ten generic and previous semantic rules in one Generate. Full GCO ZIP/composition #1054 pending; no gameplay, FPS or allocation claim.
+
+
 ## 2026-11-21 — Source-aware historical optimization admission #18/#19
 
 - Port missing historical operations from the separate-pass history only where current generic/semantic work does not already implement a better equivalent. Generated sources start from *current* post-generic owner files, never historical whole-file overwrite; honor partial/complete/custom/version-fluid and narrow refusal rules.

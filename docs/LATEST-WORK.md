@@ -1,5 +1,15 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Historical semantics #20 TriggerModeControl and #21 DisablePositionReveal (focused SCC GREEN)
+
+- Previous **full GCO CI #1052 SUCCESS** (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44846907486): canonical generators #18 Quickhack_Fixes and #19 RedWindows had independently identical source, official SCC and game-only ZIP/.NET10 packaging verified.
+- **#20 TRIGGER_MODE_LITERAL_TAG_NAMES_V1:** Source-aware TriggerModeControl.GetTriggerModeKey replaces dynamic ForceAuto/RemoveAuto/InstantCharge plus triggerStr StringToName with source-proven primary/secondary literal CName variables. Original gameplay, settings, aiming and ReadyEvents hint-refresh callbacks unchanged; historical hint throttling not ported. Stock/partial/full/custom/incompatible/idempotent contracts. [Fast post-generic Phase 2 #121 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44848315621): independent one-pass canonical Stage and full real post-generic SCC 0.5.31 passed.
+- **#21 DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1:** Source-aware historical Pass 7 avoids redundant NPC tracing-off writes in ChangeHighLevelState, OnDamageReceived and OnDefeated. Each original wrappedMethod and super call remains unchanged; independently incomplete or changed callbacks are handled narrowly. [Fast post-generic Phase 2 #124 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44848801491): source-state tests, canonical one-pass byte parity and official SCC 0.5.31 passed.
+- Both new generators use the current effective post-generic source, follow existing semantic stages in one Generate, preserve prior generics, and are composed into existing full app reference replay (no corrective layer or historical whole-file transplant).
+- Full combined app/ZIP CI **#1054 pending** at documentation checkpoint: https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44848801508 . No claim of newly generated in-game parity or measured FPS/CPU improvements. Historical handwritten passes were game-tested, but new generated overlays must still be tested in gameplay.
+- Historical portfolio: 20 present mod owners still have no dedicated semantic passes; previous four already-started owners also have remaining historical work. Next investigation: HQ_HoloGirl high-frequency resource callback, and remaining RedWindows widget/UI operations.
+
+
 ## 2026-11-21 — Historical semantic ports #18 Quickhack and #19 RedWindows (source-generated, post-generic SCC green)
 
 - Owner instructed: when a game-tested historical optimization remains absent from current generic + semantic output, port the missing compatible operation; keep whichever current/historical implementation is better. Historical separate passes and combined 62-file result are behavioral references, never whole-file replacement inputs. Three absent historical owners stay NOT_APPLICABLE.
