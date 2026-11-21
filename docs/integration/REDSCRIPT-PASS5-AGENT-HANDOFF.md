@@ -30,6 +30,9 @@ The test harness invokes the **production C# generator via reflection**, without
 
 ## Validation and integration status
 
+- **Fast Phase 2 [#202 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44874209829)** at source/test commit `11f68e791ff5506f6e104b07acdc7109c918d98a`: 196 semantic source-state tests passed, including nine HoloTravel cases; private 2,331-source HoloTravel candidate produced one file, passed official SCC 0.5.31 via the existing checkpoint script, and repeated generation was COMPLETE/no emitted file. Existing canonical stages independently passed combined SCC with **29 existing semantic overlays / 43,512,293 compiled bytes**. That canonical stack **does not yet include HoloTravel** because central stage registration belongs to the integration owner.
+- No full GCO integrated ZIP/build CI for this independent Pass 5 candidate, no in-game generated overlay proof and no performance claim. Branch-local handoff documentation commit does not change the tested code.
+
 - This branch is an **isolated candidate**, not yet a canonical Generate stage. Main integration owner must add one ordered stage and the canonical combined source/ZIP tests after merging.
 - The focused fast CI outcome must be recorded from the newest branch run before marking source/SCC green; no player-side SCC distribution or gameplay/FPS claim.
 - Do not cherry-pick historical `.reds` files into an installed game or overwrite a current mod. Prefer cherry-picking the isolated generator/tests into the integration branch.
