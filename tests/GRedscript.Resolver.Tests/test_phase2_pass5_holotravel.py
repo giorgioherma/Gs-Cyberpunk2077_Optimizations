@@ -18,6 +18,10 @@ TARGET = "r6/scripts/HQ_HoloTravel/HQ_HoloTravel.reds"
 
 STOCK = r'''module EmreHQ.HoloTravel
 public class HoloTravel { public let holo: ref<Holo>; }
+public func TurquoiseColor() -> Color = NewColor(0, 255, 239, 255);
+public func GreenColor() -> Color = NewColor(101, 255, 0, 255);
+public func NewColor(r: Int32, g: Int32, b: Int32, a: Int32) -> Color =
+    new Color(Cast<Uint8>(r), Cast<Uint8>(g), Cast<Uint8>(b), Cast<Uint8>(a));
 public class BaseHandler {
     public let svc: ref<HoloTravel>;
     public let cfg: ref<Config>;
@@ -182,6 +186,16 @@ class Pass5HoloTravelTests(unittest.TestCase):
         self.assertEqual(r["status"], "REFUSED", r)
         self.assertIn("HOLOTRAVEL_VALIDATION_OR_COLOR_DEPENDENCY_CHANGED",
                       r["reason"])
+        self.assertIsNone(out)
+
+    def test_custom_impure_color_resolver_narrowly_refused(self):
+        unsafe = STOCK.replace(
+            "case ColorOptions.Random: return this.svc.hlp.randomizedColor;",
+            "case ColorOptions.Random: return this.AdvanceRandomColor();")
+        state, out = self.generate(unsafe)
+        self.assertEqual(state["status"], "REFUSED", state)
+        self.assertIn("HOLOTRAVEL_VALIDATION_OR_COLOR_DEPENDENCY_CHANGED",
+                      state["reason"])
         self.assertIsNone(out)
 
     def test_absent_owner_does_not_emit_mod(self):
