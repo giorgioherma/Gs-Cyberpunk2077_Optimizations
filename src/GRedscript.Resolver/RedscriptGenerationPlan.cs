@@ -1879,6 +1879,93 @@ public static class RedscriptGenerationPlan
         else if(cw.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("CW_INPUT_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 2.2 GRS Context/StateCache: after #36 reuse
+        // the framework StateCache when available but retain original
+        // direct player/BB lookups if the runtime is absent or not ready.
+        string grsStateRoot=Path.Combine(output,"_stages","40-grs-statecache");
+        var grsState=GearRecoveryStateCachePass.Generate(game,
+            grsStateRoot,Directory.Exists(final)?final:null);
+        if(grsState.Status=="APPLIED")
+        {
+            if(grsState.AppliedEdits<3 || string.IsNullOrWhiteSpace(grsState.SourcePath))
+                throw new InvalidDataException("GRS_STATE_STAGE_EMPTY");
+            string rel=grsState.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(grsStateRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/GearRecoverySystem/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,grsStateRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("GRS_STATE_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("GRS_STATE_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=grsState.AppliedEdits;
+            results.Add(new(40,"gear-recovery-statecache",grsState.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        else if(grsState.Status=="REFUSED")
+            skipped.Add(new(40,"gear-recovery-statecache",1,
+                grsState.Reason ?? "GRS_STATE_INCOMPATIBLE_SOURCE"));
+        else if(grsState.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("GRS_STATE_STAGE_UNKNOWN_STATUS");
+
+        // Historical Pass 3.0 VCP: eliminate identical QuestSystem getter
+        // calls within each original callback. No historical OnAction
+        // deletion, native listener, or game fact/cooldown changes.
+        string vcpRoot=Path.Combine(output,"_stages","41-vcp-quests");
+        var vcp=VehicleCallQuestReusePass.Generate(game,
+            vcpRoot,Directory.Exists(final)?final:null);
+        if(vcp.Status=="APPLIED")
+        {
+            if(vcp.AppliedEdits<1 || string.IsNullOrWhiteSpace(vcp.SourcePath))
+                throw new InvalidDataException("VCP_QUEST_STAGE_EMPTY");
+            string rel=vcp.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(vcpRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/Vehicle Call Plus/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,vcpRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("VCP_QUEST_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var markers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("VCP_QUEST_GENERIC_LOST");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=vcp.AppliedEdits;
+            results.Add(new(41,"vehicle-call-quest-reuse",vcp.AppliedEdits,
+                existed?0:1,existed?1:0,[]));
+        }
+        foreach(string reason in vcp.Refusals)
+            skipped.Add(new(41,"vehicle-call-quest-reuse",1,reason));
+        if(vcp.Status is not ("APPLIED" or "REFUSED" or "COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("VCP_QUEST_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

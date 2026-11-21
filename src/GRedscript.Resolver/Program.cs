@@ -63,6 +63,10 @@ public static class Program
                 return RunPhase2FeInputHub(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-grs-input-hub")
                 return RunPhase2GrsInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-grs-state")
+                return RunPhase2GrsState(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-vcp-quests")
+                return RunPhase2VcpQuests(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-cyberware-ex")
                 return RunPhase2CyberwareEx(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-stealth-pickpocket")
@@ -707,6 +711,38 @@ public static class Program
             result.Status + " edits=" + result.AppliedEdits +
             " owners=" + result.SourcePaths.Length +
             " refused=" + result.Refusals.Length);
+        return 0;
+    }
+
+    private static int RunPhase2GrsState(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("GRS StateCache requires --game --out [--base-overlay]");
+        var result=GearRecoveryStateCachePass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 GRS StateCache: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Reason is null?"":" reason="+result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2VcpQuests(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("VCP quest read reuse requires --game --out [--base-overlay]");
+        var result=VehicleCallQuestReusePass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 VCP quest reuse: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Refusals.Length==0?"":" refused="+string.Join(",",result.Refusals)));
         return 0;
     }
 

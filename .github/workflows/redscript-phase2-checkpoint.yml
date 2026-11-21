@@ -53,6 +53,8 @@ jobs:
       PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
       PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
       PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_GRS_STATE_OUTPUT: ${{ github.workspace }}/.phase2-grs-state
+      PHASE2_VCP_OUTPUT: ${{ github.workspace }}/.phase2-vcp-quest
       PHASE2_CW_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-cyberware-ex
       PHASE2_SR_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-stealth-pickpocket
       PHASE2_VM_OUTPUT: ${{ github.workspace }}/.phase2-vehicle-mileage
@@ -1304,6 +1306,85 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS CyberwareEx controller-only overclock InputHub route with original engine fallback'
 
+      - name: Generate Pass 2.2 GRS StateCache reuse preserving direct player and blackboard fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-grs-state --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_GRS_STATE_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_GRS_STATE_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_GRS_STATE_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'GRS_STATE_CACHE_WITH_DIRECT_FALLBACK_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 3){
+            throw ('PHASE2_GRS_STATE_SOURCE_UNPROVEN:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+          $src=Join-Path $env:PHASE2_GRS_STATE_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){throw 'PHASE2_GRS_STATE_OUTPUT_MISSING'}
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('private func GCOGrsStateCache()') -or
+             !$content.Contains('private func GCOGrsPlayer()') -or
+             !$content.Contains('private func GCOGrsBlackboardSystem()') -or
+             !$content.Contains('GameInstance.GetPlayerSystem(GetGameInstance()).GetLocalPlayerMainGameObject()') -or
+             !$content.Contains('GameInstance.GetBlackboardSystem(GetGameInstance())') -or
+             !$content.Contains('GRSGCOInteractionPollJob') -or
+             !$content.Contains('m_grsFallbackRegistered')){
+            throw 'PHASE2_GRS_STATE_FALLBACK_OR_PREVIOUS_STAGES_LOST'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $old=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($old,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_GRS_STATE_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS GRS StateCache player and blackboard getters with direct fallback and session cleanup'
+
+      - name: Generate Pass 3.0 Vehicle Call Plus owner-local quest handle reuse
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-vcp-quests --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_VCP_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_VCP_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_VCP_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'VEHICLE_CALL_QUEST_SYSTEM_LOCAL_REUSE_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 6 -or
+             @($report.refusals).Count -ne 0){
+            throw ('PHASE2_VCP_QUEST_OWNER_UNPROVEN:'+ $report.status+' '+(@($report.refusals)-join ','))
+          }
+          $rel='r6/scripts/Vehicle Call Plus/VehicleCall_FastTravel.reds'
+          $src=Join-Path $env:PHASE2_VCP_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){throw 'PHASE2_VCP_OUTPUT_MISSING'}
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('let gcoVcpQuests = GameInstance.GetQuestsSystem(') -or
+             !$content.Contains('return wrappedMethod(action, consumer);') -or
+             !$content.Contains('return wrappedMethod(evt);') -or
+             !$content.Contains('q001_ripperdoc_done') -or
+             !$content.Contains('ep1_standalone')){
+            throw 'PHASE2_VCP_QUEST_OWNER_GAMEPLAY_LOST'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_VCP_QUEST_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS Vehicle Call Plus three quest handle pairs reused without changing original action wrappers'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1615,9 +1696,21 @@ jobs:
             if ($grsPoll.Count -ne 1 -or [int]$grsPoll[0].order -ne 36 -or
                 [int]$grsPoll[0].rewrittenExpressions -lt 5 -or
                 !(Test-Path -LiteralPath $grsPollActual -PathType Leaf) -or
-                (Get-FileHash -LiteralPath $grsPollActual -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $grsPollRef -Algorithm SHA256).Hash) {
-              throw 'PHASE2_GRS_POLL_ONE_PASS_BYTE_PARITY_DIFF'
+                !(Test-Path -LiteralPath $grsPollRef -PathType Leaf)) {
+              throw 'PHASE2_GRS_POLL_STAGE_OUTPUT_MISSING'
+            }
+            # #40 additionally reuses GRS player/blackboard getters in the
+            # same owner file. Preserve the #36 callback registration and
+            # original fallback; verify exact composed final bytes via #40.
+            $grsPollContents=Get-Content -LiteralPath $grsPollActual -Raw
+            foreach($witness in @(
+                'GRSGCOInteractionPollJob extends ScheduledJob',
+                'grsScheduler.Register(grsJob)',
+                'new GRSInteractionPollCallback()',
+                'this.m_gcoGrsPollScheduler.Unregister(this.m_gcoGrsPollID)')) {
+              if(!$grsPollContents.Contains($witness,[StringComparison]::Ordinal)){
+                throw ('PHASE2_GRS_POLL_WITNESS_LOST_AFTER_STATE:'+ $witness)
+              }
             }
             $vm=@($result.completed | Where-Object { $_.id -eq 'vehicle-mileage-scheduler' })
             if($vm.Count -ne 4 -or @($vm | Where-Object { [int]$_.order -ne 37 }).Count -ne 0){
@@ -1655,6 +1748,28 @@ jobs:
                (Get-FileHash -LiteralPath $cwActual -Algorithm SHA256).Hash -ne
                (Get-FileHash -LiteralPath $cwRef -Algorithm SHA256).Hash){
               throw 'PHASE2_CW_INPUT_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $grsState=@($result.completed | Where-Object { $_.id -eq 'gear-recovery-statecache' })
+            $grsRel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+            $grsExpected=Join-Path $env:PHASE2_GRS_STATE_OUTPUT $grsRel
+            $grsActual=Join-Path (Join-Path $stage 'effective-preview') $grsRel
+            if($grsState.Count -ne 1 -or [int]$grsState[0].order -ne 40 -or
+               [int]$grsState[0].rewrittenExpressions -lt 3 -or
+               !(Test-Path -LiteralPath $grsActual -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $grsActual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $grsExpected -Algorithm SHA256).Hash){
+              throw 'PHASE2_GRS_STATE_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $vcp=@($result.completed | Where-Object { $_.id -eq 'vehicle-call-quest-reuse' })
+            $vcpRel='r6/scripts/Vehicle Call Plus/VehicleCall_FastTravel.reds'
+            $vcpExpected=Join-Path $env:PHASE2_VCP_OUTPUT $vcpRel
+            $vcpActual=Join-Path (Join-Path $stage 'effective-preview') $vcpRel
+            if($vcp.Count -ne 1 -or [int]$vcp[0].order -ne 41 -or
+               [int]$vcp[0].rewrittenExpressions -lt 6 -or
+               !(Test-Path -LiteralPath $vcpActual -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $vcpActual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $vcpExpected -Algorithm SHA256).Hash){
+              throw 'PHASE2_VCP_ONE_PASS_BYTE_PARITY_DIFF'
             }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
@@ -1694,7 +1809,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT, $env:PHASE2_SR_INPUT_OUTPUT, $env:PHASE2_CW_INPUT_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT, $env:PHASE2_SR_INPUT_OUTPUT, $env:PHASE2_CW_INPUT_OUTPUT, $env:PHASE2_GRS_STATE_OUTPUT, $env:PHASE2_VCP_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
