@@ -201,6 +201,11 @@ static void CheckContent(Dictionary<string, string> original, string output,
                 "RM_DIRECTION_DUPLICATE_PERK_FIELD");
             Require(Regex.Matches(content, @"private let m_gredRunningManSprintDirectionValid").Count == 1,
                 "RM_DIRECTION_DUPLICATE_VALID_FIELD");
+            int module = content.IndexOf("module RunningMan", StringComparison.Ordinal);
+            int cacheField = content.IndexOf("@addField(SprintDecisions)",
+                StringComparison.Ordinal);
+            Require(module >= 0 && cacheField > module,
+                "RM_DIRECTION_FIELDS_PRECEDE_MODULE_DECLARATION");
             Require(content.Contains("if !this.m_gredRunningManSprintDirectionValid",
                 StringComparison.Ordinal), "RM_DIRECTION_OPTIONAL_MODULE_FALLBACK_LOST");
             Require(content.Contains("@if(!ModuleExists(\"EasierControllerSprint\"))",
