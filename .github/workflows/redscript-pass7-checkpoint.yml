@@ -1,6 +1,7 @@
 name: REDscript Pass 7 - Isolated Chase and Sprint Checkpoint
 
-# Validated in grouped branch-only batches, not individual generator edits.\n# Runs once when this dedicated workflow is first committed or explicitly
+# Validated in grouped branch-only batches, not individual generator edits.
+# Runs once when this dedicated workflow is first committed or explicitly
 # revalidated. No shared-phase CI concurrency and no per-edit automatic runs.
 on:
   workflow_dispatch:
@@ -67,13 +68,64 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'PASS7_CANONICAL_GENERATION_FAILED' }
           $result=Get-Content -LiteralPath (Join-Path $out 'pass7-result.json') -Raw | ConvertFrom-Json
           $changed=@(Get-ChildItem -LiteralPath (Join-Path $out 'r6/scripts') -Recurse -File -Filter '*.reds')
-          if ($changed.Count -ne 3 -or [int]$result.appliedEdits -lt 7 -or
+          if ($changed.Count -ne 4 -or [int]$result.appliedEdits -lt 9 -or
               @($result.operations | Where-Object { $_.status -ne 'APPLIED' }).Count -ne 0) {
             throw ('PASS7_CANONICAL_OWNER_OUTPUT_INCOMPLETE files='+$changed.Count)
           }
-          Write-Host ('PASS7 three source-aware owner files, edits='+$result.appliedEdits)
+          Write-Host ('PASS7 four source-aware owner files, edits='+$result.appliedEdits)
 
-      - name: Official SCC 0.5.31 combined-source compilation
+      - name: Verify canonical one-pass generator and independently equal Pass 7 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $game='.phase2-private/base_after_generic'
+          $plan='.pass7-work/plan.json'
+          $analysis='.pass7-work/analysis.json'
+          $stage='.pass7-production-stage'
+          New-Item -ItemType Directory -Force -Path '.pass7-work' | Out-Null
+          & dotnet $dll plan-redscript --game $game --out $plan
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path $plan)) {
+            throw 'PASS7_CANONICAL_PLAN_FAILED'
+          }
+          $manifest=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+          if ([int]$manifest.implementedRuleCount -ne 10 -or
+              [string]::IsNullOrWhiteSpace($manifest.sourceStackSha256)) {
+            throw 'PASS7_CANONICAL_PLAN_INVALID'
+          }
+          @{
+            schemaVersion='grsp.resolver.input.v1'
+            generationAuthorized=$false
+            capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+            source=@{ sourceStackSha256=$manifest.sourceStackSha256 }
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+          & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $stage
+          if ($LASTEXITCODE -ne 0) { throw 'PASS7_ONE_PASS_STAGE_FAILED' }
+          $staged=Get-Content -LiteralPath (Join-Path $stage 'stage-result.json') -Raw | ConvertFrom-Json
+          $targets=@(
+            @{ order=700; id='pass7-ncr-spawn-guards'; path='r6/scripts/NightCityRemembers/NCR_SpawnCulling.reds' },
+            @{ order=701; id='pass7-stealth-detection-gate'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
+            @{ order=702; id='pass7-runningman-double-sprint'; path='r6/scripts/RunningMan/double_sprint.reds' },
+            @{ order=703; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' }
+          )
+          foreach($target in $targets) {
+            $matches=@($staged.completed | Where-Object { $_.id -eq $target.id })
+            if ($matches.Count -ne 1 -or [int]$matches[0].order -ne $target.order -or
+                [int]$matches[0].rewrittenExpressions -lt 1) {
+              throw ('PASS7_CANONICAL_STAGE_OWNER_MISSING:'+ $target.id)
+            }
+            $independent=Join-Path '.pass7-generated' $target.path
+            $canonical=Join-Path (Join-Path $stage 'effective-preview') $target.path
+            if (!(Test-Path -LiteralPath $independent -PathType Leaf) -or
+                !(Test-Path -LiteralPath $canonical -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $independent -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $canonical -Algorithm SHA256).Hash) {
+              throw ('PASS7_CANONICAL_ONE_PASS_BYTE_PARITY_DIFF:'+ $target.id)
+            }
+          }
+          Write-Host 'PASS Pass 7 production one-pass: four independent source files and exact output parity'
+
+      - name: Official SCC 0.5.31 on full canonical generic plus semantic output
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -81,14 +133,14 @@ jobs:
             -PostGenericRoot '.phase2-private/base_after_generic' `
             -CompilerRoot '.phase2-private/Compiler' `
             -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' `
-            -SemanticOverlayRoot '.pass7-generated'
-          if (!$?) { throw 'PASS7_OFFICIAL_SCC_FAILED' }
+            -SemanticOverlayRoot '.pass7-production-stage/effective-preview'
+          if (!$?) { throw 'PASS7_FULL_ONE_PASS_OFFICIAL_SCC_FAILED' }
 
       - name: Remove source and SCC fixtures
         if: always()
         shell: pwsh
         run: |
-          foreach($item in @('.phase2-private','.pass7-generated')) {
+          foreach($item in @('.phase2-private','.pass7-generated','.pass7-production-stage','.pass7-work')) {
             if(Test-Path -LiteralPath $item) {
               Remove-Item -LiteralPath $item -Recurse -Force -ErrorAction SilentlyContinue
             }
