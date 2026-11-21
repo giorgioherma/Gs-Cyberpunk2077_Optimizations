@@ -73,6 +73,17 @@ protected func OnUpdate(timeDelta: Float, stateContext: ref<StateContext>, scrip
 
 
 class RunningManPass9Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        host = ROOT / "tools/Pass9/bin/Release/net10.0/Pass9.dll"
+        if not host.is_file():
+            build = subprocess.run(
+                ["dotnet", "build", str(ROOT / "tools/Pass9/Pass9.csproj"),
+                 "-c", "Release", "--nologo"],
+                text=True, capture_output=True, timeout=120)
+            if build.returncode != 0:
+                raise RuntimeError(build.stdout + build.stderr)
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
