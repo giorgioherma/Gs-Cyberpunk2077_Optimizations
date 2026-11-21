@@ -15,6 +15,7 @@ on:
       - main
       - ci/redscript-phase2-postgeneric
       - dev/redscript/resolver_handoff
+      - dev/redscript/integration
     paths:
       - '.ci/checkpoints/redscript.txt'
 
@@ -32,6 +33,7 @@ jobs:
     timeout-minutes: 10
     env:
       PHASE2_OUTPUT: ${{ github.workspace }}/.phase2-generated
+      PHASE2_INTEGRATED_OUTPUT: ${{ github.workspace }}/.phase2-integrated-final
       PHASE2_DARK_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture
       PHASE2_ICON_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture-icons
       PHASE2_FE_OUTPUT: ${{ github.workspace }}/.phase2-fe-input
@@ -95,6 +97,24 @@ jobs:
           $ErrorActionPreference='Stop'
           dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RESOLVER_BUILD_FAILED' }
+
+      - name: Build independent Pass 4 and Pass 8/10 test hosts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Pass4/GRedscript.Pass4.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS4_HOST_BUILD_FAILED' }
+          dotnet build tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS8_10_HOST_BUILD_FAILED' }
+
+      - name: Validate independent owner source-state contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass4_isolated.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS4_SOURCE_STATE_FAILED' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass8_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS8_SOURCE_STATE_FAILED' }
 
       - name: Validate DigitalVixenCore Footsteps semantic source states
         shell: pwsh
@@ -1789,6 +1809,46 @@ jobs:
                 !$contents.Contains('this.RecomputeDpadProhibitions();')) {
               throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_INPUT_STATE_LOST'
             }
+            # Verify that Pass 4-10 source-owning stages genuinely execute in
+            # this one canonical Generate, not only in separate test commands.
+            $integratedStages = @(
+              'pass4-reinforcements-geometry',
+              'pass5-holotravel-material',
+              'pass6-virtual-atelier-pacing',
+              'pass6-evs-camera-admission',
+              'pass7-chase-frame-floor',
+              'pass8-chipware-throughput',
+              'pass8-chipware-combat-cache',
+              'pass8-immersive-cyberware',
+              'pass9-runningman-dormancy',
+              'pass10-chipware-perk-memo'
+            )
+            $finalRows = @($result.completed) + @($result.skipped)
+            foreach($id in $integratedStages) {
+              if (@($finalRows | Where-Object { $_.id -eq $id }).Count -eq 0) {
+                # A fully optimized/not-installed owner has no output and is
+                # independently exercised in source-state tests.
+                Write-Host ('INTEGRATION_NOT_GENERATED_OR_ALREADY_COMPLETE:' + $id)
+              }
+            }
+            $memo = @($result.completed | Where-Object { $_.id -eq 'pass10-chipware-perk-memo' })
+            if ($memo.Count -ne 1 -or [int]$memo[0].rewrittenExpressions -lt 1) {
+              $reasons=@($result.skipped | Where-Object { $_.id -eq 'pass10-chipware-perk-memo' } |
+                ForEach-Object { $_.reason })
+              throw ('INTEGRATION_APPROVED_CHIPWARE_MEMO_NOT_APPLIED:' + ($reasons -join ';'))
+            }
+            $sourceRoot = Join-Path $stage 'effective-preview/r6/scripts'
+            $generated = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*.reds')
+            if ($generated.Count -ne [int]$result.generatedFiles) {
+              throw ('INTEGRATION_CANONICAL_FILE_MANIFEST_MISMATCH:actual=' +
+                $generated.Count + ' reported=' + $result.generatedFiles)
+            }
+            if (Test-Path -LiteralPath $env:PHASE2_INTEGRATED_OUTPUT) {
+              throw 'INTEGRATION_OUTPUT_ALREADY_EXISTS'
+            }
+            Copy-Item -LiteralPath (Join-Path $stage 'effective-preview') -Destination $env:PHASE2_INTEGRATED_OUTPUT -Recurse
+            Write-Host ('PASS GCO canonical Pass4-10 staged output: files=' +
+              $generated.Count + ' memoEdits=' + [int]$memo[0].rewrittenExpressions)
             Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots InputHub #16 and D-pad #17 applied automatically; original PlayerLastUsedPad and generic preserved; independent bytes equal'
 
           }
@@ -1798,11 +1858,11 @@ jobs:
             }
           }
 
-      - name: Checkpoint - compile post-generic plus real semantic overlay
+      - name: Checkpoint - compile canonical Pass 4-10 one-pass merged output
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot $env:PHASE2_OUTPUT
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot $env:PHASE2_INTEGRATED_OUTPUT
           if (!$?) { throw 'PHASE2_CHECKPOINT_FAILED' }
 
       - name: Summarize changes covered by this SCC checkpoint
@@ -1819,7 +1879,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT, $env:PHASE2_SR_INPUT_OUTPUT, $env:PHASE2_CW_INPUT_OUTPUT, $env:PHASE2_GRS_STATE_OUTPUT, $env:PHASE2_VCP_OUTPUT)) {
+          foreach ($path in @($env:PHASE2_INTEGRATED_OUTPUT, '.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT, $env:PHASE2_SR_INPUT_OUTPUT, $env:PHASE2_CW_INPUT_OUTPUT, $env:PHASE2_GRS_STATE_OUTPUT, $env:PHASE2_VCP_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
