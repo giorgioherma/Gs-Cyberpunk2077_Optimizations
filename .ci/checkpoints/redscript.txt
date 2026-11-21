@@ -1,1 +1,1 @@
-checkpoint=integrated-pass4-10-canonical-scc-partial-owner-contracts
+checkpoint=integrated-pass4-10-evs-owner-composition-scc
