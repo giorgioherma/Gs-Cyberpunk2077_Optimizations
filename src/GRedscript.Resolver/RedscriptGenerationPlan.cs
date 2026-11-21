@@ -1743,6 +1743,86 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 9 RunningMan double sprint and StandEvents dormancy.
+        // This is the same source-aware operation used in the isolated SCC
+        // checkpoint: it completes missing Pass 7 prerequisite cache work
+        // directly from post-generic stock, or reuses an existing partial
+        // hand-optimized cache without duplicate fields/wrappers.
+        // The former StandEvents OnUpdate wrappedMethod still runs each tick.
+        const int runningManOrder = 37;
+        const string runningManId = "runningman-pass9";
+        string runningManRoot = Path.Combine(output, "_stages",
+            "37-runningman-pass9");
+        var runningMan = RunningManDoubleSprintPass.Generate(game,
+            runningManRoot, Directory.Exists(final) ? final : null);
+        if (runningMan.Status == "APPLIED")
+        {
+            if (runningMan.AppliedEdits is < 1 or > 2 ||
+                runningMan.SourcePaths.Length != 1)
+                throw new InvalidDataException(
+                    "RUNNINGMAN_PASS9_GENERATOR_INVALID_RESULT");
+            string rel = runningMan.SourcePaths[0];
+            string live = Path.GetFullPath(Path.Combine(game,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string src = Path.GetFullPath(Path.Combine(runningManRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string dest = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(live, game) || !File.Exists(live) ||
+                !IsInside(src, runningManRoot) || !File.Exists(src) ||
+                !IsInside(dest, final) || !Directory.Exists(final))
+                throw new InvalidDataException(
+                    "RUNNINGMAN_PASS9_OWNER_OUTPUT_UNSAFE");
+            bool existed = File.Exists(dest);
+            string before = existed ?
+                File.ReadAllText(dest) : File.ReadAllText(live);
+            string after = File.ReadAllText(src);
+            // Preserve generic work, as well as any already-generated
+            // semantic implementation on the same effective source.
+            var markers = System.Text.RegularExpressions.Regex.Matches(
+                before, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+            if (markers.Any(m => !after.Contains(m, StringComparison.Ordinal)))
+                throw new InvalidDataException(
+                    "RUNNINGMAN_PASS9_DROPPED_GENERIC_SOURCE");
+            foreach (string prerequisite in new[]
+            {
+                "m_gredRunningManDoubleRunPerk",
+                "m_gredRunningManResumeChecked"
+            })
+            {
+                if (before.Contains(prerequisite, StringComparison.Ordinal) &&
+                    !after.Contains(prerequisite, StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "RUNNINGMAN_PASS9_LOST_PARTIAL_OPTIMIZATION:" +
+                        prerequisite);
+            }
+            if (!after.Contains(
+                    "if this.m_gredRunningManDoubleRunPerk || this.m_isInSecondSprint",
+                    StringComparison.Ordinal) &&
+                runningMan.AppliedEdits == 2)
+                throw new InvalidDataException(
+                    "RUNNINGMAN_PASS9_SPRINT_GATE_NOT_GENERATED");
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src, dest, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += runningMan.AppliedEdits;
+            results.Add(new(runningManOrder, runningManId,
+                runningMan.AppliedEdits, existed ? 0 : 1,
+                existed ? 1 : 0, []));
+        }
+        if (!string.IsNullOrWhiteSpace(runningMan.Reason))
+            foreach (string reason in runningMan.Reason.Split(';',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries))
+                skipped.Add(new(runningManOrder, runningManId, 1, reason));
+        if (runningMan.Status is not ("APPLIED" or "COMPLETE" or
+            "NOT_APPLICABLE" or "REFUSED"))
+            throw new InvalidDataException(
+                "RUNNINGMAN_PASS9_UNKNOWN_STAGE_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
