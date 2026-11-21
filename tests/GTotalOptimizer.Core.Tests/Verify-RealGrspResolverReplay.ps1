@@ -2076,7 +2076,9 @@ try {
       @{ Id='browser-extension-input'; Order=29; Command='phase2-browser-input';
          Rule='BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1'; Owner='BrowserExtension' },
       @{ Id='evs-onaction-ps'; Order=30; Command='phase2-evs-ps';
-         Rule='EVS_ONACTION_PS_HANDLE_REUSE_V1'; Owner='Enhanced Vehicle System' }
+         Rule='EVS_ONACTION_PS_HANDLE_REUSE_V1'; Owner='Enhanced Vehicle System' },
+      @{ Id='flushing-etiquette-input-hub'; Order=31; Command='phase2-fe-input-hub';
+         Rule='FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1'; Owner='FlushingEtiquette' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2103,6 +2105,22 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'flushing-etiquette-input-hub') {
+          if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 3) {
+            throw 'GCO_FE_HUB_REFERENCE_FILE_COUNT_INVALID'
+          }
+          $file=Get-Content -LiteralPath $portFiles[0].FullName -Raw
+          foreach($part in @('private func FETryHubInputRoutes()',
+              'private func FECleanupInputRoutes()',
+              'if !this.m_feHubInputActive && FEInput.Handle(this, action)',
+              'return FEInput.HandleValues(player, name, type);',
+              'GCO-GENERIC:CNAME_FIXED_INDEX_V1',
+              'return wrappedMethod(action, consumer);')) {
+            if (!$file.Contains($part,[StringComparison]::Ordinal)) {
+              throw ('GCO_FE_HUB_UNSAFE_INPUT_OUTPUT:'+ $part)
+            }
+          }
         }
         if ($port.Id -eq 'evs-onaction-ps') {
           if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 2) {
