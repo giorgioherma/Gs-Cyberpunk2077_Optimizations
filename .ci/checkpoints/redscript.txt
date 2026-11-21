@@ -1,5 +1,1 @@
-# REDscript SCC checkpoint trigger
-# Edit this file in a commit only when the current development branch is ready
-# for focused post-generic source-state / one-pass / SCC validation.
-# Normal source and test commits do not trigger the expensive checkpoint.
-checkpoint=pass2-and-pass3-final-305bc759
+checkpoint=integrated-pass4-through-pass10-one-go-scc
