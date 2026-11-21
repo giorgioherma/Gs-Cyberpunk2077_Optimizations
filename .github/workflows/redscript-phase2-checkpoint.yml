@@ -44,6 +44,7 @@ jobs:
       PHASE2_DPR_OUTPUT: ${{ github.workspace }}/.phase2-dpr-tracing
       PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
       PHASE2_RW_CURSORS_OUTPUT: ${{ github.workspace }}/.phase2-rw-cursors
+      PHASE2_RW_RENDER_OUTPUT: ${{ github.workspace }}/.phase2-rw-render
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -567,6 +568,65 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst
           Write-Host 'PASS RedWindows both cursor lookups, live arrays always scanned'
 
+      - name: Generate RedWindows render-aware Builder and Logs dormancy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-render --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_RW_RENDER_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_RENDER_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_RW_RENDER_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'REDWINDOWS_RENDER_AWARE_DORMANCY_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1 -or
+              @($report.sourcePaths).Count -ne 3) {
+            throw ('PHASE2_RW_RENDER_EXPECTED_THREE_FILES: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_RW_RENDER_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 3) { throw 'PHASE2_RW_RENDER_THREE_SOURCES_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            $safe=$rel.Replace([IO.Path]::DirectorySeparatorChar,'/')
+            if ($safe.StartsWith('..') -or !$safe.StartsWith('RedWindows/')) {
+              throw 'PHASE2_RW_RENDER_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            $updated=Get-Content -LiteralPath $file.FullName -Raw
+            if ($file.Name -eq 'RW_Window.reds' -and
+                (!$updated.Contains('return !this.overlayOnly;') -or
+                 !$updated.Contains('public func IsRendered() -> Bool') -or
+                 !$updated.Contains('this.m_findCursor = idx + 1;') -or
+                 !$updated.Contains('public func IsVisible() -> Bool { return this.visible; }'))) {
+              throw 'PHASE2_RW_RENDER_WINDOW_OR_FIND_NOT_PRESERVED'
+            }
+            if ($file.Name -eq 'RW_Builder.reds' -and
+                (!$updated.Contains('builder.IsRendered()') -or
+                 !$updated.Contains('gallery.IsRendered()') -or
+                 !$updated.Contains('GCO-GENERIC:STABLE_ARRAY_BOUND_V1'))) {
+              throw 'PHASE2_RW_RENDER_BUILDER_OR_GENERIC_LOST'
+            }
+            if ($file.Name -eq 'RW_Logs.reds' -and
+                (!$updated.Contains('win.IsRendered() && RedLogger.Available()') -or
+                 !$updated.Contains('this.Schedule(delay);'))) {
+              throw 'PHASE2_RW_RENDER_LOGS_POLLING_BEHAVIOR_LOST'
+            }
+            if (Test-Path -LiteralPath $target) {
+              $before=Get-Content -LiteralPath $target -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$updated.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_RW_RENDER_GENERIC_LOST'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          Write-Host 'PASS RedWindows effective visibility dormancy in three owner files'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -675,6 +735,22 @@ jobs:
                 (Get-FileHash -LiteralPath $rwcRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_RW_CURSOR_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
             }
+            $rwv=@($result.completed | Where-Object { $_.id -eq 'redwindows-render-dormancy' })
+            $expectedRwv=@('RW_Window.reds','RW_Builder.reds','RW_Logs.reds')
+            if ($rwv.Count -ne 3 -or
+                @($rwv | Where-Object { [int]$_.order -ne 24 }).Count -ne 0 -or
+                [int](($rwv | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne 1) {
+              throw 'PHASE2_RW_RENDER_CANONICAL_STAGE_MISSING'
+            }
+            foreach($file in $expectedRwv) {
+              $ref=Join-Path $env:PHASE2_RW_RENDER_OUTPUT ('r6/scripts/RedWindows/'+$file)
+              $actual=Join-Path (Join-Path $stage 'effective-preview') ('r6/scripts/RedWindows/'+$file)
+              if (!(Test-Path -LiteralPath $ref) -or !(Test-Path -LiteralPath $actual) -or
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash) {
+                throw ('PHASE2_RW_RENDER_REFERENCE_BYTES_DIFF:'+ $file)
+              }
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -713,7 +789,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

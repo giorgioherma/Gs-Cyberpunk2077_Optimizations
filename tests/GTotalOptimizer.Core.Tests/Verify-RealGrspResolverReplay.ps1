@@ -2062,7 +2062,9 @@ try {
       @{ Id='hologirl-material-event'; Order=22; Command='phase2-hologirl-material';
          Rule='HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1'; Owner='HQ_HoloGirl' },
       @{ Id='redwindows-shape-label-cursors'; Order=23; Command='phase2-redwindows-cursors';
-         Rule='REDWINDOWS_SHAPE_LABEL_CURSORS_V1'; Owner='RedWindows' }
+         Rule='REDWINDOWS_SHAPE_LABEL_CURSORS_V1'; Owner='RedWindows' },
+      @{ Id='redwindows-render-dormancy'; Order=24; Command='phase2-redwindows-render';
+         Rule='REDWINDOWS_RENDER_AWARE_DORMANCY_V1'; Owner='RedWindows' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {

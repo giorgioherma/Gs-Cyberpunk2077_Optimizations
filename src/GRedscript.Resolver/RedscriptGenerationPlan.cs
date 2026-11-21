@@ -1101,6 +1101,63 @@ public static class RedscriptGenerationPlan
             skipped.Add(new(23,"redwindows-shape-label-cursors",1,
                 rwCursors.Reason));
 
+        // RedWindows historical Pass 9: logical IsVisible stays unchanged;
+        // render eligibility controls only Builder/Logs background polling.
+        // Three independently owner-proven edits compose on top of #19/#23.
+        string rwRenderRoot = Path.Combine(output, "_stages",
+            "24-redwindows-render-aware-dormancy");
+        var rwRender = RedWindowsRenderDormancyPass.Generate(game,
+            rwRenderRoot, Directory.Exists(final) ? final : null);
+        if (rwRender.Status == "APPLIED")
+        {
+            if (rwRender.SourcePaths.Length == 0 ||
+                rwRender.AppliedEdits != 1)
+                throw new InvalidDataException("RW_RENDER_APPLIED_EMPTY");
+            var paths = rwRender.SourcePaths.Order(StringComparer.Ordinal).ToArray();
+            for (int i = 0; i < paths.Length; i++)
+            {
+                string rel=paths[i];
+                string source=Path.GetFullPath(Path.Combine(rwRenderRoot,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                string target=Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                if (!rel.StartsWith("r6/scripts/RedWindows/",
+                        StringComparison.Ordinal) ||
+                    !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                    !IsInside(source,rwRenderRoot) || !IsInside(target,final) ||
+                    !File.Exists(source))
+                    throw new InvalidDataException("RW_RENDER_STAGE_PATH_UNSAFE");
+                bool existed=File.Exists(target);
+                if (existed)
+                {
+                    string previous=File.ReadAllText(target);
+                    string updated=File.ReadAllText(source);
+                    var markers=System.Text.RegularExpressions.Regex.Matches(
+                        previous,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(x=>x.Value).Distinct(StringComparer.Ordinal);
+                    if (markers.Any(x=>!updated.Contains(x,
+                        StringComparison.Ordinal)))
+                        throw new InvalidDataException(
+                            "RW_RENDER_STAGE_GENERIC_LOST");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(source,target,overwrite:existed);
+                files += existed?0:1;
+                results.Add(new(24,"redwindows-render-dormancy",
+                    i==paths.Length-1?1:0,
+                    existed?0:1,existed?1:0,[]));
+            }
+            expressions+=rwRender.AppliedEdits;
+        }
+        else if (rwRender.Status == "REFUSED")
+            skipped.Add(new(24,"redwindows-render-dormancy",1,
+                rwRender.Reason ?? "RW_RENDER_SOURCE_INCOMPATIBLE"));
+        else if (rwRender.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("RW_RENDER_STATUS_UNKNOWN");
+        if (rwRender.Status == "APPLIED" && rwRender.Reason is not null)
+            skipped.Add(new(24,"redwindows-render-dormancy",1,
+                rwRender.Reason));
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
