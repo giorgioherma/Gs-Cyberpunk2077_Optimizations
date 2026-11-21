@@ -1,4 +1,1 @@
-# Full GCO integrated package checkpoint trigger
-# Edit this file only at a meaningful integration/release milestone.
-# Normal source and test commits do not trigger full Windows CI.
-checkpoint=initial
+checkpoint=integrated-redscript-pass4-10-final-gco-app-zip-and-real-source-replay
