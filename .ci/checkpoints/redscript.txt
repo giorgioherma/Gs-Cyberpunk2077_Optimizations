@@ -1,0 +1,2 @@
+# Main REDscript post-generic SCC milestone. Edit checkpoint after a validated source batch.
+checkpoint=not-run
