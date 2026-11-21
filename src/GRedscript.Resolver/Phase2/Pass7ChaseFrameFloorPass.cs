@@ -433,6 +433,105 @@ public static class Pass7ChaseFrameFloorPass
     }
 
 
+    // On NPC attach, LizziesBDs only needs performer records, but the
+    // original wrapper obtains QuestsSystem and three facts for every NPC.
+    // Restrict just the author-owned block; leave wrappedMethod and any
+    // extra custom code before/after it in their original order.
+    private static Decision LizziePerformerGate(string source)
+    {
+        var attach = Find(source, "NPCPuppet", "OnGameAttached", "wrapMethod");
+        var classification = Find(source, "NPCPuppet",
+            "LizziesBDsIsEnt", "addMethod");
+        if (attach is null)
+            return new("REFUSED", null, 0, 0, "LIZZIES_ATTACH_WRAPPER_MISSING");
+        string body = source[attach.Start..attach.End];
+        // The game-tested historical performer switch has already replaced
+        // the helper. Do not create a competing record filter.
+        if (classification is null && Has(source,
+            @"\blet\s+recordID\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(") &&
+            Has(source, @"\blizziesBDsNPC\s*:\s*Int32") &&
+            Has(body, @"\breturn\s+result\s*;") &&
+            Has(body, @"Character\s*\.\s*LizziesBDs_Performer"))
+            return new("COMPLETE", null, 0, 1, null);
+        if (classification is null)
+            return new("REFUSED", null, 0, 0, "LIZZIES_RECORD_HELPER_MISSING");
+        string chooser = source[classification.Start..classification.End];
+        var records = Regex.Matches(chooser,
+            @"\bthis\s*\.\s*GetRecordID\s*\(\s*\)\s*==\s*" +
+            @"(?:TDBID\s*\.\s*Create\s*\(\s*""(?<id>[^""]+)""\s*\)|t""(?<id>[^""]+)"")" +
+            @"\s*\{\s*return\s+-?\d+\s*;", Rx)
+            .Select(m => m.Groups["id"].Value).ToArray();
+        if (records.Length < 1 || records.Distinct(StringComparer.Ordinal).Count() !=
+            records.Length ||
+            Regex.Matches(chooser, @"\bthis\s*\.\s*GetRecordID\s*\(\s*\)", Rx).Count !=
+            records.Length ||
+            !Has(chooser, @"\breturn\s+-1\s*;"))
+            return new("REFUSED", null, 0, 0, "LIZZIES_PERFORMER_CLASSIFIER_INCOMPATIBLE");
+
+        var prefix = Regex.Match(body,
+            @"\bwrappedMethod\s*\(\s*\)\s*;", Rx);
+        var crowd = Regex.Match(body,
+            @"\bif\s*!\s*this\s*\.\s*IsCrowd\s*\(\s*\)\s*\{", Rx);
+        if (!prefix.Success || !crowd.Success ||
+            prefix.Index + prefix.Length > crowd.Index ||
+            !Has(body[crowd.Index..], @"\bthis\s*\.\s*LizziesBDsIsEnt\s*\(") ||
+            !Has(body[crowd.Index..], @"\bGameInstance\s*\.\s*GetQuestsSystem\s*\(") ||
+            !Has(body[crowd.Index..], @"\bthis\s*\.\s*LizziesBDsZmenitObleceni\s*\(") ||
+            !Has(body[crowd.Index..], @"\bthis\s*\.\s*LizziesBDsNastavitMoaning\s*\("))
+            return new("REFUSED", null, 0, 0, "LIZZIES_ATTACH_GAMEPLAY_FLOW_UNPROVEN");
+
+        const string local = "__gcoLizzieRecordID";
+        bool localPresent = Has(body, @"\blet\s+" + local +
+            @"\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(\s*\)\s*;");
+        bool wrapped = Has(body,
+            @"\bif\s+" + local + @"\s*==\s*t""");
+        if (wrapped)
+        {
+            bool includesAll = records.All(id =>
+                body.Contains("t\"" + id + "\"", StringComparison.Ordinal));
+            int recordGuard = body.IndexOf("if " + local, StringComparison.Ordinal);
+            if (localPresent && includesAll &&
+                recordGuard >= 0 && recordGuard < crowd.Index)
+                return new("COMPLETE", null, 0, 1, null);
+            return new("REFUSED", null, 0, 0, "LIZZIES_PARTIAL_RECORD_GATE_INCOMPATIBLE");
+        }
+        if (!localPresent && SourceAdmission.ReadTokens(body)
+            .Any(t => t.Value == local))
+            return new("REFUSED", null, 0, 0, "LIZZIES_RECORD_LOCAL_COLLISION");
+
+        var tokens = SourceAdmission.ReadTokens(body);
+        int open = -1;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Value == "{" &&
+                tokens[i].Start >= crowd.Index &&
+                tokens[i].Start < crowd.Index + crowd.Length)
+            {
+                open = i;
+                break;
+            }
+        }
+        int close = Close(tokens, open, "{", "}");
+        if (close < 0)
+            return new("REFUSED", null, 0, 0, "LIZZIES_CROWD_SCOPE_UNBALANCED");
+        string nl = Newline(source);
+        string predicate = string.Join(" ||" + nl + "    ",
+            records.Select(id => local + " == t\"" + id + "\""));
+        string header = (localPresent ? "" :
+            "  let " + local + ": TweakDBID = this.GetRecordID();" + nl) +
+            "  if " + predicate + " {" + nl;
+        var edits = new List<Edit>
+        {
+            new(attach.Start + crowd.Index, attach.Start + crowd.Index, header),
+            new(attach.Start + tokens[close].End, attach.Start + tokens[close].End,
+                nl + "  };")
+        };
+        string changed = Apply(source, edits);
+        if (LizziePerformerGate(changed).Status != "COMPLETE")
+            throw new InvalidDataException("LIZZIES_PERFORMER_POSTCONDITION_FAILED");
+        return new("APPLIED", changed, edits.Count, localPresent ? 1 : 0, null);
+    }
+
     private static readonly Regex DirectionLocal = new(
         @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
@@ -595,7 +694,9 @@ public static class Pass7ChaseFrameFloorPass
             ("RUNNING_MAN_SPRINT_ENTRY_PERK_CACHE_V1", "RunningMan",
                 "EvaluateTwoStepSprint", (Func<string, Decision>)DoubleSprint),
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
-                "@replaceMethod(SprintDecisions)", (Func<string, Decision>)SprintDirection)
+                "@replaceMethod(SprintDecisions)", (Func<string, Decision>)SprintDirection),
+            ("LIZZIES_BDS_PERFORMER_ATTACH_GATE_V1", "LizziesBDs",
+                "LizziesBDsIsEnt", (Func<string, Decision>)LizziePerformerGate)
         };
         var statuses = new List<Operation>();
         var staged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
