@@ -330,8 +330,8 @@ static void Run(string baseline)
         partial["rs"] = partial["rs"].Replace(
             "wrappedMethod(stimData);",
             "wrappedMethod(stimData);\n\tif !IsDefined(stimData) { return; }",
-            StringComparison.Ordinal).Replace("@wrapMethod(ReactionManagerComponent)",
-            "@addField(ReactionManagerComponent)\nprivate let grt_rs_nextReinforcementProbe: Float;\n\n@wrapMethod(ReactionManagerComponent)",
+            StringComparison.Ordinal).Replace("@wrapMethod(ReactionManagerComponent)\r\nprotected final func HandleStimEvent",
+            "@addField(ReactionManagerComponent)\r\nprivate let grt_rs_nextReinforcementProbe: Float;\r\n\r\n@wrapMethod(ReactionManagerComponent)\r\nprotected final func HandleStimEvent",
             StringComparison.Ordinal);
         partial["lizzies"] = partial["lizzies"].Replace(
             "\tif !this.IsCrowd() {",
