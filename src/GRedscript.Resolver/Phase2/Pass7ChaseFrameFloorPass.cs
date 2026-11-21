@@ -450,9 +450,32 @@ public static class Pass7ChaseFrameFloorPass
         if (classification is null && Has(source,
             @"\blet\s+recordID\s*:\s*TweakDBID\s*=\s*this\s*\.\s*GetRecordID\s*\(") &&
             Has(source, @"\blizziesBDsNPC\s*:\s*Int32") &&
-            Has(body, @"\breturn\s+result\s*;") &&
-            Has(body, @"Character\s*\.\s*LizziesBDs_Performer"))
-            return new("COMPLETE", null, 0, 1, null);
+            Has(body, @"\belse\s*\{\s*return\s+result\s*;\s*\}") &&
+            Has(body, @"\bthis\s*\.\s*LizziesBDsZmenitObleceni\s*\(") &&
+            Has(body, @"\bthis\s*\.\s*LizziesBDsNastavitMoaning\s*\("))
+        {
+            // The historical cached-index layout must prove ALL seven
+            // performer identities before it can count as complete; a
+            // partially rewritten markerless switch is not a no-op.
+            var ids = Regex.Matches(body,
+                @"\brecordID\s*==\s*t""(?<id>Character\.LizziesBDs_Performer(?:_\d+|_Preview)?)""", Rx)
+                .Select(m => m.Groups["id"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+            string[] historical =
+            [
+                "Character.LizziesBDs_Performer",
+                "Character.LizziesBDs_Performer_2",
+                "Character.LizziesBDs_Performer_3",
+                "Character.LizziesBDs_Performer_4",
+                "Character.LizziesBDs_Performer_5",
+                "Character.LizziesBDs_Performer_6",
+                "Character.LizziesBDs_Performer_Preview"
+            ];
+            if (historical.All(ids.Contains))
+                return new("COMPLETE", null, 0, 1, null);
+            return new("REFUSED", null, 0, 0,
+                "LIZZIES_HISTORICAL_RECORD_SWITCH_PARTIAL");
+        }
         if (classification is null)
             return new("REFUSED", null, 0, 0, "LIZZIES_RECORD_HELPER_MISSING");
         string chooser = source[classification.Start..classification.End];
