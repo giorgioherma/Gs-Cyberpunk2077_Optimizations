@@ -309,7 +309,8 @@ internal static class VehicleMileageSchedulerPass
         if(!Has(output,@"\bclass\s+"+Regex.Escape(spec.Job)+
                 @"\s+extends\s+ScheduledJob\b") ||
            !Has(output,@"\bthis\s*\.\s*m_gcoVMScheduler\s*\.\s*Unregister\s*\(") ||
-           !Has(output,@"\bthis\s*\.\s*m_gcoVMScheduler\s*\.\s*Register\s*\(") ||
+           !Has(output,@"\bvmScheduler\s*\.\s*Register\s*\(\s*vmJob\s*\)") ||
+           !Has(output,@"\bthis\s*\.\s*m_gcoVMJob\s*=\s*vmJob\s*;") ||
            !Has(output,@"\b"+Regex.Escape(spec.OldCallback)+@"\b"))
             throw new InvalidDataException("VM_SCHEDULER_POSTCONDITION_FAILED");
         foreach(Match marker in Regex.Matches(s,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+"))
