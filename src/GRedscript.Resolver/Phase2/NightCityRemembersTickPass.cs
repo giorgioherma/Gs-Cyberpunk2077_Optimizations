@@ -156,7 +156,10 @@ internal static class NightCityRemembersTickPass
 
         if (!Has(source, @"\bclass\s+NCRGCOMaintenanceJob\b"))
         {
-            Add(owner.Start, owner.Start, string.Join(nl, new[]
+            var classAnchor = Regex.Match(source, @"\b(?:public\s+)?class\s+NCRSystem\b");
+            if (!classAnchor.Success)
+                return new("REFUSED", "NCR_CLASS_INSERTION_ANCHOR_MISSING", null, 0);
+            Add(classAnchor.Index, classAnchor.Index, string.Join(nl, new[]
             {
                 "public class NCRGCOMaintenanceJob extends ScheduledJob {",
                 "  public let m_system: wref<NCRSystem>;",
@@ -213,7 +216,7 @@ internal static class NightCityRemembersTickPass
                 "  }",
                 ""
             }) + nl;
-            Add(original.Start, original.Start, method);
+            Add(original.Close + 1, original.Close + 1, nl + method);
         }
         else if (!Has(body(FindMethod(source, owner, "GCOStartTick") ?? original),
                   @"\bthis\s*\.\s*ScheduleTick\s*\(") ||
@@ -236,7 +239,7 @@ internal static class NightCityRemembersTickPass
                 "  }",
                 ""
             }) + nl;
-            Add(original.Start, original.Start, method);
+            Add(original.Close + 1, original.Close + 1, nl + method);
         }
         else if (!Has(body(FindMethod(source, owner, "GCOStopTick") ?? original),
                   @"\bUnregister\s*\(") ||
