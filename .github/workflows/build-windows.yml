@@ -39,7 +39,8 @@ permissions:
 
 jobs:
   # Full release/package must never succeed with an uncompilable Pass 7
-  # semantic overlay. Reuse the EXACT canonical source-state + SCC contract;
+  # semantic overlay, even when application/package tests alone pass.
+  # Reuse the EXACT canonical source-state + SCC contract;
   # no competing compiler or duplicated source pipeline.
   pass7_source_scc:
     if: github.ref == 'refs/heads/dev/redscript/pass7'
