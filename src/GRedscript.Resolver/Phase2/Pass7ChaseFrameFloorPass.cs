@@ -574,6 +574,299 @@ public static class Pass7ChaseFrameFloorPass
         return new("APPLIED", changed, edits.Count, localPresent ? 1 : 0, null);
     }
 
+
+    // Pass 7.0/7.1: preserve the vanilla reaction callback verbatim. The
+    // stimulus filter only gates this mod's additional reinforcement attempt.
+    private static Decision ReinforcementStimulus(string source)
+    {
+        var span = Find(source, "ReactionManagerComponent", "HandleStimEvent", "wrapMethod");
+        if (span is null) return new("REFUSED", null, 0, 0,
+            "RS_STIMULUS_WRAPPER_MISSING");
+        string body = source[span.Start..span.End];
+        var wrapped = Regex.Match(body, @"\bwrappedMethod\s*\(\s*stimData\s*\)\s*;", Rx);
+        var call = Regex.Match(body,
+            @"\breinSystem\s*\.\s*TryCallingReinforcements\s*\(\s*ownerPuppet\s*\)\s*;", Rx);
+        if (!wrapped.Success || !call.Success || wrapped.Index >= call.Index ||
+            !Has(body, @"\bGetOwnerPuppet\s*\(\s*\)") ||
+            !Has(source, @"\bStartCallReinforcement\s*\("))
+            return new("REFUSED", null, 0, 0, "RS_STIMULUS_CALL_FLOW_UNPROVEN");
+
+        string nl = Newline(source);
+        var evt = Regex.Match(body,
+            @"\blet\s+(?<name>\w+)\s*:\s*ref\s*<\s*StimuliEvent\s*>\s*=\s*stimData\s*\.\s*cachedEvt\s*;", Rx);
+        bool nullable = Has(body[..call.Index],
+            @"\bif\s*!\s*IsDefined\s*\(\s*stimData\s*\)\s*\{\s*return\s*;\s*\}");
+        if (!evt.Success)
+        {
+            if (Has(body, @"\bstimData\s*\.\s*cachedEvt\b") ||
+                Has(body, @"\bGetStimType\s*\(\s*\)") ||
+                Has(body, @"\bsourceObject\s*\.\s*IsPlayer\s*\("))
+                return new("REFUSED", null, 0, 0,
+                    "RS_STIMULUS_PARTIAL_EVENT_BINDING_UNPROVEN");
+            string addition = nl +
+                (nullable ? "" : "    if !IsDefined(stimData) { return; }" + nl) +
+                "    let __gcoRsStimEvent: ref<StimuliEvent> = stimData.cachedEvt;" + nl +
+                "    if IsDefined(__gcoRsStimEvent) {" + nl +
+                "        if !IsDefined(__gcoRsStimEvent.sourceObject) || !__gcoRsStimEvent.sourceObject.IsPlayer() {" + nl +
+                "            return;" + nl + "        }" + nl +
+                "        switch __gcoRsStimEvent.GetStimType() {" + nl +
+                "            case gamedataStimType.CombatHit:" + nl +
+                "            case gamedataStimType.Explosion:" + nl +
+                "            case gamedataStimType.Gunshot:" + nl +
+                "            case gamedataStimType.HijackVehicle:" + nl +
+                "            case gamedataStimType.CarryBody:" + nl +
+                "            case gamedataStimType.Bullet:" + nl +
+                "                break;" + nl +
+                "            default:" + nl + "                return;" + nl +
+                "        }" + nl + "    }" + nl;
+            string updated = Apply(source,
+            [
+                new Edit(span.Start + wrapped.Index + wrapped.Length,
+                    span.Start + wrapped.Index + wrapped.Length, addition)
+            ]);
+            if (ReinforcementStimulus(updated).Status != "COMPLETE")
+                throw new InvalidDataException("RS_STIMULUS_POSTCONDITION");
+            return new("APPLIED", updated, 1, 0, null);
+        }
+        if (evt.Index < wrapped.Index + wrapped.Length || evt.Index > call.Index ||
+            Regex.Matches(body, @"\bstimData\s*\.\s*cachedEvt\b", Rx).Count != 1)
+            return new("REFUSED", null, 0, 0,
+                "RS_STIMULUS_EVENT_POSITION_UNPROVEN");
+
+        string v = Regex.Escape(evt.Groups["name"].Value);
+        bool player = Has(body[..call.Index],
+            @"!\s*IsDefined\s*\(\s*" + v + @"\s*\.\s*sourceObject\s*\)") &&
+            Has(body[..call.Index],
+                v + @"\s*\.\s*sourceObject\s*\.\s*IsPlayer\s*\(\s*\)") &&
+            Has(body[..call.Index], @"\bif\s+IsDefined\s*\(\s*" + v + @"\s*\)");
+        var choice = Regex.Match(body,
+            @"\bswitch\s*\(?\s*" + v + @"\s*\.\s*GetStimType\s*\(\s*\)\s*\)?\s*\{", Rx);
+        bool hasSwitch = choice.Success && choice.Index > evt.Index &&
+            choice.Index < call.Index;
+        var tokens = SourceAdmission.ReadTokens(body);
+        int choiceOpen = -1, choiceClose = -1;
+        if (hasSwitch)
+        {
+            for (int i = 0; i < tokens.Count; i++)
+                if (tokens[i].Value == "{" &&
+                    tokens[i].Start == choice.Index + choice.Length - 1)
+                { choiceOpen = i; break; }
+            choiceClose = Close(tokens, choiceOpen, "{", "}");
+            if (choiceClose < 0) return new("REFUSED", null, 0, 0,
+                "RS_STIMULUS_SWITCH_UNBALANCED");
+        }
+        string switchBody = hasSwitch
+            ? body[tokens[choiceOpen].End..tokens[choiceClose].Start] : "";
+        bool defaultExit = Has(switchBody,
+            @"\bdefault\s*:\s*return\s*;");
+        if (hasSwitch && !defaultExit)
+            return new("REFUSED", null, 0, 0,
+                "RS_STIMULUS_CUSTOM_SWITCH_DEFAULT_UNPROVEN");
+        string[] expected =
+        [
+            "CombatHit", "Explosion", "Gunshot",
+            "HijackVehicle", "CarryBody", "Bullet"
+        ];
+        var found = Regex.Matches(switchBody,
+            @"\bcase\s+gamedataStimType\s*\.\s*(?<name>\w+)\s*:", Rx)
+            .Select(m => m.Groups["name"].Value).ToArray();
+        if (hasSwitch && found.Except(expected, StringComparer.Ordinal).Any())
+            return new("REFUSED", null, 0, 0,
+                "RS_STIMULUS_CUSTOM_STIMULUS_SET_UNPROVEN");
+        if (nullable && player && hasSwitch &&
+            expected.All(x => found.Count(y => y == x) == 1))
+            return new("COMPLETE", null, 0, 3, null);
+
+        var edits = new List<Edit>();
+        if (!nullable)
+            edits.Add(new(span.Start + wrapped.Index + wrapped.Length,
+                span.Start + wrapped.Index + wrapped.Length,
+                nl + "    if !IsDefined(stimData) { return; }"));
+        if (!player)
+        {
+            if (Has(body[..call.Index], @"\bsourceObject\s*\.\s*IsPlayer\s*\("))
+                return new("REFUSED", null, 0, 0,
+                    "RS_STIMULUS_EXISTING_SOURCE_GUARD_UNPROVEN");
+            edits.Add(new(span.Start + evt.Index + evt.Length,
+                span.Start + evt.Index + evt.Length,
+                nl + "    if IsDefined(" + evt.Groups["name"].Value + ") {" + nl +
+                "        if !IsDefined(" + evt.Groups["name"].Value + ".sourceObject) || !" +
+                evt.Groups["name"].Value + ".sourceObject.IsPlayer() { return; }" +
+                nl + "    }"));
+        }
+        if (!hasSwitch)
+        {
+            if (Has(body[..call.Index], @"\bGetStimType\s*\("))
+                return new("REFUSED", null, 0, 0,
+                    "RS_STIMULUS_EXISTING_TYPE_GATE_UNPROVEN");
+            string cases = string.Join(nl, expected.Select(x =>
+                "            case gamedataStimType." + x + ":"));
+            edits.Add(new(span.Start + evt.Index + evt.Length,
+                span.Start + evt.Index + evt.Length,
+                nl + "    if IsDefined(" + evt.Groups["name"].Value + ") {" +
+                nl + "        switch " + evt.Groups["name"].Value +
+                ".GetStimType() {" + nl + cases + nl +
+                "                break;" + nl +
+                "            default: return;" + nl +
+                "        }" + nl + "    }"));
+        }
+        else
+        {
+            var missing = expected.Where(x => !found.Contains(x,
+                StringComparer.Ordinal)).ToArray();
+            if (found.Length != found.Distinct(StringComparer.Ordinal).Count())
+                return new("REFUSED", null, 0, 0,
+                    "RS_STIMULUS_DUPLICATE_TYPE_CASE");
+            if (missing.Length > 0)
+            {
+                var def = Regex.Match(switchBody, @"\bdefault\s*:", Rx);
+                if (!def.Success)
+                    return new("REFUSED", null, 0, 0,
+                        "RS_STIMULUS_DEFAULT_POSITION_UNPROVEN");
+                int at = tokens[choiceOpen].End + def.Index;
+                edits.Add(new(span.Start + at, span.Start + at,
+                    string.Join(nl, missing.Select(x =>
+                        "            case gamedataStimType." + x + ":")) +
+                    nl + "                break;" + nl + "            "));
+            }
+        }
+        if (edits.Count == 0)
+            return new("REFUSED", null, 0, 0,
+                "RS_STIMULUS_PARTIAL_FLOW_UNPROVEN");
+        // Insertions at the same anchor are combined deterministically.
+        var combined = edits.GroupBy(x => x.Start).Select(g =>
+            new Edit(g.Key, g.Key, string.Concat(g.Select(x => x.Text))));
+        string changed = Apply(source, combined);
+        if (ReinforcementStimulus(changed).Status != "COMPLETE")
+            throw new InvalidDataException("RS_STIMULUS_PARTIAL_POSTCONDITION");
+        return new("APPLIED", changed, edits.Count, 0, null);
+    }
+
+    private static Match ReinforcementOwner(string body) => Regex.Match(body,
+        @"(?:\blet\s+ownerPuppet\s*:\s*(?:ref|wref)\s*<\s*ScriptedPuppet\s*>\s*=\s*|\bownerPuppet\s*=\s*)this\s*\.\s*GetOwnerPuppet\s*\(\s*\)\s*;", Rx);
+
+    private static Decision ReinforcementPrevention(string source)
+    {
+        var span = Find(source, "ReactionManagerComponent", "HandleStimEvent", "wrapMethod");
+        if (span is null) return new("REFUSED", null, 0, 0,
+            "RS_PREVENTION_WRAPPER_MISSING");
+        string body = source[span.Start..span.End];
+        var owner = ReinforcementOwner(body);
+        var stat = Regex.Match(body, @"\bGameInstance\s*\.\s*GetStatsSystem\s*\(", Rx);
+        var call = Regex.Match(body, @"\bTryCallingReinforcements\s*\(", Rx);
+        var wrapped = Regex.Match(body, @"\bwrappedMethod\s*\(\s*stimData\s*\)", Rx);
+        if (!owner.Success || !stat.Success || !call.Success || !wrapped.Success ||
+            !(wrapped.Index < owner.Index && owner.Index < stat.Index &&
+              stat.Index < call.Index))
+            return new("REFUSED", null, 0, 0,
+                "RS_PREVENTION_OWNER_AND_STAT_ORDER_UNPROVEN");
+        string region = body[(owner.Index + owner.Length)..stat.Index];
+        bool nullGuard = Has(region,
+            @"\bif\s*!\s*IsDefined\s*\(\s*ownerPuppet\s*\)\s*\{\s*return\s*;\s*\}");
+        bool prevention = Has(region,
+            @"\bownerPuppet\s*\.\s*IsPrevention\s*\(\s*\)");
+        bool police = Has(region,
+            @"\bEquals\s*\(\s*ownerPuppet\s*\.\s*GetAttitudeAgent\s*\(\s*\)\s*\.\s*GetAttitudeGroup\s*\(\s*\)\s*,\s*n""police""\s*\)");
+        if (nullGuard && prevention && police)
+            return new("COMPLETE", null, 0, 3, null);
+        if ((prevention && !Has(region, @"\bif\b")) ||
+            (police && !Has(region, @"\bif\b")))
+            return new("REFUSED", null, 0, 0,
+                "RS_PREVENTION_PARTIAL_CUSTOM_CONDITION_UNPROVEN");
+        string nl = Newline(source);
+        var missing = new StringBuilder();
+        if (!nullGuard) missing.Append(nl).Append(
+            "        if !IsDefined(ownerPuppet) { return; }");
+        if (!prevention) missing.Append(nl).Append(
+            "        if ownerPuppet.IsPrevention() { return; }");
+        if (!police) missing.Append(nl).Append(
+            "        if Equals(ownerPuppet.GetAttitudeAgent().GetAttitudeGroup(), n\"police\") { return; }");
+        string changed = Apply(source,
+        [
+            new Edit(span.Start + owner.Index + owner.Length,
+                span.Start + owner.Index + owner.Length, missing.ToString())
+        ]);
+        if (ReinforcementPrevention(changed).Status != "COMPLETE")
+            throw new InvalidDataException("RS_PREVENTION_POSTCONDITION");
+        return new("APPLIED", changed,
+            (nullGuard ? 0 : 1) + (prevention ? 0 : 1) + (police ? 0 : 1),
+            (nullGuard ? 1 : 0) + (prevention ? 1 : 0) + (police ? 1 : 0), null);
+    }
+
+    private static Decision ReinforcementBurstThrottle(string source)
+    {
+        var span = Find(source, "ReactionManagerComponent", "HandleStimEvent", "wrapMethod");
+        if (span is null) return new("REFUSED", null, 0, 0,
+            "RS_THROTTLE_WRAPPER_MISSING");
+        string body = source[span.Start..span.End];
+        var owner = ReinforcementOwner(body);
+        var stat = Regex.Match(body, @"\bGameInstance\s*\.\s*GetStatsSystem\s*\(", Rx);
+        var call = Regex.Match(body, @"\bTryCallingReinforcements\s*\(", Rx);
+        if (!owner.Success || !stat.Success || !call.Success ||
+            !(owner.Index < stat.Index && stat.Index < call.Index))
+            return new("REFUSED", null, 0, 0,
+                "RS_THROTTLE_OWNER_AND_STATS_UNPROVEN");
+        const string field = "grt_rs_nextReinforcementProbe";
+        var fields = Regex.Matches(source,
+            @"@\s*addField\s*\(\s*ReactionManagerComponent\s*\)\s*private\s+let\s+" +
+            field + @"\s*:\s*Float\s*;", Rx);
+        if (fields.Count > 1 || (fields.Count == 0 &&
+            Has(source, @"\blet\s+" + field + @"\b")))
+            return new("REFUSED", null, 0, 0,
+                "RS_THROTTLE_FIELD_COLLISION");
+        string region = body[(owner.Index + owner.Length)..stat.Index];
+        bool sampled = Has(region,
+            @"\bEngineTime\s*\.\s*ToFloat\s*\(\s*GameInstance\s*\.\s*GetEngineTime\s*\(\s*ownerPuppet\s*\.\s*GetGame\s*\(\s*\)\s*\)\s*\)");
+        bool guard = Has(region, @"\bif\s+\w+\s*<\s*this\s*\.\s*" + field);
+        bool store = Has(region, @"\bthis\s*\.\s*" + field +
+            @"\s*=\s*\w+\s*\+\s*0\.10\s*;");
+        if (fields.Count == 1 && sampled && guard && store)
+            return new("COMPLETE", null, 0, 3, null);
+        if ((sampled || guard || store) && !(sampled && guard && store))
+            return new("REFUSED", null, 0, 0,
+                "RS_THROTTLE_PARTIAL_TIME_FLOW_UNPROVEN");
+        string nl = Newline(source);
+        var edits = new List<Edit>();
+        if (!sampled)
+        {
+            // Always perform the prevention check before consuming the
+            // per-component 100 ms probe window. Do not alter vanilla events.
+            if (!Has(region, @"\bownerPuppet\s*\.\s*IsPrevention\s*\(") ||
+                !Has(region, @"\bn""police"""))
+                return new("REFUSED", null, 0, 0,
+                    "RS_THROTTLE_PREVENTION_NOT_PROVEN");
+            var police = Regex.Match(region,
+                @"\bif\s+Equals\s*\(\s*ownerPuppet\s*\.\s*GetAttitudeAgent\s*\(\s*\)\s*\.\s*GetAttitudeGroup\s*\(\s*\)\s*,\s*n""police""\s*\)\s*\{\s*return\s*;\s*\}", Rx);
+            if (!police.Success)
+                return new("REFUSED", null, 0, 0,
+                    "RS_THROTTLE_POLICE_GATE_NOT_LOCAL");
+            int afterPolice = owner.Index + owner.Length + police.Index + police.Length;
+            string extra = nl +
+                "        let __gcoRsNow: Float = EngineTime.ToFloat(GameInstance.GetEngineTime(ownerPuppet.GetGame()));" + nl +
+                "        if __gcoRsNow < this.grt_rs_nextReinforcementProbe &&" + nl +
+                "            this.grt_rs_nextReinforcementProbe - __gcoRsNow <= 0.10 {" + nl +
+                "            return;" + nl + "        }" + nl +
+                "        this.grt_rs_nextReinforcementProbe = __gcoRsNow + 0.10;";
+            edits.Add(new(span.Start + afterPolice,
+                span.Start + afterPolice, extra));
+        }
+        if (fields.Count == 0)
+        {
+            var directive = Regex.Match(source,
+                @"@\s*wrapMethod\s*\(\s*ReactionManagerComponent\s*\)\s*protected\s+final\s+func\s+HandleStimEvent\s*\(", Rx);
+            if (!directive.Success)
+                return new("REFUSED", null, 0, 0,
+                    "RS_THROTTLE_FIELD_ANCHOR_UNPROVEN");
+            edits.Add(new(directive.Index, directive.Index,
+                "@addField(ReactionManagerComponent)" + nl +
+                "private let grt_rs_nextReinforcementProbe: Float;" + nl + nl));
+        }
+        string changed = Apply(source, edits);
+        if (ReinforcementBurstThrottle(changed).Status != "COMPLETE")
+            throw new InvalidDataException("RS_THROTTLE_POSTCONDITION");
+        return new("APPLIED", changed, edits.Count, 0, null);
+    }
+
     private static readonly Regex DirectionLocal = new(
         @"\blet\s+hasSprintDirectionPerk\s*:\s*Bool\s*=\s*(?<expr>PlayerDevelopmentSystem\s*\.\s*GetInstance\s*\([^;]+?)\s*;",
         Rx);
