@@ -1,0 +1,135 @@
+name: REDscript Pass 6 - Isolated frame-pacing SCC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/redscript/pass6
+    paths:
+      - '.github/workflows/redscript-pass6.yml'
+      - 'src/GRedscript.Resolver/Phase2/VirtualAtelierSpawnPacingPass.cs'
+      - 'src/GRedscript.Resolver/Program.cs'
+      - 'tests/GRedscript.Resolver.Tests/test_phase2_vad_spawn_pacing.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redscript-pass6-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pass6-postgeneric:
+    name: Pass 6 - source states, combined SCC 0.5.31
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated candidate
+        uses: actions/checkout@v4
+
+      - name: Checkout post-generic source and CI-only compiler
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .pass6-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+
+      - name: Configure .NET 10 and Python
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Configure source-state test Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build GCO resolver and run source-state contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_RESOLVER_BUILD_FAILED' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_SOURCE_STATES_FAILED' }
+
+      - name: Compose prior one-pass semantics plus Pass 6 and compile SCC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $game='.pass6-private/base_after_generic'
+          $plan='.pass6-plan.json'
+          $analysis='.pass6-analysis.json'
+          $stage='.pass6-existing-stage'
+          $vad='.pass6-vad'
+          & dotnet $dll plan-redscript --game $game --out $plan
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_GENERIC_FIRST_PLAN_FAILED' }
+          $manifest=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+          if ([int]$manifest.implementedRuleCount -ne 10 -or
+              [string]::IsNullOrWhiteSpace($manifest.sourceStackSha256)) {
+            throw 'PASS6_NOT_POST_GENERIC_SOURCE'
+          }
+          @{
+            schemaVersion='grsp.resolver.input.v1'
+            generationAuthorized=$false
+            capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+            source=@{ sourceStackSha256=$manifest.sourceStackSha256 }
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+          & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $stage
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_EXISTING_ONE_PASS_STAGE_FAILED' }
+          $staged=Join-Path $stage 'effective-preview'
+          if (!(Test-Path (Join-Path $staged 'r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'))) {
+            throw 'PASS6_PRIOR_SEMANTICS_MISSING'
+          }
+          & dotnet $dll phase2-vad-spawn --game $game --base-overlay $staged --out $vad
+          if ($LASTEXITCODE -ne 0) { throw 'PASS6_VAD_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $vad 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'VIRTUAL_ATELIER_DROPPOINT_SPAWN_PACING_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 7) {
+            throw ('PASS6_VAD_NO_SOURCE_EDIT: '+$report.status+' '+$report.reason)
+          }
+          $rel=[string]$report.sourcePath
+          if (!$rel.StartsWith('r6/scripts/VirtualAtelierDelivery/',[StringComparison]::Ordinal) -or
+              !$rel.EndsWith('.reds',[StringComparison]::OrdinalIgnoreCase)) {
+            throw ('PASS6_VAD_WRONG_OWNER_PATH: '+$rel)
+          }
+          $src=Join-Path $vad $rel
+          $dst=Join-Path $staged $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf) -or (Test-Path -LiteralPath $dst)) {
+            throw 'PASS6_VAD_SOURCE_MISSING_OR_COLLIDES'
+          }
+          $compiledSource=Get-Content -LiteralPath $src -Raw
+          foreach($required in @(
+            'GcoAtelierSpawnBatchCallback extends DelayCallback',
+            'DelayCallback(cb, 0.05, false)',
+            'this.delaySystem.CancelCallback(this.m_gcoVadSpawnCallback)',
+            'this.SpawnDropPointEntity(vadImmediate)',
+            'this.entitySystem.DeleteTagged(tag)')) {
+            if (!$compiledSource.Contains($required,[StringComparison]::Ordinal)) {
+              throw ('PASS6_GENERATED_BEHAVIOR_MISSING: '+$required)
+            }
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          Copy-Item -LiteralPath $src -Destination $dst
+          Write-Host ('PASS Pass 6 staged with existing semantics; edits='+$report.appliedEdits)
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot $game -CompilerRoot '.pass6-private/Compiler' -ResolverDll $dll -SemanticOverlayRoot $staged
+          if (!$?) { throw 'PASS6_COMBINED_EFFECTIVE_SCC_FAILED' }
+
+      - name: Remove private sources, compiler and generated overlays
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($path in @(
+            '.pass6-private', '.pass6-plan.json', '.pass6-analysis.json',
+            '.pass6-existing-stage', '.pass6-vad')) {
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+          }
