@@ -1628,9 +1628,34 @@ jobs:
             if ($evs.Count -ne 1 -or [int]$evs[0].order -ne 30 -or
                 [int]$evs[0].rewrittenExpressions -lt 100 -or
                 !(Test-Path -LiteralPath $evsActual -PathType Leaf) -or
-                (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $evsRef -Algorithm SHA256).Hash) {
-              throw 'PHASE2_EVS_PS_ONE_PASS_REFERENCE_DIFF'
+                !(Test-Path -LiteralPath $evsRef -PathType Leaf)) {
+              throw 'PHASE2_EVS_PS_STAGE_OR_SOURCE_MISSING'
+            }
+            # Pass 6 deliberately removes four unused camera registrations
+            # from this same EVS owner after Stage #30. Prove both operations
+            # compose exactly from the same post-generic source instead of
+            # incorrectly demanding the final file equal the #30 intermediate.
+            $evsCamera=@($result.completed | Where-Object { $_.id -eq 'pass6-evs-camera-admission' })
+            $evsCameraOutput=Join-Path $work 'independent-evs-camera-after-ps'
+            & dotnet $dll phase2-evs-camera --game $game --base-overlay $env:PHASE2_EVS_PS_OUTPUT --out $evsCameraOutput
+            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_EVS_CAMERA_REFERENCE_GENERATOR_FAILED' }
+            $evsCamReport=Get-Content -LiteralPath (Join-Path $evsCameraOutput 'phase2-result.json') -Raw | ConvertFrom-Json
+            if ($evsCamReport.status -eq 'APPLIED') {
+              $evsCameraRef=Join-Path $evsCameraOutput $evsRel
+              if ($evsCamera.Count -ne 1 -or [int]$evsCamera[0].order -ne 45 -or
+                  !(Test-Path -LiteralPath $evsCameraRef -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $evsCameraRef -Algorithm SHA256).Hash) {
+                throw 'PHASE2_EVS_PS_AND_CAMERA_CANONICAL_COMPOSITION_DIFF'
+              }
+            } elseif ($evsCamReport.status -in @('COMPLETE','REFUSED','NOT_APPLICABLE')) {
+              if ($evsCamera.Count -ne 0 -or
+                  (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $evsRef -Algorithm SHA256).Hash) {
+                throw 'PHASE2_EVS_CAMERA_UNPROVEN_CHANGE_AFTER_PS'
+              }
+            } else {
+              throw 'PHASE2_EVS_CAMERA_UNKNOWN_INDEPENDENT_STATUS'
             }
             $feHub=@($result.completed | Where-Object { $_.id -eq 'flushing-etiquette-input-hub' })
             $feHubRel='r6/scripts/FlushingEtiquette/FE_Input.reds'
