@@ -211,7 +211,7 @@ class Pass5HoloTravelTests(unittest.TestCase):
             self.assertTrue(compiler.is_dir())
             check = subprocess.run(
                 ["pwsh", "-NoProfile", "-File", str(verification),
-                 "-PostGenericRoot", str(path.parents[2]),
+                 "-PostGenericRoot", str(path.parents[3]),
                  "-CompilerRoot", str(compiler),
                  "-ResolverDll", str(dll),
                  "-SemanticOverlayRoot", str(self.last_output)],
