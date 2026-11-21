@@ -166,6 +166,16 @@ internal static class NewHotOwnerSemanticPass
         if (Has(remains, @"\bm_lastInput\b"))
             return new("REFUSED", "APT_IGNORED_ACTION_SIDE_EFFECT_UNPROVEN", null);
 
+        // Before the name read, only the two original reset-and-return
+        // guards are eligible. Unknown extra callbacks must still execute.
+        var nameRead = Match(dispatch,
+            @"\blet\s+name\s*=\s*ListenerAction\.GetName\s*\(\s*action\s*\)\s*;");
+        string beforeName = dispatch[..nameRead.Index];
+        if (!Has(beforeName,
+            @"^\s*if\s*!\s*this\.m_shown\s*\{\s*this\.m_lastInput\s*=\s*n""None""\s*;\s*return\s+false\s*;\s*\}\s*;?\s*if\s+NotEquals\s*\(\s*ListenerAction\.GetType\s*\(\s*action\s*\)\s*,\s*gameinputActionType\.BUTTON_PRESSED\s*\)\s*\{\s*this\.m_lastInput\s*=\s*n""None""\s*;\s*return\s+false\s*;\s*\}\s*;?\s*$") ||
+            !Has(dispatch[(nameRead.Index + nameRead.Length)..],
+                @"\bthis\.m_lastInput\s*=\s*n""None""\s*;\s*return\s+false\s*;\s*$"))
+            return new("REFUSED", "APT_INPUT_RESET_LIFECYCLE_CHANGED", null);
         var names = Names(dispatch, "name");
         if (names.Length == 0 ||
             !names.Contains("n\"ChoiceApply\"", StringComparer.Ordinal) ||
@@ -496,6 +506,17 @@ internal static class NewHotOwnerSemanticPass
                 {
                     if (decision.Changed == src)
                         throw new InvalidDataException("HOT_OWNER_NO_CHANGE");
+                    Decision check = op.Rewrite(decision.Changed);
+                    if (check.Status != "COMPLETE")
+                        throw new InvalidDataException(
+                            "HOT_OWNER_GENERATED_POSTCONDITION:" + op.Id +
+                            ":" + (check.Reason ?? check.Status));
+                    foreach (Match marker in Regex.Matches(src,
+                        @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+"))
+                        if (!decision.Changed.Contains(marker.Value,
+                            StringComparison.Ordinal))
+                            throw new InvalidDataException(
+                                "HOT_OWNER_GENERIC_MARKER_LOST:" + op.Id);
                     if (existing >= 0) staged[existing] = (rel, decision.Changed);
                     else staged.Add((rel, decision.Changed));
                     applied++;
