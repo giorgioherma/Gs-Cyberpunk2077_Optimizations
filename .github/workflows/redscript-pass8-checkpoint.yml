@@ -1,0 +1,89 @@
+name: REDscript Pass 8 - isolated throughput / SCC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/redscript/pass8
+    paths:
+      - 'src/GRedscript.Resolver/Phase2/Pass8*.cs'
+      - 'tests/GRedscript.Pass8.Checkpoint/**'
+      - 'tests/GRedscript.Resolver.Tests/test_pass8_*.py'
+      - '.github/workflows/redscript-pass8-checkpoint.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redscript-pass8-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pass8:
+    name: Pass 8 source states and full effective-source SCC
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated GCO branch
+        uses: actions/checkout@v4
+      - name: Checkout authoritative post-generic source and CI-only SCC
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .phase2-private
+          sparse-checkout: |
+            base_after_generic/r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build isolated Pass 8 generator runner
+        shell: pwsh
+        run: |
+          dotnet build tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'PASS8_DOTNET_BUILD_FAILED' }
+      - name: Test stock, partial, complete, custom, absent, drift and repeat
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass8_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PASS8_SOURCE_STATE_FAILED' }
+      - name: Generate Pass 8 from actual post-generic mod sources once
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='tests/GRedscript.Pass8.Checkpoint/bin/Release/net10.0/GRedscript.Pass8.Checkpoint.dll'
+          & dotnet $dll --game '.phase2-private/base_after_generic' --out '.phase2-pass8'
+          if ($LASTEXITCODE -ne 0) { throw 'PASS8_GENERATION_FAILED' }
+          $r=Get-Content -LiteralPath '.phase2-pass8/phase2-result.json' -Raw | ConvertFrom-Json
+          if ($r.ruleId -ne 'CHIPWARE_PASS8_SOURCE_LOCAL_THROUGHPUT_V1' -or
+              $r.status -ne 'APPLIED' -or $r.appliedEdits -lt 3 -or
+              @($r.refusals).Count -ne 0) {
+            throw ("PASS8_STOCK_SOURCE_NOT_COMPLETE: "+($r | ConvertTo-Json -Compress))
+          }
+          $scripts=@(Get-ChildItem -LiteralPath '.phase2-pass8/r6/scripts' -Recurse -File -Filter '*.reds')
+          if ($scripts.Count -ne 3) { throw "PASS8_UNEXPECTED_FILE_COUNT:$($scripts.Count)" }
+          Write-Host "PASS8 source operations: $($r.appliedEdits), changed files: $($scripts.Count)"
+      - name: Compile authoritative source plus actual Pass 8 overlay using official SCC 0.5.31
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot '.phase2-pass8'
+          if (!$?) { throw 'PASS8_EFFECTIVE_SOURCE_SCC_FAILED' }
+      - name: Clean private source and compiler
+        if: always()
+        shell: pwsh
+        run: |
+          foreach($p in @('.phase2-private','.phase2-pass8')) {
+            if (Test-Path -LiteralPath $p) {
+              Remove-Item -LiteralPath $p -Recurse -Force
+            }
+          }
