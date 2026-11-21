@@ -63,6 +63,8 @@ public static class Program
                 return RunPhase2FeInputHub(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-grs-input-hub")
                 return RunPhase2GrsInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-drugdealer-input")
+                return RunPhase2DrugDealerInput(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-fe-pins")
                 return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-quickslots-input")
@@ -674,6 +676,25 @@ public static class Program
         Console.WriteLine("REDscript Phase 2 EVS OnAction PS: status=" +
             result.Status + " edits=" + result.AppliedEdits +
             (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DrugDealerInput(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "DrugDealer InputHub needs --game --out [--base-overlay]");
+        var result = DrugDealerInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 DrugDealer InputHub: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            " owners=" + result.SourcePaths.Length +
+            " refused=" + result.Refusals.Length);
         return 0;
     }
 

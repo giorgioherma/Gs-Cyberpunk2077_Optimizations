@@ -1565,6 +1565,52 @@ public static class RedscriptGenerationPlan
         else if(grsInput.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_HUB_UNKNOWN_STAGE_STATUS");
 
+        // Historical Pass 2.1: five independent DrugDealer InputHub listeners.
+        // Retain action-literal generics and exclusive engine callbacks, and
+        // refuse only the individual incompatible owner rather than the mod.
+        string ddRoot=Path.Combine(output,"_stages","33-drugdealer-input-hub");
+        var dd=DrugDealerInputHubPass.Generate(game,
+            ddRoot,Directory.Exists(final)?final:null);
+        if(dd.Status=="APPLIED")
+        {
+            if(dd.SourcePaths.Length is < 1 or > 5 ||
+               dd.AppliedEdits<dd.SourcePaths.Length)
+                throw new InvalidDataException("DD_HUB_STAGE_INVALID_FILE_COUNT");
+            foreach(string rel in dd.SourcePaths.Order(StringComparer.Ordinal))
+            {
+                string src=Path.GetFullPath(Path.Combine(ddRoot,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                string dest=Path.GetFullPath(Path.Combine(final,
+                    rel.Replace('/',Path.DirectorySeparatorChar)));
+                if(!rel.StartsWith("r6/scripts/DrugDealer/",StringComparison.Ordinal) ||
+                   !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+                   !IsInside(src,ddRoot) || !IsInside(dest,final) ||
+                   !File.Exists(src))
+                    throw new InvalidDataException("DD_HUB_OWNER_PATH_UNSAFE");
+                bool existed=File.Exists(dest);
+                if(existed)
+                {
+                    string before=File.ReadAllText(dest);
+                    string after=File.ReadAllText(src);
+                    var markers=System.Text.RegularExpressions.Regex.Matches(
+                        before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                        .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                    if(markers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                        throw new InvalidDataException("DD_HUB_GENERIC_LOST");
+                }
+                else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Copy(src,dest,overwrite:existed);
+                files+=existed?0:1;
+                results.Add(new(33,"drugdealer-input-hub",1,
+                    existed?0:1,existed?1:0,[]));
+            }
+            expressions+=dd.AppliedEdits;
+        }
+        foreach(string reason in dd.Refusals)
+            skipped.Add(new(33,"drugdealer-input-hub",1,reason));
+        if(dd.Status is not ("APPLIED" or "COMPLETE" or "NOT_APPLICABLE" or "REFUSED"))
+            throw new InvalidDataException("DD_HUB_UNKNOWN_STAGE_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))

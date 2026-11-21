@@ -53,6 +53,7 @@ jobs:
       PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
       PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
       PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_DRUGDEALER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-drugdealer-input
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -1012,6 +1013,55 @@ jobs:
           Copy-Item -LiteralPath $src -Destination $dst -Force
           Write-Host 'PASS GRS held recovery action: original success consumed, fallback and cleanup'
 
+      - name: Generate historical Pass 2.1 DrugDealer all five owner input routes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-drugdealer-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DRUGDEALER_INPUT_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DD_INPUT_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DRUG_DEALER_INPUT_HUB_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or
+              @($report.sourcePaths).Count -ne 5 -or
+              @($report.refusals).Count -ne 0) {
+            throw ('PHASE2_DD_INPUT_INCOMPLETE:'+ $report.status+' '+(@($report.refusals) -join ','))
+          }
+          foreach($rel in @(
+              'r6/scripts/DrugDealer/Crackhouse/Crackhouse.reds',
+              'r6/scripts/DrugDealer/Job/SellDrugs/Interaction.reds',
+              'r6/scripts/DrugDealer/Lab/Lab.reds',
+              'r6/scripts/DrugDealer/NightMarket/NightMarket.reds',
+              'r6/scripts/DrugDealer/Operation/OperationProximity.reds')) {
+            $src=Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+              throw ('PHASE2_DD_INPUT_FILE_MISSING:'+ $rel)
+            }
+            $content=Get-Content -LiteralPath $src -Raw
+            foreach($witness in @('OnGRedInput(evt: ref<InputEvent>)',
+                'ACTION_LITERAL_MEMBERSHIP_V1', 'EngineFallback',
+                'RegisterInputListener(this.', 'Unsubscribe(this.')) {
+              if (!$content.Contains($witness,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_DD_INPUT_FALLBACK_OR_GENERIC_MISSING:'+ $rel+':'+ $witness)
+              }
+            }
+            if (Test-Path -LiteralPath $dst -PathType Leaf) {
+              $before=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw ('PHASE2_DD_INPUT_GENERIC_LOST:'+ $marker)
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS five source-aware DrugDealer listeners, exclusive engine fallback and generic guards'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -1261,6 +1311,24 @@ jobs:
                 (Get-FileHash -LiteralPath $grsHubRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_GRS_HUB_ONE_PASS_BYTE_PARITY_DIFF'
             }
+            $dd=@($result.completed | Where-Object { $_.id -eq 'drugdealer-input-hub' })
+            if ($dd.Count -ne 5 -or @($dd | Where-Object { [int]$_.order -ne 33 }).Count -ne 0) {
+              throw 'PHASE2_DD_INPUT_STAGE_COUNT_OR_ORDER_DIFF'
+            }
+            foreach($rel in @(
+                'r6/scripts/DrugDealer/Crackhouse/Crackhouse.reds',
+                'r6/scripts/DrugDealer/Job/SellDrugs/Interaction.reds',
+                'r6/scripts/DrugDealer/Lab/Lab.reds',
+                'r6/scripts/DrugDealer/NightMarket/NightMarket.reds',
+                'r6/scripts/DrugDealer/Operation/OperationProximity.reds')) {
+              $ref=Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT $rel
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash) {
+                throw ('PHASE2_DD_INPUT_ONE_PASS_BYTE_DIFF:'+ $rel)
+              }
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -1299,7 +1367,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }

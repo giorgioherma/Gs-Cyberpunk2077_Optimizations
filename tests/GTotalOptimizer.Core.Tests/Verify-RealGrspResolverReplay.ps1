@@ -2080,7 +2080,9 @@ try {
       @{ Id='flushing-etiquette-input-hub'; Order=31; Command='phase2-fe-input-hub';
          Rule='FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1'; Owner='FlushingEtiquette' },
       @{ Id='gear-recovery-input-hub'; Order=32; Command='phase2-grs-input-hub';
-         Rule='GEAR_RECOVERY_INPUT_HUB_FALLBACK_V1'; Owner='GearRecoverySystem' }
+         Rule='GEAR_RECOVERY_INPUT_HUB_FALLBACK_V1'; Owner='GearRecoverySystem' },
+      @{ Id='drugdealer-input-hub'; Order=33; Command='phase2-drugdealer-input';
+         Rule='DRUG_DEALER_INPUT_HUB_FALLBACK_V1'; Owner='DrugDealer' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2107,6 +2109,22 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'drugdealer-input-hub') {
+          if ($portFiles.Count -ne 5 -or
+              @($portReport.refusals).Count -ne 0) {
+            throw 'GCO_DD_HUB_FULL_REFERENCE_NOT_ALL_FIVE'
+          }
+          foreach($f in $portFiles) {
+            $body=Get-Content -LiteralPath $f.FullName -Raw
+            foreach($part in @('OnGRedInput(evt: ref<InputEvent>)',
+                'ACTION_LITERAL_MEMBERSHIP_V1', 'EngineFallback',
+                'Unsubscribe(this.')) {
+              if (!$body.Contains($part,[StringComparison]::Ordinal)) {
+                throw ('GCO_DD_HUB_REFERENCE_BEHAVIOR_MISSING:'+ $f.Name+':'+ $part)
+              }
+            }
+          }
         }
         if ($port.Id -eq 'gear-recovery-input-hub') {
           if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 3) {
