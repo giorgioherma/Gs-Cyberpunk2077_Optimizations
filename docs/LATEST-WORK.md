@@ -1,5 +1,18 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Bundled G-REDruntime API visibility during REDscript Generate
+
+**Root cause:** the full GCO app staged REDscript semantic optimizations before `CopyMissingFramework` added GCO's verified G-REDruntime sources to the generated ZIP. Owners #16, #29, #31–40 therefore inspected only existing `game/r6/scripts`, reporting ~19 API/ABI refusals even where the *same pass* would deliver the required InputHub, Scheduler and StateCache declarations. Custom Quickslots' #17 device-handler dependency is separate and may become satisfied once #16 applies; it must still be proven structurally.
+
+**User-supplied archive examined:** `G-RedRuntime(1).zip` includes `Runtime.Get/IsReady/GetInputHub/GetScheduler/GetStateCache`, `InputHub.Subscribe/SubscribeDevice/Unsubscribe/UnsubscribeDevice`, `InputListener.OnGRedInput`, `InputDeviceListener.OnGRedInputDeviceChanged`, `InputEvent.actionName/actionType/consumed`, `Scheduler.Register/Unregister/RescheduleJob`, `ScheduledJob.Configure`, and `StateCache.GetPlayer/GetBlackboardSystem`. This is source evidence, not a claim that the user's previous ZIP was game-compiled.
+
+**Implementation (development branch only):** `ProvidedRuntimeSourceScope` creates an invocation-scoped, read-only view of the validated `components/redruntime/owner` + original installed runtime, respecting `CopyMissingFramework`'s installed-file precedence. It verifies every manifest hash and source path; rejects missing/tampered/unmanifested bundle files; introduces no new runtime, copies and modifies no original source, and never changes capture/plan source hashing. `RedscriptGenerationPlan.Stage` optionally receives the packaged owner path from `CombinedOptimizationPassService`. Only the 8 ABI discovery readers plus VehicleMileage reschedule check use this effective view; generic rules, owner discovery and original source admission remain unchanged.
+
+**Tests:** `test_phase2_provided_runtime.py` exercises no-bundle and supplied-bundle scheduler, input hub, state cache, conflicting installed source precedence, hash tamper and unmanifested source. The isolated CLI Stage accepts the signed manifest bundle path strictly for this replay. Expected full-pass behavior: eligible runtime-dependent semantic rules activate and `CopyMissingFramework` later includes exactly the files that were missing, respecting installed copies.
+
+**Status:** code and regression tests committed; *focused official SCC checkpoint not yet run for this change*. Full GCO package and gameplay evidence for newly admitted stages remain pending. Do not merge to `main` or claim 20/20 skips are eliminated merely from source inspection.
+
+
 ## 2026-11-21 — APPROVED new hot-owner optimizations #52–54: SCC and full GCO validated
 
 Three measured-owner candidates from the user's November 20 WORLD captures are now **implemented in the existing full GCO `dev/redscript/integration` application**. They extend the same generic-first, single-`Generate`, single combined CET/REDscript ZIP pipeline. The measurements are instrumented historical workload, **not projected or measured CPU/FPS savings**.
