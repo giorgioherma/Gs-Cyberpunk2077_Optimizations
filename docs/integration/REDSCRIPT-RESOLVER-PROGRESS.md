@@ -1,5 +1,20 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — New measured-hot-owner semantic batch awaiting SCC
+
+**Development line:** \`dev/redscript/integration\` only. Original post-generic source and \`main\` remain unchanged. The user approved three more operations from the Nov 20 three-capture audit; these are additive to the original unified stages through #51 and do not replace historical work.
+
+| Stage | Owner | Rule | Exact admission and output |
+| --- | --- | --- | --- |
+| #52 | gt_8ug_apt | \`APT_CHOICE_INPUT_EARLY_ADMISSION_V1\` | Action name and BUTTON_PRESSED check before \`Gt8ugAptSystem.Get\` in the existing listener; only when ignored-input dispatch state is provably inert |
+| #53 | negotiableaffection | \`NA_PLAYER_ACTION_EARLY_ADMISSION_V1\` | Independent name gates in the two original PlayerPuppet action wrappers; retain wrappedMethod and quest/input semantics; one or two local owner files |
+| #54 | ShatteredChrome | \`SHATTERED_CHROME_DOT_ROW_BOUND_V1\` | One stable loop counter in \`SC_DotRow\`; identical dotted output; other HUD helpers untouched |
+
+The \`NewHotOwnerSemanticPass\` generator uses live owner source admission, current effective-preview composition, per-callback refusals, repeat no-op/postcondition validation, generic-marker integrity and original-source hash auditing. It emits only game-relative owner .reds under the **existing** \`RedscriptGenerationPlan.Stage\` and one combined CET/REDscript ZIP. No new runtime, delay, listener, compiler distribution or historical pass dependency.
+
+**Validation pending:** one focused source-state + official SCC checkpoint on the combined output, followed by full application/package checkpoint at a meaningful integrated milestone, then gameplay and matched capture. Previous full GCO #1107 succeeded before this change; not evidence for stages #52–54. Do not infer a saved CPU quantity from the instrumented owner totals.
+
+
 ## 2026-11-21 — Residual seven-owner audit, Dark Future pooled-controller repair
 
 - The unified integration branch is still the **full GCO development application**; `dev/redscript/resolver_handoff` is its REDscript baseline and production `main` remains untouched.
