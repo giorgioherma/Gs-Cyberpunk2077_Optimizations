@@ -1,5 +1,14 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Isolated Pass 6.0 Agent 4: two source-aware production stages, fully compiled
+
+- Branch: `dev/redscript/pass6` from verified green `96d66c66642ac52dd13fd4001416572b9169bace`. No concurrent handoff/main edits.
+- **Production `RedscriptGenerationPlan.Stage`:** provisional #37 VirtualAtelierDelivery paced spawn queue and #38 Enhanced Vehicle System unused camera registrations. These are both generated in **one invocation** from post-generic effective source; #38 composes onto prior EVS #30 without losing it.
+- [Pass 6 fast CI #6 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875675607): 202 source-state contracts, 2,331 post-generic scripts, 30 semantic overlay files, byte-for-byte standalone-source parity for both owners, SCC 0.5.31 compiled 43,514,477 bytes. Stock/partial/complete/custom/refused/absent/repeated behavior covered.
+- [Full GCO CI #1092 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44875742283): 361 install/CLI/package contracts, combined .NET 10 app and ZIP packaging; artifact ID `14696061829`. The player-side ZIP generator is integrated, not a pre-generated in-game-tested mod ZIP. No new gameplay/performance measurement.
+- **Next integration:** branch-local #37/#38 numbers collide with newer handoff work. Reconcile sequence when merging the two generators and tests, then repeat full combined SCC/application verification. Source owners shared with concurrent Pass 4/5 are not modified here; unsafe/unproven other Pass 6 operations are explicitly deferred.
+
+
 ## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
 
 - NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.
