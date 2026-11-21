@@ -1743,6 +1743,54 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 6.0, Virtual Atelier Delivery: pace dynamic
+        // drop-point entity assembly without a second source pass.
+        // This owner is independent of #11-#36, and both a previous generic
+        // overlay and another semantic owner must remain unmodified.
+        string vadRoot = Path.Combine(output, "_stages",
+            "37-virtual-atelier-spawn-pacing");
+        var vad = VirtualAtelierSpawnPacingPass.Generate(game,
+            vadRoot, Directory.Exists(final) ? final : null);
+        if (vad.Status == "APPLIED")
+        {
+            if (vad.AppliedEdits is < 1 or > 20 ||
+                string.IsNullOrWhiteSpace(vad.SourcePath))
+                throw new InvalidDataException("VAD_STAGE_INVALID_EDIT_COUNT");
+            string rel = vad.SourcePath;
+            string src = Path.GetFullPath(Path.Combine(vadRoot,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            string dest = Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/', Path.DirectorySeparatorChar)));
+            if (!rel.StartsWith("r6/scripts/", StringComparison.Ordinal) ||
+                !rel.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                !IsInside(src, vadRoot) || !IsInside(dest, final) ||
+                !File.Exists(src))
+                throw new InvalidDataException("VAD_STAGE_OWNER_PATH_UNSAFE");
+            bool existed = File.Exists(dest);
+            if (existed)
+            {
+                string before = File.ReadAllText(dest);
+                string after = File.ReadAllText(src);
+                var genericMarkers = System.Text.RegularExpressions.Regex.Matches(
+                    before, @"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m => m.Value).Distinct(StringComparer.Ordinal);
+                if (genericMarkers.Any(m =>
+                    !after.Contains(m, StringComparison.Ordinal)))
+                    throw new InvalidDataException("VAD_STAGE_LOST_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src, dest, overwrite: existed);
+            files += existed ? 0 : 1;
+            expressions += vad.AppliedEdits;
+            results.Add(new(37, "virtual-atelier-spawn-pacing",
+                vad.AppliedEdits, existed ? 0 : 1, existed ? 1 : 0, []));
+        }
+        else if (vad.Status == "REFUSED")
+            skipped.Add(new(37, "virtual-atelier-spawn-pacing", 1,
+                vad.Reason ?? "VAD_SPAWN_PACING_SOURCE_INCOMPATIBLE"));
+        else if (vad.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("VAD_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
