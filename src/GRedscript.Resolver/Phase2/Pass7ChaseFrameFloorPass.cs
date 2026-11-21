@@ -210,10 +210,23 @@ public static class Pass7ChaseFrameFloorPass
                 "SR_DETECTION_QUEST_ONLY_PARTIAL");
         string nl = Newline(source);
         string addition = nl + string.Join(nl, missing) + nl;
+        int insertion = wrapped.Index + wrapped.Length;
+        if (complete == 1 && missing.Count == 1 &&
+            missing[0].Contains(".quest", StringComparison.Ordinal))
+        {
+            // A handwritten status-only partial guard must run before the
+            // added quest dereference, not after it. Preserve that proof.
+            var statusGuard = Regex.Match(body,
+                @"\bif\s*!\s*IsDefined\s*\(\s*this\s*\.\s*m_stealthRunnerStatus\s*\)\s*\{\s*return\s+false\s*;\s*\}", Rx);
+            if (!statusGuard.Success)
+                return new("REFUSED", null, 0, complete,
+                    "SR_DETECTION_PARTIAL_STATUS_GUARD_UNPROVEN");
+            insertion = statusGuard.Index + statusGuard.Length;
+        }
         string changed = Apply(source,
         [
-            new Edit(span.Start + wrapped.Index + wrapped.Length,
-                span.Start + wrapped.Index + wrapped.Length, addition)
+            new Edit(span.Start + insertion,
+                span.Start + insertion, addition)
         ]);
         if (StealthDetection(changed).Status != "COMPLETE")
             throw new InvalidDataException("SR_DETECTION_POSTCONDITION_FAILED");
