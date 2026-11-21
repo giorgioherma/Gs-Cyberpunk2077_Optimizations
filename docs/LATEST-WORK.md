@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Systematic historical pass port: BrowserExtension journal #28
+
+- [Historical ten-group implementation order](integration/REDSCRIPT-HISTORICAL-PASS-PORT-ORDER.md) now uses cumulative per-file source diffs: ten primary stages (2.0, 2.1, 2.2, 3, 4, 5, 6, 7, 8, 9), with 7.1/7.2/7.2r1 corrections incorporated into their owning behavior. This is an operation-level plan, not a pass ZIP transplant or rigid version list.
+- Implemented #28 `BROWSER_EXTENSION_JOURNAL_HANDLES_V1` in the existing GCO source-aware Phase 2 generator as the first missing Pass 2.0 operation. Cache only successful journal manager and journal quest-entry handles; `GetEntryState` remains live on every check. Recognize post-generic stock, partial missing fields/helper/reader, complete markerless historical equivalent, relocated/current/custom source, narrow incompatible refusal and repeated zero edits. Independent BrowserExtension InputHub migration is still pending; Quickslots #16/#17 and FE input gate #14 remain unchanged.
+- **[Fast post-generic CI #153 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44859568082):** 133 source-state tests, real 2,331-source post-generic independent #28 application, canonical one-invocation Stage exact output equivalence and official SCC 0.5.31 combined compilation. Original source unchanged. Initial #151 compiler range-precedence error fixed inside #28; #152 strict test expected the later refusal while an earlier, correct narrow refusal fired; test corrected, no repair stage.
+- **Full GCO #1065:** [integration run](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44859667400) running at this record. Full captured-source replay now includes #28 in the independent-owner reference list; no packaging or gameplay claim until successful. Do not merge to `main` or deploy without that gate. No game-side behavior/FPS measurement yet.
+
+
 ## 2026-11-21 — DigitalVixenCore historical UI port #27 SHIPPED TO DEVELOPMENT ARTIFACT
 
 - **DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1** is committed on `dev/redscript/resolver_handoff` and included automatically in GCO one-pass GENERATE after ten generic transforms and existing RedWindows semantic rules. This is not a separate historical pass ZIP and does not modify installed source. It produces only three game-relative DigitalVixenCore files in the combined output: `DVCore_BodyMapWindow.reds`, `DVCore_ItemEditor.reds`, `DVCore_StatusWindow.reds`.
