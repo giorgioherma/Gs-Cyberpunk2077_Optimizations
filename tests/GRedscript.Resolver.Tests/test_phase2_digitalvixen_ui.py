@@ -229,7 +229,7 @@ class DigitalVixenDormancyTests(unittest.TestCase):
         legacy=dict(fully_optimized)
         status=legacy["DVCore_StatusWindow.reds"]
         match=re.search(
-            r'let shouldUpdate: Bool = !this.initialized;[\\s\\S]*?(?=if shouldUpdate \\{)',
+            r'let shouldUpdate: Bool = !this.initialized;[\s\S]*?(?=if shouldUpdate \{)',
             status)
         self.assertIsNotNone(match)
         old=match.group(0)
@@ -253,7 +253,9 @@ class DigitalVixenDormancyTests(unittest.TestCase):
                       files["DVCore_StatusWindow.reds"])
         self.assertIn("if mgr.IsOverlay() { delay = 0.5; }",
                       files["DVCore_StatusWindow.reds"])
-        self.assertEqual(self.run_generation(files)[0]["status"],"COMPLETE")
+        final_sources=dict(legacy)
+        final_sources["DVCore_StatusWindow.reds"]=files["DVCore_StatusWindow.reds"]
+        self.assertEqual(self.run_generation(final_sources)[0]["status"],"COMPLETE")
 
     def test_incompatible_single_loop_skips_only_that_operation(self):
         sources=dict(ORIGINAL)
