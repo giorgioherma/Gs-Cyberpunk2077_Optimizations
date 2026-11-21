@@ -93,6 +93,8 @@ public static class Program
                 return RunPhase2RedWindowsCursors(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-hologirl-material")
                 return RunPhase2HoloGirlMaterial(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-holotravel-material")
+                return RunPhase2HoloTravelMaterial(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-disable-position-tracing")
                 return RunPhase2DisablePositionTracing(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "phase2-trigger-mode-tags")
@@ -933,6 +935,24 @@ public static class Program
             options.TryGetValue("--base-overlay", out string? prior)
                 ? Path.GetFullPath(prior) : null);
         Console.WriteLine("REDscript Phase 2 HQ HoloGirl material: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2HoloTravelMaterial(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "HoloTravel material fast path requires --game --out [--base-overlay]");
+        var result = HoloTravelMaterialEventPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 HQ HoloTravel material: status=" +
             result.Status + " edits=" + result.AppliedEdits +
             (result.Reason is null ? "" : " reason=" + result.Reason));
         return 0;
