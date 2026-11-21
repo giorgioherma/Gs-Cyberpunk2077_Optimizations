@@ -10,7 +10,7 @@
 
 **Tests:** `test_phase2_provided_runtime.py` exercises no-bundle and supplied-bundle scheduler, input hub, state cache, conflicting installed source precedence, hash tamper and unmanifested source. The isolated CLI Stage accepts the signed manifest bundle path strictly for this replay. Expected full-pass behavior: eligible runtime-dependent semantic rules activate and `CopyMissingFramework` later includes exactly the files that were missing, respecting installed copies.
 
-**Status:** code and regression tests committed; *focused official SCC checkpoint not yet run for this change*. Full GCO package and gameplay evidence for newly admitted stages remain pending. Do not merge to `main` or claim 20/20 skips are eliminated merely from source inspection.
+**Status:** [focused REDscript SCC #226 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44933955825) at `1a5b17c30210e269ca956bcc505da3cb14f06e59`, including the six new bundled-runtime source-state cases and existing canonical source/SCC checks. [Full GCO packaging #1109](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44934549708) at `8f63adc453a526e850da9d0a516ef0a40caab120` is running at this documentation update; CI/gameplay evidence for newly admitted source on the user's installed stack is still pending. Do not merge to `main` or claim 20/20 skips are eliminated merely from source inspection.
 
 
 ## 2026-11-21 — APPROVED new hot-owner optimizations #52–54: SCC and full GCO validated
