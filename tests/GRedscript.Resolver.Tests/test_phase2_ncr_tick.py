@@ -117,6 +117,12 @@ class NcrTickTests(unittest.TestCase):
         self.assertEqual(next_r['status'],'APPLIED',next_r)
         self.check(next_s)
 
+    def test_custom_maintenance_interval_preserved(self):
+        src=SOURCE.replace('cb,30.0,false','cb,12.5,false')
+        r,s=self.gen(src)
+        self.assertEqual(r['status'],'APPLIED',r)
+        self.assertIn('Configure(n"NCR_MAINTENANCE", 12.5, true)',s)
+
     def test_modified_and_relocated_source_keeps_custom_logic(self):
         src=SOURCE.replace('    this.ExpirePendingKills(100.0);',
            '    this.CustomDailyAudit();\n    this.ExpirePendingKills(100.0);')

@@ -141,6 +141,13 @@ internal static class NightCityRemembersTickPass
             !Has(source, @"\bclass\s+NCRTickCallback\s+extends\s+DelayCallback\b"))
             return new("REFUSED", "NCR_MAINTENANCE_FLOW_INCOMPATIBLE", null, 0);
 
+        // Use the current owner's actual maintenance interval. Older,
+        // newer and customized versions must not be forced to 30 seconds.
+        var periodMatch = Regex.Match(body(original),
+            @"\bDelayCallback\s*\(\s*[A-Za-z_]\w*\s*,\s*(?<period>(?:\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\(\s*\))?))\s*,\s*false\s*\)");
+        if (!periodMatch.Success)
+            return new("REFUSED", "NCR_TICK_INTERVAL_UNPROVEN", null, 0);
+        string period = periodMatch.Groups["period"].Value;
         string nl = NL(source);
         var edits = new List<Edit>();
         void Add(int start, int endAt, string text) =>
@@ -204,7 +211,7 @@ internal static class NightCityRemembersTickPass
                 "      if IsDefined(this.m_gcoScheduler) {",
                 "        this.m_gcoTickJob = new NCRGCOMaintenanceJob();",
                 "        this.m_gcoTickJob.m_system = this;",
-                "        this.m_gcoTickJob.Configure(n\"NCR_MAINTENANCE\", 30.0, true);",
+                "        this.m_gcoTickJob.Configure(n\"NCR_MAINTENANCE\", " + period + ", true);",
                 "        this.m_gcoTickID = this.m_gcoScheduler.Register(this.m_gcoTickJob);",
                 "        if this.m_gcoTickID > 0 { return; };",
                 "      };",

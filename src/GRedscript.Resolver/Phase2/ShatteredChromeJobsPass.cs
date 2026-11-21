@@ -131,7 +131,6 @@ internal static class ShatteredChromeJobsPass
             Add(module.Index+module.Length,module.Index+module.Length,
                 "import GRedRuntime.*"+nl);
         }
-        const string mainJob="SCGCOMaintenanceJob",hudJob="SCGCOHudJob";
         if(!Has(s,@"\bclass\s+SCGCOMaintenanceJob\b") &&
            !Has(s,@"\bclass\s+SCGCOHudJob\b"))
         {
@@ -229,7 +228,7 @@ internal static class ShatteredChromeJobsPass
         var originalHud=Regex.Matches(readyBody,@"\bthis\s*\.\s*ScheduleHUDTick\s*\(\s*\)\s*;");
         if(!started && originalMain.Count==1 && originalHud.Count==1)
         {
-            var a=originalMain[0],b=originalHud[0];
+            Match a=originalMain[0],b=originalHud[0];
             Add(ready.Open+1+a.Index,ready.Open+1+a.Index+a.Length,
                 "this.GCOStartJobs();");
             Add(ready.Open+1+b.Index,ready.Open+1+b.Index+b.Length,"");
