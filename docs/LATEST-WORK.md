@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Enhanced Vehicle System historical Pass 2.0 local PS #30
+
+- `EVS_ONACTION_PS_HANDLE_REUSE_V1` implements the game-tested idea of one `this.GetPS()` handle per synchronous `@replaceMethod(VehicleComponent) OnAction`; current post-generic method has 163 source-level getter occurrences. The source-aware generator replaces only proven same-receiver reads, preserves original dynamic PS field values/writes and the destroyed PS early-return, and adds no persistent cache, timer or callback. Existing current generic player/action snapshots and Audioware/gameplay code are retained, never historical whole-file replaced.
+- Stock, partial manual, historical complete, relocated/custom, incompatible, absent and repeated-generation source states are covered. [Fast post-generic CI #165 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44862902071): real 2,331-file source, canonical one-run byte parity and official SCC 0.5.31. [Full GCO #1071](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44862916327) includes the independent captured-source reference and integrated ZIP/package contracts, pending at this record. No game test or measured FPS/CPU gain claimed.
+- Pass 2.0 still has Enhanced Vehicle System action/type/vehicle reuse and FlushingEtiquette historical InputHub routing to audit as separate compatible operations. The next group is 2.1 when Pass 2.0 is complete or its remaining operations are explicitly deferred.
+
 ## 2026-11-21 — Historical Pass 2.0 BrowserExtension InputHub #29
 
 - Source-aware `BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1` added after BrowserExtension journal #28 in canonical generic-first one-ZIP generation. Two original owner files: the BrowserGameController initialize/uninitialize wrappers and homepage listener. Action-specific InputHub `UI_MoveUp/Down` routing with complete partial-subscription rollback; original engine `OnAction` retained as exclusive fallback; generic `ACTION_EVENT_SNAPSHOT_V1` remains intact. Both detach paths explicitly clean up; no new runtime or callbacks outside the original owner. No source overwrite or perf claim.
