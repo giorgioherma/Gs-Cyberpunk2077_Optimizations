@@ -1,5 +1,13 @@
 # GCO REDscript Resolver integration — active R0–R10 progress ledger
 
+## 2026-11-21 — Pass 2.2 in progress: stages #34–#36
+
+- NCR recurring 30-second (source-derived) tick #34: Scheduler when ready, original DelaySystem fallback and clean session-end/detach unregistration, no changes to OnTick gameplay.
+- ShatteredChrome main/HUD recurring jobs #35: independently registered; original respective DelayCallbacks remain exclusive fallbacks, original CancelTick cleanup retained.
+- GearRecoverySystem polling #36: recurring interaction poll job while preserving original one-shot callback fallback, input #32, guard spawning and prompt lifecycle.
+- Fast #187 SUCCESS includes #34/#35 post-generic 2,331-source SCC, state variations, source idempotence and one-pass byte parity. Fast #189 and full GCO #1082 for #36 pending; no generated gameplay/performance proof.
+- Remaining 2.2: GRS StateCache getter reuse and four VehicleMileage UI jobs. Historic VehicleMileage code removes callback tokens and runtime-absent fallbacks; only translate safe proven operations. Street Vendors absent and not generated.
+
 ## 2026-11-21 — DigitalVixenCore Pass 9 #27 fully accepted for development package
 
 - Game-tested BodyMap hidden/unpinned early gate and IsRendered; ItemEditor/StatusWindow adaptive 2.0 / 0.5 / 0.25s loops with original callbacks and pinned status refresh. Stock/partial/markerless historic/custom/incompatible/idempotent source proof passed.
