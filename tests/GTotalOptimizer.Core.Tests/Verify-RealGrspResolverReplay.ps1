@@ -2494,6 +2494,24 @@ try {
         throw ('GCO_HISTORICAL_REFERENCE_MISSING_REFUSAL: '+$reference.Id)
       }
     }
+    foreach($reference in $remainingReferences) {
+      $canonical = @($stageReport.completed | Where-Object { $_.id -eq $reference.Id })
+      if ($reference.Status -eq 'APPLIED') {
+        if ($canonical.Count -ne 1 -or
+            [int]$canonical[0].order -ne $reference.Order -or
+            [int]$canonical[0].rewrittenExpressions -ne $reference.Edits -or
+            ([int]$canonical[0].newFiles + [int]$canonical[0].composedFiles) -ne $reference.Files) {
+          throw ('GCO_SOURCE_REFERENCE_CANONICAL_COUNT_MISMATCH:'+$reference.Id)
+        }
+      } elseif ($canonical.Count -ne 0) {
+        throw ('GCO_SOURCE_REFERENCE_UNEXPECTED_STAGE:'+$reference.Id)
+      }
+      if (($reference.Status -eq 'REFUSED' -or
+           $reference.Refusals.Count -gt 0) -and
+          @($stageReport.skipped | Where-Object { $_.id -eq $reference.Id }).Count -eq 0) {
+        throw ('GCO_SOURCE_REFERENCE_REFUSALS_NOT_REPORTED:'+$reference.Id)
+      }
+    }
     # Every ordered generated REDscript source must match the independent
     # composition. Retired native FAR/subscriber source is never emitted.
     foreach ($f in $stageFiles) {
