@@ -1,9 +1,7 @@
 name: REDscript Pass 7 - Isolated Chase and Sprint Checkpoint
 
-# Validated in grouped branch-only batches, not individual generator edits.
-# A grouped rerun validates six operations, module-safe output and handwritten partials.
-# Runs once when this dedicated workflow is first committed or explicitly
-# revalidated. No shared-phase CI concurrency and no per-edit automatic runs.
+# Explicit marker-driven CI; source/test edits do not auto-trigger the SCC job.
+# All compatible Pass 7 operations are verified together, not per commit.
 on:
   workflow_call:
   workflow_dispatch:
@@ -11,7 +9,7 @@ on:
     branches:
       - dev/redscript/pass7
     paths:
-      - '.github/workflows/redscript-pass7-checkpoint.yml'
+      - 'tests/Pass7.Checkpoint/CI-TRIGGER.txt'
 
 permissions:
   contents: read
@@ -70,12 +68,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'PASS7_CANONICAL_GENERATION_FAILED' }
           $result=Get-Content -LiteralPath (Join-Path $out 'pass7-result.json') -Raw | ConvertFrom-Json
           $changed=@(Get-ChildItem -LiteralPath (Join-Path $out 'r6/scripts') -Recurse -File -Filter '*.reds')
-          if ($changed.Count -ne 5 -or [int]$result.appliedEdits -lt 11 -or
-              @($result.operations).Count -ne 6 -or
-              @($result.operations | Where-Object { $_.status -ne 'APPLIED' }).Count -ne 0) {
+          if ($changed.Count -ne 6 -or [int]$result.appliedEdits -lt 16 -or
+              @($result.operations).Count -ne 11 -or
+              @($result.operations | Where-Object {
+                $_.id -ne 'CHIPWARE_24_PERK_RESULT_MEMO_V1' -and $_.status -ne 'APPLIED'
+              }).Count -ne 0 -or
+              @($result.operations | Where-Object {
+                $_.id -eq 'CHIPWARE_24_PERK_RESULT_MEMO_V1' -and
+                ($_.status -ne 'REFUSED' -or $_.reason -notmatch 'INVALIDATION_EPOCH')
+              }).Count -ne 1) {
             throw ('PASS7_CANONICAL_OWNER_OUTPUT_INCOMPLETE files='+$changed.Count)
           }
-          Write-Host ('PASS7 five source-aware owner files, edits='+$result.appliedEdits)
+          Write-Host ('PASS7 six source-aware owner files; ten applied operations; one precise Chipware memo refusal; edits='+$result.appliedEdits)
 
       - name: Verify canonical one-pass generator and independently equal Pass 7 source
         shell: pwsh
@@ -111,7 +115,11 @@ jobs:
             @{ order=702; id='pass7-stealth-player-cache'; path='r6/scripts/StealthRunner/npc_puppet.reds' },
             @{ order=703; id='pass7-runningman-double-sprint'; path='r6/scripts/RunningMan/double_sprint.reds' },
             @{ order=704; id='pass7-runningman-direction'; path='r6/scripts/RunningMan/sprint_direction.reds' },
-            @{ order=705; id='pass7-lizzies-performer-gate'; path='r6/scripts/LizziesBDs/NPCPuppet.reds' }
+            @{ order=705; id='pass7-lizzies-performer-gate'; path='r6/scripts/LizziesBDs/NPCPuppet.reds' },
+            @{ order=706; id='pass7-lizzies-performer-index'; path='r6/scripts/LizziesBDs/NPCPuppet.reds' },
+            @{ order=707; id='pass7-reinforcements-stimulus'; path='r6/scripts/ReinforcementsSystem/ReinforcementsCall.reds' },
+            @{ order=708; id='pass7-reinforcements-prevention'; path='r6/scripts/ReinforcementsSystem/ReinforcementsCall.reds' },
+            @{ order=709; id='pass7-reinforcements-probe'; path='r6/scripts/ReinforcementsSystem/ReinforcementsCall.reds' }
           )
           foreach($target in $targets) {
             $matches=@($staged.completed | Where-Object { $_.id -eq $target.id })
@@ -128,7 +136,16 @@ jobs:
               throw ('PASS7_CANONICAL_ONE_PASS_BYTE_PARITY_DIFF:'+ $target.id)
             }
           }
-          Write-Host 'PASS Pass 7 production one-pass: six operations in five independently composed source files and exact output parity'
+          $memo=@($staged.skipped | Where-Object {
+            $_.id -eq 'pass7-chipware-result-memo'
+          })
+          if($memo.Count -ne 1 -or $memo[0].reason -notmatch 'INVALIDATION_EPOCH') {
+            throw 'PASS7_CHIPWARE_MEMO_REFUSAL_MISSING_OR_UNSAFE'
+          }
+          if(Test-Path (Join-Path $stage 'effective-preview/r6/scripts/zzy_bChipwareExpansion/chipsScripts/chipPerkUnlock.reds')) {
+            throw 'PASS7_CHIPWARE_COMPETING_CACHE_EMITTED'
+          }
+          Write-Host 'PASS Pass 7 production one-pass: ten operations in six files, Chipware refused by invalidation proof, exact canonical byte parity'
 
       - name: Official SCC 0.5.31 on module-safe full canonical one-pass output
         shell: pwsh

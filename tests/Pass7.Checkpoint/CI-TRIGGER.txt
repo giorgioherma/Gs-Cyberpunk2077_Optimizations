@@ -1,0 +1,1 @@
+2026-11-21 grouped Pass 7 checkpoint: six owners, ten compatible semantic operations and one scoped Chipware TTL refusal. Validate source-state, canonical exact byte parity and official SCC 0.5.31.
