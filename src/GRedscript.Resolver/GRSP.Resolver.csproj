@@ -20,6 +20,8 @@
   </PropertyGroup>
   <!-- Build the exact Pass 4 owner generators into the single managed resolver. -->
   <ItemGroup>
-    <Compile Include="../GRedscript.Pass4/*.cs" Link="Phase2/Pass4/%(Filename)%(Extension)" />
+    <Compile Include="../GRedscript.Pass4/Pass4Program.cs" Link="Phase2/Pass4/Pass4Program.cs" />
+    <Compile Include="../GRedscript.Pass4/Pass4Source.cs" Link="Phase2/Pass4/Pass4Source.cs" />
+    <Compile Include="../GRedscript.Pass4/ReinforcementsPass.cs" Link="Phase2/Pass4/ReinforcementsPass.cs" />
   </ItemGroup>
 </Project>

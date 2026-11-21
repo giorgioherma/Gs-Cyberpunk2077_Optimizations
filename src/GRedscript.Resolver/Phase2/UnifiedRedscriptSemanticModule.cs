@@ -4,13 +4,13 @@ namespace GRedscript.Resolver.Phase2;
 
 /// <summary>
 /// One production generation from post-generic stock. Reuses the independently
-/// validated source-owner generators from Passes 4–10; no archived REDscript
+/// validated source-owner generators from Passes 4–9 plus the approved Chipware 100ms memo; no archived REDscript
 /// files, follow-up repair runs, second runtime or parallel mod installers.
 /// Overlapping operations are applied once by their strongest compatible owner.
 /// </summary>
-internal static class RedscriptHistoricalIntegration
+internal static class UnifiedRedscriptSemanticModule
 {
-    private static Pass8CanonicalComposition.Outcome Single(
+    private static RedscriptSemanticStageComposer.Outcome Single(
         string rule, string status, int edits, string? path, string? reason)
     {
         return new(rule, status, edits,
@@ -27,7 +27,7 @@ internal static class RedscriptHistoricalIntegration
         // Pass 4's StealthRunner cache is covered by Pass 7, and its chipware
         // relevance gate by Pass 8. Generate only the unique quad-geometry
         // operation; the standalone Pass 4 contract still tests all owners.
-        Pass8CanonicalComposition.Run(42, "pass4-reinforcements-geometry",
+        RedscriptSemanticStageComposer.Run(42, "pass4-reinforcements-geometry",
             "ReinforcementsSystem", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
@@ -50,14 +50,14 @@ internal static class RedscriptHistoricalIntegration
                 var paths = root.GetProperty("sourcePaths").EnumerateArray()
                     .Select(x => x.GetString()!).ToArray();
                 string? reason = op.GetProperty("reason").GetString();
-                return new Pass8CanonicalComposition.Outcome(
+                return new RedscriptSemanticStageComposer.Outcome(
                     "REINFORCEMENTS_PREPARED_QUAD_CACHE_V1", status,
                     root.GetProperty("appliedEdits").GetInt32(), paths,
                     status == "REFUSED" && !string.IsNullOrEmpty(reason)
                         ? [reason] : []);
             });
 
-        Pass8CanonicalComposition.Run(43, "pass5-holotravel-material",
+        RedscriptSemanticStageComposer.Run(43, "pass5-holotravel-material",
             "HQ_HoloTravel", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
@@ -66,7 +66,7 @@ internal static class RedscriptHistoricalIntegration
                     r.SourcePath, r.Reason);
             });
 
-        Pass8CanonicalComposition.Run(44, "pass6-virtual-atelier-pacing",
+        RedscriptSemanticStageComposer.Run(44, "pass6-virtual-atelier-pacing",
             "VirtualAtelierDelivery", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
@@ -75,7 +75,7 @@ internal static class RedscriptHistoricalIntegration
                     r.SourcePath, r.Reason);
             });
 
-        Pass8CanonicalComposition.Run(45, "pass6-evs-camera-admission",
+        RedscriptSemanticStageComposer.Run(45, "pass6-evs-camera-admission",
             "Enhanced Vehicle System", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
@@ -84,7 +84,7 @@ internal static class RedscriptHistoricalIntegration
                     r.SourcePath, r.Reason);
             });
 
-        Pass8CanonicalComposition.Run(46, "pass7-chase-frame-floor",
+        RedscriptSemanticStageComposer.Run(46, "pass7-chase-frame-floor",
             "NightCityRemembers|StealthRunner|RunningMan|LizziesBDs|ReinforcementsSystem|zzy_bChipwareExpansion",
             game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
@@ -101,7 +101,7 @@ internal static class RedscriptHistoricalIntegration
 
                 // Historical Pass 7 deliberately refused this cache pending
                 // approval. It is now explicitly approved and implemented by
-                // Pass 10. Its actual result and refusal belong to stage 51,
+                // the Chipware memo operation. Its actual result belongs to stage 51,
                 // not a stale earlier hypothetical refusal.
                 var refusals = r.Operations.Where(x =>
                         x.Status == "REFUSED" &&
@@ -116,32 +116,32 @@ internal static class RedscriptHistoricalIntegration
                     refusals.Length > 0 ? "REFUSED" :
                     r.Operations.Any(x => x.Status == "COMPLETE") ?
                         "COMPLETE" : "NOT_APPLICABLE";
-                return new Pass8CanonicalComposition.Outcome(
+                return new RedscriptSemanticStageComposer.Outcome(
                     r.RuleId, status, r.AppliedEdits, paths, refusals);
             });
 
         // The three cached-chipware/Immersive operations now follow both
         // Pass 4 geometry and the complete Pass 7 chase/frame-floor family.
-        Pass8CanonicalComposition.Apply(game, output, final, completed,
+        RedscriptSemanticStageComposer.ApplyChipwareAndImmersive(game, output, final, completed,
             skipped, ref files, ref expressions, firstOrder: 47);
 
-        Pass8CanonicalComposition.Run(50, "pass9-runningman-dormancy",
+        RedscriptSemanticStageComposer.Run(50, "pass9-runningman-dormancy",
             "RunningMan", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
                 var r = RunningManDoubleSprintPass.Generate(g, o, b);
-                return new Pass8CanonicalComposition.Outcome(
+                return new RedscriptSemanticStageComposer.Outcome(
                     r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths,
                     !string.IsNullOrWhiteSpace(r.Reason)
                         ? [r.Reason] : []);
             });
 
-        Pass8CanonicalComposition.Run(51, "pass10-chipware-perk-memo",
+        RedscriptSemanticStageComposer.Run(51, "chipware-perk-result-memo",
             "zzy_bChipwareExpansion", game, output, final, completed, skipped,
             ref files, ref expressions, (g, o, b) =>
             {
                 var r = ChipwarePerkResultMemoPass.Generate(g, o, b);
-                return new Pass8CanonicalComposition.Outcome(
+                return new RedscriptSemanticStageComposer.Outcome(
                     r.RuleId, r.Status, r.AppliedEdits, r.SourcePaths, r.Refusals);
             });
     }

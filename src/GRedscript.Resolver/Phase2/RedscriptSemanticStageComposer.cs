@@ -3,18 +3,18 @@ using System.Text.RegularExpressions;
 namespace GRedscript.Resolver.Phase2;
 
 /// <summary>
-/// Composes the independently verified historical Pass 8 operations into the
+/// Composes independently verified Chipware/ImmersiveCyberware operations into the
 /// one production REDscript Generate. Runs after the existing ten generic and
 /// earlier semantic stages, using their effective-preview as the only overlay.
 /// This is composition/verification, never a corrective source rewrite.
 /// </summary>
-internal static class Pass8CanonicalComposition
+internal static class RedscriptSemanticStageComposer
 {
     internal sealed record Outcome(
         string RuleId, string Status, int AppliedEdits,
         string[] SourcePaths, string[] Refusals);
 
-    public static void Apply(
+    public static void ApplyChipwareAndImmersive(
         string game, string output, string final,
         List<RedscriptGenerationPlan.OutputItem> completed,
         List<RedscriptGenerationPlan.SkippedRule> skipped,

@@ -1834,7 +1834,7 @@ jobs:
                 !$contents.Contains('this.RecomputeDpadProhibitions();')) {
               throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_INPUT_STATE_LOST'
             }
-            # Verify that Pass 4-10 source-owning stages genuinely execute in
+            # Verify that Passes 4-9 + Chipware memo source-owning stages genuinely execute in
             # this one canonical Generate, not only in separate test commands.
             $integratedStages = @(
               'pass4-reinforcements-geometry',
@@ -1846,7 +1846,7 @@ jobs:
               'pass8-chipware-combat-cache',
               'pass8-immersive-cyberware',
               'pass9-runningman-dormancy',
-              'pass10-chipware-perk-memo'
+              'chipware-perk-result-memo'
             )
             $finalRows = @($result.completed) + @($result.skipped)
             foreach($id in $integratedStages) {
@@ -1856,9 +1856,9 @@ jobs:
                 Write-Host ('INTEGRATION_NOT_GENERATED_OR_ALREADY_COMPLETE:' + $id)
               }
             }
-            $memo = @($result.completed | Where-Object { $_.id -eq 'pass10-chipware-perk-memo' })
+            $memo = @($result.completed | Where-Object { $_.id -eq 'chipware-perk-result-memo' })
             if ($memo.Count -ne 1 -or [int]$memo[0].rewrittenExpressions -lt 1) {
-              $reasons=@($result.skipped | Where-Object { $_.id -eq 'pass10-chipware-perk-memo' } |
+              $reasons=@($result.skipped | Where-Object { $_.id -eq 'chipware-perk-result-memo' } |
                 ForEach-Object { $_.reason })
               throw ('INTEGRATION_APPROVED_CHIPWARE_MEMO_NOT_APPLIED:' + ($reasons -join ';'))
             }
@@ -1872,7 +1872,7 @@ jobs:
               throw 'INTEGRATION_OUTPUT_ALREADY_EXISTS'
             }
             Copy-Item -LiteralPath (Join-Path $stage 'effective-preview') -Destination $env:PHASE2_INTEGRATED_OUTPUT -Recurse
-            Write-Host ('PASS GCO canonical Pass4-10 staged output: files=' +
+            Write-Host ('PASS GCO canonical Passes4-9+ChipwareMemo staged output: files=' +
               $generated.Count + ' memoEdits=' + [int]$memo[0].rewrittenExpressions)
             Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots InputHub #16 and D-pad #17 applied automatically; original PlayerLastUsedPad and generic preserved; independent bytes equal'
 
@@ -1883,7 +1883,7 @@ jobs:
             }
           }
 
-      - name: Checkpoint - compile canonical Pass 4-10 one-pass merged output
+      - name: Checkpoint - compile canonical Passes 4-9 + Chipware memo one-pass merged output
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'

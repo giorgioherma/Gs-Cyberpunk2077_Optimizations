@@ -1969,7 +1969,7 @@ public static class RedscriptGenerationPlan
         // Source-first historical Passes 4-10. A single Generate performs
         // every compatible missing operation after all ten generic rules
         // and earlier semantic stages, preserving owner-local fallbacks.
-        RedscriptHistoricalIntegration.Apply(game, output, final, results,
+        UnifiedRedscriptSemanticModule.Apply(game, output, final, results,
             skipped, ref files, ref expressions);
 
         if (!string.Equals(document.SourceStackSha256,

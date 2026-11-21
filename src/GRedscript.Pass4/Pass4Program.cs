@@ -144,6 +144,9 @@ internal static class Pass4Program
         // Integration uses Pass 7's equivalent player cache and Pass 8's
         // equivalent source-derived perk admission. Never emit duplicates.
         // The standalone Pass 4 generator still exposes all three owners.
+#if PASS4_CLI
+        // Historical isolated reference remains available for the Pass 4 test
+        // host only. Production compiles neither duplicate generator.
         if (!args.Contains("--integration-geometry-only",StringComparer.Ordinal))
         {
             RunOwner("STEALTHRUNNER_NPC_PLAYER_CACHE_V1",
@@ -151,6 +154,7 @@ internal static class Pass4Program
             RunOwner("CHIPWARE_PERK_RELEVANCE_GATE_V1",
                 (s,_)=>ChipwarePass.Rewrite(s));
         }
+#endif
         RunOwner("REINFORCEMENTS_PREPARED_QUAD_CACHE_V1",
             (s,_)=>ReinforcementsPass.RewriteSystem(s));
 

@@ -2581,7 +2581,7 @@ try {
     if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
         $extra.FrameworkRoot = (Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
         # The owner SCC must compile the actual final canonical Stage,
-        # including the two additive Pass 8 helpers and Pass 10 memoization.
+        # including the two additive Pass 8 helpers and approved Chipware memo memoization.
         $extra.FrameworkPreviewRoot = (Resolve-Path -LiteralPath (Join-Path $orderedStage 'effective-preview') -ErrorAction Stop).Path
         $extra.ApprovedAdditiveStageRoot = (Resolve-Path -LiteralPath $orderedStage -ErrorAction Stop).Path
     }

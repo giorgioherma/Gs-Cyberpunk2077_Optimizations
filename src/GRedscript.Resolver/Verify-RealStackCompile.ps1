@@ -378,14 +378,14 @@ try {
       # not merely that it appeared in the final composed preview. Stage
       # NewFiles also counts newly staged ORIGINAL owner files, so it is
       # intentionally not assumed to equal one additive helper.
-      # Pass 10 extends the chipware helper with the historical 100ms
+      # The approved Chipware memo extends the helper with the historical 100ms
       # perk-result memo. Accept the FINAL bytes only if both source-owner
-      # stages participated and the final helper equals the Pass 10 output.
+      # stages participated and the final helper equals the final Chipware memo output.
       # ImmersiveCyberware remains exactly the Pass 8 producer's bytes.
       $producerId=$contract.Id
       $producerOrder=$contract.Order
       if ($contract.Id -eq 'pass8-chipware-combat-cache') {
-        $memo=@($stageReport.completed | Where-Object { $_.id -eq 'pass10-chipware-perk-memo' })
+        $memo=@($stageReport.completed | Where-Object { $_.id -eq 'chipware-perk-result-memo' })
         if ($memo.Count -ne 1 -or [int]$memo[0].order -ne 51 -or
             [int]$memo[0].rewrittenExpressions -lt 1) {
           throw 'R6_ADDITIVE_HISTORICAL_CHIPWARE_MEMO_NOT_PROVEN'
@@ -395,7 +395,7 @@ try {
         if (!(Test-Path -LiteralPath $firstHelper -PathType Leaf)) {
           throw 'R6_ADDITIVE_CHIPWARE_FIRST_PRODUCER_MISSING'
         }
-        $producerId='pass10-chipware-perk-memo'
+        $producerId='chipware-perk-result-memo'
         $producerOrder=51
       }
       $producerRoot=Join-Path $stageHome ('_stages/'+$producerOrder+'-'+$producerId)
