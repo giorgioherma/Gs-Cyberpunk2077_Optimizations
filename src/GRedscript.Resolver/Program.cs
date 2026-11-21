@@ -1622,7 +1622,7 @@ public static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--base-overlay" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha" or "--exclude-ranking-owners"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--base-overlay" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha" or "--exclude-ranking-owners" or "--kind"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);
