@@ -1743,6 +1743,53 @@ public static class RedscriptGenerationPlan
         else if(grsPoll.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
             throw new InvalidDataException("GRS_POLL_STAGE_UNKNOWN_STATUS");
 
+        // Historical Pass 5.0 HoloTravel: filter unrelated type-wide material
+        // events before dereferencing holo state; hoist only source-proven
+        // pure color resolution out of the parameter loop. This is a single
+        // source-aware owner stage after all existing generic/semantic work.
+        string holoTravelRoot=Path.Combine(output,"_stages",
+            "37-holotravel-material-event");
+        var holoTravel=HoloTravelMaterialEventPass.Generate(game,
+            holoTravelRoot,Directory.Exists(final)?final:null);
+        if(holoTravel.Status=="APPLIED")
+        {
+            if(holoTravel.AppliedEdits!=1 ||
+               string.IsNullOrWhiteSpace(holoTravel.SourcePath))
+                throw new InvalidDataException("HOLOTRAVEL_STAGE_EMPTY_OR_PARTIAL");
+            string rel=holoTravel.SourcePath;
+            string src=Path.GetFullPath(Path.Combine(holoTravelRoot,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            string dest=Path.GetFullPath(Path.Combine(final,
+                rel.Replace('/',Path.DirectorySeparatorChar)));
+            if(!rel.StartsWith("r6/scripts/HQ_HoloTravel/",StringComparison.Ordinal) ||
+               !rel.EndsWith(".reds",StringComparison.OrdinalIgnoreCase) ||
+               !IsInside(src,holoTravelRoot) || !IsInside(dest,final) ||
+               !File.Exists(src))
+                throw new InvalidDataException("HOLOTRAVEL_STAGE_OWNER_PATH_UNSAFE");
+            bool existed=File.Exists(dest);
+            if(existed)
+            {
+                string before=File.ReadAllText(dest);
+                string after=File.ReadAllText(src);
+                var genericMarkers=System.Text.RegularExpressions.Regex.Matches(
+                    before,@"(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+")
+                    .Select(m=>m.Value).Distinct(StringComparer.Ordinal);
+                if(genericMarkers.Any(m=>!after.Contains(m,StringComparison.Ordinal)))
+                    throw new InvalidDataException("HOLOTRAVEL_STAGE_LOST_GENERIC");
+            }
+            else Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src,dest,overwrite:existed);
+            files+=existed?0:1;
+            expressions+=holoTravel.AppliedEdits;
+            results.Add(new(37,"holotravel-material-event",
+                holoTravel.AppliedEdits,existed?0:1,existed?1:0,[]));
+        }
+        else if(holoTravel.Status=="REFUSED")
+            skipped.Add(new(37,"holotravel-material-event",1,
+                holoTravel.Reason ?? "HOLOTRAVEL_SOURCE_INCOMPATIBLE"));
+        else if(holoTravel.Status is not ("COMPLETE" or "NOT_APPLICABLE"))
+            throw new InvalidDataException("HOLOTRAVEL_STAGE_UNKNOWN_STATUS");
+
         if (!string.Equals(document.SourceStackSha256,
             admission.FingerprintCurrentSources(),
             StringComparison.OrdinalIgnoreCase))
