@@ -134,7 +134,7 @@ jobs:
       # this REDscript development branch, from GCO's existing scoped token.
       # Source stays outside publish/release and is removed even on failure.
       - name: Verify existing GCO private-source token for REDscript
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         env:
           REDSCRIPT_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
@@ -145,11 +145,11 @@ jobs:
       # REDscript managed Resolver is source-owned by this GCO branch.
       # GRSP's separate native profiler checkout above is unchanged.
       - uses: actions/setup-python@v5
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         with:
           python-version: '3.12'
       - name: Build GCO-local REDscript Resolver and verify approved source generator contracts
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         env:
@@ -167,7 +167,7 @@ jobs:
           }
           Write-Host 'PASS GCO-local REDscript Resolver .NET10 build, safety tests and native boundary'
       - name: Checkout private live REDscript source for GCO-local admission audit
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/original_cet_source
@@ -181,7 +181,7 @@ jobs:
             Compiler
           sparse-checkout-cone-mode: true
       - name: Checkout authoritative G-REDruntime source for isolated SCC compilation
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-REDruntime_Framework
@@ -193,7 +193,7 @@ jobs:
             optional-native/r6/scripts/G-RedRuntime/Native
           sparse-checkout-cone-mode: true
       - name: Audit private REDscript stack with GCO-local REDscript CLI
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -276,7 +276,7 @@ jobs:
       # that generated the sealed GRSP fixture. Replay/SCC below deliberately
       # retains the archived game-root source and its capture-matched SHA.
       - name: Audit newer REDscript source independently of sealed capture replay
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -394,7 +394,7 @@ jobs:
             ' olderFixtureModified=' + $modified + ' added=' + $added + ' removed=' + $removed +
             ' generationAuthorized=false captureIdentityNotAssumed=true')
       - name: Discover generic callback shapes in private effective REDscript stack
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -425,7 +425,7 @@ jobs:
             ' already=' + $scan.fixedCnameIndexAlreadyComplete +
             ' generated=0 originalSourcesUntouched=true')
       - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers (manual research only)
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' && github.event_name == 'workflow_dispatch' && inputs.research_diagnostics }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') && github.event_name == 'workflow_dispatch' && inputs.research_diagnostics }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -464,7 +464,7 @@ jobs:
           # The private catalog contains third-party source paths and must
           # never become a GCO public artifact or be printed in detail.
       - name: Scan private REDscript OnAction literal membership candidates
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -496,7 +496,7 @@ jobs:
       # Real R3 milestone: capture lives on a separate GCO commit. Check out
       # ONLY that immutable fixture; never merge unrelated branch changes.
       - name: Checkout exact real GRSP 15:51 capture fixture
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
@@ -509,7 +509,7 @@ jobs:
       # Source test binary lives on stable main, not the REDscript dev branch.
       # A sparse checkout imports only the exact immutable native test asset.
       - name: Checkout native CET player/location test fixture
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
@@ -520,7 +520,7 @@ jobs:
             tests/G-CETtoNATIVEplayer_state_machine
           sparse-checkout-cone-mode: true
       - name: Replay real sealed GRSP capture with private REDscript source
-        if: ${{ github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         timeout-minutes: 12
         shell: pwsh
         working-directory: unified
@@ -538,7 +538,7 @@ jobs:
           & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework' -IncludeResearchDiagnostics:('${{ inputs.research_diagnostics }}' -eq 'true')
           if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
       - name: Remove exact real GRSP fixture checkout
-        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ always() && (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -549,7 +549,7 @@ jobs:
             Remove-Item -LiteralPath '.gco-ci-native-fixture' -Recurse -Force -ErrorAction Stop
           }
       - name: Remove private REDscript source checkout
-        if: ${{ always() && github.ref == 'refs/heads/dev/redscript/resolver_handoff' }}
+        if: ${{ always() && (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
