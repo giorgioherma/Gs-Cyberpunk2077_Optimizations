@@ -2072,7 +2072,9 @@ try {
       @{ Id='digitalvixen-ui-dormancy'; Order=27; Command='phase2-digitalvixen-ui';
          Rule='DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1'; Owner='DigitalVixenCore' },
       @{ Id='browser-extension-journal'; Order=28; Command='phase2-browser-journal';
-         Rule='BROWSER_EXTENSION_JOURNAL_HANDLES_V1'; Owner='BrowserExtension' }
+         Rule='BROWSER_EXTENSION_JOURNAL_HANDLES_V1'; Owner='BrowserExtension' },
+      @{ Id='browser-extension-input'; Order=29; Command='phase2-browser-input';
+         Rule='BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1'; Owner='BrowserExtension' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2099,6 +2101,27 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'browser-extension-input') {
+          if ($portFiles.Count -lt 1 -or $portFiles.Count -gt 2 -or
+              [int]$portReport.appliedEdits -ne $portFiles.Count) {
+            throw 'GCO_BROWSER_INPUT_REFERENCE_FILE_COUNT_INVALID'
+          }
+          foreach($file in $portFiles) {
+            $ownerText=Get-Content -LiteralPath $file.FullName -Raw
+            if ($file.Name -eq 'HomePagePagination.reds' -and
+                (!$ownerText.Contains('extends InputListener') -or
+                 !$ownerText.Contains('func OnGRedInput(evt: ref<InputEvent>)') -or
+                 !$ownerText.Contains('func OnAction(action: ListenerAction'))) {
+              throw 'GCO_BROWSER_INPUT_LISTENER_FALLBACK_MISSING'
+            }
+            if ($file.Name -eq 'browserController.overrides.reds' -and
+                (!$ownerText.Contains('m_customBrowserFallbackRegistered = true;') -or
+                 !$ownerText.Contains('m_customBrowserFallbackPlayer.UnregisterInputListener(') -or
+                 !$ownerText.Contains('m_customBrowserInputHub.Subscribe('))) {
+              throw 'GCO_BROWSER_INPUT_UNSUBSCRIBE_OR_FALLBACK_MISSING'
+            }
+          }
         }
         if ($port.Id -eq 'browser-extension-journal') {
           if ($portFiles.Count -ne 1 -or
