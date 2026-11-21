@@ -4,6 +4,7 @@ The production generator is exercised through an isolated .NET 10 harness.
 Central semantic stage registration is intentionally untouched on this branch.
 """
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -98,6 +99,7 @@ class Pass5HoloTravelTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0,
                          process.stdout + "\n" + process.stderr)
         report = json.loads((output / "phase2-result.json").read_text("utf8"))
+        self.last_output = output
         self.assertEqual(game_file.read_text("utf8"), source)
         staged = output / path
         return report, staged.read_text("utf8") if staged.exists() else None
@@ -200,6 +202,23 @@ class Pass5HoloTravelTests(unittest.TestCase):
             "let color = this.ResolveColor(this.svc.holo.particleColor);"), 1)
         self.assertIn("class ParticleHandler extends BaseHandler", result)
         self.assertIn("BindCallbackTRL(self, n\"OnUpdate\"", result)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            compiler = ROOT / ".phase2-private/Compiler"
+            dll = (ROOT / "src/GRedscript.Resolver/bin/Release/net10.0/"
+                   "GRedscript.Resolver.dll")
+            verification = (ROOT / "tests/GRedscript.Resolver.Tests/"
+                            "Verify-Phase2Checkpoint.ps1")
+            self.assertTrue(compiler.is_dir())
+            check = subprocess.run(
+                ["pwsh", "-NoProfile", "-File", str(verification),
+                 "-PostGenericRoot", str(path.parents[2]),
+                 "-CompilerRoot", str(compiler),
+                 "-ResolverDll", str(dll),
+                 "-SemanticOverlayRoot", str(self.last_output)],
+                capture_output=True, text=True, timeout=300)
+            self.assertEqual(check.returncode, 0,
+                             check.stdout + "\n" + check.stderr)
+            self.assertIn("SCC=0.5.31", check.stdout)
         second, blank = self.generate(result)
         self.assertEqual(second["status"], "COMPLETE", second)
         self.assertIsNone(blank)
