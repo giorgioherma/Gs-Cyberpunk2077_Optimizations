@@ -630,6 +630,7 @@ public partial class MainWindow : Window
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
             SetActiveTab(true);
             RefreshCompletedWorkspace();
         }
@@ -1049,6 +1050,59 @@ public partial class MainWindow : Window
             else
                 StatusText.Text = completed.PreviousText;
         }
+    }
+
+    // Shared cyan progress rail; three independent, token-scoped job lifecycles.
+    private enum WorkPhase { None, Collect, Analyze, Generate }
+    private WorkPhase activeWorkPhase = WorkPhase.None;
+    private long activeWorkToken;
+
+    private long BeginWorkProgress(WorkPhase phase, string label)
+    {
+        activeWorkPhase = phase;
+        long token = ++activeWorkToken;
+        WorkflowProgressBar.Value = 0;
+        WorkflowProgressText.Text = label;
+        WorkflowProgressHost.Visibility = Visibility.Visible;
+        return token;
+    }
+
+    private void SetWorkProgress(long token, WorkPhase phase, int completed, int total, string label)
+    {
+        if (token != activeWorkToken || activeWorkPhase != phase || total <= 0) return;
+        WorkflowProgressBar.Value = Math.Max(WorkflowProgressBar.Value,
+            Math.Clamp(completed * 100.0 / total, 0, 100));
+        WorkflowProgressText.Text = label;
+    }
+
+    private IProgress<WorkflowStepProgress> WorkProgressReporter(WorkPhase phase, long token) =>
+        new Progress<WorkflowStepProgress>(step =>
+            SetWorkProgress(token, phase, step.Completed, step.Total, step.Detail));
+
+    private void FinishWorkProgress(long token, WorkPhase phase, bool success)
+    {
+        if (token != activeWorkToken || activeWorkPhase != phase) return;
+        if (success)
+        {
+            WorkflowProgressBar.Value = 100;
+            WorkflowProgressText.Text = phase switch
+            {
+                WorkPhase.Collect => "COLLECT / REPORTS READY",
+                WorkPhase.Analyze => "ANALYSIS READY",
+                WorkPhase.Generate => "ZIP READY",
+                _ => "READY"
+            };
+        }
+        else WorkflowProgressHost.Visibility = Visibility.Collapsed;
+        activeWorkPhase = WorkPhase.None;
+    }
+
+    private void ClearWorkProgress()
+    {
+        ++activeWorkToken;
+        activeWorkPhase = WorkPhase.None;
+        WorkflowProgressBar.Value = 0;
+        WorkflowProgressHost.Visibility = Visibility.Collapsed;
     }
 
     internal void SetResultsConsoleStatus(string message)
@@ -1605,6 +1659,7 @@ public partial class MainWindow : Window
         SetPortraitStage(PortraitStage.Collecting);
         SetStatus("Collecting profiler results...");
         long collectActivity = BeginConsoleActivity("Collecting and verifying profiler results");
+        long collectProgress = BeginWorkProgress(WorkPhase.Collect, "COLLECT / VERIFY CAPTURES");
         var sealedSuccess = false;
         try
         {
@@ -1623,7 +1678,11 @@ public partial class MainWindow : Window
             var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot,
                 clearTracking: false);
             string? frameWarning = stop.Error;
+            if (stop.Stopped)
+                SetWorkProgress(collectProgress, WorkPhase.Collect, 1, 10, "COLLECT / PRESENTMON STOPPED");
             var native = await Workflow.CollectResultsAsync(game);
+            if (native.Ok)
+                SetWorkProgress(collectProgress, WorkPhase.Collect, 2, 10, "COLLECT / CET + REDSCRIPT");
             if (native.Ok && stop.Stopped && stop.Csv is not null)
             {
                 var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, attempt.SessionId) +
@@ -1649,6 +1708,7 @@ public partial class MainWindow : Window
                     }
                 }
             }
+            SetWorkProgress(collectProgress, WorkPhase.Collect, 3, 10, "COLLECT / FRAME EVIDENCE CHECKED");
             // Do not seal a failed/empty native collection. Keep the pending
             // capture intact so Collect may be retried or the run abandoned.
             var collected = Workflow.ReadCollected(game, verifyHashes: true);
@@ -1664,6 +1724,7 @@ public partial class MainWindow : Window
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             sealedSuccess = true;
+            SetWorkProgress(collectProgress, WorkPhase.Collect, 4, 10, "COLLECT / CAPTURES VERIFIED");
             if (saved.Cet is not null && saved.Redscript is not null)
             {
                 SetPortraitStage(PortraitStage.Collected);
@@ -1713,8 +1774,10 @@ public partial class MainWindow : Window
                 PinStatus("Collect failed. START again or RESTORE.");
             }
             EndConsoleActivity(collectActivity);
+            bool reportsReady = false;
             if (sealedSuccess && savedCapture is { } complete)
-                await GenerateCollectedProfilerReportAsync(game, complete.SessionId);
+                reportsReady = await GenerateCollectedProfilerReportAsync(game, complete.SessionId);
+            FinishWorkProgress(collectProgress, WorkPhase.Collect, sealedSuccess && reportsReady);
             SetBusy(false);
             await RefreshSourceAsync();
         }
@@ -1744,20 +1807,33 @@ public partial class MainWindow : Window
     private async Task<bool> GenerateCollectedProfilerReportAsync(string game, string sessionId)
     {
         if (profilerReportRunning) return false;
-        if (HasCompletedProfilerReport(packageRoot, sessionId)) return true;
+        if (HasCompletedProfilerReport(packageRoot, sessionId))
+        {
+            if (activeWorkPhase == WorkPhase.Collect)
+                SetWorkProgress(activeWorkToken, WorkPhase.Collect, 10, 10, "COLLECT / REPORTS VERIFIED");
+            return true;
+        }
+        bool ownsRail = activeWorkPhase != WorkPhase.Collect;
+        long reportToken = ownsRail
+            ? BeginWorkProgress(WorkPhase.Collect, "COLLECT / BUILDING REPORTS")
+            : activeWorkToken;
+        bool reportReady = false;
         profilerReportRunning = true;
         ContinueButton.IsEnabled = false;
         long reportActivity = BeginConsoleActivity("Preparing performance graphs and report");
         try
         {
+            var reporter = WorkProgressReporter(WorkPhase.Collect, reportToken);
             var result = await Task.Run(() =>
-                GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
+                GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId,
+                    progress: reporter));
             if (!HasCompletedProfilerReport(packageRoot, sessionId))
                 throw new InvalidDataException("Combined profiler report was not published completely.");
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
             ClearStatusPin();
             SetStatus("Combined profiler report ready. Click CONTINUE.");
+            reportReady = true;
             return true;
         }
         catch (Exception ex)
@@ -1773,6 +1849,7 @@ public partial class MainWindow : Window
         {
             EndConsoleActivity(reportActivity);
             profilerReportRunning = false;
+            if (ownsRail) FinishWorkProgress(reportToken, WorkPhase.Collect, reportReady);
         }
     }
 
@@ -1836,6 +1913,7 @@ public partial class MainWindow : Window
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
             SetActiveTab(true);
             return;
         }
@@ -1892,6 +1970,7 @@ public partial class MainWindow : Window
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
             BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
             SetActiveTab(true);
             RefreshCompletedWorkspace();
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
@@ -1981,12 +2060,14 @@ public partial class MainWindow : Window
         AnalyzeButton.IsEnabled = false;
         GenerateButton.IsEnabled = false;
         long analyzeActivity = BeginConsoleActivity("Analyzing CET and REDscript sources");
+        long analyzeProgress = BeginWorkProgress(WorkPhase.Analyze, "ANALYZE / CET SOURCES");
         try
         {
             var report = await readOnlyAnalyzer.AnalyzeAsync(
                 packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
+            SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 2, "ANALYZE / REDSCRIPT SOURCES");
             // Do not mark the session ANALYZED until both CET and the
             // REDscript generation plan have completed successfully.
             // The Resolver's UnresolvedCount is a CALLBACK count, not
@@ -2038,6 +2119,7 @@ public partial class MainWindow : Window
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
                 redscriptPlanReady = true;
+                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 2, 2, "ANALYZE / CET + REDSCRIPT DONE");
                 var ready = planned.Rules.Where(rule =>
                     rule.Status == "READY_FOR_GENERATOR").ToArray();
                 var affected = ready.SelectMany(rule => rule.SourceFolders)
@@ -2093,6 +2175,8 @@ public partial class MainWindow : Window
         finally
         {
             EndConsoleActivity(analyzeActivity);
+            FinishWorkProgress(analyzeProgress, WorkPhase.Analyze,
+                analyzedSessionId == saved.SessionId && redscriptPlanReady);
             analysisRunning = false;
             AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
                 !generationRunning;
@@ -2127,6 +2211,7 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
         generatedPassZipPath = null;
+        ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
         GeneratedPassLocation.Text = string.Empty;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
@@ -2140,6 +2225,7 @@ public partial class MainWindow : Window
         GenerateButton.Content = "GENERATING...";
         CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         long generateActivity = BeginConsoleActivity("Generating CET and REDscript optimizations");
+        long generateProgress = BeginWorkProgress(WorkPhase.Generate, "GENERATE / CET OPTIMIZATIONS");
         try
         {
             // CET retains its owner generator; GCO-local REDscript stages
@@ -2147,7 +2233,7 @@ public partial class MainWindow : Window
             // published after source drift and ZIP ownership/integrity checks.
             var pass = await combinedPassGenerator.GenerateAsync(
                 packageRoot, game, session, cancellation.Token,
-                hotscenesEnglishOnly);
+                hotscenesEnglishOnly, WorkProgressReporter(WorkPhase.Generate, generateProgress));
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
             // OPEN FOLDER always opens the GCO root containing RESULTS
             // and generated_optimizations; it does not depend on a pass.
@@ -2220,6 +2306,8 @@ public partial class MainWindow : Window
         finally
         {
             EndConsoleActivity(generateActivity);
+            FinishWorkProgress(generateProgress, WorkPhase.Generate,
+                generatedPassZipPath is not null && File.Exists(generatedPassZipPath));
             generationRunning = false;
             if (IsLoaded)
             {
@@ -2316,6 +2404,7 @@ public partial class MainWindow : Window
         redscriptPlanReady = false;
         savedCapture = null;
         generatedPassZipPath = null;
+        ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
         GeneratedPassLocation.Text = string.Empty;
         OpenFolderButton.IsEnabled = false;

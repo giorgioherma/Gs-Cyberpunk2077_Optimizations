@@ -41,7 +41,8 @@ public sealed class CombinedOptimizationPassService
 
     public async Task<CombinedPassOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken token = default, bool hotscenesEnglishOnly = false)
+        CancellationToken token = default, bool hotscenesEnglishOnly = false,
+        IProgress<WorkflowStepProgress>? progress = null)
     {
         string package = Path.GetFullPath(packageRoot);
         string game = Path.GetFullPath(gameRoot);
@@ -66,6 +67,7 @@ public sealed class CombinedOptimizationPassService
                 package, game, sessionId, cetZip, token,
                 hotscenesEnglishOnly).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
+            progress?.Report(new(1, 6, "GENERATE / CET OPTIMIZATIONS READY"));
             string analysis = Path.Combine(temp, "redscript-analysis.json");
             await Task.Run(() =>
             {
@@ -73,6 +75,7 @@ public sealed class CombinedOptimizationPassService
             }, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
+            progress?.Report(new(2, 6, "GENERATE / REDSCRIPT ANALYSIS READY"));
             string planOutput = Path.Combine(temp, "redscript-stage");
             string frameworkOwner = Path.Combine(package, "components",
                 "redruntime", "owner");
@@ -87,6 +90,7 @@ public sealed class CombinedOptimizationPassService
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
+            progress?.Report(new(3, 6, "GENERATE / REDSCRIPT OPTIMIZATIONS READY"));
             string overlay = Path.Combine(temp, "game-overlay");
             Directory.CreateDirectory(overlay);
             var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -112,6 +116,7 @@ public sealed class CombinedOptimizationPassService
                 // validation; never infer compilation success at generation.
             }
 
+            progress?.Report(new(4, 6, "GENERATE / COMBINED SOURCE STAGED"));
             if (cetFiles == 0 && redFiles == 0)
                 throw new InvalidOperationException(
                     "No safe source changes remain. CET skipped " +
@@ -143,6 +148,7 @@ public sealed class CombinedOptimizationPassService
                     throw new InvalidDataException("GCO_COMBINED_EMPTY_OUTPUT");
                 using (var archive = ZipFile.Open(pending, ZipArchiveMode.Create))
                 {
+                    int written = 0;
                     foreach (var entry in indexed)
                     {
                         token.ThrowIfCancellationRequested();
@@ -151,11 +157,16 @@ public sealed class CombinedOptimizationPassService
                         using var input = File.OpenRead(entry.FullName);
                         using var target = zip.Open();
                         input.CopyTo(target);
+                        written++;
+                        // Only count completed ZIP entries, not estimated duration.
+                        progress?.Report(new(4 * indexed.Count + written,
+                            6 * indexed.Count, "GENERATE / WRITING ZIP"));
                     }
                 }
                 token.ThrowIfCancellationRequested();
                 if (CombinedPassOutputInspector.Validate(pending) != indexed.Count)
                     throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
+                progress?.Report(new(5, 6, "GENERATE / ZIP VERIFIED"));
                 // All sidecars, source hashes and exclusions stay outside the
                 // game-only ZIP. Record original hashes for Vortex rollback.
                 string manifest = pending + ".ownership.json";
@@ -213,6 +224,7 @@ public sealed class CombinedOptimizationPassService
                 if (Directory.Exists(finalFolder) || File.Exists(finalFolder))
                     throw new IOException("An optimization pass already has this timestamp.");
                 Directory.Move(stagedFolder, finalFolder);
+                progress?.Report(new(6, 6, "GENERATE / ZIP PUBLISHED"));
                 return new(final, cetFiles, redFiles, indexed.Count,
                     cetResult.TransformCount, red.AppliedEdits)
                 {

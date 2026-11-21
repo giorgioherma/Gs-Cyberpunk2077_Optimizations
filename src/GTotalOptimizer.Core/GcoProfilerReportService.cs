@@ -48,7 +48,8 @@ public static class GcoProfilerReportService
 
     public static async Task<GcoProfilerReportOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<WorkflowStepProgress>? progress = null)
     {
         packageRoot = Path.GetFullPath(packageRoot);
         var saved = CollectedCaptureStore.Read(packageRoot, gameRoot, sessionId,
@@ -68,6 +69,7 @@ public static class GcoProfilerReportService
             if (existing.RootElement.GetProperty("sessionId").GetString() != sessionId)
                 throw new InvalidDataException("Previous GCO report belongs to a different session.");
             var frameCount = existing.RootElement.GetProperty("presentMonFrameCount").GetInt32();
+            progress?.Report(new(10, 10, "COLLECT / EXISTING REPORT VERIFIED"));
             return new(html, machine, frameCount, 0, 0);
         }
 
@@ -104,15 +106,18 @@ public static class GcoProfilerReportService
                     sealedFolder, saved,
                     PresentMonCaptureAlignment.RequireOverlap(packageRoot, saved), cet);
 
+            progress?.Report(new(5, 10, "COLLECT / REPORT SOURCES READY"));
             // Run the ORIGINAL reporters on copies. Neither standalone owner
             // sees a made-up CapFrameX JSON or modifies the sealed capture.
             await RunOwnerAsync(bundle.CetExecutable,
                 ["--report", "--capture", cet, "--json"],
                 packageRoot, cancellationToken).ConfigureAwait(false);
+            progress?.Report(new(6, 10, "COLLECT / CET REPORT READY"));
             await RunOwnerAsync(bundle.GrspExecutable,
                 ["--report", "--capture", red, "--json"],
                 packageRoot, cancellationToken).ConfigureAwait(false);
 
+            progress?.Report(new(7, 10, "COLLECT / REDSCRIPT REPORT READY"));
             var cetSummary = Path.Combine(cet, "CET_Summary.json");
             var cetInput = Path.Combine(cet, "CET_Resolver_Input.json");
             var grspSummary = Path.Combine(red, "GRSP_Summary.json");
@@ -261,6 +266,7 @@ public static class GcoProfilerReportService
                     mon.Frames.Select(frame => frame.IntervalMs).ToArray(),
                 timelineJson, redSpikeMarkers);
 
+            progress?.Report(new(8, 10, "COLLECT / TIMELINE DATA READY"));
             Directory.CreateDirectory(publishing);
             if (stagedFrameHandoff is not null)
                 File.Copy(stagedFrameHandoff,
@@ -304,6 +310,7 @@ public static class GcoProfilerReportService
                     timelineJson, grspFrames, cetWindows,
                     digest.Html, JsonSerializer.Serialize(digest.SpikeMarkers, Json)),
                 new UTF8Encoding(false));
+            progress?.Report(new(9, 10, "COLLECT / COMBINED REPORT WRITTEN"));
             // Keep the owner reports and all derived files. Byte-identical
             // raw CSVs already exist in the hash-sealed owner capture, so link
             // to that canonical copy instead of multiplying results storage.
@@ -316,6 +323,7 @@ public static class GcoProfilerReportService
             if (Directory.Exists(outputFolder))
                 throw new IOException("Another report already exists for this capture; no overwrite.");
             Directory.Move(publishing, outputFolder);
+            progress?.Report(new(10, 10, "COLLECT / REPORTS AND GRAPHS READY"));
             return new(html, machine, mon?.Frames.Count ?? 0, cetWindows, grspFrames);
         }
         finally

@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — WPF unified milestone progress rail (development only)
+
+- Three separate user-visible operation states share one 6-DIP rounded cyan/glow rail underneath the consoles: **Collect + report/graphs**, **Analyze CET + REDscript**, **Generate combined ZIP**. No indicator for instant profiler installation.
+- Collect completion requires sealed CET/REDscript capture and published combined report. Reporting emits actual CET/GRSP owner completion, timeline-data, serialized-output and published-report checkpoints; failed/report-incomplete operations never show 100%.
+- Analyze reaches completion only after both CET source analysis and a successful REDscript plan; Generate reports CET output, REDscript planning/staging, ownership overlay, per-entry ZIP writes, archive verification and atomic pass publication.
+- No elapsed-time-based/fake percentage, new polling or Profiler/Resolver algorithm changes. Late asynchronous progress callbacks are ignored using operation tokens. Existing console and PASS READY guidance are preserved. **Source/structure inspected; Windows compilation, rendered placement and gameplay are not yet validated.** No full CI checkpoint requested for this UI iteration.
+
+
 ## 2026-11-21 — Bundled G-REDruntime API visibility during REDscript Generate
 
 **Root cause:** the full GCO app staged REDscript semantic optimizations before `CopyMissingFramework` added GCO's verified G-REDruntime sources to the generated ZIP. Owners #16, #29, #31–40 therefore inspected only existing `game/r6/scripts`, reporting ~19 API/ABI refusals even where the *same pass* would deliver the required InputHub, Scheduler and StateCache declarations. Custom Quickslots' #17 device-handler dependency is separate and may become satisfied once #16 applies; it must still be proven structurally.
