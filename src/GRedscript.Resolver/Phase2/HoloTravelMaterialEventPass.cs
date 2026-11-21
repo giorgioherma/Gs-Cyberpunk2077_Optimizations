@@ -100,6 +100,58 @@ internal static class HoloTravelMaterialEventPass
     private static int HotColorCalls(string source) =>
         OldColor.Matches(ColorLocal.Replace(source, "")).Count;
 
+    private const string PureResolverBody = """
+        switch this.cfg.colorOption
+        {
+            case ColorOptions.TrueColor: return color;
+            case ColorOptions.Random: return this.svc.hlp.randomizedColor;
+            case ColorOptions.Turquoise: return TurquoiseColor();
+            case ColorOptions.Green: return GreenColor();
+            default: return GreenColor();
+        }
+        """;
+
+    private static string TokenShape(string value) =>
+        string.Join("\u001f", SourceAdmission.ReadTokens(value).Select(t => t.Value));
+
+    private static bool PureColorResolution(string original)
+    {
+        var t = SourceAdmission.ReadTokens(original);
+        int count = 0, open = -1, end = -1;
+        for (int i = 0; i + 2 < t.Count; i++)
+        {
+            if (t[i].Value != "func" || t[i + 1].Value != "ResolveColor" ||
+                t[i + 2].Value != "(") continue;
+            count++;
+            int args = Close(t, i + 2, "(", ")");
+            if (args < 0) return false;
+            int brace = args + 1;
+            while (brace < t.Count && t[brace].Value is not ("{" or ";"))
+                brace++;
+            if (brace >= t.Count || t[brace].Value != "{") return false;
+            open = brace; end = Close(t, open);
+            if (end < 0) return false;
+            i = end;
+        }
+        if (count != 1 || open < 0 ||
+            !string.Equals(TokenShape(original[t[open].End..t[end].Start]),
+                TokenShape(PureResolverBody), StringComparison.Ordinal))
+            return false;
+        // The two color helpers used by ResolveColor must remain literal
+        // constructors. An owner customization with effects is refused,
+        // not silently hoisted from two per-param calls to one event call.
+        foreach (string name in new[] { "TurquoiseColor", "GreenColor" })
+        {
+            if (Regex.Matches(original, @"\bfunc\s+" + name +
+                @"\s*\(\s*\)\s*->\s*Color\s*=\s*NewColor\s*\(\s*" +
+                @"[0-9]+\s*,\s*[0-9]+\s*,\s*[0-9]+\s*,\s*[0-9]+\s*\)\s*;").Count != 1)
+                return false;
+        }
+        return Regex.IsMatch(original,
+            @"\bfunc\s+NewColor\s*\(\s*r\s*:\s*Int32\s*,\s*g\s*:\s*Int32\s*," +
+            @"\s*b\s*:\s*Int32\s*,\s*a\s*:\s*Int32\s*\)\s*->\s*Color\s*=\s*new\s+Color\s*\(");
+    }
+
     private static (string Status, string? Reason, string? Source) Rewrite(string original)
     {
         var cb = FindParticleCallback(original);
@@ -107,8 +159,7 @@ internal static class HoloTravelMaterialEventPass
         // This is the source-defined, side-effect-free IsValid predicate.
         if (!Regex.IsMatch(original,
                 @"\bfunc\s+IsValid\s*\(\s*e\s*:\s*ref\s*<\s*ResourceEvent\s*>\s*\)\s*->\s*Bool\s*=\s*IsDefined\s*\(\s*this\s*\.\s*svc\s*\.\s*holo\s*\)\s*&&\s*IsDefined\s*\(\s*e\s*\)\s*;") ||
-            !Regex.IsMatch(original,
-                @"\bfunc\s+ResolveColor\s*\(\s*color\s*:\s*Color\s*\)\s*->\s*Color\b"))
+            !PureColorResolution(original))
             return ("REFUSED", "HOLOTRAVEL_VALIDATION_OR_COLOR_DEPENDENCY_CHANGED", null);
 
         string body = original[cb.Open..cb.End];
