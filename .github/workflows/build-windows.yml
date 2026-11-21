@@ -38,7 +38,17 @@ permissions:
   actions: read
 
 jobs:
+  # Full release/package must never succeed with an uncompilable Pass 7
+  # semantic overlay. Reuse the EXACT canonical source-state + SCC contract;
+  # no competing compiler or duplicated source pipeline.
+  pass7_source_scc:
+    if: github.ref == 'refs/heads/dev/redscript/pass7'
+    uses: ./.github/workflows/redscript-pass7-checkpoint.yml
+    secrets: inherit
+
   bundle:
+    needs: pass7_source_scc
+    if: ${{ always() && (github.ref != 'refs/heads/dev/redscript/pass7' || needs.pass7_source_scc.result == 'success') }}
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
