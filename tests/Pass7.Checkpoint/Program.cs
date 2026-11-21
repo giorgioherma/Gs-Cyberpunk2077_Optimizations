@@ -174,8 +174,9 @@ static void CheckContent(Dictionary<string, string> original, string output,
                 StringComparison.Ordinal), "RM_DIRECTION_OPTIONAL_MODULE_FALLBACK_LOST");
             Require(content.Contains("@if(!ModuleExists(\"EasierControllerSprint\"))",
                 StringComparison.Ordinal), "RM_DIRECTION_MODULE_EXCLUSION_LOST");
-            Require(Regex.Matches(content, @"IsNewPerkBought").Count == 2,
-                "RM_DIRECTION_ENTRY_AND_FALLBACK_PREDICATES_NOT_PRESERVED");
+            Require(Regex.Matches(content, @"IsNewPerkBought").Count ==
+                Regex.Matches(original[key], @"IsNewPerkBought").Count,
+                "RM_DIRECTION_OTHER_AUTHOR_PERK_QUERIES_LOST");
         }
     }
 }
