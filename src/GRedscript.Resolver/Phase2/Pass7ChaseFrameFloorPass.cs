@@ -1273,7 +1273,7 @@ public static class Pass7ChaseFrameFloorPass
             ("RUNNING_MAN_SPRINT_DIRECTION_PERK_CACHE_V1", "RunningMan",
                 "@replaceMethod(SprintDecisions)", (Func<string, Decision>)SprintDirection),
             ("LIZZIES_BDS_PERFORMER_ATTACH_GATE_V1", "LizziesBDs",
-                "LizziesBDsIsEnt", (Func<string, Decision>)LizziePerformerGate),
+                "LizziesBDsZmenitObleceni", (Func<string, Decision>)LizziePerformerGate),
             ("LIZZIES_BDS_PERFORMER_INDEX_MEMO_V1", "LizziesBDs",
                 "LizziesBDsZmenitObleceni", (Func<string, Decision>)LizziePerformerIndex),
             ("REINFORCEMENTS_CHASE_STIMULUS_GATE_V1", "ReinforcementsSystem",
