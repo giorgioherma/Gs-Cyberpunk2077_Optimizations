@@ -1,6 +1,6 @@
 name: REDscript Pass 7 - Isolated Chase and Sprint Checkpoint
 
-# Runs once when this dedicated workflow is first committed or explicitly
+# Validated in grouped branch-only batches, not individual generator edits.\n# Runs once when this dedicated workflow is first committed or explicitly
 # revalidated. No shared-phase CI concurrency and no per-edit automatic runs.
 on:
   workflow_dispatch:
