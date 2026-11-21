@@ -2078,7 +2078,9 @@ try {
       @{ Id='evs-onaction-ps'; Order=30; Command='phase2-evs-ps';
          Rule='EVS_ONACTION_PS_HANDLE_REUSE_V1'; Owner='Enhanced Vehicle System' },
       @{ Id='flushing-etiquette-input-hub'; Order=31; Command='phase2-fe-input-hub';
-         Rule='FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1'; Owner='FlushingEtiquette' }
+         Rule='FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1'; Owner='FlushingEtiquette' },
+      @{ Id='gear-recovery-input-hub'; Order=32; Command='phase2-grs-input-hub';
+         Rule='GEAR_RECOVERY_INPUT_HUB_FALLBACK_V1'; Owner='GearRecoverySystem' }
     )
     $historicalReferences = @()
     foreach ($port in $historicalPorts) {
@@ -2105,6 +2107,22 @@ try {
       if ($portReport.status -eq 'APPLIED') {
         if ($portFiles.Count -eq 0 -or [int]$portReport.appliedEdits -le 0) {
           throw ('GCO_HISTORICAL_APPLIED_OUTPUT_MISSING: '+$port.Id)
+        }
+        if ($port.Id -eq 'gear-recovery-input-hub') {
+          if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 3) {
+            throw 'GCO_GRS_HUB_REFERENCE_NOT_GENERATED'
+          }
+          $file=Get-Content -LiteralPath $portFiles[0].FullName -Raw
+          foreach($witness in @('class GRSRecoverInputListener extends InputListener',
+              'private func GRSPerformRecover() -> Bool',
+              'if this.GRSPerformRecover() { evt.consumed = true; }',
+              'if this.m_grsFallbackRegistered {',
+              'this.m_grsInputHub.Unsubscribe(this.m_grsInputSubscription);',
+              'controller.TryRecoverGear();')) {
+            if (!$file.Contains($witness,[StringComparison]::Ordinal)) {
+              throw ('GCO_GRS_HUB_REFERENCE_GAMEPLAY_LOST:'+ $witness)
+            }
+          }
         }
         if ($port.Id -eq 'flushing-etiquette-input-hub') {
           if ($portFiles.Count -ne 1 -or [int]$portReport.appliedEdits -lt 3) {
