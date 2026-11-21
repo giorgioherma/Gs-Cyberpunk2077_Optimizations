@@ -39,6 +39,7 @@ jobs:
       PHASE2_QUICKSLOTS_OUTPUT: ${{ github.workspace }}/.phase2-cq-input
       PHASE2_DPAD_OUTPUT: ${{ github.workspace }}/.phase2-cq-dpad
       PHASE2_QUICKHACK_OUTPUT: ${{ github.workspace }}/.phase2-qhf-tags
+      PHASE2_REDWINDOWS_OUTPUT: ${{ github.workspace }}/.phase2-redwindows-find
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -368,6 +369,50 @@ jobs:
           }
           Write-Host 'PASS Quickhack direct tag predicate: two callbacks source-generated; fallback retained'
 
+      - name: Generate RedWindows retained widget Find from historical Pass 9
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-find --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_REDWINDOWS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_FIND_GENERATION_FAILED' }
+          $result=Get-Content -LiteralPath (Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($result.ruleId -ne 'REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1' -or
+              $result.status -ne 'APPLIED' -or [int]$result.appliedEdits -ne 1) {
+            throw ('PHASE2_RW_FIND_EXPECTED_APPLIED: '+$result.status+' '+$result.reason)
+          }
+          $files=@(Get-ChildItem -LiteralPath (Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts') -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_RW_FIND_ONE_OWNER_FILE_EXPECTED' }
+          foreach($file in $files) {
+            $relative=[IO.Path]::GetRelativePath((Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts'),$file.FullName)
+            $safe=$relative.Replace([IO.Path]::DirectorySeparatorChar,'/')
+            if (!$safe.StartsWith('RedWindows/') -or $safe.StartsWith('..')) {
+              throw 'PHASE2_RW_FIND_PATH_UNSAFE'
+            }
+            $body=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$body.Contains('m_lastFindWidget') -or
+                !$body.Contains('m_lastFindId') -or
+                !$body.Contains('this.m_findCursor = idx + 1;') -or
+                !$body.Contains('ArrayPush(this.m_widgets, widget);')) {
+              throw 'PHASE2_RW_FIND_HISTORICAL_PREDICATE_INCOMPLETE'
+            }
+            $dst=Join-Path (Join-Path $env:PHASE2_OUTPUT 'r6/scripts') $relative
+            if (Test-Path -LiteralPath $dst) {
+              $previous=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($previous,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_RW_FIND_LOST_GENERIC'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $dst -Force
+          }
+          Write-Host 'PASS RedWindows retained Find: last-hit and predicted cursor; original owner preserved'
+
       - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
         shell: pwsh
         run: |
@@ -422,6 +467,16 @@ jobs:
                 (Get-FileHash -LiteralPath $qhRef -Algorithm SHA256).Hash) {
               throw 'PHASE2_QHF_CANONICAL_SINGLE_GENERATE_DIFFERENT_FROM_INDEPENDENT'
             }
+            $rw=@($result.completed | Where-Object { $_.id -eq 'redwindows-widget-lookup' })
+            $rwRef=Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts/RedWindows/RW_Window.reds'
+            $rwActual=Join-Path $stage 'effective-preview/r6/scripts/RedWindows/RW_Window.reds'
+            if ($rw.Count -ne 1 -or [int]$rw[0].order -ne 19 -or
+                [int]$rw[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $rwActual) -or
+                (Get-FileHash -LiteralPath $rwActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $rwRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_RW_FIND_CANONICAL_OUTPUT_DIFFERENT_FROM_INDEPENDENT'
+            }
             $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
             $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
             if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
@@ -460,7 +515,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT)) {
+          foreach ($path in @('.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT)) {
             if (Test-Path -LiteralPath $path) {
               Remove-Item -LiteralPath $path -Force -Recurse
             }
