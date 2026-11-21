@@ -5,11 +5,11 @@ on:
   push:
     branches:
       - dev/redscript/pass8
+    # Deliberate grouped checkpoints only: source/tests commits do not
+    # auto-cancel each other. Dispatch manually or update the trigger file
+    # after a meaningful source-proven batch has been assembled.
     paths:
-      - 'src/GRedscript.Resolver/Phase2/Pass8*.cs'
-      - 'tests/GRedscript.Pass8.Checkpoint/**'
-      - 'tests/GRedscript.Resolver.Tests/test_pass8_*.py'
-      - '.github/workflows/redscript-pass8-checkpoint.yml'
+      - 'tests/GRedscript.Pass8.Checkpoint/CI-TRIGGER.txt'
 
 permissions:
   contents: read
