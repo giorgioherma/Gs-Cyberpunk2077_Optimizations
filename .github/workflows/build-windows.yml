@@ -158,6 +158,17 @@ jobs:
           $ErrorActionPreference='Stop'
           dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_BUILD_FAILED' }
+          # The Python source-state tests invoke the isolated owner-host DLLs.
+          # Build those prerequisites when present rather than skipping tests
+          # or expecting an unrelated earlier Actions workflow to supply them.
+          foreach ($project in @(
+              'src/GRedscript.Pass4/GRedscript.Pass4.csproj',
+              'tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj')) {
+            if (Test-Path -LiteralPath $project -PathType Leaf) {
+              dotnet build $project -c Release --nologo
+              if ($LASTEXITCODE -ne 0) { throw ('GCO_OWNER_TEST_HOST_BUILD_FAILED:' + $project) }
+            }
+          }
           python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_SAFETY_TESTS_FAILED' }
           $runtime = Get-Content src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.runtimeconfig.json -Raw
