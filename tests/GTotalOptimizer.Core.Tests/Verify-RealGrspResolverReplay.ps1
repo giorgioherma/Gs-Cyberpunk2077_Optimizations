@@ -2124,6 +2124,18 @@ try {
                 throw ('GCO_DD_HUB_REFERENCE_BEHAVIOR_MISSING:'+ $f.Name+':'+ $part)
               }
             }
+            # Historical Crackhouse alone consumes successful hold actions.
+            # The other four owners must not manufacture consumed input.
+            $isConsumer=($f.Name -eq 'Crackhouse.reds')
+            $actuallyConsumes=$body.Contains('evt.consumed = true;',[StringComparison]::Ordinal)
+            if ($actuallyConsumes -ne $isConsumer) {
+              throw ('GCO_DD_HUB_CONSUMPTION_MISMATCH:'+ $f.Name)
+            }
+            if (!$body.Contains('protected cb func OnAction(action: ListenerAction') -or
+                !$body.Contains('RegisterInputListener(this.') -or
+                !$body.Contains('EngineFallback = true;')) {
+              throw ('GCO_DD_HUB_EXCLUSIVE_ENGINE_FALLBACK_LOST:'+ $f.Name)
+            }
           }
         }
         if ($port.Id -eq 'gear-recovery-input-hub') {
