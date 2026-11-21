@@ -1,1 +1,1 @@
-checkpoint=runtime-aware-redscript-gco-wpf-footer-smoke-corrected-20261121
+checkpoint=gco-1111-current-ui-functional-contracts-runtime-provided-semantic-20261121
