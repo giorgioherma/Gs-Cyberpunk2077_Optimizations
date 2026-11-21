@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-21 — Isolated Agent 5 historical Pass 7, production one-pass branch (CI pending)
+
+- Dedicated `dev/redscript/pass7` starts at green `96d66c66`; no commits to stable `main` or the concurrent `dev/redscript/resolver_handoff` / Pass 4 / Pass 5 branches. The production `RedscriptGenerationPlan.Stage` on **this branch** now runs the source-aware Pass 7 generator after ten generics and earlier semantic rules, composing six operations (#700–705) into five owner files.
+- Implemented: NightCityRemembers spawn-guard hoist, StealthRunner quest-detection early gate and weak-player attach/detach lifecycle cache, RunningMan second-sprint entry perk and sprint-direction entry perk cache with optional-module live fallback, and LizziesBDs performer-only attach work gate. Existing DF #25, DVCore #27, DPR #21 and Quickhack #18 remain untouched. Source-state and official SCC tests use post-generic source; no historical whole-file transplant or corrective stages.
+- Dedicated `.github/workflows/redscript-pass7-checkpoint.yml` verifies untouched, handwritten partial, markerless full, compatible relocated/custom, absent, incompatible and repeated states, independent exact one-pass source parity, and official SCC 0.5.31 on complete effective output. **Focused CI #6 (run 44875905281) is running**, not accepted yet. Full GCO `build-windows.yml` and generated gameplay overlay remain unverified at this documentation checkpoint. No FPS/CPU savings claimed.
+- ReinforcementsCall/7.1 and Chipware overlap Pass 4/5/6/8 work; no duplicate ownership claimed. Historical Lizzies broader cached-index redesign is intentionally not imported. Integration decisions and remaining blockers are documented in `docs/integration/REDSCRIPT-PASS7-ISOLATED-HANDOFF.md`.
+
+
 ## 2026-11-21 — Historical Pass 2.2 scheduling batch #34–#36
 
 - **#34 NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1:** current post-generic `NCRSystem` retains its original `NCRTickCallback` + source-defined DelaySystem period when GRedRuntime Scheduler is unavailable or registration fails. The new recurring `NCRGCOMaintenanceJob` prevents duplicate requeues and is unregistered on session end/detach; faction, pending kills, daily decay and original callbacks remain untouched. Original callback creation, binding and DelayCallback arguments are proven, not just its declared type.
