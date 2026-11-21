@@ -39,7 +39,8 @@ static Dictionary<string, string> ReadCurrent(string root)
         ["ncr"] = ("NightCityRemembers", "NCR_CullChanceForTier"),
         ["sr"] = ("StealthRunner", "OnPlayerDetectionChangedEvent"),
         ["rm"] = ("RunningMan", "EvaluateTwoStepSprint"),
-        ["dir"] = ("RunningMan", "@replaceMethod(SprintDecisions)")
+        ["dir"] = ("RunningMan", "@replaceMethod(SprintDecisions)"),
+        ["lizzies"] = ("LizziesBDs", "LizziesBDsIsEnt")
     };
     var result = new Dictionary<string, string>();
     foreach (var sample in samples)
@@ -66,7 +67,8 @@ static string MakeGame(string temp, string label,
         ["ncr"] = "NightCityRemembers/NCR_SpawnCulling.reds",
         ["sr"] = "StealthRunner/npc_puppet.reds",
         ["rm"] = "RunningMan/double_sprint.reds",
-        ["dir"] = "RunningMan/sprint_direction.reds"
+        ["dir"] = "RunningMan/sprint_direction.reds",
+        ["lizzies"] = "LizziesBDs/NPCPuppet.reds"
     };
     foreach (var entry in sources)
     {
@@ -98,13 +100,14 @@ static void CheckContent(Dictionary<string, string> original, string output,
     bool relocated = false)
 {
     var files = GeneratedFiles(output);
-    Require(files.Length == 4, "EXPECTED_FOUR_OUTPUTS");
-    foreach (var key in new[] { "ncr", "sr", "rm", "dir" })
+    Require(files.Length == 5, "EXPECTED_FIVE_OUTPUTS");
+    foreach (var key in new[] { "ncr", "sr", "rm", "dir", "lizzies" })
     {
         string owner = key switch
         {
             "ncr" => "NightCityRemembers",
             "sr" => "StealthRunner",
+            "lizzies" => "LizziesBDs",
             _ => "RunningMan"
         };
         var ownerName = key switch
@@ -112,6 +115,7 @@ static void CheckContent(Dictionary<string, string> original, string output,
             "ncr" => "NCR_SpawnCulling.reds",
             "sr" => "npc_puppet.reds",
             "rm" => "double_sprint.reds",
+            "lizzies" => "NPCPuppet.reds",
             _ => "sprint_direction.reds"
         };
         var candidates = files.Where(f =>
@@ -162,6 +166,17 @@ static void CheckContent(Dictionary<string, string> original, string output,
             Require(content.Contains("let player: wref<PlayerPuppet> = this.m_stealthRunnerPlayer;",
                 StringComparison.Ordinal), "STEALTH_PLAYER_CACHED_READ_MISSING");
         }
+        else if (key == "lizzies")
+        {
+            Require(content.Contains("let __gcoLizzieRecordID: TweakDBID = this.GetRecordID();",
+                StringComparison.Ordinal), "LIZZIES_RECORD_FAST_GUARD_MISSING");
+            Require(content.Contains("if __gcoLizzieRecordID == t\"Character.LizziesBDs_Performer\"",
+                StringComparison.Ordinal), "LIZZIES_PERFORMER_LIST_MISSING");
+            Require(content.Contains("this.LizziesBDsZmenitObleceni(questsSystem, 1);",
+                StringComparison.Ordinal), "LIZZIES_GAMEPLAY_CALLBACK_LOST");
+            Require(content.Contains("OnLizziesBDsNPCEvent", StringComparison.Ordinal),
+                "LIZZIES_EVENT_CALLBACK_LOST");
+        }
         else if (key == "rm")
         {
             Require(Regex.Matches(content, @"private let m_gredRunningManDoubleRunPerk").Count == 1,
@@ -203,7 +218,7 @@ static void Run(string baseline)
         string result = Path.Combine(temp, "generated");
         var report = Pass7ChaseFrameFloorPass.Generate(game, result);
         Require(report.AppliedEdits >= 7, "STOCK_BATCH_EDITS");
-        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER_QUEST_DETECTION", "STEALTH_RUNNER_PLAYER_HANDLE", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION" })
+        foreach (string id in new[] { "NCR_SPAWN", "STEALTH_RUNNER_QUEST_DETECTION", "STEALTH_RUNNER_PLAYER_HANDLE", "RUNNING_MAN_SPRINT_ENTRY", "RUNNING_MAN_SPRINT_DIRECTION", "LIZZIES_BDS_PERFORMER" })
             AssertStatus(report, id, "APPLIED");
         CheckContent(originals, result);
         Require(Sha(string.Join("|", ReadCurrent(game)
@@ -218,7 +233,8 @@ static void Run(string baseline)
             string key = norm.Contains("/NightCityRemembers/") ? "ncr" :
                 norm.Contains("/StealthRunner/") ? "sr" :
                 norm.EndsWith("/sprint_direction.reds", StringComparison.Ordinal) ?
-                "dir" : "rm";
+                "dir" : norm.EndsWith("/LizziesBDs/NPCPuppet.reds", StringComparison.Ordinal) ?
+                "lizzies" : "rm";
             completed[key] = File.ReadAllText(file);
         }
         var fullGame = MakeGame(temp, "complete", completed);
@@ -254,6 +270,10 @@ static void Run(string baseline)
             + partial["rm"];
         partial["dir"] = "@addField(SprintDecisions)\nprivate let m_gredRunningManSprintDirectionPerk: Bool;\n\n"
             + partial["dir"];
+        partial["lizzies"] = partial["lizzies"].Replace(
+            "\tif !this.IsCrowd() {",
+            "\tlet __gcoLizzieRecordID: TweakDBID = this.GetRecordID();\n\tif !this.IsCrowd() {",
+            StringComparison.Ordinal);
         var partialReport = Pass7ChaseFrameFloorPass.Generate(
             MakeGame(temp, "partial", partial), Path.Combine(temp, "partial-out"));
         foreach (var id in new[] { "NCR_SPAWN", "STEALTH_RUNNER", "RUNNING_MAN" })
@@ -286,7 +306,7 @@ static void Run(string baseline)
         AssertStatus(bad, "NCR_SPAWN", "APPLIED");
         AssertStatus(bad, "RUNNING_MAN_SPRINT_ENTRY", "APPLIED");
         AssertStatus(bad, "RUNNING_MAN_SPRINT_DIRECTION", "APPLIED");
-        Require(GeneratedFiles(Path.Combine(temp, "incompatible-out")).Length == 3,
+        Require(GeneratedFiles(Path.Combine(temp, "incompatible-out")).Length == 4,
             "INCOMPATIBLE_SCOPE_TOO_BROAD");
 
         // When EasierControllerSprint integration changes, refuse the affected
@@ -301,7 +321,7 @@ static void Run(string baseline)
             Path.Combine(temp, "changed-module-out"));
         AssertStatus(moduleReport, "RUNNING_MAN_SPRINT_DIRECTION", "REFUSED");
         AssertStatus(moduleReport, "RUNNING_MAN_SPRINT_ENTRY", "APPLIED");
-        Require(GeneratedFiles(Path.Combine(temp, "changed-module-out")).Length == 3,
+        Require(GeneratedFiles(Path.Combine(temp, "changed-module-out")).Length == 4,
             "CHANGED_MODULE_REFUSAL_SCOPE_TOO_BROAD");
 
         var absent = Pass7ChaseFrameFloorPass.Generate(
