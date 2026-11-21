@@ -1,1 +1,1 @@
-checkpoint=integrated-pass4-through-pass10-one-go-scc
+checkpoint=integrated-pass4-10-source-state-and-full-canonical-scc-v2
