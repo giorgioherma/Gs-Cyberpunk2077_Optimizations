@@ -28,7 +28,7 @@ Dedicated branch-only workflow `.github/workflows/redscript-pass7-checkpoint.yml
 4. Exact byte parity between independently generated Pass 7 owner files and the **production one-pass** `stage-redscript-plan` effective source output.
 5. Official SCC 0.5.31 compilation of the **entire canonical generic + existing semantic + Pass 7 composition**, never just a syntactic toy fixture.
 
-A full branch-specific `build-windows.yml` must additionally validate integrated .NET 10 application, one game-relative combined ZIP, rollback/ownership sidecar and package integrity before this code is accepted as ship-ready. CI results are not gameplay or measured savings. Historical handmade ZIP behavior was played/tested, but **the new generator-produced files still need comparable in-game A/B checks**.
+**[Dedicated Pass 7 CI #11 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876625041)**: all six operations (23 edits / five original-path owner files) passed stock/partial/complete/custom/incompatible/absent/repeat tests, canonical one-pass byte parity and SCC 0.5.31 compilation across 2,331 post-generic files plus 34 semantic effective files (43,512,829 compiled bytes; sources untouched). `build-windows.yml` now has a **mandatory branch-scoped reusable Pass 7 CI/SCC prerequisite**, so a successful app build alone cannot mask invalid output. [Full GCO #1098](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44876651197) passed the reusable source/SCC job and is still validating integrated .NET 10 application, one game-relative combined ZIP, rollback/ownership sidecar and package integrity. This validation remains required before claiming ship-ready. CI results are not gameplay or measured savings. Historical handmade ZIP behavior was played/tested, but **the new generator-produced files still need comparable in-game A/B checks**.
 
 ## Remaining Pass 7 review / isolation
 
@@ -38,4 +38,4 @@ A full branch-specific `build-windows.yml` must additionally validate integrated
 - **LizziesBDs:** implemented only the independently safe attach-gate operation; historical across-method index rewriting is not automatically claimed.
 - **RunningMan Pass 9 dormancy and other Pass 7 operations:** remaining independent work requires source audit and explicit behavior/lifecycle proof.
 
-Development-branch integration is complete at the stage wiring level, but deployment acceptance depends on green focused **and full** CI and actual gameplay verification.
+Production one-pass integration and focused real-source compilation are verified on this development branch. Full application/package CI and actual generated in-game behavior need distinct acceptance; source/CI correctness alone does not establish FPS/CPU improvement.
