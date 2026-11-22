@@ -7,7 +7,7 @@ namespace GTotalOptimizer.App;
 /// </summary>
 internal sealed class CheckpointProgressSmoother
 {
-    public const double EstimatedCeiling = 98.5;
+    public const double EstimatedCeiling = 99.0;
     private double[] baseline = [0, 8];
     private int[] timingAnchors = [1];
     private double confirmedStage;
