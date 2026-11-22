@@ -226,7 +226,7 @@ public partial class MainWindow : Window
         bool show = preview is not null && redscriptPlanReady &&
             analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
             !HasPublishedOptimizationZip();
-        CetPlannedPanel.Visibility = RedPlannedPanel.Visibility =
+        CetPlannedText.Visibility = RedPlannedText.Visibility =
             show ? Visibility.Visible : Visibility.Collapsed;
         if (!show || preview is null)
         {
@@ -234,31 +234,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        var cetLines = preview.CetPlannedTransforms
-            .GroupBy(item => (item.Owner, item.Operation))
-            .OrderBy(group => group.Key.Owner, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(group => group.Key.Operation, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.Key.Owner + ": " + group.Key.Operation.Replace('_', ' ') +
-                (group.Count() > 1 ? " (" + group.Count() + ")" : ""))
-            .ToList();
-        if (HasPendingHotscenesOptIn())
-            cetLines.Add("Hotscenes ENG-only: requested; verified during Generate.");
-        CetPlannedText.Text = cetLines.Count > 0
-            ? string.Join(Environment.NewLine, cetLines)
-            : "No new CET optimizations.";
+        static string CountText(int count) => count == 0
+            ? "No new optimizations."
+            : count == 1 ? "1 new optimization" : count + " new optimizations";
 
-        var redLines = preview.RedscriptPlannedRules
-            .GroupBy(item => (item.Order, item.Id))
-            .OrderBy(group => group.Key.Order)
-            .Select(group => group.Key.Id.Replace('-', ' ') + ": " +
-                group.Sum(item => item.RewrittenExpressions) + " edits")
-            .ToList();
-        if (redLines.Count > 0 && preview.RedscriptPlannedSourceGroups.Length > 0)
-            redLines.Add("Affected source groups: " +
-                string.Join(", ", preview.RedscriptPlannedSourceGroups));
-        RedPlannedText.Text = redLines.Count > 0
-            ? string.Join(Environment.NewLine, redLines)
-            : "No new REDscript optimizations.";
+        CetPlannedText.Text = CountText(preview.CetOptimizationTransforms);
+        // This personal option has not been verified by the source owner yet.
+        if (HasPendingHotscenesOptIn())
+            CetPlannedText.Text += " | 1 additional option requested";
+        RedPlannedText.Text = CountText(preview.RedscriptOptimizationCount);
     }
 
     private void RefreshGenerateEligibility()

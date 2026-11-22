@@ -1014,13 +1014,9 @@
                                     <TextBlock x:Name="CetOptimizationHeading" Text="CET mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
-                                    <StackPanel x:Name="CetPlannedPanel" Visibility="Collapsed" Margin="0,6,0,0">
-                                        <TextBlock Text="PLANNED FOR NEXT ZIP" Foreground="{StaticResource Yellow}"
-                                                   FontWeight="Bold" FontSize="12"/>
-                                        <TextBox x:Name="CetPlannedText" IsReadOnly="True" TextWrapping="Wrap"
-                                                 AcceptsReturn="True" Background="#081012" Foreground="{StaticResource Cyan}"
-                                                 BorderThickness="0" MaxHeight="110" VerticalScrollBarVisibility="Auto"/>
-                                    </StackPanel>
+                                    <TextBlock x:Name="CetPlannedText" Visibility="Collapsed"
+                                               Margin="0,6,0,0" Foreground="{StaticResource Yellow}"
+                                               FontWeight="Bold" FontSize="13" TextWrapping="Wrap"/>
                                     <TextBox x:Name="CetReportText" Text="No verified CET capture analyzed."
                                              IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"
@@ -1050,13 +1046,9 @@
                                     <TextBlock x:Name="RedOptimizationHeading" Text="REDscript mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
-                                    <StackPanel x:Name="RedPlannedPanel" Visibility="Collapsed" Margin="0,6,0,0">
-                                        <TextBlock Text="PLANNED FOR NEXT ZIP" Foreground="{StaticResource Yellow}"
-                                                   FontWeight="Bold" FontSize="12"/>
-                                        <TextBox x:Name="RedPlannedText" IsReadOnly="True" TextWrapping="Wrap"
-                                                 AcceptsReturn="True" Background="#081012" Foreground="{StaticResource Cyan}"
-                                                 BorderThickness="0" MaxHeight="110" VerticalScrollBarVisibility="Auto"/>
-                                    </StackPanel>
+                                    <TextBlock x:Name="RedPlannedText" Visibility="Collapsed"
+                                               Margin="0,6,0,0" Foreground="{StaticResource Yellow}"
+                                               FontWeight="Bold" FontSize="13" TextWrapping="Wrap"/>
                                     <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
                                              IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"

@@ -299,23 +299,18 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
         !new CombinedPassAvailability(0, 1, []).HasNewOptimizations)
         throw new InvalidDataException("GCO_GENERATE_MUST_REFUSE_SUPPORT_ONLY_SECOND_PASS");
 
-    // Use the same manifest classifier for preview and Generate eligibility.
-    // A support-only refresh must never appear as planned work.
-    var describe = typeof(CetReadOnlyAnalysisService).GetMethod(
-        "DescribeOptimizationTransforms",
+    var countRed = typeof(CombinedPassAvailability).GetMethod(
+        "CountCompletedRedscriptOptimizations",
         System.Reflection.BindingFlags.Static |
         System.Reflection.BindingFlags.NonPublic) ??
-        throw new InvalidDataException("CET_MISSING_PLANNED_TRANSFORMS");
-    using (var preview = System.Text.Json.JsonDocument.Parse(
-        """{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":false},{"type":"GC_CONTROLLER","runtimeUpgrade":true},{"type":"SEMANTIC_RULE","Owner":"ExampleMod","RuleId":"example-rule"},{"type":"GENERIC_SOURCE_RUNTIME_HOOK","file":"OtherMod/init.lua","stage":"source-gate"}]}"""))
-    {
-        var rows = (CetPlannedTransform[])describe.Invoke(null, [preview.RootElement])!;
-        if (rows.Length != Count(preview.RootElement.GetRawText()) ||
-            !rows.Any(x => x.Owner == "G-GC" && x.Operation == "Controller runtime upgrade") ||
-            !rows.Any(x => x.Owner == "ExampleMod" && x.Operation == "example-rule") ||
-            !rows.Any(x => x.Owner == "OtherMod" && x.Operation == "source-gate"))
-            throw new InvalidDataException("GCO_PLANNED_CET_WORK_NOT_SOURCE_GROUNDED");
-    }
+        throw new InvalidDataException("GCO_MISSING_REDSCRIPT_PREVIEW_COUNTER");
+    int CountRed(GRedscript.Resolver.RedscriptGenerationPlan.OutputItem[] items) =>
+        (int)countRed.Invoke(null, [items])!;
+    if (CountRed([]) != 0 ||
+        CountRed([new(11, "one", 3, 1, 0, []),
+                  new(11, "one", 2, 0, 1, []),
+                  new(12, "two", 8, 1, 0, [])]) != 2)
+        throw new InvalidDataException("GCO_REDSCRIPT_PREVIEW_COUNT_MUST_COUNT_APPLIED_RULES");
 
     bool malformedRefused = false;
     try { _ = Count("""{"transforms":[{"unexpected":"no-type"}]}"""); }

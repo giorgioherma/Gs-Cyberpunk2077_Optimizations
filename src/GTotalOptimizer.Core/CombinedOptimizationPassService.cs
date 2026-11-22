@@ -36,9 +36,13 @@ public sealed record CombinedPassAvailability(
     RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped)
 {
     public bool HasNewOptimizations => CetOptimizationTransforms > 0 || RedscriptEdits > 0;
-    public CetPlannedTransform[] CetPlannedTransforms { get; init; } = [];
-    public RedscriptGenerationPlan.OutputItem[] RedscriptPlannedRules { get; init; } = [];
-    public string[] RedscriptPlannedSourceGroups { get; init; } = [];
+    public int RedscriptOptimizationCount { get; init; }
+
+    // Count actual applied rule families, not individual rewritten expressions
+    // or configured catalogue entries. A multi-file stage counts once.
+    internal static int CountCompletedRedscriptOptimizations(
+        IEnumerable<RedscriptGenerationPlan.OutputItem> completed) =>
+        completed.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count();
 }
 
 public sealed class NoNewOptimizationsException : InvalidOperationException
@@ -94,26 +98,17 @@ public sealed class CombinedOptimizationPassService
                 "redruntime", "owner");
             string? providedRuntime = Directory.Exists(frameworkOwner)
                 ? frameworkOwner : null;
-            string stageRoot = Path.Combine(temp, "redscript-stage");
             var red = await Task.Run(() =>
                 RedscriptGenerationPlan.Stage(game, plan, analysis,
-                    stageRoot, providedRuntime),
+                    Path.Combine(temp, "redscript-stage"), providedRuntime),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             progress?.Report(new(4, 5, "ANALYZE / REDSCRIPT CHANGES VERIFIED"));
-            string scripts = Path.Combine(stageRoot, "effective-preview", "r6", "scripts");
-            var sourceGroups = Directory.Exists(scripts)
-                ? Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
-                    .Select(file => Path.GetRelativePath(scripts, file).Replace('\\', '/').Split('/')[0])
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray()
-                : Array.Empty<string>();
             return new(cetResult.OptimizationTransformCount,
                 red.AppliedEdits, red.Skipped)
             {
-                CetPlannedTransforms = cetResult.PlannedTransforms,
-                RedscriptPlannedRules = red.Completed,
-                RedscriptPlannedSourceGroups = sourceGroups
+                RedscriptOptimizationCount = CombinedPassAvailability
+                    .CountCompletedRedscriptOptimizations(red.Completed)
             };
         }
         finally
