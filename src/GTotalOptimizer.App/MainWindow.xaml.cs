@@ -409,7 +409,7 @@ public partial class MainWindow : Window
             PausePortrait();
             return;
         }
-        double seconds = Math.Min(0.20, portraitClock.Elapsed.TotalSeconds);
+        double seconds = Math.Min(0.35, portraitClock.Elapsed.TotalSeconds);
         portraitClock.Restart();
         RenderPortrait(portraitSignal.Advance(seconds));
         if (!portraitSignal.NeedsTicks) PausePortrait();
@@ -432,6 +432,7 @@ public partial class MainWindow : Window
         private double remaining;
         private double restAfterBurst;
         private double burstMajority;
+        private double burstPresence;
         private bool inBurst;
         private bool stable;
         public bool NeedsTicks => target > 0 && !stable;
@@ -505,7 +506,11 @@ public partial class MainWindow : Window
                 {
                     inBurst = false;
                     color = burstMajority;
-                    remaining = restAfterBurst;
+                    // Never inherit a long quiet period from a much less
+                    // active stage after CONTINUE or another state change.
+                    remaining = Math.Abs(presence - burstPresence) > .10
+                        ? Math.Min(restAfterBurst, Range(.45, 1.1))
+                        : restAfterBurst;
                 }
                 else
                     BeginBurst();
@@ -523,6 +528,7 @@ public partial class MainWindow : Window
         private void BeginBurst()
         {
             double p = Math.Clamp(presence, .025, .975);
+            burstPresence = p;
             burstMajority = p >= .5 ? 1 : 0;
             double minority = burstMajority == 0 ? p : 1 - p;
             int count = random.Next(1, 6);
