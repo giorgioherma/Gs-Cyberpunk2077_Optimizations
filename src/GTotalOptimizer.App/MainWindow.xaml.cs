@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using Color = System.Windows.Media.Color;
 using Brush = System.Windows.Media.Brush;
@@ -19,7 +18,7 @@ namespace GTotalOptimizer.App;
 // in the authoritative CET and GRSP owner managers via UnifiedProfilerWorkflow.
 public partial class MainWindow : Window
 {
-    private enum PortraitStage { Black, Capturing, Collecting, Collected }
+    private enum PortraitStage { Black, Installed, Capturing, Collecting, Results, Analyzing, Generating }
     private static readonly Brush AnalyzeYellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
     private static readonly Brush AnalyzeOkGreen = new SolidColorBrush(Color.FromRgb(101, 220, 162));
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
@@ -49,7 +48,8 @@ public partial class MainWindow : Window
     private readonly GameProcessEvents gameProcesses = new();
     private readonly DispatcherTimer gameStateTimer = new()
         { Interval = TimeSpan.FromSeconds(10) };
-    private readonly Random glitchRandom = new();
+    private readonly PortraitSignal portraitSignal = new();
+    private readonly Stopwatch portraitClock = new();
     private CancellationTokenSource? refreshCancellation;
     private GameInspection inspection = GameInspector.Inspect(null);
     private LiveProfilerState? liveState;
@@ -121,7 +121,6 @@ public partial class MainWindow : Window
     private const double ExpandedConsolePortraitClearance = 112.0;
     private const double ExpandedConsoleRaise = 19.0;
     internal bool WpfVerificationMode { get; set; }
-    private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
 
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
@@ -295,6 +294,12 @@ public partial class MainWindow : Window
         Title = $"G's Cyberpunk 2077 Optimizer — v{version}";
         BuildVersionText.Text = $"v{version}";
         glitchTimer.Tick += GlitchTick;
+        Deactivated += (_, _) => PausePortrait();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible) StartGlitchIfVisible();
+            else PausePortrait();
+        };
         consoleActivityTimer.Tick += (_, _) => AdvanceConsoleActivity();
         workProgressTimer.Tick += (_, _) =>
             WorkflowProgressBar.Value = progressSmoother.Advance(
@@ -354,51 +359,206 @@ public partial class MainWindow : Window
             Trace.TraceError("Missing/undecodable Regular border PNG in assets/ui/elements.");
     }
 
+    // The same aligned owner images serve both pages. Only their signal
+    // intensity changes; this effect is never workflow/completion evidence.
     private void SetPortraitStage(PortraitStage stage)
     {
-        portraitStage = stage;
-        glitchTimer.Stop();
-        VBlackImage.BeginAnimation(UIElement.OpacityProperty, null);
-        if (stage == PortraitStage.Collected)
+        if (portraitStage != stage)
         {
-            var fade = new DoubleAnimation(VBlackImage.Opacity, 0.0,
-                TimeSpan.FromMilliseconds(850)) { FillBehavior = FillBehavior.HoldEnd };
-            VBlackImage.BeginAnimation(UIElement.OpacityProperty, fade);
-            return;
+            portraitStage = stage;
+            portraitSignal.SetStage(stage);
         }
-        VBlackImage.Opacity = 1.0;
-        if (stage is PortraitStage.Capturing or PortraitStage.Collecting)
-            StartGlitchIfVisible();
+        if (stage == PortraitStage.Black)
+        {
+            PausePortrait();
+            RenderPortrait(0);
+        }
+        else StartGlitchIfVisible();
+    }
+
+    private void RenderPortrait(double color)
+    {
+        // Explicit endpoints prevent color leaking through the black PNG's
+        // transparent perimeter. Interior weak pulses use the original pair.
+        if (VColorImage.Opacity != color) VColorImage.Opacity = color;
+        if (VBlackImage.Opacity != 1 - color) VBlackImage.Opacity = 1 - color;
+    }
+
+    private void PausePortrait()
+    {
+        glitchTimer.Stop();
+        portraitClock.Reset();
     }
 
     private void StartGlitchIfVisible()
     {
-        if (!IsActive ||
-            VBlackImage.Source is null || VColorImage.Source is null)
-            return;
-        glitchTimer.Interval = TimeSpan.FromMilliseconds(350 + glitchRandom.Next(1100));
+        if (WpfVerificationMode || !IsActive || !IsVisible ||
+            WindowState == System.Windows.WindowState.Minimized ||
+            VBlackImage.Source is null || VColorImage.Source is null ||
+            !portraitSignal.NeedsTicks || glitchTimer.IsEnabled) return;
+        portraitClock.Restart();
+        glitchTimer.Interval = TimeSpan.FromMilliseconds(portraitSignal.NextTickMilliseconds);
         glitchTimer.Start();
     }
 
     private void GlitchTick(object? sender, EventArgs e)
     {
-        if (portraitStage is not (PortraitStage.Capturing or PortraitStage.Collecting) ||
-            !IsActive)
+        if (WpfVerificationMode || !IsActive || !IsVisible ||
+            WindowState == System.Windows.WindowState.Minimized)
         {
-            glitchTimer.Stop();
-            VBlackImage.Opacity = 1;
+            PausePortrait();
             return;
         }
-        ++glitchTicks;
-        var longBlack = glitchTicks % 8 == 0;
-        var colored = VBlackImage.Opacity > 0.5 && !longBlack;
-        VBlackImage.Opacity = colored ? 0 : 1;
-        // Flashing does NOT indicate progress, capture success or validation.
-        var next = longBlack ? 2400 + glitchRandom.Next(5000)
-            : colored ? 30 + glitchRandom.Next(portraitStage == PortraitStage.Collecting ? 110 : 200)
-            : portraitStage == PortraitStage.Collecting ? 90 + glitchRandom.Next(800)
-              : 240 + glitchRandom.Next(2200);
-        glitchTimer.Interval = TimeSpan.FromMilliseconds(next);
+        double seconds = Math.Min(0.20, portraitClock.Elapsed.TotalSeconds);
+        portraitClock.Restart();
+        RenderPortrait(portraitSignal.Advance(seconds));
+        if (!portraitSignal.NeedsTicks) PausePortrait();
+        else glitchTimer.Interval =
+            TimeSpan.FromMilliseconds(portraitSignal.NextTickMilliseconds);
+    }
+
+    // Variable-length pulses and pauses, not a uniform alternating blink.
+    // Interpolate the requested density without resetting an in-flight burst.
+    private sealed class PortraitSignal
+    {
+        private readonly Random random = new();
+        private readonly Queue<(double Color, double Seconds)> pulses = new();
+        private double presence;
+        private double from;
+        private double target;
+        private double transitionElapsed;
+        private double transitionDuration = 1;
+        private double color;
+        private double remaining;
+        private double restAfterBurst;
+        private double burstMajority;
+        private bool inBurst;
+        private bool stable;
+        public bool NeedsTicks => target > 0 && !stable;
+        public double NextTickMilliseconds =>
+            transitionElapsed < transitionDuration ? 33 :
+            Math.Clamp(remaining * 1000, 20, 250);
+
+        private double Range(double min, double max) => min + random.NextDouble() * (max - min);
+
+        public void SetStage(PortraitStage stage)
+        {
+            double next = stage switch
+            {
+                PortraitStage.Installed => .12,
+                PortraitStage.Capturing => .20,
+                PortraitStage.Collecting => .38,
+                PortraitStage.Results => .75,
+                PortraitStage.Analyzing => .90,
+                PortraitStage.Generating => 1,
+                _ => 0
+            };
+            if (next == target) return;
+            if (next == 0)
+            {
+                pulses.Clear();
+                presence = from = target = color = remaining = 0;
+                inBurst = stable = false;
+                transitionElapsed = transitionDuration;
+                return;
+            }
+            from = presence;
+            target = next;
+            stable = false;
+            transitionElapsed = 0;
+            transitionDuration = stage switch
+            {
+                PortraitStage.Generating => 1.2,
+                PortraitStage.Analyzing => 1.6,
+                PortraitStage.Results => 2.4,
+                _ => 2.8
+            };
+            // Keep an ongoing cluster intact, but do not wait through the
+            // previous profile's entire quiet hold before the new one emerges.
+            if (!inBurst)
+                remaining = remaining <= 0 ? Range(.65, 1.25) :
+                    Math.Min(remaining, Range(.65, 1.25));
+        }
+
+        public double Advance(double seconds)
+        {
+            if (!NeedsTicks) return color;
+            transitionElapsed = Math.Min(transitionDuration, transitionElapsed + seconds);
+            double t = transitionElapsed / transitionDuration;
+            double blend = t * t * (3 - 2 * t);
+            presence = from + (target - from) * blend;
+            if (target == 1 && t >= 1)
+            {
+                pulses.Clear();
+                inBurst = false;
+                stable = true;
+                color = 1;
+                return color;
+            }
+
+            remaining -= seconds;
+            if (remaining <= 0)
+            {
+                if (pulses.Count != 0)
+                    (color, remaining) = pulses.Dequeue();
+                else if (inBurst)
+                {
+                    inBurst = false;
+                    color = burstMajority;
+                    remaining = restAfterBurst;
+                }
+                else
+                    BeginBurst();
+            }
+            // Only the terminal ramp settles the last interruptions away;
+            // all earlier state transitions change frequency/duty, not fade.
+            if (target == 1)
+            {
+                double settle = Math.Clamp((t - .5) * 2, 0, 1);
+                return color + (1 - color) * settle * settle;
+            }
+            return color;
+        }
+
+        private void BeginBurst()
+        {
+            double p = Math.Clamp(presence, .025, .975);
+            burstMajority = p >= .5 ? 1 : 0;
+            double minority = burstMajority == 0 ? p : 1 - p;
+            int count = random.Next(1, 6);
+            // Active windows expand through Capture and Collect. In the
+            // color-dominant states, interruptions stay much shorter.
+            bool hold = burstMajority == 0 &&
+                random.NextDouble() < Math.Clamp((p - .10) * 2, 0, .62);
+            double minoritySeconds = 0;
+            double gapSeconds = 0;
+            int holdIndex = hold ? random.Next(count) : -1;
+            for (int i = 0; i < count; ++i)
+            {
+                // A longer pulse, a weak hit, or a tiny cut can appear at
+                // any position. Short pulses deliberately vary in strength.
+                double duration = i == holdIndex
+                    ? Range(.55, .8 + 7 * p)
+                    : random.NextDouble() < .23 ? Range(.18, .36) : Range(.045, .14);
+                double strength = duration < .14 && random.NextDouble() < .55
+                    ? Range(.25, .65) : 1;
+                pulses.Enqueue((burstMajority == 0 ? strength : 1 - strength, duration));
+                minoritySeconds += duration;
+                if (i + 1 < count)
+                {
+                    double gap = random.NextDouble() < .30 ? Range(.16, .40) : Range(.04, .13);
+                    pulses.Enqueue((burstMajority, gap));
+                    gapSeconds += gap;
+                }
+            }
+            // Budget the quiet hold by the actual cluster duration, so the
+            // long-run color duty follows the current workflow profile.
+            restAfterBurst = Math.Clamp(
+                (minoritySeconds * (1 - minority) / minority - gapSeconds) *
+                    Range(.72, 1.28), .18, 18);
+            inBurst = true;
+            (color, remaining) = pulses.Dequeue();
+        }
     }
 
     // Preserve the old narrow V content-column reservation. The new
@@ -770,7 +930,7 @@ public partial class MainWindow : Window
             captureAndRestoreVerified = true;
             savedCapture = saved;
             UpdateResultTexts(saved);
-            SetPortraitStage(PortraitStage.Collected);
+            SetPortraitStage(PortraitStage.Results);
             CapturePage.Visibility = Visibility.Collapsed;
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
@@ -985,10 +1145,9 @@ public partial class MainWindow : Window
     private void Window_Activated(object sender, EventArgs e)
     {
         if (WpfVerificationMode) return;
-        if (!initialized || busy ||
+        if (!initialized ||
             WindowState == System.Windows.WindowState.Minimized) return;
-        if (portraitStage is PortraitStage.Capturing or PortraitStage.Collecting)
-            StartGlitchIfVisible();
+        StartGlitchIfVisible();
         // Activation is presentation-only. Initial load, user REFRESH,
         // process transitions and workflow actions already re-inspect sources.
         // Repeating owner CLIs and package hashing on Alt-Tab was redundant.
@@ -1000,7 +1159,7 @@ public partial class MainWindow : Window
         if (WpfVerificationMode) return;
         if (WindowState == System.Windows.WindowState.Minimized)
         {
-            glitchTimer.Stop();
+            PausePortrait();
             return;
         }
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
@@ -1010,6 +1169,7 @@ public partial class MainWindow : Window
             {
                 Activate();
                 Focus();
+                StartGlitchIfVisible();
             }
         }));
     }
@@ -1033,7 +1193,7 @@ public partial class MainWindow : Window
     {
         gameStateTimer.Stop();
         gameProcesses.Dispose();
-        glitchTimer.Stop();
+        PausePortrait();
         consoleActivityTimer.Stop();
         workProgressTimer.Stop();
         workProgressClock.Stop();
@@ -1392,6 +1552,7 @@ public partial class MainWindow : Window
         // cached permissions before awaiting any owner status.
         if (sourceChanged)
         {
+            SetPortraitStage(PortraitStage.Black);
             SetFrameworkStatuses(null);
             liveState = null;
             savedCapture = null;
@@ -1533,9 +1694,14 @@ public partial class MainWindow : Window
                             : session
                                 ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
                                 : $"G-CET Profiler: {cetProfiler} | G-REDscript Profiler: {redProfiler}");
-            if (CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
-                portraitStage != PortraitStage.Collected)
-                SetPortraitStage(PortraitStage.Collected);
+            // Reconstruct Page 1's decorative state from the authoritative
+            // journal after tray hibernation/reopen, not from a local flag.
+            SetPortraitStage(CaptureAdmissionPolicy.CanContinue(saved, frame is null)
+                ? PortraitStage.Collecting
+                : !state.BothInstalled || !session ? PortraitStage.Black
+                : captureStarted && saved?.CollectInvoked != true
+                    ? PortraitStage.Capturing
+                    : PortraitStage.Installed);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1579,6 +1745,7 @@ public partial class MainWindow : Window
             return;
         }
         SetBusy(true);
+        SetPortraitStage(PortraitStage.Installed);
         SetStatus("Installing CET and REDscript profilers...");
         long installActivity = BeginConsoleActivity("Installing profilers");
         try
@@ -1586,13 +1753,21 @@ public partial class MainWindow : Window
             var result = await Workflow.InstallAsync(inspection.GameRoot);
             if (result.Ok)
             {
-                SetPortraitStage(PortraitStage.Black);
+                SetPortraitStage(PortraitStage.Installed);
                 // InstallAsync already re-inspects both source-owned managers.
                 PinStatus("Profilers installed. Ready to start Cyberpunk.");
             }
-            else Warn(result.Detail, "Profiler installation");
+            else
+            {
+                SetPortraitStage(PortraitStage.Black);
+                Warn(result.Detail, "Profiler installation");
+            }
         }
-        catch (Exception ex) { Warn(ex.Message, "Profiler installation"); }
+        catch (Exception ex)
+        {
+            SetPortraitStage(PortraitStage.Black);
+            Warn(ex.Message, "Profiler installation");
+        }
         finally { EndConsoleActivity(installActivity); SetBusy(false); await RefreshSourceAsync(); }
     }
 
@@ -1716,6 +1891,7 @@ public partial class MainWindow : Window
         ClearStatusPin();
         var launched = false;
         SetBusy(true);
+        SetPortraitStage(PortraitStage.Capturing);
         long launchActivity = BeginConsoleActivity("Preparing profilers and starting Cyberpunk");
         try
         {
@@ -1775,6 +1951,7 @@ public partial class MainWindow : Window
             gcoLaunchedGamePid = null;
             EndConsoleActivity(launchActivity);
             SetBusy(false);
+            if (!launched) SetPortraitStage(PortraitStage.Installed);
             // Handoff when the launch request succeeds. The native tray and
             // observer are independent of whether Cyberpunk is observable
             // yet; the user can reopen GCO after a slow start or crash.
@@ -1894,7 +2071,8 @@ public partial class MainWindow : Window
             SetWorkProgress(collectProgress, WorkPhase.Collect, 4, 10, "COLLECT / CAPTURES VERIFIED");
             if (saved.Cet is not null && saved.Redscript is not null)
             {
-                SetPortraitStage(PortraitStage.Collected);
+                // Keep Collect's black-dominant signal through report
+                // building and while awaiting CONTINUE.
                 UpdateResultTexts(saved);
             }
             else SetPortraitStage(PortraitStage.Black);
@@ -2051,6 +2229,9 @@ public partial class MainWindow : Window
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
+            if (portraitStage is PortraitStage.Black or PortraitStage.Installed or
+                PortraitStage.Capturing or PortraitStage.Collecting)
+                SetPortraitStage(PortraitStage.Results);
             CapturePage.Visibility = Visibility.Collapsed;
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
@@ -2108,6 +2289,7 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("Workspace reopening metadata: " + ex);
             }
             UpdateResultTexts(saved);
+            SetPortraitStage(PortraitStage.Results);
             CapturePage.Visibility = Visibility.Collapsed;
             CaptureFooterHost.Visibility = Visibility.Collapsed;
             ResultsPage.Visibility = Visibility.Visible;
@@ -2197,6 +2379,7 @@ public partial class MainWindow : Window
             return;
 
         analysisRunning = true;
+        SetPortraitStage(PortraitStage.Analyzing);
         redscriptPlanReady = false;
         analyzedAvailability = null;
         RefreshPlannedWork();
@@ -2347,6 +2530,8 @@ public partial class MainWindow : Window
             FinishWorkProgress(analyzeProgress, WorkPhase.Analyze,
                 analyzedSessionId == saved.SessionId && redscriptPlanReady);
             analysisRunning = false;
+            if (analyzedSessionId != saved.SessionId || !redscriptPlanReady)
+                SetPortraitStage(PortraitStage.Results);
             RefreshDoneAvailability();
             AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
                 !generationRunning;
@@ -2382,6 +2567,7 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.Visibility == Visibility.Visible &&
             HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
+        SetPortraitStage(PortraitStage.Generating);
         generatedPassZipPath = null;
         ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
@@ -2503,6 +2689,7 @@ public partial class MainWindow : Window
             if (IsLoaded)
             {
                 bool generated = HasPublishedOptimizationZip();
+                if (!generated) SetPortraitStage(PortraitStage.Analyzing);
                 RefreshDoneAvailability();
                 HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
                 OpenFolderButton.IsEnabled = generated && generatedPassZipPath is not null &&
