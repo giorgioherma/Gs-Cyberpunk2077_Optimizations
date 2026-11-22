@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Hide progress row at completion
+
+- Shared FinishWorkProgress now collapses the entire progress row (label and gradient rail) after successful or unsuccessful Collect, Analyze and Generate. Existing completion messages, adaptive progress, operation tokens and eligibility unchanged. No cosmetic CI assertion or separate checkpoint; pending Windows package validation.
+
 ## 2026-11-22 — v1.2.6 exact installed framework omission
 
 - GCO packages the full owner-proven runtime overlay as before, then conditionally excludes only complete byte-identical 0-Engine (CET), G-REDruntime (REDscript) and G-CET native (RED4ext) groups using SHA-256 of actual required files. Missing, different, linked or unreadable files retain the existing full framework payload and compatibility handling. G-REDruntime copied custom installed bytes do not qualify as an exact bundled version. Final publication rechecks omitted dependencies and records omitted paths/hashes in the external ownership sidecar; game files untouched. G-GC learning/calibration and ordinary mods never omitted by this policy. No generator order or admission changes.

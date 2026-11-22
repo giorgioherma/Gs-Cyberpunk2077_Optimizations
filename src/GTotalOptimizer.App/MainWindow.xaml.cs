@@ -1255,7 +1255,9 @@ public partial class MainWindow : Window
                 _ => "READY"
             };
         }
-        else WorkflowProgressHost.Visibility = Visibility.Collapsed;
+        // Completion is reported by the buttons and console. The shared
+        // progress row is visible only while Collect, Analyze or Generate runs.
+        WorkflowProgressHost.Visibility = Visibility.Collapsed;
         activeWorkPhase = WorkPhase.None;
     }
 
