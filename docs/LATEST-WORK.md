@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Workload-proportional adaptive progress
+
+- Owner's five-minute capture run (130 CET mods / 2,319 REDscript files) observed large-jump intervals Collect 48/44s; Analyze 57/23/66/82s; Generate 73/79s. These are observed UI jump times, not separately instrumented backend-stage durations.
+- Existing WPF-only CheckpointProgressSmoother now maps actual producer checkpoints to phase-specific cumulative timing weights. Collect allocates approximately half to verified native collection and half to report processing; Analyze follows CET analysis, REDscript plan, CET preview, REDscript preview; Generate reserves approximately 45% for CET, 49% for REDscript analysis/staging and 6% for combined staging/ZIP verification/publication. Fine-grained internal timing splits and the final ZIP reserve are provisional. Fractional ZIP-entry callbacks map into the existing weighted stage.
+- Actual elapsed checkpoint intervals calibrate a normalized timing multiplier within each operation (first useful sample directly, then 60% latest sample). The visual interpolation reaches 95% of the remaining checkpoint interval at predicted arrival and eases toward 99% if late; no advance beyond the next checkpoint or 98.5% global ceiling before verified success. Cheap intermediate callbacks cannot distort the full-stage timing samples. No persisted learning, new settings, source scans, generator changes, or modified completion/restore gates.
+- Source commit `d15194e6`; existing packaged smoke extended with weighted-work, faster/slower normalized adaptation and partial ZIP progress scenarios at `69128da1`. Independent numerical formula replay passed (42.81% before first Generate checkpoint, 91.70% before REDscript staging completes, 34.28% at the same normalized Analyze checkpoint on half/double-duration simulations, 98.5% ceiling). This is not C# compilation or real WPF/gameplay verification. Full Windows checkpoint and owner visual acceptance pending; version and main unchanged.
+
 ## 2026-11-22 — Analyze spacing and matched generation summaries
 
 - Owner-requested Page 2 visual breathing room: increased card/action vertical separation, card padding, action-button gaps and spacing between installer/Vortex guidance and PASS READY; normal hyphens replace both long dashes in those notices. Page 1 and progress estimator unchanged.
