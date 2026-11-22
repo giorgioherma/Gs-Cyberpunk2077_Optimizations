@@ -79,6 +79,20 @@ public static class Pass8ThroughputPass
     {
         string body = source[(method.Open + 1)..method.Close];
         var branches = PerkBranch.Matches(body);
+        // A later approved Chipware perk-result memo retains the original
+        // conditional branches but moves the vanilla fallback into a cached
+        // result. Its switch already skips unrelated perk types before any
+        // expensive stat read. Do not add an overlapping early gate.
+        var switchGate = Regex.Match(body, @"\bswitch\s+perkType\s*\{");
+        var statsRead = Regex.Match(body,
+            @"\bGameInstance\s*\.\s*GetStatsSystem\s*\(");
+        if (switchGate.Success && statsRead.Success &&
+            switchGate.Index < statsRead.Index &&
+            Regex.IsMatch(body, @"\bdefault\s*:\s*return\s+wrappedMethod\s*\(\s*perkType\s*\)\s*;") &&
+            Regex.IsMatch(body, @"\bTryGetPerkResult\s*\(\s*cacheIndex\s*,\s*player\s*,") &&
+            Regex.IsMatch(body, @"\bcache\s*\.\s*StorePerkResult\s*\(\s*cacheIndex\s*,\s*player\s*,\s*vanillaPerkResult\s*\)") &&
+            Regex.IsMatch(body, @"\breturn\s+vanillaPerkResult\s*;"))
+            return new("COMPLETE", null, null);
         if (branches.Count == 0)
         {
             // Historical/manual switch dispatch is already independently
