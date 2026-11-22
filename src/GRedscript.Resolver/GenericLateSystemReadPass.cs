@@ -226,7 +226,8 @@ internal static class GenericLateSystemReadPass
             // read/null guard, all within one statement sequence.
             var typeGuard = T($"if !Equals(ListenerAction.GetType(action), gameinputActionType.BUTTON_RELEASED) {{ return {result}; }}");
             if (!Match(tokens, next, typeGuard)) continue;
-            int readAt = next + typeGuard.Length;
+            int readAt = AfterSafeActionNameGate(tokens,
+                next + typeGuard.Length, result);
             if (readAt + 2 >= tokens.Count ||
                 tokens[readAt].Value != "let" ||
                 !Identifier(tokens[readAt + 1].Value) ||
@@ -245,6 +246,40 @@ internal static class GenericLateSystemReadPass
         if (text.Split(Marker, StringSplitOptions.None).Length - 1 != complete)
             throw new InvalidDataException("LATE_SYSTEM_READ_PARTIAL_OR_DRIFTED_GENERATED_MARKER");
         return new(edits, complete);
+    }
+
+    // A later semantic action-name admission may live between our already
+    // generated type guard and the same quest lookup. Only a pure sequence
+    // of literal negative name comparisons returning the prior wrapper
+    // result is accepted. Changed effects remain genuine marker drift.
+    private static int AfterSafeActionNameGate(
+        IReadOnlyList<SourceAdmission.Token> tokens, int at, string result)
+    {
+        if (at + 10 >= tokens.Count || tokens[at].Value != "let" ||
+            !Identifier(tokens[at + 1].Value)) return at;
+        string name = tokens[at + 1].Value;
+        var getter = T("= ListenerAction.GetName(action);");
+        if (!Match(tokens, at + 2, getter)) return at;
+        int i = at + 2 + getter.Length;
+        if (i >= tokens.Count || tokens[i].Value != "if") return at;
+        i++;
+        int members = 0;
+        while (i < tokens.Count)
+        {
+            if (tokens[i].Value == "NotEquals" &&
+                Match(tokens, i + 1, ["(", name, ",", "n", "<literal>", ")"]))
+                i += 7;
+            else if (Match(tokens, i,
+                     ["!", "Equals", "(", name, ",", "n", "<literal>", ")"]))
+                i += 8;
+            else return at;
+            members++;
+            if (Match(tokens, i, ["&", "&"])) { i += 2; continue; }
+            break;
+        }
+        return members > 0 &&
+            Match(tokens, i, ["{", "return", result, ";", "}"])
+            ? i + 5 : at;
     }
 
     private static bool Whitespace(string source, int start, int end) =>
