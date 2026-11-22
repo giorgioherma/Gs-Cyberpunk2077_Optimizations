@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Distribute progress waiting across checkpoints
+
+- Owner clarification: at predicted checkpoint arrival the bar covers 95% of that weighted interval; if work runs longer, it eases to exactly 99% of the interval at 125% of predicted duration and holds until the actual checkpoint. Global 99% cap and verified-success-only 100% remain unchanged. Source `14012e80`; numerical formula replay passed. No extra UI CI assertion or checkpoint; Windows validation pending.
+
 ## 2026-11-22 — Final progress ceiling
 
 - Owner-approved final visual ceiling increased to 99% (`2e425fed`), superseding the earlier 98.5% ceiling. Intermediate checkpoint limits and real success/failure authority remain unchanged. Only verified successful completion sets 100%. Existing numerical replay below documents the previous ceiling; Windows validation remains pending.
