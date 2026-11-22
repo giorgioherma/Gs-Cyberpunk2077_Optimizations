@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Matching Capture and Analyze console text origins
+
+- Eliminated the 26-DIP horizontal mismatch between Page 1 and Page 2 console text. Both now start at the same right-content-relative anchor, halfway between their earlier positions; text viewport widths and line wrapping remain responsive.
+- Maximized Capture already shifts away from the extended V portrait. Analyze now applies precisely the same shift to its own scroll viewport without moving DONE or the rest of Page 2. Both margins reset upon return to Normal.
+- The existing packaged WPF verifier checks actual page-to-page console X alignment at supported window sizes, and matching maximized-only shift/reset. No layout snapshots, cosmetic pixel constants, CI checkpoint or optimization generator changes. Windows build/render validation remains pending.
+
 ## 2026-11-22 — Progress rail cleared from chassis border; reports use natural wrapping
 
 - Capture console: reserved a bounded, clipped scroll viewport above the shared progress strip without changing CONTINUE/card positions. Analyze console: raised its footer clearance without affecting the DONE visibility/width behavior. Shared 6-DIP progress rail sits fully inside the content area rather than on the decorated outer border.

@@ -644,12 +644,20 @@ internal static class Program
                     frame.Render(root);
                 }
 
+                // Preserve the same on-screen text origin when switching pages.
+                var captureStartX = window.CaptureConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).X;
                 Render();
                 window.CapturePage.Visibility = System.Windows.Visibility.Collapsed;
                 window.CaptureFooterHost.Visibility = System.Windows.Visibility.Collapsed;
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
                 window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                var analyzeStartX = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).X;
+                if (Math.Abs(captureStartX - analyzeStartX) > 1)
+                    throw new InvalidOperationException(
+                        $"Capture and Analyze console text origins differ: {captureStartX:F1} vs {analyzeStartX:F1}.");
                 if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Collapsed ||
                     window.ContinueButton.Visibility != System.Windows.Visibility.Visible ||
                     window.ConsoleTextHost.Visibility != System.Windows.Visibility.Visible ||
@@ -933,6 +941,7 @@ internal static class Program
             var gameMargin = gameSection.Margin;
             var headingMargin = structural.CaptureWorkflowHeading.Margin;
             var statusMargin = structural.ConsoleTextHost.Margin;
+            var resultsStatusMargin = structural.ResultsConsoleScroll.Margin;
             var cardHeight = cards.Height;
             var cardMinHeight = cards.MinHeight;
             var originalGameRootHeight = structural.GameRootPanel.Height;
@@ -948,6 +957,11 @@ internal static class Program
                 ArrangeOffscreen(structural, 1700, 900);
                 structural.ApplyMaximizedCaptureLayout();
                 ArrangeOffscreen(structural, 1700, 900);
+                if (Math.Abs(
+                    (structural.ConsoleTextHost.Margin.Left - statusMargin.Left) -
+                    (structural.ResultsConsoleScroll.Margin.Left - resultsStatusMargin.Left)) > 1)
+                    throw new InvalidOperationException(
+                        "Maximized Capture/Analyze console offsets must follow the same portrait clearance.");
                 if (!ReferenceEquals(structural.CapturePage.Content, originalPanel) ||
                     originalPanel.Children.Count != 4 ||
                     cards.Height <= cardHeight + 15 ||
@@ -981,6 +995,7 @@ internal static class Program
                     gameSection.Margin != gameMargin ||
                     structural.CaptureWorkflowHeading.Margin != headingMargin ||
                     structural.ConsoleTextHost.Margin != statusMargin ||
+                    structural.ResultsConsoleScroll.Margin != resultsStatusMargin ||
                     structural.GameRootPanel.Height != originalGameRootHeight ||
                     cardPanels.Where((card, index) => card.Margin != originalCardMargins[index]).Any() ||
                     cards.Height != cardHeight || cards.MinHeight != cardMinHeight ||

@@ -102,6 +102,7 @@ public partial class MainWindow : Window
     private Grid[]? maximizedCardColumns;
     private Thickness[]? normalCardMargins;
     private readonly Thickness originalConsoleMargin;
+    private readonly Thickness originalResultsConsoleMargin;
 
     // Fullscreen-only visual tuning: fixed normal XAML values are authoritative.
     // Width/gap/height knobs intentionally do not scale child text or SVGs.
@@ -224,6 +225,7 @@ public partial class MainWindow : Window
             RefreshGenerateEligibility();
         };
         originalConsoleMargin = ConsoleTextHost.Margin;
+        originalResultsConsoleMargin = ResultsConsoleScroll.Margin;
         CapturePage.SizeChanged += (_, _) =>
         {
             UpdateMaximizedCaptureGeometry();
@@ -524,6 +526,7 @@ public partial class MainWindow : Window
         maximizedWorkflowCards.Height = normalWorkflowHeight;
         maximizedWorkflowCards.MinHeight = normalWorkflowMinHeight;
         ConsoleTextHost.Margin = originalConsoleMargin;
+        ResultsConsoleScroll.Margin = originalResultsConsoleMargin;
         var scrollOffset = normalCaptureScrollOffset;
         maximizedGameRootSection = null;
         maximizedWorkflowCards = null;
@@ -554,8 +557,20 @@ public partial class MainWindow : Window
 
     private void UpdateMaximizedCaptureGeometry()
     {
-        if (WindowState != System.Windows.WindowState.Maximized ||
-            maximizedGameRootSection is null || maximizedWorkflowCards is null ||
+        if (WindowState != System.Windows.WindowState.Maximized) return;
+
+        // Both console text origins must move by the SAME portrait clearance
+        // in fullscreen. Shift only the Analyze console's scroll viewport,
+        // leaving its DONE button and the rest of Page 2 untouched.
+        var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
+        var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
+        var resultsMargin = new Thickness(originalResultsConsoleMargin.Left + shift,
+            originalResultsConsoleMargin.Top, originalResultsConsoleMargin.Right,
+            originalResultsConsoleMargin.Bottom);
+        if (ResultsConsoleScroll.Margin != resultsMargin)
+            ResultsConsoleScroll.Margin = resultsMargin;
+
+        if (maximizedGameRootSection is null || maximizedWorkflowCards is null ||
             CapturePage.ActualHeight <= 0)
             return;
 
@@ -598,10 +613,8 @@ public partial class MainWindow : Window
                     maximizedCardColumns[i].Margin = expanded;
             }
 
-        // The current maximized console is unnecessarily far right.
-        // Keep it outside the portrait edge while reducing that extra shift.
-        var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
-        var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
+        // Preserve the existing Capture clearance but apply its same
+        // horizontal shift to Analyze above, avoiding per-page visual drift.
         var console = new Thickness(originalConsoleMargin.Left + shift,
             originalConsoleMargin.Top - ExpandedConsoleRaise, originalConsoleMargin.Right,
             originalConsoleMargin.Bottom + ExpandedConsoleRaise);

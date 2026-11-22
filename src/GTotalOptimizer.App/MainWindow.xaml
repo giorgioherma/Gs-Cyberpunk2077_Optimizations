@@ -922,6 +922,8 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- Capture and Analyze consoles share an identical content-local X anchor.
+                     The 26-DIP original offset is split equally between them. -->
                 <!-- Capture-only status and CONTINUE are explicitly removed
                      from layout during Analyze; no stale controls underlay Page 2. -->
                 <Grid x:Name="CaptureFooterHost" Grid.Row="1" Margin="14,6,14,8">
@@ -941,7 +943,7 @@
                              if all five framework gates fail at once. Keep the
                              standard one-line status centered in this space. -->
                         <ScrollViewer x:Name="CaptureConsoleScroll" FocusVisualStyle="{x:Null}"
-                                      Margin="25,0,5,0" MaxHeight="80"
+                                      Margin="38,0,5,0" MaxHeight="80"
                                       HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
@@ -1093,7 +1095,7 @@
                     <!-- Analyze console and CLOSE share a single footer row.
                          Hidden CLOSE releases its Auto column to the console;
                          visible CLOSE stays to the right without lifting text. -->
-                    <Grid Grid.Row="1" Margin="18,0,8,23" MinHeight="49">
+                    <Grid Grid.Row="1" Margin="5,0,8,23" MinHeight="49">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
