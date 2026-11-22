@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Full integrated package checkpoint #1114 green
+
+- [GCO full integration #1114 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44970673688) at `02ce686ca276e306cf1bd9c7e723d28148501d5e`; 40 completed successful steps, zero failed. Verified integrated .NET 10 application assembly, CET/GRSP launcher and install/restore smoke, source/package contracts, packaged WPF layout, and uploaded `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1114-a1`.
+- The focused [REDscript SCC #229 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44970188632) independently verified the changed historical source recognizers, one-pass composition and official compiler.
+- Actual installed-game repeat Analyze on the exact user's 2,333-file source is still required to confirm that all three source refusals are now classified as complete or that missing compatible work is generated; CI cannot prove their exact current installed state. `main` was not modified. This handoff update only does not require another CI checkpoint.
+
 ## 2026-11-22 — Historical/combined REDscript recognition: focused SCC green
 
 - [Focused REDscript SCC #229 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44970188632) at `9ab1a4d5834dffb21db7d081d6213fac8f8d8146`: 12 independent Pass 4 tests, 20 Pass 8 tests, 13 late-read tests, 289 Phase 2 tests; 58 semantic source files generated in one pass from 2,331 post-generic source files, 491 candidate edits/56 applied passes reported, official SCC 0.5.31 clean, original source untouched. Historical FE InputHub and Chipware memo source-state tests passed.
