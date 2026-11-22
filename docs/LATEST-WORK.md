@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Correct packaged WPF inline notice verification
+
+- [Full CI #1117](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44981808666) failed the packaged WPF footer guidance assertion (Program.cs:825); WPF compilation, package assembly, integrated CET/GRSP launcher and install/restore smoke passed. The previous Hotscenes parent-layout failure is cleared. The authored notice uses colored Run elements, so read their actual text instead of the offscreen TextBlock.Text value; retain the same safety and file-management concepts, independent of punctuation and casing. Include the observed text in failure diagnostics. No change to actual notice, optimization generators, ZIP safety checks, component pins or version. Rerun full v1.2.6 checkpoint; result pending. Main untouched.
+
 ## 2026-11-22 — Full v1.2.6 checkpoint: current layout and repeat-pass verification
 
 - User replay on unchanged 2,333-file optimized REDscript stack confirmed zero generated REDscript edits and zero refusals; Negotiate Affection generic guard/Chipware cache recognition fixes and installed Flushing Etiquette complete input gate account for the earlier three false refusals. G-GC-only ZIP updated init.lua and learned threshold.lua; unchanged runtime payloads are subject to new SHA omission policy in v1.2.6. Prior package remains v1.2.5.

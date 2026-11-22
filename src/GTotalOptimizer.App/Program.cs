@@ -816,14 +816,22 @@ internal static class Program
                 // Only assert meaningful guidance, not an exact UI sentence:
                 // wording and spacing are presentation decisions, not a
                 // release-blocking CI contract.
-                var guide = FlattenWhitespace(window.OptimizationFooterNotice.Text);
+                // Colored WPF inlines are the authored content. Reading the
+                // Text dependency property during offscreen layout can miss
+                // the inline text. Join actual runs and avoid coupling to
+                // punctuation or capitalization in the editable notice.
+                var guide = FlattenWhitespace(string.Join(" ",
+                    window.OptimizationFooterNotice.Inlines
+                        .OfType<System.Windows.Documents.Run>()
+                        .Select(run => run.Text)));
                 if (!guide.Contains("game files", StringComparison.OrdinalIgnoreCase) ||
-                    !guide.Contains("NOT", StringComparison.Ordinal) ||
-                    !guide.Contains("CET + REDscript", StringComparison.Ordinal) ||
-                    !guide.Contains("ZIP", StringComparison.Ordinal) ||
+                    !guide.Contains("not", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("CET", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("REDscript", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("ZIP", StringComparison.OrdinalIgnoreCase) ||
                     !guide.Contains("Vortex", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException(
-                        "Analyze footer must describe non-mutating ZIP generation and file-management guidance.");
+                        "Analyze footer guidance missing required concepts; actual inline text: " + guide);
 
                 // DONE is an exit after either confirmed publication or
                 // completed analysis with zero safe work, not a way to dismiss
