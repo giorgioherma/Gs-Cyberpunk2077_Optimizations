@@ -116,6 +116,8 @@ internal static class FlushingEtiquetteInputGatePass
         var handle = Method(t, cls.Open + 1, cls.Close, "Handle");
         var modifier = Method(t, cls.Open + 1, cls.Close,
             "IndexOfModifier");
+        var values = Method(t, cls.Open + 1, cls.Close,
+            "HandleValues");
         if (handle is null || modifier is null)
             return new("REFUSED", "FE_INPUT_REQUIRED_METHOD_MISSING",
                 0, 0, null);
@@ -164,8 +166,23 @@ internal static class FlushingEtiquetteInputGatePass
             if (Seq(t, i, "player", ".", "GetGame", "(", ")"))
                 getGame = i;
         }
+        // After the historical InputHub migration, the engine fallback
+        // adapter keeps GetName/GetType but delegates gameplay and GetGame
+        // to HandleValues. It is not a different source-incompatible mod.
+        bool delegated = false;
+        if (getNameCalls == 1 && nameVar == "name" &&
+            getType > getNameEnd && getGame < 0 && values is not null)
+        {
+            string valueBody = source[t[values.Open].End..t[values.Close].Start];
+            delegated = Seq(t, getType + 7, "return", "FEInput", ".",
+                    "HandleValues", "(", "player", ",", "name", ",",
+                    "type", ")", ";") &&
+                System.Text.RegularExpressions.Regex.IsMatch(valueBody,
+                    @"^\s*let\s+gi\s*=\s*player\s*\.\s*GetGame\s*\(\s*\)\s*;") &&
+                !valueBody.Contains("ListenerAction.Get", StringComparison.Ordinal);
+        }
         if (getNameCalls != 1 || nameVar is null || getType <= getNameEnd ||
-            getGame <= getType)
+            (getGame <= getType && !delegated))
             return new("REFUSED", "FE_ACTION_ORDER_OR_RECEIVER_UNPROVEN",
                 0, 0, null);
 
@@ -177,7 +194,8 @@ internal static class FlushingEtiquetteInputGatePass
 
         var directNames = new HashSet<string>(StringComparer.Ordinal);
         bool modifierCall = false;
-        for (int i = getType; i < h.Close; i++)
+        for (int i = delegated ? values!.Open + 1 : getType;
+            i < (delegated ? values!.Close : h.Close); i++)
         {
             string? matched = NameEquals(source, t, i, nameVar);
             if (matched is not null) directNames.Add(matched);
