@@ -2039,23 +2039,13 @@ public partial class MainWindow : Window
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
-        // Page 2 shows owner restoration and independently verified capture
-        // domains above both optimization cards. Only OK is green.
+        // Page 2 retains the restoration confirmation above both panels.
+        // The redundant capture-domain OK row is no longer displayed.
         ResultsRestoreStatusText.Text = saved.Restored
             ? "Both profilers uninstalled. All game files are restored."
             : "Profiler restoration has not yet been verified.";
         ResultsRestoreStatusText.Foreground = saved.Restored
             ? (System.Windows.Media.Brush)FindResource("Cyan") : AnalyzeYellow;
-
-        SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET",
-            saved.Cet is null ? "MISSING" : "OK");
-        SetAnalyzeCaptureStatus(RedCaptureStatusText, "REDscript",
-            saved.Redscript is null ? "MISSING" : "OK");
-        bool presentRecorded = saved.FrameTimeEvidence is not null;
-        bool presentReady = presentRecorded && saved.PresentMonAlignedFrames > 0;
-        SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon",
-            presentReady ? "OK" :
-            presentRecorded ? "NOT ALIGNED" : "NOT CAPTURED");
 
         // A normal refresh must not erase a completed analysis or replace
         // it with capture paths, compiler details, or development diagnostics.
@@ -2184,9 +2174,6 @@ public partial class MainWindow : Window
             SetResultsConsoleStatus("Saved capture verification failed: " + ex.Message);
             ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
             ResultsRestoreStatusText.Foreground = AnalyzeYellow;
-            SetAnalyzeCaptureStatus(CetCaptureStatusText, "CET", "NOT VERIFIED");
-            SetAnalyzeCaptureStatus(RedCaptureStatusText, "REDscript", "NOT VERIFIED");
-            SetAnalyzeCaptureStatus(PresentCaptureStatusText, "PresentMon", "NOT VERIFIED");
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
             OpenFolderButton.IsEnabled = false;
@@ -2419,7 +2406,6 @@ public partial class MainWindow : Window
         generatedPassZipPath = null;
         ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
-        GeneratedPassLocation.Text = string.Empty;
         HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
         OpenFolderButton.IsEnabled = false;
@@ -2482,14 +2468,15 @@ public partial class MainWindow : Window
                 pass.HotscenesEnglishOnlyEdits == 0 &&
                 !HasCompletedHotscenesEnglishOnly(game))
                 summary += " | Hotscenes ENG-only: not applied.";
-            SetResultsConsoleStatus(summary);
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
+            if (generatedPassZipPath is not null)
+                summary += Environment.NewLine + "in GCO folder /" +
+                    Path.GetRelativePath(packageRoot, generatedPassZipPath).Replace('\\', '/');
+            SetResultsConsoleStatus(summary);
             RefreshPlannedWork();
             if (generatedPassZipPath is not null)
             {
-                GeneratedPassLocation.Text = "Saved in portable app: " +
-                    Path.GetRelativePath(packageRoot, generatedPassZipPath);
                 GeneratedPassNotice.Visibility = Visibility.Visible;
                 Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
                 {
@@ -2627,7 +2614,6 @@ public partial class MainWindow : Window
         RefreshPlannedWork();
         ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
-        GeneratedPassLocation.Text = string.Empty;
         OpenFolderButton.IsEnabled = false;
         SetHotscenesOptionVisible(false);
         HotscenesEnglishOnlyCheckBox.IsEnabled = true;

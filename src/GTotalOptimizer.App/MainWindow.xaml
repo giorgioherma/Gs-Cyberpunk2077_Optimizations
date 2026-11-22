@@ -994,17 +994,6 @@
                             <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Yellow}"
                                        TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
                                        Margin="0,7,0,0" Text="Restoration status pending."/>
-                            <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                                <TextBlock x:Name="CetCaptureStatusText" Foreground="#FFF000"
-                                           FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="CET · NOT VERIFIED"/>
-                                <TextBlock x:Name="RedCaptureStatusText" Foreground="#FFF000"
-                                           FontWeight="Bold" FontSize="13" Margin="0,0,24,0" Text="REDscript · NOT VERIFIED"/>
-                                <TextBlock x:Name="PresentCaptureStatusText" Foreground="#FFF000"
-                                           FontWeight="Bold" FontSize="13" Text="PresentMon · NOT VERIFIED"/>
-                            </StackPanel>
-                            <!-- Actual analysis / generation log belongs in the
-                                 console BELOW the action buttons, not under the
-                                 restored status and three capture indicators. -->
                             <Grid Margin="0,12,0,0">
                                 <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
                                                    SpatialStroke="True"
@@ -1027,17 +1016,20 @@
                                     </StackPanel>
                                     <!-- Only visible when installed Hotscenes is found.
                                          English-only remains an explicit, unchecked player choice. -->
-                                    <CheckBox x:Name="HotscenesEnglishOnlyCheckBox"
-                                              Visibility="Collapsed"
-                                              IsChecked="False" IsThreeState="False"
-                                              Foreground="#FFF000" FontSize="13"
-                                              Margin="1,7,0,0" VerticalAlignment="Center"
-                                              Content="Hotscenes ENG only"/>
-                                    <TextBlock x:Name="HotscenesEnglishOnlyDescription"
-                                               Visibility="Collapsed"
-                                               Foreground="#98A9B1" FontSize="11.5"
-                                               Margin="24,2,0,0" TextWrapping="Wrap"
-                                               Text="Check only if you use English. Removes Hotscenes localization from the generated ZIP to make room for optimizations."/>
+                                    <Grid Margin="1,7,0,0">
+                                         <Grid.ColumnDefinitions>
+                                             <ColumnDefinition Width="Auto"/>
+                                             <ColumnDefinition Width="*"/>
+                                         </Grid.ColumnDefinitions>
+                                         <CheckBox x:Name="HotscenesEnglishOnlyCheckBox" Grid.Column="0"
+                                                   Visibility="Collapsed" IsChecked="False" IsThreeState="False"
+                                                   Foreground="#FFF000" FontSize="13"
+                                                   VerticalAlignment="Center" Content="Hotscenes ENG only"/>
+                                         <TextBlock x:Name="HotscenesEnglishOnlyDescription" Grid.Column="1"
+                                                    Visibility="Collapsed" Foreground="#98A9B1" FontSize="11.5"
+                                                    Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                    Text="Check only if you use English. Removes Hotscenes localization from the generated ZIP to make room for optimizations."/>
+                                     </Grid>
                                 </StackPanel>
                             </Grid>
                             <Grid Margin="0,10,0,0">
@@ -1080,35 +1072,20 @@
                             </Grid>
                             <!-- This Page 2 statement refers to the installer/output stage after
                                  both temporary profilers have been uninstalled and restoration verified. -->
-                            <StackPanel Margin="3,8,0,0">
-                                <TextBlock x:Name="OptimizationFooterSafety"
-                                           Text="Installer does NOT change any of your game files."
-                                           Foreground="#FFF000" FontSize="12.5" FontWeight="SemiBold"
-                                           TextWrapping="Wrap"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                    <TextBlock x:Name="OptimizationFooterFirstLine"
-                                               Text="CET + REDscript — one clean ZIP with optimization files."
-                                               Foreground="#98A9B1" FontSize="12.5" Margin="0,0,20,0"/>
-                                    <TextBlock x:Name="OptimizationFooterVortex" Text="Use Vortex for easy file management"
-                                               Foreground="#98A9B1" FontSize="12.5"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <!-- Successful generated ZIP guidance below the existing manual
-                                 backup/Vortex instructions and above the live console. -->
-                            <StackPanel x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,10,0,0">
-                                <TextBlock Text="PASS READY — Optimization ZIP generated"
-                                           Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
-                                           FontWeight="Bold" FontSize="13"/>
-                                <TextBlock x:Name="GeneratedPassLocation"
-                                           Foreground="{StaticResource Cyan}" FontSize="12.5"
-                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
-                                <TextBlock Foreground="#B7CED6" FontSize="12.5"
-                                           TextWrapping="Wrap" Margin="0,3,0,0">
-                                    <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
-                                    <Run Text="If installing manually, BACK UP first."
-                                         Foreground="#FFF000" FontWeight="Bold"/>
-                                </TextBlock>
-                            </StackPanel>
+                            <TextBlock Margin="3,8,0,0" FontSize="12.5" TextWrapping="Wrap">
+                                 <Run Text="Installer does NOT change any of your game files."
+                                      Foreground="#FFF000" FontWeight="SemiBold"/>
+                                 <Run Text="  CET + REDscript — one clean ZIP with optimization files.   Use Vortex for easy file management"
+                                      Foreground="#98A9B1"/>
+                             </TextBlock>
+                             <!-- Completion guidance is one compact row. The published path belongs in the console. -->
+                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,8,0,0"
+                                        FontSize="12.5" TextWrapping="Wrap" Foreground="#B7CED6">
+                                 <Run Text="PASS READY — " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
+                                 <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
+                                 <Run Text="If installing manually, BACK UP first."
+                                      Foreground="#FFF000" FontWeight="Bold"/>
+                             </TextBlock>
                         </StackPanel>
                     </ScrollViewer>
                     <!-- Analyze console and DONE share a single footer row.

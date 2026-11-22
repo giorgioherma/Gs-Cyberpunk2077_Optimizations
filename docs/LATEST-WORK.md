@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Compact Analyze notices and completion console
+
+- Page 2: removed redundant CET/REDscript/PresentMon status row (all underlying capture/restoration verification and enablement unchanged). Installer safety, ZIP and Vortex notices share one row with existing colors; Hotscenes checkbox and explanation share one row. Wrap naturally if narrow instead of clipping. PASS READY remains yellow and conflict/manual-backup guidance shares its row; removed separate generated location line from main content and appended actual GCO-relative ZIP path on the second console row. Existing OPEN FOLDER selects published ZIP, DONE and prior progress collapse behavior unchanged. No new cosmetic CI checks. Pending next Windows package checkpoint.
+
 ## 2026-11-22 — Hide progress row at completion
 
 - Shared FinishWorkProgress now collapses the entire progress row (label and gradient rail) after successful or unsuccessful Collect, Analyze and Generate. Existing completion messages, adaptive progress, operation tokens and eligibility unchanged. No cosmetic CI assertion or separate checkpoint; pending Windows package validation.
