@@ -1059,11 +1059,11 @@
                                         Style="{StaticResource ResultsActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
-                            <!-- ZIP generation never writes to installed game files.
-                                 Profiler installation is a separate, temporary workflow. -->
+                            <!-- This Page 2 statement refers to the installer/output stage after
+                                 both temporary profilers have been uninstalled and restoration verified. -->
                             <StackPanel Margin="3,8,0,0">
                                 <TextBlock x:Name="OptimizationFooterSafety"
-                                           Text="Generating the optimization ZIP does NOT modify installed game files."
+                                           Text="Installer does NOT change any of your game files."
                                            Foreground="#FFF000" FontSize="12.5" FontWeight="SemiBold"
                                            TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,3,0,0">

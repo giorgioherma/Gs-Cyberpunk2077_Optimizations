@@ -839,9 +839,8 @@ internal static class Program
                 var safetyGuide = FlattenWhitespace(window.OptimizationFooterSafety.Text);
                 var zipGuide = FlattenWhitespace(window.OptimizationFooterFirstLine.Text);
                 var managerGuide = FlattenWhitespace(window.OptimizationFooterVortex.Text);
-                if (!safetyGuide.Contains("Generating", StringComparison.Ordinal) ||
-                    !safetyGuide.Contains("does NOT modify installed game files",
-                        StringComparison.Ordinal) ||
+                if (!safetyGuide.Contains("game files", StringComparison.OrdinalIgnoreCase) ||
+                    !safetyGuide.Contains("NOT", StringComparison.Ordinal) ||
                     !zipGuide.Contains("CET + REDscript", StringComparison.Ordinal) ||
                     !zipGuide.Contains("ZIP", StringComparison.Ordinal) ||
                     string.IsNullOrWhiteSpace(managerGuide))

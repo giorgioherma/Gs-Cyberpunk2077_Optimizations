@@ -4,7 +4,7 @@
 
 - Reuse Page 2 DONE after verified Analyze finds zero applicable CET/REDscript work. It invokes the existing safe workflow reset and full exit, with no empty ZIP. DONE remains hidden during analysis/generation and on incomplete or failed analysis; the optional Hotscenes checkbox can still enable a genuine Generate and hide DONE until work completes.
 - Display the source-refused REDscript operation IDs after Analyze, not just an unexplained count. Refusals remain narrowly scoped and do not become actionable edits.
-- Replace the prominent pre-generation manual-backup warning with "Generating the optimization ZIP does NOT modify installed game files." Place the combined CET+REDscript ZIP explanation immediately below, retaining Vortex guidance. The wording intentionally does not claim installing profilers is non-mutating: profiler installation temporarily changes game files before verified restoration. Keep manual installation advice in the separate published-pass notice.
+- Page 2 now uses the requested exact wording, "Installer does NOT change any of your game files.", after the temporary CET/GRSP profilers have been removed and their restoration verified. The statement describes this installer/output stage, not the earlier profiler installation. Place the combined CET+REDscript ZIP explanation immediately below, retain Vortex guidance, and keep manual installation advice in the separate published-pass notice.
 - Updated the existing WPF UI contract to verify the actual footer semantics and no-work DONE admission. No changes to profiler, REDscript/CET generators or packaging. Requires Windows WPF/package CI validation at the next deliberate checkpoint.
 
 ## 2026-11-22 — Adaptive WPF progress smoothing (checkpoint-authoritative)
