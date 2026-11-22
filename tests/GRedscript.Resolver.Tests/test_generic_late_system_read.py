@@ -317,7 +317,7 @@ public class C extends IScriptable {
 """
         self.source.write_text(optimized.replace(read, early + read),
                                encoding="utf8")
-        self.scan.unlink()
+        self.scan.unlink(missing_ok=True)
         report = self.scan_source()
         self.assertEqual(report["eligible"], 0)
         self.assertEqual(report["alreadyComplete"], 1)
