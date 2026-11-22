@@ -115,6 +115,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS4_SOURCE_STATE_FAILED' }
           python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass8_*.py' -v
           if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS8_SOURCE_STATE_FAILED' }
+          # A later semantic action gate must not invalidate a completed generic marker.
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_generic_late_system_read.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GENERIC_LATE_SYSTEM_COMPOSED_STATE_FAILED' }
 
       - name: Validate DigitalVixenCore Footsteps semantic source states
         shell: pwsh
