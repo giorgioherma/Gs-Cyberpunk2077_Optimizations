@@ -1138,7 +1138,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="WorkflowProgressText" Grid.Column="0"
-                           Foreground="{StaticResource Cyan}" FontFamily="{StaticResource Oxanium}"
+                           Foreground="{StaticResource Yellow}" FontFamily="{StaticResource Oxanium}"
                            FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center" Margin="0,0,13,0"/>
                 <ProgressBar x:Name="WorkflowProgressBar" Grid.Column="1" Height="6"

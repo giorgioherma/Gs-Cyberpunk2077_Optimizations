@@ -2,7 +2,7 @@
 
 ## 2026-11-22 — Progress rail gradient and footer micro-adjustment
 
-- Both pages share the same progress host: lowered its entire row by 12 DIPs (bottom margin 19 → 7). Console text lowered by 3 DIPs on both Capture and Analyze (translation -6 → -3). Existing scroll height, horizontal anchors, typography, controls and artwork unchanged. Progress fill and its soft halo share the yellow-to-cyan brush; track and progress behavior unchanged. Owner specified the final rail offset of 12 DIPs; console remains 3 DIPs lower. Windows visual check pending.
+- Both pages share the same progress host: lowered its entire row by 12 DIPs (bottom margin 19 → 7). Console text lowered by 3 DIPs on both Capture and Analyze (translation -6 → -3). Existing scroll height, horizontal anchors, typography, controls and artwork unchanged. Progress label is yellow; the fill starts with the identical yellow and transitions smoothly to cyan, with a matching soft halo. Track and progress behavior unchanged. Owner specified the final rail offset of 12 DIPs; console remains 3 DIPs lower. Windows visual check pending.
 - [GCO #1115](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44975556013) **SUCCESS**, 40 successful steps at `fd2dfdd16551c6ec444a9ffbd7b46f250bfea1ca` (selectable G-GC and previous console change). New UI-only edit not yet Windows-validated; intentionally no extra CI checkpoint until final measured placement is agreed. Both main branches untouched.
 
 ## 2026-11-22 — Selectable G-GC collector cadence (CET owner integration, validation pending)
