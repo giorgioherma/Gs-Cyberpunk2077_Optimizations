@@ -23,11 +23,14 @@ public sealed record CetSkipDetail(
     string Category, string Type, string? Owner, string? RuleId,
     string? File, string Reason);
 
+public sealed record CetPlannedTransform(string Owner, string Operation);
+
 public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
 {
     // The CET owner's transform count includes per-capture G-GC calibration.
     // Only actual work (including a proven obsolete runtime upgrade) qualifies.
     public int OptimizationTransformCount { get; init; }
+    public CetPlannedTransform[] PlannedTransforms { get; init; } = [];
     public CetSkipDetail[] SkipDetails { get; init; } = [];
     public int HotscenesEnglishOnlyEdits { get; init; }
 }
@@ -231,11 +234,12 @@ public sealed class CetReadOnlyAnalysisService
                     File.Move(publishing, destination, overwrite: false);
                 }
                 finally { if (File.Exists(publishing)) File.Delete(publishing); }
+                var plannedTransforms = ReadOwnerOptimizationTransforms(pass, temporaryZip);
                 generatedPass = new CetPassOutcome(destination, expectedFiles,
                     Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"))
                 {
-                    OptimizationTransformCount =
-                        ReadOwnerOptimizationTransforms(pass, temporaryZip),
+                    OptimizationTransformCount = plannedTransforms.Length,
+                    PlannedTransforms = plannedTransforms,
                     SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip),
                     HotscenesEnglishOnlyEdits = ReadOwnerEnglishOnlyEdits(
                         pass, temporaryZip, hotscenesEnglishOnly)
@@ -295,27 +299,47 @@ public sealed class CetReadOnlyAnalysisService
     // Ground actual new work in the CET owner's authoritative transform list.
     // Calibration-only G-GC support never authorizes another ZIP. A proven
     // obsolete installed G-GC runtime upgrade is actual source-changing work.
-    internal static int CountOptimizationTransforms(JsonElement manifest)
+    internal static int CountOptimizationTransforms(JsonElement manifest) =>
+        DescribeOptimizationTransforms(manifest).Length;
+
+    internal static CetPlannedTransform[] DescribeOptimizationTransforms(JsonElement manifest)
     {
         if (!manifest.TryGetProperty("transforms", out var rows) ||
             rows.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
-        int count = 0;
+        static string? Field(JsonElement row, params string[] keys)
+        {
+            foreach (var key in keys)
+                if (row.TryGetProperty(key, out var value) &&
+                    value.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(value.GetString()))
+                    return value.GetString();
+            return null;
+        }
+        var changes = new List<CetPlannedTransform>();
         foreach (var item in rows.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object ||
                 !item.TryGetProperty("type", out var type) ||
                 type.ValueKind != JsonValueKind.String)
                 throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_INVALID");
-            if (type.GetString() != "GC_CONTROLLER" ||
-                (item.TryGetProperty("runtimeUpgrade", out var runtimeUpgrade) &&
-                 runtimeUpgrade.ValueKind == JsonValueKind.True))
-                count++;
+            string kind = type.GetString()!;
+            if (kind == "GC_CONTROLLER")
+            {
+                if (item.TryGetProperty("runtimeUpgrade", out var runtimeUpgrade) &&
+                    runtimeUpgrade.ValueKind == JsonValueKind.True)
+                    changes.Add(new("G-GC", "Controller runtime upgrade"));
+                continue;
+            }
+            string owner = Field(item, "owner", "Owner") ??
+                Field(item, "file", "File")?.Replace('\\', '/').Split('/')[0] ?? "CET";
+            string operation = Field(item, "ruleId", "RuleId", "stage", "Stage") ?? kind;
+            changes.Add(new(owner, operation));
         }
-        return count;
+        return changes.ToArray();
     }
 
-    private static int ReadOwnerOptimizationTransforms(JsonElement pass, string zipPath)
+    private static CetPlannedTransform[] ReadOwnerOptimizationTransforms(JsonElement pass, string zipPath)
     {
         string expected = Path.ChangeExtension(zipPath, ".json");
         if (!pass.TryGetProperty("ManifestPath", out var location) ||
@@ -325,11 +349,11 @@ public sealed class CetReadOnlyAnalysisService
             !File.Exists(expected))
             throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
         using var manifest = JsonDocument.Parse(File.ReadAllText(expected));
-        int count = CountOptimizationTransforms(manifest.RootElement);
+        var planned = DescribeOptimizationTransforms(manifest.RootElement);
         int recorded = manifest.RootElement.GetProperty("transforms").GetArrayLength();
         if (recorded != Nonnegative(pass, "TransformCount"))
             throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_COUNT_MISMATCH");
-        return count;
+        return planned;
     }
 
     private static int ReadOwnerEnglishOnlyEdits(

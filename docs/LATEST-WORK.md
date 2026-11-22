@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Show verified next-ZIP work before Generate
+
+- User's optimized-stack gameplay test reached ANALYZED and correctly offered Generate, but aggregate inventory did not identify the remaining operations. Both existing optimization panels now show PLANNED FOR NEXT ZIP from the already-executed disposable production preview: CET actual owner/rule/stage operations grouped by owner and operation (same manifest classification as eligibility), REDscript completed operation IDs/edit counts and actual affected staged source groups. Calibration-only GC support, rejected rules and catalog-only entries do not appear as new work; the Hotscenes checkbox is separately marked requested/verified during Generate. Empty previews explicitly report no new optimizations in their domain. No extra generator pass, source edits, or eligibility change. Preview clears on workflow reset/failure and successful publication; Generate continues to revalidate live source and report actual outputs.
+- Source-level classifier contract added to the existing core test suite. Pending Windows/full GCO verification; no native rebuild or SCC-only micro-checkpoint. Prior #1115 remains last verified package. Main unchanged.
+
 ## 2026-11-22 — Progress rail gradient and footer micro-adjustment
 
 - Both pages share the same progress host: lowered its entire row by 12 DIPs (bottom margin 19 → 7). Console text lowered by 3 DIPs on both Capture and Analyze (translation -6 → -3). Existing scroll height, horizontal anchors, typography, controls and artwork unchanged. Progress label is yellow; the fill starts with the identical yellow and transitions smoothly to cyan, with a matching soft halo. Track and progress behavior unchanged. Owner specified the final rail offset of 12 DIPs; console remains 3 DIPs lower. Windows visual check pending.

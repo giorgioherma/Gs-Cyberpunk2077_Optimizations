@@ -220,10 +220,52 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void RefreshPlannedWork()
+    {
+        var preview = analyzedAvailability;
+        bool show = preview is not null && redscriptPlanReady &&
+            analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
+            !HasPublishedOptimizationZip();
+        CetPlannedPanel.Visibility = RedPlannedPanel.Visibility =
+            show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show || preview is null)
+        {
+            CetPlannedText.Text = RedPlannedText.Text = string.Empty;
+            return;
+        }
+
+        var cetLines = preview.CetPlannedTransforms
+            .GroupBy(item => (item.Owner, item.Operation))
+            .OrderBy(group => group.Key.Owner, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(group => group.Key.Operation, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Key.Owner + ": " + group.Key.Operation.Replace('_', ' ') +
+                (group.Count() > 1 ? " (" + group.Count() + ")" : ""))
+            .ToList();
+        if (HasPendingHotscenesOptIn())
+            cetLines.Add("Hotscenes ENG-only: requested; verified during Generate.");
+        CetPlannedText.Text = cetLines.Count > 0
+            ? string.Join(Environment.NewLine, cetLines)
+            : "No new CET optimizations.";
+
+        var redLines = preview.RedscriptPlannedRules
+            .GroupBy(item => (item.Order, item.Id))
+            .OrderBy(group => group.Key.Order)
+            .Select(group => group.Key.Id.Replace('-', ' ') + ": " +
+                group.Sum(item => item.RewrittenExpressions) + " edits")
+            .ToList();
+        if (redLines.Count > 0 && preview.RedscriptPlannedSourceGroups.Length > 0)
+            redLines.Add("Affected source groups: " +
+                string.Join(", ", preview.RedscriptPlannedSourceGroups));
+        RedPlannedText.Text = redLines.Count > 0
+            ? string.Join(Environment.NewLine, redLines)
+            : "No new REDscript optimizations.";
+    }
+
     private void RefreshGenerateEligibility()
     {
         if (analyzedSessionId is null || analyzedSessionId != completedSessionId ||
             !redscriptPlanReady || analyzedAvailability is null) return;
+        RefreshPlannedWork();
         bool ready = HasNewOptimizationAvailable();
         RefreshDoneAvailability();
         GenerateButton.IsEnabled = !analysisRunning && !generationRunning &&
@@ -2033,6 +2075,7 @@ public partial class MainWindow : Window
         // it with capture paths, compiler details, or development diagnostics.
         if (analyzedSessionId != saved.SessionId)
         {
+            RefreshPlannedWork();
             CetReportText.Text = saved.Cet is null
                 ? "CET capture unavailable."
                 : "Capture verified. Click ANALYZE for optimization candidates.";
@@ -2200,6 +2243,7 @@ public partial class MainWindow : Window
         analysisRunning = true;
         redscriptPlanReady = false;
         analyzedAvailability = null;
+        RefreshPlannedWork();
         hotscenesOptInRefused = false;
         analysisCancellation?.Dispose();
         analysisCancellation = new CancellationTokenSource();
@@ -2277,9 +2321,8 @@ public partial class MainWindow : Window
                 int alreadyComplete = planned.Rules
                     .Where(rule => rule.Order is not null)
                     .Sum(rule => rule.AlreadyComplete ?? 0);
-                // The plan admits only generic source candidates. Semantic
-                // stages #11–#54 exist in the production one-pass generator,
-                // but their owner/source compatibility is decided at Generate.
+                // The initial plan reports candidate counts; the disposable
+                // production preview below reports actual applied operations.
                 redPlanStatus = "REDscript source files: " + planned.SourceFiles +
                     " | Generic source groups: " + affected + " | " +
                     "Generic candidates: " + ready.Length +
@@ -2325,6 +2368,7 @@ public partial class MainWindow : Window
                     string.Join(", ", skipped.Select(item => item.Id)
                         .Distinct(StringComparer.Ordinal));
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
+            RefreshPlannedWork();
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
             SetResultsConsoleStatus(!redscriptPlanReady
                 ? "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged."
@@ -2341,6 +2385,7 @@ public partial class MainWindow : Window
                 " Collected results remain untouched.");
             analyzedSessionId = null;
             analyzedAvailability = null;
+            RefreshPlannedWork();
             CetReportText.Text = "CET Resolver unavailable. The collected capture is unchanged.";
             AnalyzeButton.Content = "UNAVAILABLE";
         }
@@ -2423,8 +2468,8 @@ public partial class MainWindow : Window
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
                         : "not applied (see pass details)");
 
-            // ANALYZE only plans the ten generic families. GENERATE knows
-            // the real applied semantic rules, including multi-file stages.
+            // Replace the analysis inventory with actual published outcomes.
+            // The disposable preview was informational, not a publication.
             int unavailableRuleFamilies = pass.RedscriptSkipped
                 .Select(item => item.Id)
                 .Distinct(StringComparer.Ordinal).Count();
@@ -2454,6 +2499,7 @@ public partial class MainWindow : Window
             SetResultsConsoleStatus(summary);
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
+            RefreshPlannedWork();
             if (generatedPassZipPath is not null)
             {
                 GeneratedPassLocation.Text = "Saved in portable app: " +
@@ -2476,6 +2522,7 @@ public partial class MainWindow : Window
             hotscenesOptInRefused = true;
             analyzedAvailability = new CombinedPassAvailability(0, 0,
                 analyzedAvailability?.RedscriptSkipped ?? []);
+            RefreshPlannedWork();
             SetResultsConsoleStatus(NoNewOptimizationStatus());
         }
         catch (Exception ex)
@@ -2591,6 +2638,7 @@ public partial class MainWindow : Window
         hotscenesOptInRefused = false;
         savedCapture = null;
         generatedPassZipPath = null;
+        RefreshPlannedWork();
         ClearWorkProgress();
         GeneratedPassNotice.Visibility = Visibility.Collapsed;
         GeneratedPassLocation.Text = string.Empty;

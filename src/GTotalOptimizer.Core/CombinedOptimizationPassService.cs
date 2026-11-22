@@ -36,6 +36,9 @@ public sealed record CombinedPassAvailability(
     RedscriptGenerationPlan.SkippedRule[] RedscriptSkipped)
 {
     public bool HasNewOptimizations => CetOptimizationTransforms > 0 || RedscriptEdits > 0;
+    public CetPlannedTransform[] CetPlannedTransforms { get; init; } = [];
+    public RedscriptGenerationPlan.OutputItem[] RedscriptPlannedRules { get; init; } = [];
+    public string[] RedscriptPlannedSourceGroups { get; init; } = [];
 }
 
 public sealed class NoNewOptimizationsException : InvalidOperationException
@@ -91,14 +94,27 @@ public sealed class CombinedOptimizationPassService
                 "redruntime", "owner");
             string? providedRuntime = Directory.Exists(frameworkOwner)
                 ? frameworkOwner : null;
+            string stageRoot = Path.Combine(temp, "redscript-stage");
             var red = await Task.Run(() =>
                 RedscriptGenerationPlan.Stage(game, plan, analysis,
-                    Path.Combine(temp, "redscript-stage"), providedRuntime),
+                    stageRoot, providedRuntime),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             progress?.Report(new(4, 5, "ANALYZE / REDSCRIPT CHANGES VERIFIED"));
+            string scripts = Path.Combine(stageRoot, "effective-preview", "r6", "scripts");
+            var sourceGroups = Directory.Exists(scripts)
+                ? Directory.EnumerateFiles(scripts, "*.reds", SearchOption.AllDirectories)
+                    .Select(file => Path.GetRelativePath(scripts, file).Replace('\\', '/').Split('/')[0])
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray()
+                : Array.Empty<string>();
             return new(cetResult.OptimizationTransformCount,
-                red.AppliedEdits, red.Skipped);
+                red.AppliedEdits, red.Skipped)
+            {
+                CetPlannedTransforms = cetResult.PlannedTransforms,
+                RedscriptPlannedRules = red.Completed,
+                RedscriptPlannedSourceGroups = sourceGroups
+            };
         }
         finally
         {
