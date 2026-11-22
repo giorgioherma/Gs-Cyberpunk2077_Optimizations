@@ -1156,6 +1156,59 @@ internal static class Program
                 throw new InvalidOperationException(
                     "New progress operation did not reset the prior estimate.");
 
+            // Replay representative workflow milestones, not visual pixel positions.
+            // The expensive generation work must occupy most of the progress
+            // interval, with the final archive work remaining proportional.
+            static double TickProgress(CheckpointProgressSmoother model, double from, double to)
+            {
+                for (double t = from + 0.1; t < to; t += 0.1)
+                    model.Advance(t);
+                return model.Advance(to);
+            }
+
+            smooth.Start(6);
+            double cetEstimate = TickProgress(smooth, 0, 73);
+            if (cetEstimate < 35 || cetEstimate >= 46)
+                throw new InvalidOperationException(
+                    $"Generate CET estimate did not approach its weighted checkpoint: {cetEstimate:F2}.");
+            smooth.Confirm(1, 6, 73);
+            TickProgress(smooth, 73, 83);
+            smooth.Confirm(2, 6, 83);
+            double redEstimate = TickProgress(smooth, 83, 152);
+            if (redEstimate < 85 || redEstimate >= 95)
+                throw new InvalidOperationException(
+                    $"Generate REDscript estimate left disproportionate final work: {redEstimate:F2}.");
+            smooth.Confirm(3, 6, 152);
+            TickProgress(smooth, 152, 154);
+            smooth.Confirm(4, 6, 154);
+            double beforeZipEntries = TickProgress(smooth, 154, 155);
+            smooth.Confirm(450, 600, 157); // 50 / 100 ZIP entries in stage 4 -> 5
+            double duringZip = TickProgress(smooth, 155, 160);
+            if (duringZip < beforeZipEntries ||
+                duringZip > CheckpointProgressSmoother.EstimatedCeiling)
+                throw new InvalidOperationException(
+                    "Fractional ZIP checkpoints regressed or exceeded the safety ceiling.");
+
+            // Same normalized work on faster/slower machines should learn
+            // different elapsed durations but reach comparable estimates.
+            static double SecondAnalyzeEstimate(double speed)
+            {
+                var model = new CheckpointProgressSmoother();
+                model.Start(5);
+                TickProgress(model, 0, 57 * speed);
+                model.Confirm(1, 5, 57 * speed);
+                return TickProgress(model, 57 * speed, 80 * speed);
+            }
+
+            double fastEstimate = SecondAnalyzeEstimate(0.5);
+            double slowEstimate = SecondAnalyzeEstimate(2.0);
+            if (fastEstimate < 30 || slowEstimate < 30 ||
+                Math.Abs(fastEstimate - slowEstimate) > 2)
+                throw new InvalidOperationException(
+                    $"Progress failed to adapt proportionally: fast={fastEstimate:F2}, slow={slowEstimate:F2}.");
+
+            Console.WriteLine("PASS weighted workflow progress, proportional timing adaptation and ZIP ceiling");
+
             var normal = new MainWindow();
             VerifyAtSize(normal, normal.Width, normal.Height);
 
