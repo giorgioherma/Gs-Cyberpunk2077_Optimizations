@@ -1059,20 +1059,20 @@
                                         Style="{StaticResource ResultsActionButton}" IsEnabled="False"
                                         Margin="4,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
-                            <!-- Short installation guidance remains in two rows. -->
+                            <!-- ZIP generation never writes to installed game files.
+                                 Profiler installation is a separate, temporary workflow. -->
                             <StackPanel Margin="3,8,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="OptimizationFooterFirstLine" Text="CET + REDscript  One clean zip with optimization files."
+                                <TextBlock x:Name="OptimizationFooterSafety"
+                                           Text="Generating the optimization ZIP does NOT modify installed game files."
+                                           Foreground="#FFF000" FontSize="12.5" FontWeight="SemiBold"
+                                           TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock x:Name="OptimizationFooterFirstLine"
+                                               Text="CET + REDscript — one clean ZIP with optimization files."
                                                Foreground="#98A9B1" FontSize="12.5" Margin="0,0,20,0"/>
                                     <TextBlock x:Name="OptimizationFooterVortex" Text="Use Vortex for easy file management"
                                                Foreground="#98A9B1" FontSize="12.5"/>
                                 </StackPanel>
-                                <TextBlock x:Name="OptimizationFooterBackup" Foreground="#98A9B1" FontSize="12.5"
-                                           Margin="0,3,0,0" TextWrapping="Wrap">
-                                    <Run Text="For manual install "/>
-                                    <Run Text="BACKUP YOUR " Foreground="#FFF000" FontWeight="Bold"/>
-                                    <Run Text="&quot;\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods&quot; and &quot;\Cyberpunk 2077\r6\scripts&quot;"/>
-                                </TextBlock>
                             </StackPanel>
                             <!-- Successful generated ZIP guidance below the existing manual
                                  backup/Vortex instructions and above the live console. -->
@@ -1092,9 +1092,9 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
-                    <!-- Analyze console and CLOSE share a single footer row.
-                         Hidden CLOSE releases its Auto column to the console;
-                         visible CLOSE stays to the right without lifting text. -->
+                    <!-- Analyze console and DONE share a single footer row.
+                         DONE also appears after a verified no-new-work analysis.
+                         Hidden DONE releases its Auto column to the console. -->
                     <Grid Grid.Row="1" Margin="5,0,8,23" MinHeight="49">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>

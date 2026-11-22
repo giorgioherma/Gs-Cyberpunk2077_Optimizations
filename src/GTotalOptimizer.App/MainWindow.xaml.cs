@@ -200,15 +200,35 @@ public partial class MainWindow : Window
                 : "");
     }
 
+    private bool HasPublishedOptimizationZip() =>
+        generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
+
+    // The same DONE action closes the verified workflow after a real pass or
+    // after an analyzed no-op. Unproven source refusals do not force a ZIP.
+    internal static bool ShouldShowDone(bool publishedZip, bool verifiedAnalysis,
+        bool hasNewWork, bool operationRunning) =>
+        !operationRunning && (publishedZip || (verifiedAnalysis && !hasNewWork));
+
+    private void RefreshDoneAvailability()
+    {
+        bool verifiedAnalysis = captureAndRestoreVerified &&
+            analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
+            redscriptPlanReady && analyzedAvailability is not null;
+        CloseAfterGenerationButton.Visibility = ShouldShowDone(
+            HasPublishedOptimizationZip(), verifiedAnalysis,
+            HasNewOptimizationAvailable(), analysisRunning || generationRunning)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void RefreshGenerateEligibility()
     {
         if (analyzedSessionId is null || analyzedSessionId != completedSessionId ||
             !redscriptPlanReady || analyzedAvailability is null) return;
         bool ready = HasNewOptimizationAvailable();
+        RefreshDoneAvailability();
         GenerateButton.IsEnabled = !analysisRunning && !generationRunning &&
-            CloseAfterGenerationButton.Visibility != Visibility.Visible && ready;
-        if (!analysisRunning && !generationRunning &&
-            CloseAfterGenerationButton.Visibility != Visibility.Visible)
+            !HasPublishedOptimizationZip() && ready;
+        if (!analysisRunning && !generationRunning && !HasPublishedOptimizationZip())
             SetResultsConsoleStatus(ready
                 ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
                 : NoNewOptimizationStatus());
@@ -2118,13 +2138,13 @@ public partial class MainWindow : Window
             if (!analysisRunning)
                 AnalyzeButton.Content = analyzedSessionId == saved.SessionId
                     ? "ANALYZED" : "ANALYZE";
+            RefreshDoneAvailability();
             GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
                 analyzedSessionId == saved.SessionId && redscriptPlanReady &&
-                CloseAfterGenerationButton.Visibility != Visibility.Visible &&
-                HasNewOptimizationAvailable();
+                !HasPublishedOptimizationZip() && HasNewOptimizationAvailable();
             if (analyzedSessionId == saved.SessionId && !generationRunning &&
-                CloseAfterGenerationButton.Visibility != Visibility.Visible &&
-                analyzedAvailability is not null && !HasNewOptimizationAvailable())
+                !HasPublishedOptimizationZip() && analyzedAvailability is not null &&
+                !HasNewOptimizationAvailable())
                 SetResultsConsoleStatus(NoNewOptimizationStatus());
             OpenFolderButton.IsEnabled = !generationRunning &&
                 generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
@@ -2141,6 +2161,7 @@ public partial class MainWindow : Window
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
             OpenFolderButton.IsEnabled = false;
+            CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -2186,6 +2207,7 @@ public partial class MainWindow : Window
         AnalyzeButton.Content = "ANALYZING";
         AnalyzeButton.IsEnabled = false;
         GenerateButton.IsEnabled = false;
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         long analyzeActivity = BeginConsoleActivity("Analyzing CET and REDscript sources");
         long analyzeProgress = BeginWorkProgress(WorkPhase.Analyze, "ANALYZE / CET SOURCES");
         try
@@ -2298,6 +2320,10 @@ public partial class MainWindow : Window
                             item => item.Id + ": " + item.Reason)));
             }
             RedReportText.Text = redPlanStatus;
+            if (analyzedAvailability?.RedscriptSkipped is { Length: > 0 } skipped)
+                RedReportText.Text += " | Source-refused operations (not applied): " +
+                    string.Join(", ", skipped.Select(item => item.Id)
+                        .Distinct(StringComparer.Ordinal));
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
             SetResultsConsoleStatus(!redscriptPlanReady
@@ -2324,6 +2350,7 @@ public partial class MainWindow : Window
             FinishWorkProgress(analyzeProgress, WorkPhase.Analyze,
                 analyzedSessionId == saved.SessionId && redscriptPlanReady);
             analysisRunning = false;
+            RefreshDoneAvailability();
             AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
                 !generationRunning;
             if (analyzedSessionId != saved.SessionId)
@@ -2331,14 +2358,14 @@ public partial class MainWindow : Window
             GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
                 redscriptPlanReady && analyzedAvailability is not null &&
                 HasNewOptimizationAvailable() && !generationRunning &&
-                CloseAfterGenerationButton.Visibility != Visibility.Visible;
+                !HasPublishedOptimizationZip();
         }
     }
 
     private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
     {
         if (generationRunning || analysisRunning ||
-            CloseAfterGenerationButton.Visibility == Visibility.Visible ||
+            HasPublishedOptimizationZip() ||
             completedSessionId is null || completedGameRoot is null ||
             analyzedSessionId != completedSessionId ||
             !redscriptPlanReady || !captureAndRestoreVerified ||
@@ -2468,7 +2495,8 @@ public partial class MainWindow : Window
             generationRunning = false;
             if (IsLoaded)
             {
-                bool generated = CloseAfterGenerationButton.Visibility == Visibility.Visible;
+                bool generated = HasPublishedOptimizationZip();
+                RefreshDoneAvailability();
                 HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
                 OpenFolderButton.IsEnabled = generated && generatedPassZipPath is not null &&
                     File.Exists(generatedPassZipPath);

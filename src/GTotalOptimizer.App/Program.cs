@@ -825,8 +825,6 @@ internal static class Program
                 GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
                     window.CetCaptureStatusText, "CET", "NOT VERIFIED");
 
-                var backup = string.Concat(window.OptimizationFooterBackup.Inlines
-                    .OfType<System.Windows.Documents.Run>().Select(run => run.Text));
                 static string FlattenWhitespace(string value) =>
                     System.Text.RegularExpressions.Regex.Replace(
                         value, @"\s+", " ").Trim();
@@ -838,24 +836,28 @@ internal static class Program
                 // Only assert meaningful guidance, not an exact UI sentence:
                 // wording and spacing are presentation decisions, not a
                 // release-blocking CI contract.
+                var safetyGuide = FlattenWhitespace(window.OptimizationFooterSafety.Text);
                 var zipGuide = FlattenWhitespace(window.OptimizationFooterFirstLine.Text);
                 var managerGuide = FlattenWhitespace(window.OptimizationFooterVortex.Text);
-                if (!zipGuide.Contains("CET + REDscript", StringComparison.Ordinal) ||
-                    !zipGuide.Contains("zip", StringComparison.OrdinalIgnoreCase) ||
+                if (!safetyGuide.Contains("Generating", StringComparison.Ordinal) ||
+                    !safetyGuide.Contains("does NOT modify installed game files",
+                        StringComparison.Ordinal) ||
+                    !zipGuide.Contains("CET + REDscript", StringComparison.Ordinal) ||
+                    !zipGuide.Contains("ZIP", StringComparison.Ordinal) ||
                     string.IsNullOrWhiteSpace(managerGuide))
                     throw new InvalidOperationException(
-                        "Analyze footer must identify the combined ZIP and file-management guidance.");
-                // WPF adds optional whitespace-only inline runs around XAML
-                // Run elements. Validate visible words and both exact game
-                // paths, not parser-generated whitespace between those runs.
-                if (!FlattenWhitespace(backup).Contains(
-                        "For manual install BACKUP YOUR ", StringComparison.Ordinal) ||
-                    !backup.Contains(@"\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks\mods",
-                        StringComparison.Ordinal) ||
-                    !backup.Contains(@"\Cyberpunk 2077\r6\scripts",
-                        StringComparison.Ordinal))
+                        "Analyze footer must describe non-mutating ZIP generation and file-management guidance.");
+
+                // DONE is an exit after either confirmed publication or
+                // completed analysis with zero safe work, not a way to dismiss
+                // unverified source failures.
+                if (!GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, false, false) ||
+                    !GTotalOptimizer.App.MainWindow.ShouldShowDone(true, true, true, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, true, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, false, false, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, false, true))
                     throw new InvalidOperationException(
-                        "Incorrect Analyze backup guidance: " + backup);
+                        "DONE eligibility must require completed no-work analysis or published ZIP.");
                 // Exercise the exact timer state machine deterministically:
                 // one, two, three dots, then repeat, and restore prior
                 // completed console text without replacing real diagnostics.
