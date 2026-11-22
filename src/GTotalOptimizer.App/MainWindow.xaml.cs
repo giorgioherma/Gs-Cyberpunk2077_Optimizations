@@ -235,8 +235,8 @@ public partial class MainWindow : Window
         }
 
         static string CountText(int count) => count == 0
-            ? "No new optimizations."
-            : count == 1 ? "1 new optimization" : count + " new optimizations";
+            ? "No new optimizations planned"
+            : count == 1 ? "1 new optimization planned" : count + " new optimizations planned";
 
         CetPlannedText.Text = CountText(preview.CetOptimizationTransforms);
         // This personal option has not been verified by the source owner yet.
