@@ -589,7 +589,7 @@
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
                         <!-- Move title and its description together. -->
-                        <StackPanel x:Name="HeroSection" Margin="62,17,0,8">
+                        <StackPanel x:Name="HeroSection" Margin="32,17,0,8">
                             <TextBlock x:Name="HeroTitle" Margin="0"
                                        FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
