@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Owner-requested v1.2.7 build
+
+- [Full CI #1118](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44986418835) succeeded, 40/40 steps, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.6-run1118-a1` (14739484066), source `f47b1d3db5c6f07c583a2df3f86d1dba56d72898`. Framework omission, REDscript replay, WPF and profiler integration validated by the full checkpoint. At owner request, increase the unified app version to 1.2.7 and run one full package checkpoint. No generator changes or owner version changes; main untouched. New checkpoint result pending.
+
 ## 2026-11-22 — Correct packaged WPF inline notice verification
 
 - [Full CI #1117](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44981808666) failed the packaged WPF footer guidance assertion (Program.cs:825); WPF compilation, package assembly, integrated CET/GRSP launcher and install/restore smoke passed. The previous Hotscenes parent-layout failure is cleared. The authored notice uses colored Run elements, so read their actual text instead of the offscreen TextBlock.Text value; retain the same safety and file-management concepts, independent of punctuation and casing. Include the observed text in failure diagnostics. No change to actual notice, optimization generators, ZIP safety checks, component pins or version. Rerun full v1.2.6 checkpoint; result pending. Main untouched.

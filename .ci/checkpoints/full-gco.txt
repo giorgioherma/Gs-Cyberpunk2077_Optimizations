@@ -1,1 +1,1 @@
-checkpoint=v1.2.6-inline-footer-contract-recheck-20261122
+checkpoint=v1.2.7-owner-requested-package-20261122
