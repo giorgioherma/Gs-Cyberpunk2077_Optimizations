@@ -994,12 +994,12 @@
                             <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Yellow}"
                                        TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
                                        Margin="0,7,0,0" Text="Restoration status pending."/>
-                            <Grid Margin="0,12,0,0">
+                            <Grid Margin="0,18,0,0">
                                 <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
                                                    SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
-                                <StackPanel Margin="12">
+                                <StackPanel Margin="14">
                                     <TextBlock x:Name="CetOptimizationHeading" Text="CET mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
@@ -1032,12 +1032,12 @@
                                      </Grid>
                                 </StackPanel>
                             </Grid>
-                            <Grid Margin="0,10,0,0">
+                            <Grid Margin="0,16,0,0">
                                 <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
                                                    SpatialStroke="True"
                                                    StrokeThickness="2.0" CornerCut="14"
                                                    IsHitTestVisible="False"/>
-                                <StackPanel Margin="12">
+                                <StackPanel Margin="14">
                                     <TextBlock x:Name="RedOptimizationHeading" Text="REDscript mod Optimizations:"
                                                Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="14"/>
@@ -1054,34 +1054,34 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
-                            <Grid Margin="0,12,0,0">
+                            <Grid Margin="0,18,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
-                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="0,0,4,0"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="0,0,6,0"
                                         Click="Analyze_Click"/>
                                 <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE OPTIMIZATION ZIP"
-                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="4,0,4,0"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="6,0,6,0"
                                         Click="GenerateCetPass_Click"/>
                                 <Button x:Name="OpenFolderButton" Grid.Column="2" Content="OPEN FOLDER"
                                         Style="{StaticResource ResultsActionButton}" IsEnabled="False"
-                                        Margin="4,0,0,0" Click="OpenFolder_Click"/>
+                                        Margin="6,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
                             <!-- This Page 2 statement refers to the installer/output stage after
                                  both temporary profilers have been uninstalled and restoration verified. -->
-                            <TextBlock x:Name="OptimizationFooterNotice" Margin="3,8,0,0" FontSize="12.5" TextWrapping="Wrap">
+                            <TextBlock x:Name="OptimizationFooterNotice" Margin="3,12,0,0" FontSize="12.5" TextWrapping="Wrap">
                                  <Run Text="Installer does NOT change any of your game files."
                                       Foreground="#FFF000" FontWeight="SemiBold"/>
-                                 <Run Text="  CET + REDscript — one clean ZIP with optimization files.   Use Vortex for easy file management"
+                                 <Run Text="  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
                                       Foreground="#98A9B1"/>
                              </TextBlock>
                              <!-- Completion guidance is one compact row. The published path belongs in the console. -->
-                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,8,0,0"
+                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,14,0,0"
                                         FontSize="12.5" TextWrapping="Wrap" Foreground="#B7CED6">
-                                 <Run Text="PASS READY — " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
+                                 <Run Text="PASS READY - " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
                                  <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
                                  <Run Text="If installing manually, BACK UP first."
                                       Foreground="#FFF000" FontWeight="Bold"/>
