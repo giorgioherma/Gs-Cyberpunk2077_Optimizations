@@ -113,11 +113,13 @@ internal sealed class CheckpointProgressSmoother
         double remainingBaseline = BaselineAt(nextStage) - BaselineAt(confirmedStage);
         double predictedSeconds = Math.Max(0.15, remainingBaseline * durationScale);
         double ratio = Math.Max(0, elapsedSeconds - lastRealSeconds) / predictedSeconds;
-        // At predicted arrival, cover 95% of the next interval rather than
-        // the previous formula's 50%. If late, ease toward 99%, never past it.
+        // Cover 95% of this interval at predicted arrival. If work takes
+        // longer, ease to exactly 99% of this interval and hold there until
+        // its real checkpoint arrives. Distribute waiting across the flow.
+        double late = Math.Clamp((ratio - 1) / 0.25, 0.0, 1.0);
         double fraction = ratio <= 1
             ? 0.95 * ratio
-            : 0.95 + 0.04 * (1 - Math.Exp(1 - ratio));
+            : 0.95 + 0.04 * late * (2 - late);
         double width = 100.0 * remainingBaseline / baseline[^1];
         double target = Math.Min(EstimatedCeiling,
             confirmedPercent + width * fraction);
