@@ -1131,7 +1131,7 @@
             </Grid>
             <!-- Shared rail in the protected space below both consoles, clear of the outer frame. -->
             <Grid x:Name="WorkflowProgressHost" Grid.Column="1" Panel.ZIndex="6"
-                  Height="17" VerticalAlignment="Bottom" Margin="40,0,31,9"
+                  Height="17" VerticalAlignment="Bottom" Margin="40,0,31,7"
                   Visibility="Collapsed" IsHitTestVisible="False">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="242"/>
