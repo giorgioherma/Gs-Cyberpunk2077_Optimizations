@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-22 — REDscript repeat Analyze refusal classification: overlapping approved work
+
+- Three actual owner operations from the already-optimized stack were investigated against the user-provided post-generic source tree and the game-tested historical passes. This is a source-state and overlap issue, not a reason to silently remove rules or ship historical replacement files.
+- Generic `late-system-read`: the later approved Negotiable Affection name-only early action gate can separate the already-generated BUTTON_RELEASED guard from its original quest lookup. The generic recognizer now admits only a structurally proven pure literal-action negative gate returning the original wrapped result; unsupported effects still fail narrowly.
+- Historical Flushing Etiquette InputHub: after gameplay moves into `HandleValues`, the engine `Handle(action)` adapter lacks the prior `player.GetGame()` read. The input gate now checks the actual delegated receiver flow and can complete the remaining safe name gate without duplicating listeners or touching the gameplay body.
+- Historical Pass 8 Chipware: approved 100ms perk-result memoization adds an early perk switch and caches fallback results while retaining conditional branches. The throughput gate now recognizes this stronger complete state, rather than falsely claiming the final `return wrappedMethod` is missing.
+- Three focused regression tests cover second-run generic completion, the FE delegated partial/complete/incompatible states, and Chipware memo switch completion alongside independent combat stages. These are source-level implementation and test additions; official REDscript compilation/combined one-pass acceptance and replay on the user's current exact 2,333-file installation remain to be verified. No live game files are modified.
+
 ## 2026-11-22 — No-op Analyze DONE and accurate non-mutating ZIP guidance
 
 - Reuse Page 2 DONE after verified Analyze finds zero applicable CET/REDscript work. It invokes the existing safe workflow reset and full exit, with no empty ZIP. DONE remains hidden during analysis/generation and on incomplete or failed analysis; the optional Hotscenes checkbox can still enable a genuine Generate and hide DONE until work completes.

@@ -305,6 +305,41 @@ public class C extends IScriptable {
         self.assertIn("transformed=0", r.stdout)
         self.assertFalse(self.preview.exists())
 
+    def test_semantic_name_gate_preserves_completed_generic_marker(self):
+        self.seal()
+        self.assertEqual(self.preview_source().returncode, 0)
+        optimized = (self.preview / "r6/scripts/AnyMod/Test.reds").read_text()
+        read = "    let questHandle = GameInstance.GetQuestsSystem(this.GetGame());"
+        early = """    let actionName = ListenerAction.GetName(action);
+    if NotEquals(actionName, n"any_mod_action") && NotEquals(actionName, n"another") {
+        return value;
+    }
+"""
+        self.source.write_text(optimized.replace(read, early + read),
+                               encoding="utf8")
+        self.scan.unlink()
+        report = self.scan_source()
+        self.assertEqual(report["eligible"], 0)
+        self.assertEqual(report["alreadyComplete"], 1)
+        shutil.rmtree(self.preview)
+        self.seal()
+        again = self.preview_source()
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn("transformed=0", again.stdout)
+        self.assertFalse(self.preview.exists())
+
+        # Unknown side effects in that gate invalidate marker completion.
+        self.source.write_text(self.source.read_text().replace(
+            "        return value;\n    }\n    let questHandle",
+            "        this.LogUnknownAction(); return value;\n    }\n    let questHandle"),
+            encoding="utf8")
+        self.scan.unlink()
+        refused = self.cli("scan-late-system-read", "--game", self.game,
+                           "--out", self.scan)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("LATE_SYSTEM_READ_PARTIAL_OR_DRIFTED_GENERATED_MARKER",
+                      refused.stderr + refused.stdout)
+
     def test_nonterminal_action_guard_refused(self):
         self.source.write_text(SOURCE.replace(
             "if !Equals(ListenerAction.GetType(action), gameinputActionType.BUTTON_RELEASED) { return value; }",

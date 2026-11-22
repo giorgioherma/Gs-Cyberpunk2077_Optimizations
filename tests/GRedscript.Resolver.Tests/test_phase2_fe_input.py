@@ -131,6 +131,31 @@ class FlushingEtiquetteInputGateTests(unittest.TestCase):
         self.assertEqual(repeat["status"], "COMPLETE")
         self.assertIsNone(again)
 
+    def test_input_hub_handlevalues_adapter_completes_missing_gate(self):
+        # Historical InputHub moves GetGame and gameplay into HandleValues.
+        # Keep the engine ListenerAction adapter and complete its safe gate.
+        adapted = SOURCE.replace(
+            "    let type = ListenerAction.GetType(action);\n    let gi = player.GetGame();",
+            """    let type = ListenerAction.GetType(action);
+    return FEInput.HandleValues(player, name, type);
+  }
+  public static func HandleValues(player: ref<PlayerPuppet>,
+                                  name: CName, type: gameinputActionType) -> Bool {
+    let gi = player.GetGame();""")
+        report, generated = self.generate(adapted)
+        self.assertEqual(report["status"], "APPLIED", report)
+        self.assertIn('!Equals(name, n"Flush_Relief")', generated)
+        self.assertEqual(generated.count("return FEInput.HandleValues("), 1)
+        repeat, out = self.generate(generated)
+        self.assertEqual(repeat["status"], "COMPLETE", repeat)
+        self.assertIsNone(out)
+
+        unsafe = adapted.replace("let gi = player.GetGame();",
+                                 "let gi = this.CustomGameLookup();")
+        refused, output = self.generate(unsafe)
+        self.assertEqual(refused["status"], "REFUSED", refused)
+        self.assertIsNone(output)
+
     def test_new_custom_action_branch_is_included_without_version_lock(self):
         modified = SOURCE.replace("    return false;\n  }\n}",
             """    if Equals(name, n"Flush_CustomAction") {

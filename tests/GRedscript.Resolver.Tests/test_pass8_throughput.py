@@ -133,6 +133,34 @@ class Pass8Contracts(unittest.TestCase):
         self.assertIn("Custom owner note", files[relocated])
         self.assertIn("Reflexes_Master_Perk_5, perkType)", files[relocated])
 
+    def test_approved_memo_switch_completes_perk_early_admission(self):
+        p = next(k for k in FILES if k.endswith("chipPerkUnlock.reds"))
+        memo = PERK.replace(
+            "    let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(game);",
+            """    let cacheIndex: Int32 = -1;
+    switch perkType {
+        case gamedataNewPerkType.Cool_Left_Milestone_2: cacheIndex = 0; break;
+        case gamedataNewPerkType.Tech_Central_Milestone_3: cacheIndex = 1; break;
+        default: return wrappedMethod(perkType);
+    }
+    let cache: ref<GRedChipwareHotpathCache> = player.GRedChipwareHotpathCache();
+    let cachedResult: Int32;
+    if cache.TryGetPerkResult(cacheIndex, player, cachedResult) {
+        return cachedResult;
+    }
+    let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(game);""")
+        memo = memo.replace(
+            "    return wrappedMethod(perkType);\n}",
+            """    let vanillaPerkResult: Int32 = wrappedMethod(perkType);
+    cache.StorePerkResult(cacheIndex, player, vanillaPerkResult);
+    return vanillaPerkResult;
+}""")
+        report, output, _ = self.run_generator({**FILES, p: memo})
+        self.assertEqual(report["refusals"], [], report)
+        self.assertEqual(report["alreadyComplete"], 1, report)
+        self.assertEqual(report["appliedEdits"], 2, report)
+        self.assertNotIn(p, output)
+
     def test_incompatible_perk_refuses_only_perk_not_combat_gates(self):
         p = next(k for k in FILES if k.endswith("chipPerkUnlock.reds"))
         unsafe = PERK.replace("    let game = GetGameInstance();",
