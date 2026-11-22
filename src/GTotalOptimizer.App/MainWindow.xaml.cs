@@ -2020,23 +2020,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // Domain and separators always use yellow. The verified word OK alone
-    // is green; absent/unaligned/unknown evidence never looks successful.
-    internal static void SetAnalyzeCaptureStatus(
-        TextBlock label, string domain, string status)
-    {
-        label.Inlines.Clear();
-        label.Foreground = AnalyzeYellow;
-        label.Inlines.Add(new System.Windows.Documents.Run(domain + " · ")
-        {
-            Foreground = AnalyzeYellow
-        });
-        label.Inlines.Add(new System.Windows.Documents.Run(status)
-        {
-            Foreground = status == "OK" ? AnalyzeOkGreen : AnalyzeYellow
-        });
-    }
-
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
         // Page 2 retains the restoration confirmation above both panels.

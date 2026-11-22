@@ -669,9 +669,6 @@ internal static class Program
                 // messages must be INSIDE the scrollable console BELOW actions.
                 if (window.AnalyzeButton.ActualWidth <= 0 ||
                     window.ResultsRestoreStatusText.ActualWidth <= 0 ||
-                    window.CetCaptureStatusText.ActualWidth <= 0 ||
-                    window.RedCaptureStatusText.ActualWidth <= 0 ||
-                    window.PresentCaptureStatusText.ActualWidth <= 0 ||
                     window.ResultsConsoleScroll.ActualWidth <= 0 ||
                     !ReferenceEquals(window.ResultsConsoleScroll.Content,
                         window.ResultsStatusText) ||
@@ -682,7 +679,7 @@ internal static class Program
                     window.AnalyzeButton.TranslatePoint(
                         new System.Windows.Point(0, 0), window.ResultsPage).Y)
                     throw new InvalidOperationException(
-                        "Analyze console must be visible below buttons; restoration and capture indicators stay above panels.");
+                        "Analyze console must be visible below buttons; restoration status stays above panels.");
 
                 if (window.BackToCaptureButton.Visibility !=
                         System.Windows.Visibility.Visible ||
@@ -773,13 +770,24 @@ internal static class Program
                 // Hotscenes English-only removes the language system from
                 // generated Lua, so it must always be an explicit default-OFF
                 // user choice inside the CET (not REDscript) summary.
+                static bool IsWithin(System.Windows.DependencyObject item,
+                    System.Windows.DependencyObject ancestor)
+                {
+                    for (System.Windows.DependencyObject? current = item;
+                         current is not null;
+                         current = System.Windows.LogicalTreeHelper.GetParent(current))
+                        if (ReferenceEquals(current, ancestor)) return true;
+                    return false;
+                }
                 var englishCheck = window.HotscenesEnglishOnlyCheckBox;
                 if (englishCheck.IsChecked != false ||
                     englishCheck.IsThreeState ||
                     englishCheck.Content?.ToString() != "Hotscenes ENG only" ||
-                    englishCheck.Parent is not System.Windows.Controls.StackPanel cetPanel ||
-                    !ReferenceEquals(window.CetReportText.Parent, cetPanel) ||
-                    window.HotscenesEnglishOnlyDescription.Parent != cetPanel ||
+                    window.CetOptimizationHeading.Parent is not System.Windows.DependencyObject cetPanel ||
+                    !IsWithin(englishCheck, cetPanel) ||
+                    !IsWithin(window.CetReportText, cetPanel) ||
+                    !IsWithin(window.HotscenesEnglishOnlyDescription, cetPanel) ||
+                    IsWithin(window.RedReportText, cetPanel) ||
                     !window.HotscenesEnglishOnlyDescription.Text.Contains(
                         "Removes Hotscenes localization", StringComparison.Ordinal))
                     throw new InvalidOperationException(
@@ -790,40 +798,12 @@ internal static class Program
                         "Hotscenes ENG-only explicit opt-in could not be selected.");
                 englishCheck.IsChecked = false;
 
-                var yellow = System.Windows.Media.Color.FromRgb(255, 240, 0);
-                var green = System.Windows.Media.Color.FromRgb(101, 220, 162);
-                static bool ColorIs(System.Windows.Media.Brush? value,
-                    System.Windows.Media.Color expected) =>
-                    value is System.Windows.Media.SolidColorBrush b && b.Color == expected;
-                if (!ColorIs(window.ResultsRestoreStatusText.Foreground, yellow) ||
-                    !ColorIs(window.CetCaptureStatusText.Foreground, yellow) ||
-                    !ColorIs(window.RedCaptureStatusText.Foreground, yellow) ||
-                    !ColorIs(window.PresentCaptureStatusText.Foreground, yellow))
+                // Pending restoration must not be displayed as verified.
+                if (window.ResultsRestoreStatusText.Foreground is not
+                        System.Windows.Media.SolidColorBrush pendingRestore ||
+                    pendingRestore.Color != System.Windows.Media.Color.FromRgb(255, 240, 0))
                     throw new InvalidOperationException(
-                        "Analyze restoration and domain labels must use owner yellow.");
-
-                // Test the actual formatter used by successful and missing
-                // capture results: only verified OK may be green.
-                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
-                    window.CetCaptureStatusText, "CET", "OK");
-                var good = window.CetCaptureStatusText.Inlines
-                    .OfType<System.Windows.Documents.Run>().ToArray();
-                if (good.Length != 2 || good[0].Text != "CET · " ||
-                    !ColorIs(good[0].Foreground, yellow) ||
-                    good[1].Text != "OK" || !ColorIs(good[1].Foreground, green))
-                    throw new InvalidOperationException(
-                        "Only the verified CET OK word must render green.");
-                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
-                    window.CetCaptureStatusText, "CET", "MISSING");
-                var missing = window.CetCaptureStatusText.Inlines
-                    .OfType<System.Windows.Documents.Run>().ToArray();
-                if (missing.Length != 2 || missing[1].Text != "MISSING" ||
-                    !ColorIs(missing[0].Foreground, yellow) ||
-                    !ColorIs(missing[1].Foreground, yellow))
-                    throw new InvalidOperationException(
-                        "Missing capture status must never be green.");
-                GTotalOptimizer.App.MainWindow.SetAnalyzeCaptureStatus(
-                    window.CetCaptureStatusText, "CET", "NOT VERIFIED");
+                        "Unverified restoration must retain its warning state.");
 
                 static string FlattenWhitespace(string value) =>
                     System.Text.RegularExpressions.Regex.Replace(
@@ -836,14 +816,12 @@ internal static class Program
                 // Only assert meaningful guidance, not an exact UI sentence:
                 // wording and spacing are presentation decisions, not a
                 // release-blocking CI contract.
-                var safetyGuide = FlattenWhitespace(window.OptimizationFooterSafety.Text);
-                var zipGuide = FlattenWhitespace(window.OptimizationFooterFirstLine.Text);
-                var managerGuide = FlattenWhitespace(window.OptimizationFooterVortex.Text);
-                if (!safetyGuide.Contains("game files", StringComparison.OrdinalIgnoreCase) ||
-                    !safetyGuide.Contains("NOT", StringComparison.Ordinal) ||
-                    !zipGuide.Contains("CET + REDscript", StringComparison.Ordinal) ||
-                    !zipGuide.Contains("ZIP", StringComparison.Ordinal) ||
-                    string.IsNullOrWhiteSpace(managerGuide))
+                var guide = FlattenWhitespace(window.OptimizationFooterNotice.Text);
+                if (!guide.Contains("game files", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("NOT", StringComparison.Ordinal) ||
+                    !guide.Contains("CET + REDscript", StringComparison.Ordinal) ||
+                    !guide.Contains("ZIP", StringComparison.Ordinal) ||
+                    !guide.Contains("Vortex", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException(
                         "Analyze footer must describe non-mutating ZIP generation and file-management guidance.");
 

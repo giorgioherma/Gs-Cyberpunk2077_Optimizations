@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Full v1.2.6 checkpoint: current layout and repeat-pass verification
+
+- User replay on unchanged 2,333-file optimized REDscript stack confirmed zero generated REDscript edits and zero refusals; Negotiate Affection generic guard/Chipware cache recognition fixes and installed Flushing Etiquette complete input gate account for the earlier three false refusals. G-GC-only ZIP updated init.lua and learned threshold.lua; unchanged runtime payloads are subject to new SHA omission policy in v1.2.6. Prior package remains v1.2.5.
+- [Full CI #1116](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44979926233) failed the packaged WPF smoke at the Hotscenes direct-parent layout assertion, after build and integrated launcher/install-restore smoke passed. Assert actual logical containment and opt-in semantics instead of direct-parent identity; remove obsolete status row checks following explicit owner removal; retain restoration warning, footer guidance and workflow safety checks. No new cosmetic checks. Latest accumulated UI and SHA omission checkpoint requested; result pending. Main untouched.
+
 ## 2026-11-22 — Compact Analyze notices and completion console
 
 - Page 2: removed redundant CET/REDscript/PresentMon status row (all underlying capture/restoration verification and enablement unchanged). Installer safety, ZIP and Vortex notices share one row with existing colors; Hotscenes checkbox and explanation share one row. Wrap naturally if narrow instead of clipping. PASS READY remains yellow and conflict/manual-backup guidance shares its row; removed separate generated location line from main content and appended actual GCO-relative ZIP path on the second console row. Existing OPEN FOLDER selects published ZIP, DONE and prior progress collapse behavior unchanged. No new cosmetic CI checks. Pending next Windows package checkpoint.

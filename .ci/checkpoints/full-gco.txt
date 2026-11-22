@@ -1,1 +1,1 @@
-checkpoint=framework-sha-omission-v1.2.6-planned-counts-and-progress-20261122
+checkpoint=v1.2.6-framework-omission-final-compact-ui-repeat-pass-20261122

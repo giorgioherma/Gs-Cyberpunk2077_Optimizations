@@ -1072,7 +1072,7 @@
                             </Grid>
                             <!-- This Page 2 statement refers to the installer/output stage after
                                  both temporary profilers have been uninstalled and restoration verified. -->
-                            <TextBlock Margin="3,8,0,0" FontSize="12.5" TextWrapping="Wrap">
+                            <TextBlock x:Name="OptimizationFooterNotice" Margin="3,8,0,0" FontSize="12.5" TextWrapping="Wrap">
                                  <Run Text="Installer does NOT change any of your game files."
                                       Foreground="#FFF000" FontWeight="SemiBold"/>
                                  <Run Text="  CET + REDscript — one clean ZIP with optimization files.   Use Vortex for easy file management"
