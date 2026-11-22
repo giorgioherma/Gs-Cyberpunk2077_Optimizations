@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Adaptive WPF progress smoothing (checkpoint-authoritative)
+
+- Capture Collect, Analyze and Generate keep the existing real progress callbacks and phase tokens; added a WPF-only 80ms timer to animate the visual bar between source-owner checkpoints.
+- The initial animation pace is provisional. Each verified checkpoint records the elapsed interval and updates a per-run smoothed estimate. No capture from one PC, fixed total-duration prediction, or measured efficiency claim is reused on another machine.
+- An estimate can approach only the next checkpoint, never exceed 98.5% and never indicate success. Verified completion alone sets 100%; failures, cancellations, window close and workflow reset stop the timer. Existing console text, status sequencing, ZIP source ownership and profiler work remain unchanged.
+- Added a focused portable state test in the existing WPF packaged smoke verifier for gradual advance, adaptation to a fast checkpoint, monotonicity, sub-100 cap, stop and fresh-operation reset. Windows packaging CI not triggered for this UI-only batch.
+
 ## 2026-11-22 — Matching Capture and Analyze console text origins
 
 - Eliminated the 26-DIP horizontal mismatch between Page 1 and Page 2 console text. Both now start at the same right-content-relative anchor, halfway between their earlier positions; text viewport widths and line wrapping remain responsive.

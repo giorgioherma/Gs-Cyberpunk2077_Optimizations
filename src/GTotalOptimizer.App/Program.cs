@@ -1135,6 +1135,40 @@ internal static class Program
             DrainDispatcher();
             Console.WriteLine("PASS START capture handoff unloads WPF before Cyberpunk is observed");
 
+            // The display estimate is distinct from confirmed completion:
+            // simulate slow and fast checkpoint intervals on different PCs.
+            // No fixed runtime is asserted; only monotonic, bounded behavior.
+            var smooth = new CheckpointProgressSmoother();
+            smooth.Start(5);
+            var initialEstimate = smooth.Advance(2.0);
+            var slowerEstimate = smooth.Advance(6.0);
+            if (initialEstimate <= 0 || slowerEstimate <= initialEstimate ||
+                slowerEstimate >= 20)
+                throw new InvalidOperationException(
+                    "Progress estimator failed to advance within the first real stage.");
+            smooth.Confirm(1, 5, 7.0);
+            var firstCheckpoint = smooth.Advance(7.1);
+            smooth.Confirm(2, 5, 8.0); // next checkpoint arrives much faster
+            var afterFastCheckpoint = smooth.Advance(8.1);
+            smooth.Confirm(5, 5, 9.0); // all stages verified; work may still publish
+            var waitingForPublish = smooth.Advance(25.0);
+            if (firstCheckpoint < slowerEstimate ||
+                afterFastCheckpoint < firstCheckpoint ||
+                waitingForPublish < afterFastCheckpoint ||
+                waitingForPublish > CheckpointProgressSmoother.EstimatedCeiling ||
+                waitingForPublish >= 100)
+                throw new InvalidOperationException(
+                    "Progress estimator regressed or claimed unverified completion.");
+            smooth.Stop();
+            var stoppedValue = smooth.Advance(300);
+            if (stoppedValue != waitingForPublish)
+                throw new InvalidOperationException(
+                    "Stopped progress estimator continued advancing after work ended.");
+            smooth.Start(10);
+            if (smooth.Value != 0 || smooth.Advance(1.0) <= 0)
+                throw new InvalidOperationException(
+                    "New progress operation did not reset the prior estimate.");
+
             var normal = new MainWindow();
             VerifyAtSize(normal, normal.Width, normal.Height);
 

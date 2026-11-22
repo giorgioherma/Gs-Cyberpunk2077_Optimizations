@@ -29,6 +29,11 @@ public partial class MainWindow : Window
     // from stopping another operation's indicator prematurely.
     private readonly DispatcherTimer consoleActivityTimer = new()
         { Interval = TimeSpan.FromMilliseconds(350) };
+    // A UI-only interpolator, active only while Collect/Analyze/Generate runs.
+    private readonly DispatcherTimer workProgressTimer = new()
+        { Interval = TimeSpan.FromMilliseconds(80) };
+    private readonly Stopwatch workProgressClock = new();
+    private readonly CheckpointProgressSmoother progressSmoother = new();
     private sealed record ConsoleActivity(
         string Message, bool Results, string PreviousText, long StatusRevision);
     private long captureConsoleRevision;
@@ -245,6 +250,9 @@ public partial class MainWindow : Window
         BuildVersionText.Text = $"v{version}";
         glitchTimer.Tick += GlitchTick;
         consoleActivityTimer.Tick += (_, _) => AdvanceConsoleActivity();
+        workProgressTimer.Tick += (_, _) =>
+            WorkflowProgressBar.Value = progressSmoother.Advance(
+                workProgressClock.Elapsed.TotalSeconds);
         gameStateTimer.Tick += GameStateTimer_Tick;
         gameProcesses.Started += pid => DispatchGameEvent(() => GameStarted(pid));
         gameProcesses.Exited += pid => DispatchGameEvent(() => GameExited(pid));
@@ -981,6 +989,9 @@ public partial class MainWindow : Window
         gameProcesses.Dispose();
         glitchTimer.Stop();
         consoleActivityTimer.Stop();
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
         consoleActivities.Clear();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
@@ -1143,26 +1154,37 @@ public partial class MainWindow : Window
         }
     }
 
-    // Shared cyan progress rail; three independent, token-scoped job lifecycles.
+    // Real source milestones remain authoritative. A UI-only estimate eases
+    // toward the next checkpoint and is never allowed to indicate completion.
     private enum WorkPhase { None, Collect, Analyze, Generate }
     private WorkPhase activeWorkPhase = WorkPhase.None;
     private long activeWorkToken;
 
     private long BeginWorkProgress(WorkPhase phase, string label)
     {
+        workProgressTimer.Stop();
         activeWorkPhase = phase;
         long token = ++activeWorkToken;
+        progressSmoother.Start(phase switch
+        {
+            WorkPhase.Collect => 10,
+            WorkPhase.Analyze => 5,
+            WorkPhase.Generate => 6,
+            _ => 1
+        });
+        workProgressClock.Restart();
         WorkflowProgressBar.Value = 0;
         WorkflowProgressText.Text = label;
         WorkflowProgressHost.Visibility = Visibility.Visible;
+        workProgressTimer.Start();
         return token;
     }
 
     private void SetWorkProgress(long token, WorkPhase phase, int completed, int total, string label)
     {
         if (token != activeWorkToken || activeWorkPhase != phase || total <= 0) return;
-        WorkflowProgressBar.Value = Math.Max(WorkflowProgressBar.Value,
-            Math.Clamp(completed * 100.0 / total, 0, 100));
+        progressSmoother.Confirm(completed, total,
+            workProgressClock.Elapsed.TotalSeconds);
         WorkflowProgressText.Text = label;
     }
 
@@ -1173,6 +1195,9 @@ public partial class MainWindow : Window
     private void FinishWorkProgress(long token, WorkPhase phase, bool success)
     {
         if (token != activeWorkToken || activeWorkPhase != phase) return;
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
         if (success)
         {
             WorkflowProgressBar.Value = 100;
@@ -1191,6 +1216,9 @@ public partial class MainWindow : Window
     private void ClearWorkProgress()
     {
         ++activeWorkToken;
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
         activeWorkPhase = WorkPhase.None;
         WorkflowProgressBar.Value = 0;
         WorkflowProgressHost.Visibility = Visibility.Collapsed;
