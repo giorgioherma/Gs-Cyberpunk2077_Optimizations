@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Final progress ceiling
+
+- Owner-approved final visual ceiling increased to 99% (`2e425fed`), superseding the earlier 98.5% ceiling. Intermediate checkpoint limits and real success/failure authority remain unchanged. Only verified successful completion sets 100%. Existing numerical replay below documents the previous ceiling; Windows validation remains pending.
+
 ## 2026-11-22 — Workload-proportional adaptive progress
 
 - Owner's five-minute capture run (130 CET mods / 2,319 REDscript files) observed large-jump intervals Collect 48/44s; Analyze 57/23/66/82s; Generate 73/79s. These are observed UI jump times, not separately instrumented backend-stage durations.
