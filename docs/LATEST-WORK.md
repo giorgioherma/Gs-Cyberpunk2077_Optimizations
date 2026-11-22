@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Historical/combined REDscript recognition: focused SCC green
+
+- [Focused REDscript SCC #229 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44970188632) at `9ab1a4d5834dffb21db7d081d6213fac8f8d8146`: 12 independent Pass 4 tests, 20 Pass 8 tests, 13 late-read tests, 289 Phase 2 tests; 58 semantic source files generated in one pass from 2,331 post-generic source files, 491 candidate edits/56 applied passes reported, official SCC 0.5.31 clean, original source untouched. Historical FE InputHub and Chipware memo source-state tests passed.
+- This is proof that the new structural recognizers handle the tested stock, partially-optimized and complete shapes while refusing incompatible variants. It does not establish that the user's separate currently installed 2,333-file tree is identical to the private post-generic fixture or that a new optimization ZIP should be produced on an already optimized installation.
+- One deliberate full-GCO release checkpoint is next, covering the accumulated WPF changes and the integrated source generators. Previous focused #227/#228 failed solely on two missing-file assumptions in a newly authored generic test fixture, corrected before green #229.
+
 ## 2026-11-22 — REDscript repeat Analyze refusal classification: overlapping approved work
 
 - Three actual owner operations from the already-optimized stack were investigated against the user-provided post-generic source tree and the game-tested historical passes. This is a source-state and overlap issue, not a reason to silently remove rules or ship historical replacement files.

@@ -1,1 +1,1 @@
-checkpoint=gco-repeat-pass-noop-ui-restoration-pending-yellow-20261121
+checkpoint=redscript-overlap-noop-done-adaptive-ui-full-integration-20261122
