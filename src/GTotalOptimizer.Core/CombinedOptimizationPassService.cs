@@ -222,9 +222,16 @@ public sealed class CombinedOptimizationPassService
             string final = Path.Combine(finalFolder, zipName);
             try
             {
-                var indexed = CollectOutput(overlay, owners, game, token);
+                var allOutput = CollectOutput(overlay, owners, game, token);
+                var omittedPaths = FindIdenticalFrameworkFiles(overlay, game,
+                    frameworkOwner, owners, token).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var omitted = allOutput.Where(e => omittedPaths.Contains(e.Path)).ToArray();
+                var indexed = allOutput.Where(e => !omittedPaths.Contains(e.Path)).ToList();
+                // Report the actual published payload, not the full pre-filter staging inventory.
+                cetFiles -= omitted.Count(e => !e.Path.StartsWith("r6/", StringComparison.OrdinalIgnoreCase));
+                redFiles -= omitted.Count(e => e.Owner.StartsWith("REDscript/", StringComparison.OrdinalIgnoreCase));
                 if (indexed.Count == 0)
-                    throw new InvalidDataException("GCO_COMBINED_EMPTY_OUTPUT");
+                    throw new NoNewOptimizationsException();
                 using (var archive = ZipFile.Open(pending, ZipArchiveMode.Create))
                 {
                     int written = 0;
@@ -284,6 +291,9 @@ public sealed class CombinedOptimizationPassService
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
                         installRecommendation = "Vortex overlay after originals; manually back up before direct installation",
+                        identicalFrameworkFilesOmitted = omitted.Select(e => new {
+                            path = e.Path, owner = e.Owner, sha256 = Sha(e.FullName)
+                        }).ToArray(),
                         excludedOwners = cetResult.SkipDetails
                             .Where(item => item.Category == "MOD_BLACKLIST" &&
                                 !string.IsNullOrWhiteSpace(item.Owner))
@@ -300,6 +310,12 @@ public sealed class CombinedOptimizationPassService
                     }, new JsonSerializerOptions { WriteIndented = true }),
                     new UTF8Encoding(false));
                 token.ThrowIfCancellationRequested();
+                // An omitted dependency must still be identical at publication.
+                // Source drift must not leave a ZIP with a missing framework.
+                if (omitted.Length > 0 && !omittedPaths.IsSubsetOf(
+                    FindIdenticalFrameworkFiles(overlay, game, frameworkOwner, owners, token)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("GCO_IDENTICAL_FRAMEWORK_CHANGED_BEFORE_PUBLICATION");
                 if (Directory.Exists(finalFolder) || File.Exists(finalFolder))
                     throw new IOException("An optimization pass already has this timestamp.");
                 Directory.Move(stagedFolder, finalFolder);
@@ -371,6 +387,85 @@ public sealed class CombinedOptimizationPassService
             files.Add(new(rel, file, live, owner));
         }
         return files.OrderBy(x => x.Path, StringComparer.Ordinal).ToList();
+    }
+
+    // Only the infrastructure explicitly owned and supplied by GCO/CET
+    // is eligible. Ordinary mods and G-GC's capture-driven learning payload
+    // never participate in this omission policy.
+    private static string? FrameworkGroup(string relative)
+    {
+        if (relative.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/",
+                StringComparison.OrdinalIgnoreCase)) return "0-Engine";
+        if (relative.StartsWith("r6/scripts/G-RedRuntime/",
+                StringComparison.OrdinalIgnoreCase)) return "G-REDruntime";
+        if (relative.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
+                StringComparison.OrdinalIgnoreCase)) return "G-CET native";
+        return null;
+    }
+
+    internal static string[] FindIdenticalFrameworkFiles(string overlay, string game,
+        string frameworkOwner, IReadOnlyDictionary<string, string> owners,
+        CancellationToken token)
+    {
+        var omitted = new List<string>();
+        // All required files in a framework group must match. A partial or
+        // different installation retains the existing complete owner payload.
+        foreach (var group in owners.Keys
+            .Select(path => (Path: path, Group: FrameworkGroup(path)))
+            .Where(item => item.Group is not null)
+            .GroupBy(item => item.Group!, StringComparer.OrdinalIgnoreCase))
+        {
+            bool exact = true;
+            foreach (var item in group)
+            {
+                token.ThrowIfCancellationRequested();
+                string relative = item.Path;
+                string local = relative.Replace('/', Path.DirectorySeparatorChar);
+                string live = Path.Combine(game, local);
+                string staged = Path.Combine(overlay, local);
+                if (!SafeGamePath(relative) || !ExactInstalledFile(game, live, staged))
+                {
+                    exact = false;
+                    break;
+                }
+                // REDscript's owner assembler intentionally preserves
+                // installed customized bytes. Do not mistake that copy for
+                // proof that the installed framework matches the bundled version.
+                if (group.Key == "G-REDruntime" &&
+                    !ExactInstalledFile(game, live, Path.Combine(frameworkOwner, local)))
+                {
+                    exact = false;
+                    break;
+                }
+            }
+            if (exact) omitted.AddRange(group.Select(item => item.Path));
+        }
+        return omitted.OrderBy(path => path, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool ExactInstalledFile(string game, string live, string required)
+    {
+        try
+        {
+            if (!Inside(live, game) || !File.Exists(live) || !File.Exists(required))
+                return false;
+            // Unknown, linked or unreadable paths are not exact proof.
+            string fullGame = Path.GetFullPath(game);
+            for (string? current = Path.GetFullPath(live);
+                 current is not null && !string.Equals(
+                     current, fullGame, StringComparison.OrdinalIgnoreCase);
+                 current = Path.GetDirectoryName(current))
+            {
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+            }
+            if ((File.GetAttributes(required) & FileAttributes.ReparsePoint) != 0)
+                return false;
+            return new FileInfo(live).Length == new FileInfo(required).Length &&
+                Sha(live).Equals(Sha(required), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     private static bool SafeGamePath(string path) =>

@@ -1,1 +1,1 @@
-checkpoint=selectable-ggc-runtime-upgrade-console-full-integration-20261122
+checkpoint=framework-sha-omission-v1.2.6-planned-counts-and-progress-20261122

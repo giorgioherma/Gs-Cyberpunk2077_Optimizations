@@ -411,6 +411,65 @@ void Require(bool valid, string message)
     finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
 }
 
+// Framework omission happens after complete owner staging and excludes
+// only exact complete framework payloads, never G-GC calibration or mods.
+{
+    var find = typeof(CombinedOptimizationPassService).GetMethod(
+        "FindIdenticalFrameworkFiles",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_FRAMEWORK_OMISSION_MISSING");
+    string sandbox = Path.Combine(Path.GetTempPath(), "gco-omit-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string game = Path.Combine(sandbox, "game");
+        string overlay = Path.Combine(sandbox, "overlay");
+        string owner = Path.Combine(sandbox, "owner");
+        const string cet = "bin/x64/plugins/cyber_engine_tweaks/mods/";
+        const string red = "r6/scripts/G-RedRuntime/";
+        const string native = "red4ext/plugins/G-CET-StaticLocations/";
+        string[] paths = [cet + "0-Engine/init.lua", cet + "0-Engine/core.lua",
+            red + "Core.reds", red + "Cache.reds", native + "Runtime.dll",
+            native + "Data.locations", cet + "G-GC/init.lua", cet + "SomeMod/init.lua"];
+        var owners = paths.ToDictionary(p => p, p => "owner", StringComparer.OrdinalIgnoreCase);
+        string At(string root, string path) => Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
+        void Write(string root, string path, string bytes)
+        {
+            string file = At(root, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, bytes);
+        }
+        foreach (string path in paths)
+        {
+            Write(game, path, "exact payload");
+            Write(overlay, path, "exact payload");
+            if (path.StartsWith(red)) Write(owner, path, "exact payload");
+        }
+        string[] Omitted() => (string[])find.Invoke(null,
+            [overlay, game, owner, owners, CancellationToken.None])!;
+        Require(Omitted().ToHashSet().SetEquals(paths.Take(6)),
+            "only complete identical framework groups omitted; G-GC and ordinary mods retained");
+        // Equal byte length but different bytes must not pass SHA matching.
+        Write(game, paths[0], "other payload");
+        File.Delete(At(game, paths[4]));
+        Require(Omitted().ToHashSet().SetEquals(paths.Skip(2).Take(2)),
+            "different or missing framework file keeps its complete group");
+        Write(game, paths[2], "custom live");
+        Write(overlay, paths[2], "custom live");
+        Require(Omitted().Length == 0,
+            "installed custom source copied into staging is not proof of bundled framework identity");
+        Write(game, paths[0], "exact payload");
+        Write(game, paths[4], "exact payload");
+        Write(game, paths[2], "exact payload");
+        Write(overlay, paths[2], "new optimization");
+        Require(Omitted().ToHashSet().SetEquals(new[] {paths[0], paths[1], paths[4], paths[5]}),
+            "a newly optimized framework file keeps the framework group");
+        Require(File.ReadAllText(At(game, paths[2])) == "exact payload",
+            "framework comparison never modifies live files");
+    }
+    finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
+}
+
 var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().ToString("N"));
 try
 {

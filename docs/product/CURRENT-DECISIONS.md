@@ -1,5 +1,9 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-22 — Exact framework omission in combined ZIP
+
+After full source-owner generation, omit only complete required framework groups whose installed files match the final required bytes by SHA-256. For G-REDruntime also require the verified bundled source hashes, not just copied installed custom bytes. No version-string inference, dependency shortcuts, or removal of differing/missing framework files. Preserve G-GC learning/calibration delivery. Recheck skipped dependencies before publication; record omission in external ownership report. This is a ZIP packaging policy only, not a semantic source-recognition hash lock. Unified app v1.2.6; owner versions remain independent.
+
 ## 2026-11-21 — Quickslots D-pad cache automatic; no extra GCO checkbox
 
 **Supersedes the short-lived Nov 20 manual Quickslots checkbox design.** The owner does **not** want another setting/check on the Analyze page; the CET Hotscenes ENG-only option required for Lua-local capacity remains untouched. Keep controller/gamepad functionality enabled. The REDscript `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` generator applies automatically after InputHub #16 to compatible already-generic Quickslots source, with no UI option, persisted preference or extra CLI flag. Incompatible Quickslots source refuses only stage #17. At runtime the cache follows the **existing last-used input-state signals and original `PlayerLastUsedPad()` predicate**, not physical controller connection. A permanently plugged-in controller does not force pad mode when KBM is used. Preserve source-owned modifier hold/release, configuration changes, event order and fallback, without replacing game state or introducing a fixed polling interval. No controller input is disabled.
