@@ -1662,6 +1662,14 @@ public partial class MainWindow : Window
             ContinueButton.IsEnabled = !running && !profilerReportRunning &&
                 CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
                 saved is not null && HasCompletedProfilerReport(packageRoot, saved.SessionId);
+            // Reconstruct Page 1's decorative state from the authoritative
+            // journal after tray hibernation/reopen, not from a local flag.
+            SetPortraitStage(CaptureAdmissionPolicy.CanContinue(saved, frame is null)
+                ? PortraitStage.Collecting
+                : !state.BothInstalled || !session ? PortraitStage.Black
+                : captureStarted && saved?.CollectInvoked != true
+                    ? PortraitStage.Capturing
+                    : PortraitStage.Installed);
             // Recover a sealed capture on restart or REFRESH without allowing
             // Continue to skip unfinished derived report generation.
             if (!running && saved is not null &&
@@ -1700,14 +1708,6 @@ public partial class MainWindow : Window
                             : session
                                 ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
                                 : $"G-CET Profiler: {cetProfiler} | G-REDscript Profiler: {redProfiler}");
-            // Reconstruct Page 1's decorative state from the authoritative
-            // journal after tray hibernation/reopen, not from a local flag.
-            SetPortraitStage(CaptureAdmissionPolicy.CanContinue(saved, frame is null)
-                ? PortraitStage.Collecting
-                : !state.BothInstalled || !session ? PortraitStage.Black
-                : captureStarted && saved?.CollectInvoked != true
-                    ? PortraitStage.Capturing
-                    : PortraitStage.Installed);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
