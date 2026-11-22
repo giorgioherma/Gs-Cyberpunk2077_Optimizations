@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Analyze spacing and matched generation summaries
+
+- Owner-requested Page 2 visual breathing room: increased card/action vertical separation, card padding, action-button gaps and spacing between installer/Vortex guidance and PASS READY; normal hyphens replace both long dashes in those notices. Page 1 and progress estimator unchanged.
+- CET analysis omits below-threshold callbacks from its UI only; material unresolved callback counts remain analysis data rather than generation refusals. After successful generation both panels show actual output file counts and numeric skips, including zero; CET also shows actual transforms and available skipped owner names. Console order is success/counts, actual GCO-relative published ZIP path, then unavailable entries/optional Hotscenes failure. No changes to source admission or owner generators.
+- User-provided v1.2.7 ownership JSON confirms 394 CET and 123 REDscript files, 664 REDscript edits, zero REDscript refusals and one CET refusal: G-GC `GC_CONTROLLER_SOURCE_DRIFT`; installed unrecognized/modified runtime preserved, no G-GC file emitted. The development runtime is a plausible explanation, not an independently verified source identity.
+- Source edits `d8b53bc5` and `7f187293` reread and checked for scope and report order. Windows package/rendering verification pending next deliberate full GCO checkpoint; no new cosmetic CI contract or version bump. Main unchanged.
+
 ## 2026-11-22 — Owner-requested v1.2.7 build
 
 - [Full CI #1118](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44986418835) succeeded, 40/40 steps, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.6-run1118-a1` (14739484066), source `f47b1d3db5c6f07c583a2df3f86d1dba56d72898`. Framework omission, REDscript replay, WPF and profiler integration validated by the full checkpoint. At owner request, increase the unified app version to 1.2.7 and run one full package checkpoint. No generator changes or owner version changes; main untouched. New checkpoint result pending.
