@@ -2219,19 +2219,15 @@ public partial class MainWindow : Window
             SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 5, "ANALYZE / REDSCRIPT SOURCES");
             // Do not mark the session ANALYZED until both CET and the
             // REDscript generation plan have completed successfully.
-            // The Resolver's UnresolvedCount is a CALLBACK count, not
-            // unresolved mods. The material portion is a subset; the rest
-            // is below the owner's 3ms/s-or-stutter materiality rule.
-            int lowImpact = Math.Max(0,
-                report.Unresolved - report.MaterialRemaining);
+            // MaterialRemaining is an analysis callback count, not a
+            // generation refusal count. Below-threshold work is not shown here.
             CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
                 " | Callback families: " + report.MeasuredCallbackFamilies +
                 " | Measured callbacks: " + report.RankedCallbacks + " | " +
                 "Generic candidates: " + report.GenericCandidates +
                 " | Semantic rules: " + report.SemanticCandidates +
                 " | Already optimized: " + report.AlreadySatisfied + " | " +
-                "Priority unresolved callbacks: " + report.MaterialRemaining +
-                " | Below-threshold callbacks: " + lowImpact;
+                "Priority unresolved callbacks: " + report.MaterialRemaining;
             // REDscript is no longer reported as absent: use the actual
             // bundled GCO-local Resolver to decide source-specific passes and
             // their generation order. This is a plan, not an optimization ZIP.
@@ -2410,11 +2406,10 @@ public partial class MainWindow : Window
                 packageRoot, game, session, cancellation.Token,
                 hotscenesEnglishOnly, WorkProgressReporter(WorkPhase.Generate, generateProgress));
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
-            // OPEN FOLDER always opens the GCO root containing RESULTS
-            // and generated_optimizations; it does not depend on a pass.
-            // The CET/REDscript boxes keep detailed source information.
-            // Success console is deliberately just the two measured edit counts.
-            // Actual skip outcomes stay visible if any pass was refused.
+            // Keep analysis counts distinct from actual published output and refusals.
+            // CET candidate counts are not counts of applied generator rules.
+            CetReportText.Text += " | Transforms applied: " + pass.CetTransforms +
+                " | Output files: " + pass.CetFiles;
             if (pass.HotscenesEnglishOnlyRequested &&
                 (pass.HotscenesEnglishOnlyEdits > 0 ||
                  !HasCompletedHotscenesEnglishOnly(game)))
@@ -2422,9 +2417,14 @@ public partial class MainWindow : Window
                     (pass.HotscenesEnglishOnlyEdits > 0
                         ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
                         : "not applied (see pass details)");
+            CetReportText.Text += " | Skipped entries: " + pass.CetSkipped;
+            var skippedCetOwners = pass.CetSkipDetails
+                .Select(item => item.Owner)
+                .Where(owner => !string.IsNullOrWhiteSpace(owner))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (pass.CetSkipped > 0 && skippedCetOwners.Length > 0)
+                CetReportText.Text += " (" + string.Join(", ", skippedCetOwners) + ")";
 
-            // Replace the analysis inventory with actual published outcomes.
-            // The disposable preview was informational, not a publication.
             int unavailableRuleFamilies = pass.RedscriptSkipped
                 .Select(item => item.Id)
                 .Distinct(StringComparer.Ordinal).Count();
@@ -2434,28 +2434,32 @@ public partial class MainWindow : Window
                 " | Semantic rules applied: " + pass.SemanticRedscriptRules +
                 " | Generic edits: " + pass.GenericRedscriptEdits +
                 " | Semantic edits: " + pass.SemanticRedscriptEdits +
-                " | Output files: " + pass.RedscriptFiles + " | " +
-                (pass.RedscriptSkipped.Length == 0
-                    ? "No refused REDscript operations."
-                    : "Unavailable: " + unavailableRuleFamilies +
-                      " rule families (" + pass.RedscriptSkipped.Length +
-                      " operations). See ZIP ownership details.");
+                " | Output files: " + pass.RedscriptFiles +
+                " | Skipped operations: " + pass.RedscriptSkipped.Length;
+            if (pass.RedscriptSkipped.Length > 0)
+                RedReportText.Text += " (" + unavailableRuleFamilies +
+                    " rule families). See ZIP ownership details.";
+
             string summary = "ZIP generated. CET: " + pass.CetTransforms +
                 " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
-            if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
-                summary += " | Unavailable: CET " +
-                    pass.CetSkipped + " entries | REDscript " +
-                    unavailableRuleFamilies + " rule families (" +
-                    pass.RedscriptSkipped.Length + " operations).";
-            if (pass.HotscenesEnglishOnlyRequested &&
-                pass.HotscenesEnglishOnlyEdits == 0 &&
-                !HasCompletedHotscenesEnglishOnly(game))
-                summary += " | Hotscenes ENG-only: not applied.";
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
             if (generatedPassZipPath is not null)
                 summary += Environment.NewLine + "in GCO folder /" +
                     Path.GetRelativePath(packageRoot, generatedPassZipPath).Replace('\\', '/');
+            if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
+            {
+                summary += Environment.NewLine + "Unavailable: CET " +
+                    pass.CetSkipped + " entries";
+                if (pass.CetSkipped > 0 && skippedCetOwners.Length > 0)
+                    summary += " (" + string.Join(", ", skippedCetOwners) + ")";
+                summary += " | REDscript " + unavailableRuleFamilies + " rule families (" +
+                    pass.RedscriptSkipped.Length + " operations).";
+            }
+            if (pass.HotscenesEnglishOnlyRequested &&
+                pass.HotscenesEnglishOnlyEdits == 0 &&
+                !HasCompletedHotscenesEnglishOnly(game))
+                summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
             RefreshPlannedWork();
             if (generatedPassZipPath is not null)
