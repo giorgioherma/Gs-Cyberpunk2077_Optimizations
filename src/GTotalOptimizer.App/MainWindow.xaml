@@ -934,10 +934,10 @@
                     <!-- RESTORE reuses the first stage action, not a footer button. -->
                     <Grid x:Name="ConsoleTextHost" Grid.Column="0"
                           Margin="-7,-6,9,24" Background="Transparent" ClipToBounds="True">
-                        <!-- Lift only the capture console text; footer button and
-                             capture content keep their original positions. -->
+                        <!-- Position console text near the upper edge of the cyan slash;
+                             footer button and capture content keep their original positions. -->
                         <Grid.RenderTransform>
-                            <TranslateTransform Y="-14"/>
+                            <TranslateTransform Y="-6"/>
                         </Grid.RenderTransform>
                         <!-- Restore multiple visible guidance rows; allow scrolling
                              if all five framework gates fail at once. Keep the
@@ -1104,10 +1104,10 @@
                                       FocusVisualStyle="{x:Null}" HorizontalAlignment="Stretch"
                                       VerticalAlignment="Center" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
-                                      MaxHeight="68" MinHeight="34" Margin="0,0,12,0">
-                            <!-- Align the Analyze console higher without moving DONE. -->
+                                      MaxHeight="62" MinHeight="34" Margin="0,0,12,6">
+                            <!-- Lower the text slightly; retain bottom clearance above the shared rail. -->
                             <ScrollViewer.RenderTransform>
-                                <TranslateTransform Y="-14"/>
+                                <TranslateTransform Y="-6"/>
                             </ScrollViewer.RenderTransform>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        Width="{Binding ViewportWidth, ElementName=ResultsConsoleScroll}"
