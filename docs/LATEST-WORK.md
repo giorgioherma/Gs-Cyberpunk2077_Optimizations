@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Console vertical placement refinement before main migration
+
+- At owner request, lowered the Capture and Analyze console text towards the upper edge of the cyan slash by reducing the existing upward translation from 14 to 6 DIPs. Analyze retains a 6-DIP bottom clearance inside its footer and a 62-DIP maximum scroll height (same saturated footprint), preserving room for two wrapped lines above the shared progress rail. Horizontal anchors, controls, artwork, font and workflow are unchanged.
+- UI-only commit `685b6857ab967ad6b0c8918b3f282b4a58e5f05c`. No new cosmetic CI assertion or checkpoint dispatch. Source edit verified; Windows rendering and package validation remain pending. Previous combined checkpoint #1114 and SCC #229 remain the verified baseline, not validation of this new edit.
+- Owner direction: after this console refinement, migrate the completed `dev/redscript/integration` development line back to `main`, reconciling main-only changes without force-overwriting stable history. Main has not been modified by this edit.
+
 ## 2026-11-22 — Full integrated package checkpoint #1114 green
 
 - [GCO full integration #1114 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44970673688) at `02ce686ca276e306cf1bd9c7e723d28148501d5e`; 40 completed successful steps, zero failed. Verified integrated .NET 10 application assembly, CET/GRSP launcher and install/restore smoke, source/package contracts, packaged WPF layout, and uploaded `Gs-Cyberpunk2077_Optimizer-v1.2.5-run1114-a1`.
