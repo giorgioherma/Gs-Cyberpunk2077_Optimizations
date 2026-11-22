@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Progress rail gradient and footer micro-adjustment
+
+- Both pages share the same progress host: lowered its entire row by 10 DIPs (bottom margin 19 → 9). Console text lowered by 3 DIPs on both Capture and Analyze (translation -6 → -3). Existing scroll height, horizontal anchors, typography, controls and artwork unchanged. Progress fill and its soft halo share the yellow-to-cyan brush; track and progress behavior unchanged. Requested offsets are provisional pending owner's exact screenshot measurements and visual check.
+- [GCO #1115](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44975556013) **SUCCESS**, 40 successful steps at `fd2dfdd16551c6ec444a9ffbd7b46f250bfea1ca` (selectable G-GC and previous console change). New UI-only edit not yet Windows-validated; intentionally no extra CI checkpoint until final measured placement is agreed. Both main branches untouched.
+
 ## 2026-11-22 — Selectable G-GC collector cadence (CET owner integration, validation pending)
 
 - GCO consumes authoritative CET source `976c1662077f67e5e69b978d19cd2332f35ce2e9` from the CET repository's `dev/resolver-profiler-handoff`. Runtime controls: 50 KiB / 150 KiB / 4 MiB / 8 MiB; OFF to 30s–50ms nonlinear interval; default 50 KiB/500ms; optional automatic workload protection, evenly spaced MODERATE work and gradual recovery. Large steps are experimental, not reclaimed-byte promises. Original historical 90s A/B remains available.

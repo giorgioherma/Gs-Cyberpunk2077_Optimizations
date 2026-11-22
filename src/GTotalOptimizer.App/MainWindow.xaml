@@ -47,6 +47,10 @@
         <FontFamily x:Key="Oxanium">./Fonts/Oxanium/#Oxanium</FontFamily>
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
         <SolidColorBrush x:Key="Cyan" Color="#00E2F2"/>
+        <LinearGradientBrush x:Key="GcoProgressFill" StartPoint="0,0.5" EndPoint="1,0.5">
+            <GradientStop Color="#FFF000" Offset="0"/>
+            <GradientStop Color="#00E2F2" Offset="1"/>
+        </LinearGradientBrush>
         <!-- One slim, glowing rail reused by the three long operations. -->
         <Style x:Key="GcoProgressRail" TargetType="{x:Type ProgressBar}">
             <Setter Property="Template">
@@ -56,14 +60,17 @@
                             <Border Background="#152C32" BorderBrush="#35565D"
                                     BorderThickness="0.6" CornerRadius="3"/>
                             <Grid x:Name="PART_Track" Background="Transparent">
-                                <Border x:Name="PART_Indicator" Background="{StaticResource Cyan}"
-                                        CornerRadius="3" Height="4.5" VerticalAlignment="Center"
-                                        HorizontalAlignment="Left">
-                                    <Border.Effect>
-                                        <DropShadowEffect Color="#00E2F2" ShadowDepth="0"
-                                                          BlurRadius="7" Opacity="0.8"/>
-                                    </Border.Effect>
-                                </Border>
+                                <Grid x:Name="PART_Indicator" Height="4.5"
+                                      VerticalAlignment="Center" HorizontalAlignment="Left">
+                                    <Border Background="{StaticResource GcoProgressFill}"
+                                            CornerRadius="3" Opacity="0.65">
+                                        <Border.Effect>
+                                            <BlurEffect Radius="4"/>
+                                        </Border.Effect>
+                                    </Border>
+                                    <Border Background="{StaticResource GcoProgressFill}"
+                                            CornerRadius="3"/>
+                                </Grid>
                             </Grid>
                         </Grid>
                     </ControlTemplate>
@@ -937,7 +944,7 @@
                         <!-- Position console text near the upper edge of the cyan slash;
                              footer button and capture content keep their original positions. -->
                         <Grid.RenderTransform>
-                            <TranslateTransform Y="-6"/>
+                            <TranslateTransform Y="-3"/>
                         </Grid.RenderTransform>
                         <!-- Restore multiple visible guidance rows; allow scrolling
                              if all five framework gates fail at once. Keep the
@@ -1107,7 +1114,7 @@
                                       MaxHeight="62" MinHeight="34" Margin="0,0,12,6">
                             <!-- Lower the text slightly; retain bottom clearance above the shared rail. -->
                             <ScrollViewer.RenderTransform>
-                                <TranslateTransform Y="-6"/>
+                                <TranslateTransform Y="-3"/>
                             </ScrollViewer.RenderTransform>
                             <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
                                        Width="{Binding ViewportWidth, ElementName=ResultsConsoleScroll}"
@@ -1124,7 +1131,7 @@
             </Grid>
             <!-- Shared rail in the protected space below both consoles, clear of the outer frame. -->
             <Grid x:Name="WorkflowProgressHost" Grid.Column="1" Panel.ZIndex="6"
-                  Height="17" VerticalAlignment="Bottom" Margin="40,0,31,19"
+                  Height="17" VerticalAlignment="Bottom" Margin="40,0,31,9"
                   Visibility="Collapsed" IsHitTestVisible="False">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="242"/>
