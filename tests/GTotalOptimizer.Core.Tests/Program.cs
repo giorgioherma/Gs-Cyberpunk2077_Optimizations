@@ -273,6 +273,7 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
 // Only source-changing transforms count as new optimization work.
 // Source-owner G-GC calibration is valid capture data but cannot authorize
 // a second combined pass or regenerate a support-only optimization ZIP.
+// A source-proven obsolete installed G-GC runtime update is real work.
 {
     var classify = typeof(CetReadOnlyAnalysisService).GetMethod(
         "CountOptimizationTransforms",
@@ -288,6 +289,9 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     }
 
     if (Count("""{"transforms":[{"type":"GC_CONTROLLER"}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":false}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":"true"}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":true}]}""") != 1 ||
         Count("""{"transforms":[{"type":"GC_CONTROLLER"},{"type":"SEMANTIC_RULE"}]}""") != 1 ||
         Count("""{"transforms":[{"type":"PERSONAL_HOTSCENES_ENGLISH_ONLY"}]}""") != 1 ||
         new CombinedPassAvailability(0, 0, []).HasNewOptimizations ||

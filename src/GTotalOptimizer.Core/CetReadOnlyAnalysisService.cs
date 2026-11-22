@@ -26,7 +26,7 @@ public sealed record CetSkipDetail(
 public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
 {
     // The CET owner's transform count includes per-capture G-GC calibration.
-    // Calibration alone does not authorize another combined optimization pass.
+    // Only actual work (including a proven obsolete runtime upgrade) qualifies.
     public int OptimizationTransformCount { get; init; }
     public CetSkipDetail[] SkipDetails { get; init; } = [];
     public int HotscenesEnglishOnlyEdits { get; init; }
@@ -293,8 +293,8 @@ public sealed class CetReadOnlyAnalysisService
     }
 
     // Ground actual new work in the CET owner's authoritative transform list.
-    // 0-Engine, native locations and G-GC remain pass support; a newly
-    // calibrated G-GC threshold is never sufficient by itself to create a ZIP.
+    // Calibration-only G-GC support never authorizes another ZIP. A proven
+    // obsolete installed G-GC runtime upgrade is actual source-changing work.
     internal static int CountOptimizationTransforms(JsonElement manifest)
     {
         if (!manifest.TryGetProperty("transforms", out var rows) ||
@@ -307,7 +307,9 @@ public sealed class CetReadOnlyAnalysisService
                 !item.TryGetProperty("type", out var type) ||
                 type.ValueKind != JsonValueKind.String)
                 throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_INVALID");
-            if (type.GetString() != "GC_CONTROLLER")
+            if (type.GetString() != "GC_CONTROLLER" ||
+                (item.TryGetProperty("runtimeUpgrade", out var runtimeUpgrade) &&
+                 runtimeUpgrade.ValueKind == JsonValueKind.True))
                 count++;
         }
         return count;

@@ -161,9 +161,9 @@ public sealed class CombinedOptimizationPassService
             token.ThrowIfCancellationRequested();
 
             progress?.Report(new(3, 6, "GENERATE / REDSCRIPT OPTIMIZATIONS READY"));
-            // The CET manifest counts a newly calibrated G-GC threshold as
-            // one transform. That is a support update, not an optimization
-            // opportunity. An already-optimized stack must not get a new ZIP.
+            // A recalibrated threshold is support-only. A source-proven
+            // installed G-GC runtime upgrade counts as source-changing work.
+            // Do not publish a ZIP when neither owner has real new work.
             var applicable = new CombinedPassAvailability(
                 cetResult.OptimizationTransformCount, red.AppliedEdits, red.Skipped);
             if (!applicable.HasNewOptimizations)

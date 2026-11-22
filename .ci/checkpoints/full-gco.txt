@@ -1,1 +1,1 @@
-checkpoint=redscript-overlap-noop-done-adaptive-ui-full-integration-20261122
+checkpoint=selectable-ggc-runtime-upgrade-console-full-integration-20261122

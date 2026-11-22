@@ -428,15 +428,15 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
 $nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
 $provenance=@{
   testOnly=$true
-  cet=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  cet=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
-  cetResolver=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  cetResolver=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; ownerReferenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
   $entries=@(
-    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
     @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
   )
   foreach ($entry in $entries) {
@@ -460,7 +460,8 @@ if ($Integrated) {
   $resolverEntry=@{
     id='cet-resolver'
     executable='components/cet-resolver/app/G-CET-Resolver.exe'
-    sourceCommit='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'
+    sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'
+    ownerReferenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'
     ownerCiRun=41820765951
     ownerArtifactId=13317096524
     framework='net10.0-windows'

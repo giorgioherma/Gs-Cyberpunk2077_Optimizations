@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Selectable G-GC collector cadence (CET owner integration, validation pending)
+
+- GCO consumes authoritative CET source `976c1662077f67e5e69b978d19cd2332f35ce2e9` from the CET repository's `dev/resolver-profiler-handoff`. Runtime controls: 50 KiB / 150 KiB / 4 MiB / 8 MiB; OFF to 30s–50ms nonlinear interval; default 50 KiB/500ms; optional automatic workload protection, evenly spaced MODERATE work and gradual recovery. Large steps are experimental, not reclaimed-byte promises. Original historical 90s A/B remains available.
+- Proven existing obsolete runtime upgrades are counted as actual source changes, so an already optimized installation can receive the new controller. A missing first-time support runtime or calibration-only refresh does not by itself authorize an optimization ZIP. Existing no-op safeguards and read-only previews remain intact.
+- Owner artifact reference remains the previously successful run 41820765951 (source `7f3489d8fd7e02d595f4a053616044cf2f6b2dab`); current managed source rebuilt for .NET10, prior native/reference artifacts retain hash verification and separate provenance. New owner CI #2607 and full integration checkpoint pending; no new native build or product version change. Prior #1114 remains the last verified GCO package baseline until this checkpoint passes. Main unchanged.
+
 ## 2026-11-22 — Console vertical placement refinement before main migration
 
 - At owner request, lowered the Capture and Analyze console text towards the upper edge of the cyan slash by reducing the existing upward translation from 14 to 6 DIPs. Analyze retains a 6-DIP bottom clearance inside its footer and a 62-DIP maximum scroll height (same saturated footprint), preserving room for two wrapped lines above the shared progress rail. Horizontal anchors, controls, artwork, font and workflow are unchanged.

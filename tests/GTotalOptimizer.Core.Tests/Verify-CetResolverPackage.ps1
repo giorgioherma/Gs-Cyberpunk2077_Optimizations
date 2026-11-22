@@ -9,7 +9,8 @@ $OwnerArtifactRoot=(Resolve-Path -LiteralPath $OwnerArtifactRoot).Path
 $manifest=Get-Content -LiteralPath (Join-Path $PackageRoot 'components/manifest.json') -Raw | ConvertFrom-Json
 $tools=@($manifest.analysisTools)
 if ($tools.Count -ne 1 -or $tools[0].id -ne 'cet-resolver' -or
-    $tools[0].sourceCommit -ne '08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44' -or
+    $tools[0].sourceCommit -ne '976c1662077f67e5e69b978d19cd2332f35ce2e9' -or
+    $tools[0].ownerReferenceSourceCommit -ne '7f3489d8fd7e02d595f4a053616044cf2f6b2dab' -or
     $tools[0].ownerCiRun -ne 41820765951 -or
     $tools[0].ownerArtifactId -ne 13317096524 -or
     $tools[0].framework -ne 'net10.0-windows') {

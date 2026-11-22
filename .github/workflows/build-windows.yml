@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44
+          ref: 976c1662077f67e5e69b978d19cd2332f35ce2e9
           path: unified/vendor-cet
           persist-credentials: false
       - name: Resolve latest verified GRSP owner-native build
@@ -605,10 +605,10 @@ jobs:
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
-          # Same exact CET source/run as the profiler. This reference is NOT
-          # copied wholesale into GCO (it is .NET8 self-contained); only its
-          # source-owned native service is imported, and the old binary is
-          # exercised as a behavior oracle for the rebuilt .NET10 CLI.
+          # Previously verified .NET8 owner reference/native assets remain
+          # pinned independently of the newer managed CET source checkout.
+          # Import only the owner native service; exercise the reference CLI
+          # as a behavior oracle for the rebuilt .NET10 Resolver.
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
