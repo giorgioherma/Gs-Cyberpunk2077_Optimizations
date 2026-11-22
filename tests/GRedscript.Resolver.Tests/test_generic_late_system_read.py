@@ -333,7 +333,7 @@ public class C extends IScriptable {
             "        return value;\n    }\n    let questHandle",
             "        this.LogUnknownAction(); return value;\n    }\n    let questHandle"),
             encoding="utf8")
-        self.scan.unlink()
+        self.scan.unlink(missing_ok=True)
         refused = self.cli("scan-late-system-read", "--game", self.game,
                            "--out", self.scan)
         self.assertNotEqual(refused.returncode, 0)

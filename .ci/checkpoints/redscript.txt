@@ -1,1 +1,1 @@
-checkpoint=historical-composed-source-refusals-na-fe-chipware-20261122
+checkpoint=historical-composed-source-refusals-na-fe-chipware-test-replay-20261122
