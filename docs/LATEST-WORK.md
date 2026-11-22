@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-22 — Shared V portrait progressive signal
+
+- Owner-approved staged portrait behavior on both pages: cold black; Install target 12% color; Start 20%; Collect and waiting for Continue 38%; verified Page 2 75%; Analyze and analyzed 90%; Generate and published ZIP stable full color. Existing aligned black/color PNGs and shared portrait geometry retained.
+- Single UI-only signal engine replaces old regular toggles and Collected fade. Irregular 1–5-pulse clusters, randomized gaps, weak hits, occasional longer holds, and gradually blended density (1.2–2.8s) without restarting an in-flight cluster. Final Generate settles to stable full color. Black and stable states stop timer; inactive/minimized/hidden/closed windows pause it. Tray reopen reconstructs stage from verified capture/session evidence; failed analysis/generate returns to prior visual stage, restore/back reset black. Artwork does not influence workflow admission or completion.
+- Implementation commits `bd5f5f0`, `43253e6`, `19a17ed`. Independent deterministic numerical replay of the signal algorithm over 600 simulated seconds per stage produced mean color intensity 11/18/36/78/91%; checked stable Generate and cold reset. These are model results, not actual WPF screenshots, measured user experience or compiled C# tests. Source hooks reread; Windows package build and owner visual acceptance pending. No new decorative CI contracts, version bump or main changes.
+
 ## 2026-11-22 — Distribute progress waiting across checkpoints
 
 - Owner clarification: at predicted checkpoint arrival the bar covers 95% of that weighted interval; if work runs longer, it eases to exactly 99% of the interval at 125% of predicted duration and holds until the actual checkpoint. Global 99% cap and verified-success-only 100% remain unchanged. Source `14012e80`; numerical formula replay passed. No extra UI CI assertion or checkpoint; Windows validation pending.
