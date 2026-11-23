@@ -23,6 +23,12 @@ PLUGIN_NAME = "GCO MO2 Bridge"
 
 
 def _canonical(path):
+    # MO2's Python bindings return QDir / QFileInfo for several API paths.
+    # str(QDir) is not reliably a filesystem path.
+    if hasattr(path, "absoluteFilePath"):
+        path = path.absoluteFilePath()
+    elif hasattr(path, "absolutePath"):
+        path = path.absolutePath()
     return os.path.normcase(os.path.abspath(str(path or "")))
 
 
@@ -120,6 +126,24 @@ class GcoLaunchMappingController:
         self._calls = 0
 
     @staticmethod
+    def _digest(path):
+        hash_code = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for data in iter(lambda: stream.read(1024 * 1024), b""):
+                hash_code.update(data)
+        return hash_code.hexdigest()
+
+    @classmethod
+    def _files_unchanged(cls, files):
+        return all(
+            Path(filename).is_file()
+            and not Path(filename).is_symlink()
+            and Path(filename).stat().st_size == size
+            and cls._digest(filename) == digest
+            for filename, _relative, size, digest in files
+        )
+
+    @staticmethod
     def _within(root, child):
         return child != root and root in child.parents
 
@@ -167,9 +191,12 @@ class GcoLaunchMappingController:
         exe = claimed_game / "bin" / "x64" / "Cyberpunk2077.exe"
         if not exe.is_file():
             raise GcoOverlayContractError("Selected MO2 game executable missing")
-        root = Path(_canonical(staging_root)).resolve(strict=True)
+        requested_root = Path(_canonical(staging_root))
+        if requested_root.is_symlink():
+            raise GcoOverlayContractError("Session-owned stage cannot be a symlink")
+        root = requested_root.resolve(strict=True)
         expected_root = (_bridge_root() / "staging" / session_id).resolve()
-        if root != expected_root or root.is_symlink():
+        if root != expected_root:
             raise GcoOverlayContractError("Profiler staging root is not the session-owned GCO directory")
         files = []
         allowed_directories = set()
@@ -202,8 +229,12 @@ class GcoLaunchMappingController:
             if not source.is_dir():
                 raise GcoOverlayContractError("Source mapping parent missing: " + str(parent))
             directory_mappings.append((str(source), str(dest)))
+        sealed = [
+            (str(p), str(rel), p.stat().st_size, self._digest(p))
+            for p, rel in files
+        ]
         self._plan = (selected_profile, str(exe), directory_mappings,
-                      str(root), session_id, [(str(p), str(rel)) for p, rel in files])
+                      str(root), session_id, sealed)
         self._armed = False
         self._calls = 0
         return selected_profile
@@ -219,7 +250,7 @@ class GcoLaunchMappingController:
         profile, exe, _dirs, root, _session, files = self._plan
         if profile != selected_profile:
             raise GcoOverlayContractError("Cannot launch a different MO2 profile than the staged profile")
-        if not Path(root).is_dir() or not all(Path(p).is_file() for p, _rel in files):
+        if not Path(root).is_dir() or not self._files_unchanged(files):
             raise GcoOverlayContractError("MO2 profiler stage changed before launch")
         # Explicit profile is passed to MO2. It may differ from profileName()
         # (the visible MO2 profile); no setActive(), setPriority(), modlist writes.
@@ -244,8 +275,8 @@ class GcoLaunchMappingController:
         if self._calls:
             raise GcoOverlayContractError("Duplicate file-mapping request during single MO2 launch")
         _profile, _exe, dirs, root, _session, files = self._plan
-        if not Path(root).is_dir() or not all(Path(p).is_file() for p, _rel in files):
-            raise GcoOverlayContractError("Profiler staging files disappeared while mapping")
+        if not Path(root).is_dir() or not self._files_unchanged(files):
+            raise GcoOverlayContractError("Profiler staging bytes changed while mapping")
         self._calls += 1
         return [
             mobase.Mapping(source=source, destination=destination,
