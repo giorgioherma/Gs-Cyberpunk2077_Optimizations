@@ -61,6 +61,8 @@ public partial class MainWindow : Window
     private readonly CombinedOptimizationPassService combinedPassGenerator = new();
     private bool redscriptPlanReady;
     private CombinedPassAvailability? analyzedAvailability;
+    private CetAnalysisOutcome? analyzedCetCounts;
+    private RedscriptGenerationPlan.Document? analyzedRedscriptCounts;
     private bool hotscenesOptInRefused;
     // This session's successfully published combined optimization ZIP only.
     // OPEN FOLDER selects the actual file, not the GCO application root.
@@ -230,29 +232,50 @@ public partial class MainWindow : Window
         }
     }
 
+    // Both panels show equivalent units and three consistent rows.
+    // Mod counts come from actual staged source edits, not ZIP support files.
     private void RefreshPlannedWork()
     {
-        var preview = analyzedAvailability;
-        bool show = preview is not null && redscriptPlanReady &&
-            analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
-            !HasPublishedOptimizationZip();
-        CetPlannedText.Visibility = RedPlannedText.Visibility =
-            show ? Visibility.Visible : Visibility.Collapsed;
-        if (!show || preview is null)
-        {
-            CetPlannedText.Text = RedPlannedText.Text = string.Empty;
+        if (analyzedAvailability is null || analyzedCetCounts is null ||
+            analyzedRedscriptCounts is null || !redscriptPlanReady ||
+            analyzedSessionId is null || analyzedSessionId != completedSessionId)
             return;
-        }
 
-        static string CountText(int count) => count == 0
-            ? "No new optimizations planned"
-            : count == 1 ? "1 new optimization planned" : count + " new optimizations planned";
+        var cet = analyzedCetCounts;
+        var red = analyzedRedscriptCounts;
+        var preview = analyzedAvailability;
+        int cetChangedMods = preview.CetOptimizedModNames.Length;
+        // English-only is an explicit Generate option. Count the still-pending
+        // Hotscenes source owner once; do not show an "additional option" item.
+        if (HasPendingHotscenesOptIn() &&
+            !preview.CetOptimizedModNames.Contains("hotscenes",
+                StringComparer.OrdinalIgnoreCase))
+            cetChangedMods++;
 
-        CetPlannedText.Text = CountText(preview.CetOptimizationTransforms);
-        // This personal option has not been verified by the source owner yet.
-        if (HasPendingHotscenesOptIn())
-            CetPlannedText.Text += " | 1 additional option requested";
-        RedPlannedText.Text = CountText(preview.RedscriptOptimizationCount);
+        CetReportText.Text =
+            "Source mods: " + cet.InstalledCetMods +
+            " | Source files: " + cet.LiveLuaSourceFiles +
+            " | Callback families: " + cet.MeasuredCallbackFamilies +
+            " | Generic candidates: " + cet.GenericCandidates +
+            " | Semantic rules: " + cet.SemanticCandidates + Environment.NewLine +
+            "Already optimized: " + cet.AlreadySatisfied +
+            " | Other issues: " + cet.MaterialRemaining + Environment.NewLine +
+            "Mods with optimizations: " + cetChangedMods;
+
+        int alreadyComplete = red.Rules.Where(rule => rule.Order is not null)
+            .Sum(rule => rule.AlreadyComplete ?? 0);
+        RedReportText.Text =
+            "Source mods: " + preview.RedscriptSourceModCount +
+            " | Source files: " + red.SourceFiles +
+            " | Callback families: " +
+                (preview.RedscriptCallbackFamilyCount?.ToString() ?? "N/A") +
+            " | Generic candidates: " + red.EligibleSourceEdits +
+            " | Semantic rules: " + preview.RedscriptSemanticRuleCount +
+            Environment.NewLine +
+            "Already optimized: " + alreadyComplete +
+            " | Other issues: " + preview.RedscriptSkipped.Length +
+            Environment.NewLine +
+            "Mods with optimizations: " + preview.RedscriptOptimizedModCount;
     }
 
     private void RefreshGenerateEligibility()
@@ -2452,6 +2475,8 @@ public partial class MainWindow : Window
         SetPortraitStage(PortraitStage.Analyzing);
         redscriptPlanReady = false;
         analyzedAvailability = null;
+        analyzedCetCounts = null;
+        analyzedRedscriptCounts = null;
         RefreshPlannedWork();
         hotscenesOptInRefused = false;
         analysisCancellation?.Dispose();
@@ -2474,13 +2499,7 @@ public partial class MainWindow : Window
             // REDscript generation plan have completed successfully.
             // MaterialRemaining is an analysis callback count, not a
             // generation refusal count. Below-threshold work is not shown here.
-            CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
-                " | Callback families: " + report.MeasuredCallbackFamilies +
-                " | Measured callbacks: " + report.RankedCallbacks + " | " +
-                "Generic candidates: " + report.GenericCandidates +
-                " | Semantic rules: " + report.SemanticCandidates +
-                " | Already optimized: " + report.AlreadySatisfied + " | " +
-                "Priority unresolved callbacks: " + report.MaterialRemaining;
+            CetReportText.Text = "Checking current CET source and callback evidence...";
             // REDscript is no longer reported as absent: use the actual
             // bundled GCO-local Resolver to decide source-specific passes and
             // their generation order. This is a plan, not an optimization ZIP.
@@ -2517,31 +2536,11 @@ public partial class MainWindow : Window
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
                 redscriptPlanReady = true;
+                analyzedCetCounts = report;
+                analyzedRedscriptCounts = planned;
                 SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 2, 5,
                     "ANALYZE / VERIFYING APPLICABLE RULES");
-                var ready = planned.Rules.Where(rule =>
-                    rule.Status == "READY_FOR_GENERATOR").ToArray();
-                var affected = ready.SelectMany(rule => rule.SourceFolders)
-                    .Distinct(StringComparer.Ordinal).Count();
-                int alreadyComplete = planned.Rules
-                    .Where(rule => rule.Order is not null)
-                    .Sum(rule => rule.AlreadyComplete ?? 0);
-                // The initial plan reports candidate counts; the disposable
-                // production preview below reports actual applied operations.
-                redPlanStatus = "REDscript source files: " + planned.SourceFiles +
-                    " | Generic source groups: " + affected + " | " +
-                    "Generic candidates: " + ready.Length +
-                    " | Semantic stages: " +
-                    RedscriptGenerationPlan.ConfiguredSemanticStages +
-                    " configured | " +
-                    "Eligible generic edits: " + planned.EligibleSourceEdits +
-                    " | Already optimized: " + alreadyComplete + " | " +
-                    "Semantic compatibility checked against installed source.";
-                var sourceRefused = planned.Rules.Where(rule =>
-                    rule.Status == "SOURCE_REFUSED").ToArray();
-                if (sourceRefused.Length > 0)
-                    redPlanStatus += " | Source-specific rules skipped: " + sourceRefused.Length +
-                        " (" + string.Join(", ", sourceRefused.Select(x => x.Id)) + ").";
+                redPlanStatus = "REDscript source analysis ready.";
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -2568,10 +2567,6 @@ public partial class MainWindow : Window
                             item => item.Id + ": " + item.Reason)));
             }
             RedReportText.Text = redPlanStatus;
-            if (analyzedAvailability?.RedscriptSkipped is { Length: > 0 } skipped)
-                RedReportText.Text += " | Source-refused operations (not applied): " +
-                    string.Join(", ", skipped.Select(item => item.Id)
-                        .Distinct(StringComparer.Ordinal));
             analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
             RefreshPlannedWork();
             AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
@@ -2662,39 +2657,16 @@ public partial class MainWindow : Window
                 packageRoot, game, session, cancellation.Token,
                 hotscenesEnglishOnly, WorkProgressReporter(WorkPhase.Generate, generateProgress));
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
-            // Keep analysis counts distinct from actual published output and refusals.
-            // CET candidate counts are not counts of applied generator rules.
-            CetReportText.Text += " | Transforms applied: " + pass.CetTransforms +
-                " | Output files: " + pass.CetFiles;
-            if (pass.HotscenesEnglishOnlyRequested &&
-                (pass.HotscenesEnglishOnlyEdits > 0 ||
-                 !HasCompletedHotscenesEnglishOnly(game)))
-                CetReportText.Text += " | Hotscenes ENG-only: " +
-                    (pass.HotscenesEnglishOnlyEdits > 0
-                        ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
-                        : "not applied (see pass details)");
-            CetReportText.Text += " | Skipped entries: " + pass.CetSkipped;
+            // Keep the three source-summary rows unchanged after GENERATE.
+            // Actual output/refusals are already displayed in the console and
+            // the verified ownership sidecar, never as comparable source units.
             var skippedCetOwners = pass.CetSkipDetails
                 .Select(item => item.Owner)
                 .Where(owner => !string.IsNullOrWhiteSpace(owner))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            if (pass.CetSkipped > 0 && skippedCetOwners.Length > 0)
-                CetReportText.Text += " (" + string.Join(", ", skippedCetOwners) + ")";
-
             int unavailableRuleFamilies = pass.RedscriptSkipped
                 .Select(item => item.Id)
                 .Distinct(StringComparer.Ordinal).Count();
-            string sourceSummary = string.Join(" | ", RedReportText.Text
-                .Split(" | ", StringSplitOptions.None).Take(2));
-            RedReportText.Text = sourceSummary + " | Generic rules applied: " + pass.GenericRedscriptRules +
-                " | Semantic rules applied: " + pass.SemanticRedscriptRules +
-                " | Generic edits: " + pass.GenericRedscriptEdits +
-                " | Semantic edits: " + pass.SemanticRedscriptEdits +
-                " | Output files: " + pass.RedscriptFiles +
-                " | Skipped operations: " + pass.RedscriptSkipped.Length;
-            if (pass.RedscriptSkipped.Length > 0)
-                RedReportText.Text += " (" + unavailableRuleFamilies +
-                    " rule families). See ZIP ownership details.";
 
             string summary = "ZIP generated. CET: " + pass.CetTransforms +
                 " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
