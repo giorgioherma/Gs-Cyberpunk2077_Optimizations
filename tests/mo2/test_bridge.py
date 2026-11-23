@@ -63,6 +63,10 @@ class Organizer:
     def __init__(self, root):
         self.root = root
         self.changed = None
+        for name in ("Heavy", "Other"):
+            folder = self.root / "profiles" / name
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "modlist.txt").write_text("", encoding="utf-8")
     def managedGame(self):
         return types.SimpleNamespace(gameDirectory=lambda: str(self.root / "game"),
                                      gameName=lambda: "Cyberpunk2077")
@@ -78,8 +82,6 @@ class Organizer:
         return str(self.root / "overwrite")
     def onProfileChanged(self, callback):
         self.changed = callback
-    def profileNames(self):
-        return ["Heavy", "Other"]
     def profileName(self):
         return "Other"
     def startApplication(self, executable, args, cwd, profile=""):
@@ -272,6 +274,26 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                         organizer, "Heavy", game, stage, self.SESSION), "Heavy")
                 self.assertEqual(tool._launch_controller.launch(organizer, "Heavy"), 123456)
                 self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(mapper.mappings(), [])
+
+    def test_refuse_profile_directory_mismatch_and_missing_modlist(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                (root / "profiles" / "Heavy" / "modlist.txt").unlink()
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", game, stage, self.SESSION)
+                (root / "profiles" / "Heavy" / "modlist.txt").write_text("")
+                organizer.profilePath = lambda: str(root / "profiles" / "Heavy")
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", game, stage, self.SESSION)
                 self.assertEqual(mapper.mappings(), [])
 
     def test_reject_unknown_namespaced_scheduler(self):
