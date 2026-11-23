@@ -17,7 +17,11 @@ public sealed record CetAnalysisOutcome(
     int RankedCallbacks, int GenericCandidates, int SemanticCandidates,
     int AlreadySatisfied, int MaterialRemaining, int Unresolved,
     string FrameEvidence, string RuntimeInterpretation, string SourceVerification,
-    string[] BlacklistedMods);
+    string[] BlacklistedMods)
+{
+    // Lua source files in the verified current physical CET tree, not capture CSVs.
+    public int LiveLuaSourceFiles { get; init; }
+}
 
 public sealed record CetSkipDetail(
     string Category, string Type, string? Owner, string? RuleId,
@@ -30,6 +34,8 @@ public sealed record CetPassOutcome(string ZipPath, int FileCount, int Transform
     public int OptimizationTransformCount { get; init; }
     public CetSkipDetail[] SkipDetails { get; init; } = [];
     public int HotscenesEnglishOnlyEdits { get; init; }
+    // Distinct physically changed CET mod roots. Excludes support-only G-GC.
+    public string[] OptimizedModNames { get; init; } = [];
 }
 
 public sealed class CetReadOnlyAnalysisService
@@ -238,7 +244,8 @@ public sealed class CetReadOnlyAnalysisService
                         ReadOwnerOptimizationTransforms(pass, temporaryZip),
                     SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip),
                     HotscenesEnglishOnlyEdits = ReadOwnerEnglishOnlyEdits(
-                        pass, temporaryZip, hotscenesEnglishOnly)
+                        pass, temporaryZip, hotscenesEnglishOnly),
+                    OptimizedModNames = ReadOwnerOptimizedMods(pass, temporaryZip)
                 };
             }
 
@@ -260,7 +267,11 @@ public sealed class CetReadOnlyAnalysisService
                 usedFrame ? "PRESENTMON_QPC_F11_VERIFIED" : "NOT_CAPTURED",
                 sourceMode,
                 "CURRENT_SOURCE_READ_ONLY; CAPTURE_SOURCE_IDENTITY_UNVERIFIED",
-                blacklisted);
+                blacklisted)
+            {
+                LiveLuaSourceFiles = originalSources.Keys.Count(path =>
+                    path.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
+            };
             return (analysis, generatedPass);
         }
         finally
@@ -313,6 +324,52 @@ public sealed class CetReadOnlyAnalysisService
                 count++;
         }
         return count;
+    }
+
+    // The CET owner reports transform operations (potentially many per mod).
+    // Count a source mod once only if its actual composed file has positive
+    // appliedTransforms. Fixed 0-Engine delivery and G-GC calibration do not
+    // become extra modified mods; the optional ENG-only edit is counted when
+    // the user enables it at Generate time.
+    internal static string[] CountOptimizedSourceMods(JsonElement manifest)
+    {
+        if (!manifest.TryGetProperty("files", out var files) ||
+            files.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("GCO_CET_FILE_MANIFEST_MISSING");
+        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in files.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("path", out var path) ||
+                path.ValueKind != JsonValueKind.String ||
+                !item.TryGetProperty("appliedTransforms", out var edits) ||
+                edits.ValueKind != JsonValueKind.Number ||
+                !edits.TryGetInt32(out var applied) || applied < 0)
+                throw new InvalidDataException("GCO_CET_FILE_MANIFEST_INVALID");
+            if (applied == 0) continue;
+            string relative = (path.GetString() ?? "").Replace('\\', '/');
+            int boundary = relative.IndexOf('/');
+            if (boundary <= 0 || relative.StartsWith("/", StringComparison.Ordinal) ||
+                relative.Split('/').Any(part => part is "" or "." or ".."))
+                throw new InvalidDataException("GCO_CET_OPTIMIZED_MOD_PATH_INVALID");
+            string owner = relative[..boundary];
+            if (!owner.Equals("G-GC", StringComparison.OrdinalIgnoreCase))
+                owners.Add(owner);
+        }
+        return owners.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static string[] ReadOwnerOptimizedMods(JsonElement pass, string zipPath)
+    {
+        string expected = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var location) ||
+            location.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(location.GetString() ?? ""),
+                Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(expected))
+            throw new InvalidDataException("GCO_CET_FILE_MANIFEST_MISSING");
+        using var doc = JsonDocument.Parse(File.ReadAllText(expected));
+        return CountOptimizedSourceMods(doc.RootElement);
     }
 
     private static int ReadOwnerOptimizationTransforms(JsonElement pass, string zipPath)
