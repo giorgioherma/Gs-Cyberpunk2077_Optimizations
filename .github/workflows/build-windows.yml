@@ -819,6 +819,12 @@ jobs:
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          # MO2 is an isolated feature branch. This focused contract is run only
+          # at a deliberate full-gco TXT checkpoint, never per source commit.
+          if ('${{ github.ref }}' -eq 'refs/heads/MO2_integration') {
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
+            if ($LASTEXITCODE -ne 0) { throw 'MO2 selected-profile and companion identity contract failed' }
+          }
           # Stage 1: execute both the exact CET owner-built Resolver and our
           # source-retargeted .NET10 Resolver against the same disposable
           # measured-callback evidence. Do not edit sealed user captures.
