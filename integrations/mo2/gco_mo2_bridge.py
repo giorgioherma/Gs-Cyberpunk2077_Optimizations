@@ -30,10 +30,14 @@ PLUGIN_NAME = "GCO MO2 Bridge"
 def _canonical(path):
     # MO2's Python bindings return QDir / QFileInfo for several API paths.
     # str(QDir) is not reliably a filesystem path.
-    if hasattr(path, "absoluteFilePath"):
-        path = path.absoluteFilePath()
-    elif hasattr(path, "absolutePath"):
+    # QDir exposes BOTH methods but absoluteFilePath(fileName) requires an
+    # argument. All MO2 API paths passed here denote directories, so prefer
+    # QDir.absolutePath() and only use QFileInfo.absoluteFilePath() when the
+    # directory method is unavailable.
+    if hasattr(path, "absolutePath"):
         path = path.absolutePath()
+    elif hasattr(path, "absoluteFilePath"):
+        path = path.absoluteFilePath()
     return os.path.normcase(os.path.abspath(str(path or "")))
 
 
