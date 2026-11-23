@@ -1,1 +1,1 @@
-checkpoint=mo2-stage3-legacy-complete-and-missing-root-scheduler-20261124
+checkpoint=mo2-stage4-real-application-python-bridge-authenticated-probe-20261124
