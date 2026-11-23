@@ -27,6 +27,7 @@ internal static class Mo2CompanionDiscoveryTests
             {
                 ["schemaVersion"] = 1,
                 ["kind"] = "gco.mo2.readonly.status",
+                ["bridgeEpoch"] = "0123456789abcdef0123456789abcdef",
                 ["mo2Executable"] = Path.Combine(app, "ModOrganizer.exe"),
                 ["instanceRoot"] = root,
                 ["gameRoot"] = game,
