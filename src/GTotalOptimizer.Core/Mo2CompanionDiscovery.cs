@@ -22,7 +22,8 @@ public static class Mo2CompanionDiscovery
 
     public static Mo2CompanionStatus Inspect(
         string? mo2ApplicationFolder, Mo2Instance instance,
-        string? localAppData = null, DateTimeOffset? currentUtc = null)
+        string? localAppData = null, DateTimeOffset? currentUtc = null,
+        Func<int, string?>? processImageForTesting = null)
     {
         var disconnected = Empty("MO2 companion not connected or not yet loaded.");
         if (!instance.Recognized || string.IsNullOrWhiteSpace(mo2ApplicationFolder))
@@ -76,13 +77,11 @@ public static class Mo2CompanionDiscovery
                     pid <= 0) continue;
                 if (!DateTimeOffset.TryParse(Read(root, "updatedUtc"), out var heartbeat) ||
                     now < heartbeat || now - heartbeat > MaximumAge) continue;
-                try
-                {
-                    using var process = Process.GetProcessById(pid);
-                    if (process.HasExited) continue;
-                }
-                catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
-                { continue; }
+                // A live PID can be reused by another process. Verify the actual
+                // running image, not just a self-reported executable or live PID.
+                var actualImage = processImageForTesting is null
+                    ? LiveProcessImage(pid) : processImageForTesting(pid);
+                if (!SameFile(actualImage, exe)) continue;
                 accepted.Add(new(true, "MO2 companion read-only identity confirmed; selected-profile deployment not yet proven.",
                     game, profile, exe, baseDirectory, mods, overwrite,
                     profilePath, pid, heartbeat));
@@ -97,6 +96,27 @@ public static class Mo2CompanionDiscovery
         {
             return Empty("Cannot verify MO2 bridge status: " + ex.Message);
         }
+    }
+
+    private static string? LiveProcessImage(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            if (process.HasExited) return null;
+            return process.MainModule?.FileName;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or
+            System.ComponentModel.Win32Exception or NotSupportedException)
+        { return null; }
+    }
+
+    private static bool SameFile(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+            return false;
+        return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SameFolder(string? left, string? right)
