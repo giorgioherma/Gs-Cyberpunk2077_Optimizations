@@ -224,6 +224,52 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                     controller.launch(organizer, "Heavy")
                 self.assertEqual(mapper.mappings(), [])
 
+    def test_staged_bytes_must_not_change_after_approval(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                controller = tool._launch_controller
+                controller.prepare(organizer, "Heavy", game, stage, self.SESSION)
+                (stage / "bin" / "x64" / "plugins" / "cyber_engine_tweaks.asi").write_text(
+                    "tampered profiler")
+                with self.assertRaises(module.GcoOverlayContractError):
+                    controller.launch(organizer, "Heavy")
+                self.assertEqual(mapper.mappings(), [])
+                self.assertFalse(hasattr(organizer, "last_launch"))
+
+    def test_qdir_wrapper_path_is_not_stringified(self):
+        module = _load_plugin()
+        class FakeQDir:
+            def __init__(self, directory):
+                self.directory = directory
+            def absolutePath(self):
+                return str(self.directory)
+            def __str__(self):
+                return "<PyQt6 QDir representation, not a path>"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                original = organizer.managedGame
+                organizer.managedGame = lambda: types.SimpleNamespace(
+                    gameDirectory=lambda: FakeQDir(game),
+                    gameName=lambda: "Cyberpunk2077")
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                self.assertEqual(
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", game, stage, self.SESSION),
+                    "Heavy")
+                self.assertEqual(len(tool._launch_controller.mappings()), 0)
+                self.assertEqual(
+                    tool._launch_controller.launch(organizer, "Heavy"), 123456)
+
     def test_file_mapper_never_enables_mods(self):
         module = _load_plugin()
         with tempfile.TemporaryDirectory() as td:
