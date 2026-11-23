@@ -4,7 +4,22 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
-## Stage 0 — API and source-contract proof [NOT STARTED]
+## 2026-11-23 — isolated Stage 0/1 foundation committed; runtime gates still BLOCKED
+
+**Scope:** GCO `MO2_integration` only. Compared checkpoint workflow conventions with the separate `integration/phase2-main-reconcile-20261120` branch as an example; did not merge, change or reinterpret its implementation. Existing `.github/workflows/build-windows.yml` and `redscript-phase2-checkpoint.yml` now include `MO2_integration` **only in their pre-existing TXT checkpoint push filters** (`.ci/checkpoints/full-gco.txt`, `redscript.txt`). Ordinary source, test and docs commits do not launch CI.
+
+**New source code:**
+- `src/GTotalOptimizer.Core/Mo2ProfileSelection.cs` verifies requested portable/global instance, explicit configured profile, API-reported Cyberpunk executable and the existing `Mo2SourceInspector` candidate winner map. A missing/corrupt modlist or foreign profile is not treated as a verified MO2 stack. It is **read-only** and explicitly cannot authorize profiler install or generation.
+- `integrations/mo2/gco_mo2_bridge.py` is a **prototype MO2 IPluginTool** publishing its actual managed game's directory, currently displayed profile, profile directory, configured Mods/Overwrite, MO2 executable and process identity into a JSON heartbeat under the user's LocalAppData. This prototype has no active install/launch/delete operations and requires a real MO2 Python-plugin test before distribution.
+- `src/GTotalOptimizer.Core/Mo2CompanionDiscovery.cs` consumes the read-only heartbeat only after checking path identity (MO2 executable directory, configured Mods/Profiles/Overwrite), process liveness, schema, JSON shape and freshness; no status report enables profiler installation. Fake process, stale and foreign-root data must be rejected.
+
+**Regression fixtures:** `tests/GTotalOptimizer.Core.Tests/Mo2ProfileSelectionTests.cs` and `Mo2CompanionDiscoveryTests.cs`, callable via `--mo2-profile-contract`; full GCO TXT checkpoint invokes this focused test only on `MO2_integration`. No live MO2, native Cyberpunk capture, Python plugin loading or gameplay proof yet. GCO feature gate stays disabled.
+
+**Current MO2 API finding:** documented `IOrganizer.startApplication(..., profile=...)` explicitly selects a launch profile. `IModList.setActive(name, active)` and `setPriority(name, priority)` have **no profile argument**; `IOrganizer.profileName()` reports the *currently loaded* profile, and no public `setCurrentProfile` appeared in the documented Python interface. `IPluginFileMapper.mappings()` is a possible research avenue, but its relative precedence and profile-scoped lifecycle are **unverified**. Do not confuse these API declarations with real selected-noncurrent-profile activation or native forced-load proof. Never edit a user's modlist directly or ask them to coordinate profile selection manually.
+
+**Still required before any deployment:** test a supported API mechanism to activate a single session-owned profiler overlay for selected profile A while MO2 UI displays B, with B unchanged and no original source writes; prove CET ASI + GRSP loading and result locations in real MO2. Failure is a hard blocker, not a reason to enable `Mo2FeatureGate`.
+
+## Stage 0 — API and source-contract proof [IN PROGRESS — RUNTIME BLOCKED]
 
 - Review `AGENTS.md`, `docs/HANDOFF/CORE.md`, WPF Page 1 and the current GCO/CET/GRSP owner source. Record current versioned MO2 Python API/Cyberpunk plugin capabilities, supported native loaders and RootBuilder exceptions.
 - Verify exact API semantics for `IOrganizer.startApplication(..., profile=...)`, `createMod`, `IModList.setActive/setPriority`, `removeMod`, virtual source winner resolution, game root/profile enumeration, and output routing.
@@ -12,7 +27,7 @@
 - Define fixture profiles: direct-only, portable MO2, global multiple instances, external Mods/Profiles/Overwrite paths, mixed physical + MO2, disabled/shadowed/partial mods, old RootBuilder, custom overwrite; collect source hashes and minimal runtime evidence.
 - **Exit:** documented reproducible API probe and clear supported/refused matrix. No user-facing feature activation.
 
-## Stage 1 — Discovery and Page 1 shell [NOT STARTED]
+## Stage 1 — Discovery and Page 1 shell [IN PROGRESS — READ-ONLY CORE ONLY]
 
 - Implement two equal-footprint Direct/MO2 source modes inside existing Page 1 Game Source box; keep main layout and three existing capture buttons. In MO2: one MO2 folder picker, auto-resolved game root, optional instance choice, **profile dropdown listing all configured profiles**, real source/status counters; persist selected instance/profile. Advanced recovery only when auto-discovery cannot prove paths.
 - Extend existing `Mo2InstallLocator`/`Mo2SourceInspector` rather than new scanner; include physical game baseline, exact enabled packages, precedence, Overwrite and source-owner provenance. Never claim VFS-verified from physical scanning.
