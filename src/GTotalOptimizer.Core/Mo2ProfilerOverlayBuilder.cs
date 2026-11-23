@@ -205,10 +205,15 @@ public static class Mo2ProfilerOverlayBuilder
             path.Equals("red4ext/plugins/G-REDscript-Profiler.dll", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua",
                 StringComparison.OrdinalIgnoreCase)) return true;
-        if (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/",
-                StringComparison.OrdinalIgnoreCase))
-            return path.EndsWith("/Scheduler.lua", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith("/CETProfilerScheduler.lua", StringComparison.OrdinalIgnoreCase);
+        const string schedulerBase =
+            "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/";
+        if (path.StartsWith(schedulerBase, StringComparison.OrdinalIgnoreCase))
+        {
+            var tail = path[schedulerBase.Length..];
+            return tail.Equals("Scheduler.lua", StringComparison.OrdinalIgnoreCase) ||
+                tail.Equals("CETProfilerScheduler.lua", StringComparison.OrdinalIgnoreCase) ||
+                tail.Equals("G-CET/Scheduler.lua", StringComparison.OrdinalIgnoreCase);
+        }
         if (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/",
                 StringComparison.OrdinalIgnoreCase))
             return path.EndsWith(".lua", StringComparison.OrdinalIgnoreCase) ||
