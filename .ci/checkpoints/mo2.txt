@@ -1,1 +1,1 @@
-checkpoint=mo2-stage3-partial-namespaced-worker-real-owner-replay-20261123
+checkpoint=mo2-stage3-original-adaptive-legacy-integrated-source-owner-20261124
