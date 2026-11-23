@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-23 — Page 2 REFRESH is presentation-only
+
+- The top-right REFRESH button on Page 2 now only invalidates existing WPF layout/visuals. It does **not** clear pinned console status, create a console activity, read capture/game files, re-run owner inspection or ANALYZE, recalculate eligibility, start generation, reset/progress the workflow, alter button states, or advance V's portrait stage. An in-flight Analyze/Generate remains untouched.
+- The shared `RefreshSourceAsync` path also exits via the same Page 2 redraw **before** creating a console activity. Initial workspace restoration, explicit ANALYZE/GENERATE actions, and Page 1 owner refresh retain their original behaviors. UI-only source guard verified; full Windows CI not started per user instruction.
+
+
 ## 2026-11-23 — Page 2 comparable CET / REDscript source summaries
 
 - Removed misleading CET `1172 new optimizations planned` transform-operation count and REDscript `54 new optimizations planned` rule-family count from the side-by-side Page 2 boxes. Also removed `1 additional option requested` text; Hotscenes ENG-only remains an explicit opt-in and contributes one distinct pending CET source mod to the mod count only when not otherwise counted.
