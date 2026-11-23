@@ -10,6 +10,15 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
     return;
 }
 
+// Stage 3: real source-owner managers, not simulated output.
+if (args.Length > 0 && args[0] == "--mo2-real-owner-overlay")
+{
+    if (args.Length != 3)
+        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI>");
+    await Mo2RealOwnerOverlayTests.RunAsync(args[1], args[2]);
+    return;
+}
+
 // CI: inspect the actual ordered, real-source REDscript output archive through
 // the same final ZIP validator used by GCO, not a separate path heuristic.
 if (args.Length > 0 && args[0] == "--verify-combined-archive")
