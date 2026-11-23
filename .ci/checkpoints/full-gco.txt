@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-progress-vsignal-test-20261122
+checkpoint=v1.2.7-cet-ggc-v12-owner-pin-20261123
