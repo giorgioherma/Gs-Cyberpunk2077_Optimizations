@@ -295,6 +295,24 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
 
 
 class TestAuthenticatedMo2Bridge(unittest.TestCase):
+    def test_cross_language_canonical_hmac_vector(self):
+        module = _load_plugin()
+        signed = {
+            "schemaVersion": 1,
+            "bridgeEpoch": "a" * 32,
+            "requestId": "b" * 32,
+            "operation": "probe",
+            "profile": "",
+            "gameRoot": r"C:\Games\Cyberpunk 2077",
+            "stagingRoot": "",
+            "sessionId": "",
+            "createdUtcMs": 1795460000000,
+        }
+        actual = module.GcoAuthenticatedMailbox.signature_payload(signed)
+        digest = hmac.new(bytes(range(32)), actual, hashlib.sha256).hexdigest()
+        self.assertEqual(digest,
+            "525b9fa14a79e3417649ef7c99600e59dd278bf672968b478ec487d553c23ddd")
+
     def fixture(self):
         temp = tempfile.TemporaryDirectory()
         root = Path(temp.name)
