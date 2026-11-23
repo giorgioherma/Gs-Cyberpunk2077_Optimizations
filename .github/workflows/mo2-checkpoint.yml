@@ -227,6 +227,16 @@ jobs:
             Write-Host 'NOT TESTED: private historical 0-Engine fixture not available on this runner.'
           }
 
+      - name: Boot official MO2 Python plugin and authenticate read-only GCO probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Real official MO2 application in RUNNER_TEMP; no Cyberpunk launch.
+          # Strict: this fails if MO2 cannot load the actual GCO plugin or
+          # service a signed probe. A mocked mobase API is not acceptable.
+          & ./integrations/mo2/RealMo2CompanionSmoke.ps1 -ExtractedMo2Root (Join-Path $env:RUNNER_TEMP 'gco-official-mo2/unpacked') -SourcePlugin (Join-Path $env:GITHUB_WORKSPACE 'integrations/mo2/gco_mo2_bridge.py')
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_APPLICATION_COMPANION_PROBE_FAILED' }
+
       - name: Preserve truthful MO2 validation boundary
         shell: pwsh
         run: |
