@@ -1,5 +1,8 @@
 """Isolated unit tests for the GCO MO2 companion (no MO2 installation needed)."""
 import importlib.util
+import hmac
+import hashlib
+import time
 import json
 import os
 from pathlib import Path
@@ -288,6 +291,129 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                 tool._launch_controller.launch(organizer, "Heavy")
                 self.assertEqual(organizer.profileName(), "Other")
                 self.assertEqual(mapper.mappings(), [])
+
+
+
+class TestAuthenticatedMo2Bridge(unittest.TestCase):
+    def fixture(self):
+        temp = tempfile.TemporaryDirectory()
+        root = Path(temp.name)
+        module = _load_plugin()
+        local, game, stage = TestSelectedProfileOneShotMapper().create(root, module)
+        return temp, root, module, local, game, stage
+
+    @staticmethod
+    def request(mailbox, operation="probe", profile="", game="", stage="", session="",
+                request_id="11111111111111111111111111111111", signing=True):
+        body = {
+            "schemaVersion": 1,
+            "bridgeEpoch": mailbox.epoch,
+            "requestId": request_id,
+            "operation": operation,
+            "profile": profile,
+            "gameRoot": str(game),
+            "stagingRoot": str(stage),
+            "sessionId": session,
+            "createdUtcMs": int(time.time() * 1000),
+        }
+        signature = hmac.new(mailbox._secret,
+                             mailbox.signature_payload(body),
+                             hashlib.sha256).hexdigest()
+        body["hmac"] = signature if signing else "0" * 64
+        mailbox._request_path.write_text(json.dumps(body), encoding="utf-8")
+        return body
+
+    @staticmethod
+    def read_response(mailbox):
+        response = json.loads(mailbox._response_path.read_text(encoding="utf-8"))
+        payload = "\n".join([
+            str(response["schemaVersion"]), response["bridgeEpoch"],
+            response["requestId"], "1" if response["ok"] else "0",
+            str(response["processId"]), response["detail"]
+        ]).encode("utf-8")
+        expected = hmac.new(mailbox._secret, payload, hashlib.sha256).hexdigest()
+        assert hmac.compare_digest(response["hmac"], expected)
+        return response
+
+    def test_authenticated_probe_and_invalid_signature(self):
+        temp, root, module, local, game, stage = self.fixture()
+        try:
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                self.assertTrue(tool.init(organizer))
+                mailbox = tool._mailbox
+                self.assertEqual(len(mailbox._key_path.read_bytes()), 32)
+                self.assertTrue(mailbox._status.is_file())
+                heartbeat = json.loads(mailbox._status.read_text(encoding="utf-8"))
+                self.assertEqual(heartbeat["bridgeEpoch"], mailbox.epoch)
+                self.request(mailbox)
+                self.assertTrue(mailbox.process_one())
+                reply = self.read_response(mailbox)
+                self.assertTrue(reply["ok"])
+                self.assertEqual(reply["processId"], 0)
+                self.assertEqual(mapper.mappings(), [])
+                self.request(mailbox, request_id="22222222222222222222222222222222",
+                             signing=False)
+                self.assertTrue(mailbox.process_one())
+                reply = self.read_response(mailbox)
+                self.assertFalse(reply["ok"])
+                self.assertFalse(hasattr(organizer, "last_launch"))
+        finally:
+            temp.cleanup()
+
+    def test_signed_selected_profile_launch_while_ui_shows_other(self):
+        temp, root, module, local, game, stage = self.fixture()
+        try:
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                tool.init(organizer)
+                mailbox = tool._mailbox
+                self.request(mailbox, "launch", "Heavy", game, stage,
+                             TestSelectedProfileOneShotMapper.SESSION)
+                self.assertTrue(mailbox.process_one(
+                    process_id_for_testing=lambda handle: 4567))
+                reply = self.read_response(mailbox)
+                self.assertTrue(reply["ok"], reply["detail"])
+                self.assertEqual(reply["processId"], 4567)
+                self.assertEqual(organizer.profileName(), "Other")
+                self.assertEqual(organizer.last_launch[3], "Heavy")
+                self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(mapper.mappings(), [])
+        finally:
+            temp.cleanup()
+
+    def test_replay_and_wrong_epoch_cannot_start_game(self):
+        temp, root, module, local, game, stage = self.fixture()
+        try:
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                tool.init(organizer)
+                mailbox = tool._mailbox
+                original = self.request(mailbox)
+                mailbox.process_one()
+                self.assertTrue(self.read_response(mailbox)["ok"])
+                # Duplicate request ID is rejected even with a valid signature.
+                mailbox._request_path.write_text(json.dumps(original), encoding="utf-8")
+                mailbox.process_one()
+                self.assertFalse(self.read_response(mailbox)["ok"])
+                wrong = self.request(mailbox,
+                                     request_id="33333333333333333333333333333333")
+                wrong["bridgeEpoch"] = "a" * 32
+                wrong["hmac"] = hmac.new(mailbox._secret,
+                    mailbox.signature_payload(wrong), hashlib.sha256).hexdigest()
+                mailbox._request_path.write_text(json.dumps(wrong), encoding="utf-8")
+                mailbox.process_one()
+                self.assertFalse(self.read_response(mailbox)["ok"])
+                self.assertFalse(hasattr(organizer, "last_launch"))
+                self.assertEqual(mapper.mappings(), [])
+        finally:
+            temp.cleanup()
 
 
 if __name__ == "__main__":
