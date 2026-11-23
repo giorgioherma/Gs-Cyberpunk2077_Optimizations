@@ -13,9 +13,9 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
 // Stage 3: real source-owner managers, not simulated output.
 if (args.Length > 0 && args[0] == "--mo2-real-owner-overlay")
 {
-    if (args.Length != 3)
-        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI>");
-    await Mo2RealOwnerOverlayTests.RunAsync(args[1], args[2]);
+    if (args.Length is not (3 or 4))
+        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI> [historical 0-Engine source directory]");
+    await Mo2RealOwnerOverlayTests.RunAsync(args[1], args[2], args.Length == 4 ? args[3] : null);
     return;
 }
 
