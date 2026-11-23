@@ -85,7 +85,9 @@ class TestReadOnlyCompanion(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             with patch.dict(os.environ, {"LOCALAPPDATA": str(root)}):
-                plugin = module.createPlugin()
+                self.assertFalse(hasattr(module, 'createPlugin'))
+                plugin, mapper = module.createPlugins()
+                self.assertEqual(mapper.mappings(), [])
                 organizer = Organizer(root)
                 self.assertTrue(plugin.init(organizer))
                 self.assertIsNotNone(organizer.changed)
