@@ -375,12 +375,6 @@ class GcoMo2Bridge(mobase.IPluginTool):
         )
 
 
-def createPlugin():
-    # Historical single-plugin loader remains read-only; release installs the
-    # createPlugins() bundle below so MO2 also registers the file mapper.
-    return GcoMo2Bridge()
-
-
 def createPlugins():
     controller = GcoLaunchMappingController()
     tool = GcoMo2Bridge()
