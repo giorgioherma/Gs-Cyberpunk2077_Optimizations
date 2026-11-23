@@ -309,6 +309,14 @@ class GcoMo2ProfilerFileMapper(mobase.IPluginFileMapper):
         super().__init__()
         self._controller = controller
 
+    def init(self, organizer):
+        # IPluginFileMapper is exposed through Python's IPlugin bridge. Actual
+        # MO2 calls the required pure-virtual IPlugin.init on EVERY returned
+        # plugin, including the mapper, before it can become active.
+        # The mapper never changes mods, profiles or game files here.
+        self._organizer = organizer
+        return True
+
     def name(self):
         return "GCO MO2 temporary profiler mapper"
 
