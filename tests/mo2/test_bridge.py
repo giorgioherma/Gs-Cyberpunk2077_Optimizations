@@ -83,6 +83,14 @@ class Organizer:
 
 
 class TestReadOnlyCompanion(unittest.TestCase):
+    def test_status_tool_uses_supported_qt_parent_contract(self):
+        module = _load_plugin()
+        tool, _mapper = module.createPlugins()
+        with patch.object(module.QMessageBox, "information") as info:
+            tool.display()
+            self.assertEqual(info.call_count, 1)
+            self.assertIsNone(info.call_args.args[0])
+
     def test_reports_real_mo2_api_paths_and_never_mutates_mods(self):
         module = _load_plugin()
         with tempfile.TemporaryDirectory() as folder:
