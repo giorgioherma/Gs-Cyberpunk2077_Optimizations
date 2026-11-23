@@ -9,7 +9,8 @@ public sealed record Mo2CompanionStatus(
     bool Connected, string Detail, string GameDirectory, string CurrentProfile,
     string Mo2Executable, string InstanceBaseDirectory, string ModsDirectory,
     string OverwriteDirectory, string CurrentProfileDirectory,
-    int ProcessId, DateTimeOffset UpdatedUtc)
+    int ProcessId, DateTimeOffset UpdatedUtc,
+    string BridgeEpoch = "", string StatusFilePath = "")
 {
     public bool CanMutateSelectedProfile => false;
     public bool CanInstallProfilers => false;
@@ -57,9 +58,11 @@ public static class Mo2CompanionDiscovery
                 using var json = JsonDocument.Parse(stream);
                 var root = json.RootElement;
                 if (root.ValueKind != JsonValueKind.Object) continue;
+                var epoch = Read(root, "bridgeEpoch");
                 if (ReadInt(root, "schemaVersion") != 1 ||
                     Read(root, "kind") != "gco.mo2.readonly.status" ||
-                    ReadBool(root, "installationEnabled")) continue;
+                    ReadBool(root, "installationEnabled") ||
+                    epoch.Length != 32 || !epoch.All(char.IsAsciiHexDigit)) continue;
 
                 var exe = Read(root, "mo2Executable");
                 var game = Read(root, "gameRoot");
@@ -84,7 +87,7 @@ public static class Mo2CompanionDiscovery
                 if (!SameFile(actualImage, exe)) continue;
                 accepted.Add(new(true, "MO2 companion read-only identity confirmed; selected-profile deployment not yet proven.",
                     game, profile, exe, baseDirectory, mods, overwrite,
-                    profilePath, pid, heartbeat));
+                    profilePath, pid, heartbeat, epoch, file));
             }
             return accepted.Count == 1 ? accepted[0] :
                 Empty(accepted.Count > 1
