@@ -29,6 +29,8 @@ internal static class Program
     private delegate bool LinkDirectory(string source, string destination, uint flags);
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate IntPtr Version();
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate void InitLogging([MarshalAs(UnmanagedType.I1)] bool toLocal);
     [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private delegate bool CreateHooked(
@@ -78,25 +80,6 @@ internal static class Program
                 Probe(Path.GetFullPath(args[1]));
                 return 0;
             }
-            if (args.Length == 3 && args[0] == "--child")
-            {
-                string game = Path.GetFullPath(args[1]);
-                string diagnostic = Path.GetFullPath(args[2]);
-                string asi = File.ReadAllText(Path.Combine(game, "bin", "x64", "plugins",
-                    "cyber_engine_tweaks.asi"));
-                string reds = File.ReadAllText(Path.Combine(game, "r6", "scripts", "TestMod", "test.reds"));
-                File.WriteAllText(diagnostic, "Observed ASI: " + asi +
-                    "\\nObserved REDscript: " + reds + "\\n");
-                if (asi != "MO2_PROFILER_OVERRIDE" || reds != "MO2_VIRTUAL_REDSCRIPT")
-                    throw new InvalidDataException(
-                        "USVFS did not expose exact higher-priority profiler/source bytes");
-                string capture = Path.Combine(game, "red4ext", "plugins", "G-REDscript-Profiler",
-                    "RESULTS", "GCO-CI-capture.csv");
-                Directory.CreateDirectory(Path.GetDirectoryName(capture)!);
-                File.WriteAllText(capture, "owner,result\nGRSP,real_usvfs_child\n");
-                Console.WriteLine("PASS hooked child observed exact profiler ASI and REDscript override bytes");
-                return 0;
-            }
             throw new ArgumentException("Usage: USVFSProbe --probe <actual-usvfs_x64.dll>");
         }
         catch (Exception ex)
@@ -144,6 +127,8 @@ internal static class Program
                 throw new InvalidOperationException("USVFS returned no real native version");
             Console.WriteLine("PASS loaded real MO2 USVFS native DLL: " + realVersion);
 
+            // Match the order used by USVFS's own native test fixture.
+            Export<InitLogging>(library, "usvfsInitLogging")(false);
             parameters = Export<CreateParams>(library, "usvfsCreateParameters")();
             if (parameters == IntPtr.Zero) throw new InvalidOperationException("USVFS parameters unavailable");
             Export<SetInstance>(library, "usvfsSetInstanceName")(
@@ -159,34 +144,60 @@ internal static class Program
             if (!link(overwrite, game, Recursive | CreateTarget))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount MO2 Overwrite");
 
-            string diagnostic = Path.Combine(folder, "hooked-child-observations.txt");
-            var command = new StringBuilder('"' + Environment.ProcessPath! +
-                "\" --child \"" + game + "\" \"" + diagnostic + "\"");
+            // A native Windows x64 child is a better stand-in for the game
+            // loader than the managed .NET apphost (which faulted during hook
+            // initialization on the first probe). Assert actual file bytes.
+            string obsAsi = Path.Combine(folder, "observed-asi.txt");
+            string obsReds = Path.Combine(folder, "observed-reds.txt");
+            string captureTarget = Path.Combine(game, capture);
+            string batch = Path.Combine(folder, "usvfs-child.cmd");
+            var script = new StringBuilder();
+            script.AppendLine("@echo off");
+            script.AppendLine("type \"" + originalAsi + "\" > \"" + obsAsi + "\"");
+            script.AppendLine("if errorlevel 1 exit /b 11");
+            script.AppendLine("type \"" + Path.Combine(game, relativeReds) + "\" > \"" + obsReds + "\"");
+            script.AppendLine("if errorlevel 1 exit /b 12");
+            script.AppendLine("echo owner,result > \"" + captureTarget + "\"");
+            script.AppendLine("if errorlevel 1 exit /b 13");
+            script.AppendLine("echo GRSP,real_usvfs_child >> \"" + captureTarget + "\"");
+            script.AppendLine("if errorlevel 1 exit /b 14");
+            File.WriteAllText(batch, script.ToString(), Encoding.ASCII);
+
+            string commandInterpreter = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            if (!File.Exists(commandInterpreter))
+                throw new FileNotFoundException("Native Windows command interpreter missing");
+            var command = new StringBuilder("\"" + commandInterpreter +
+                "\" /D /C \"" + batch + "\"");
             var startup = new StartupInfo { cb = (uint)Marshal.SizeOf<StartupInfo>() };
             var hooked = Export<CreateHooked>(library, "usvfsCreateProcessHooked");
-            if (!hooked(null, command, IntPtr.Zero, IntPtr.Zero, false,
-                    0, IntPtr.Zero, Path.GetDirectoryName(Environment.ProcessPath!),
-                    ref startup, out var info))
+            if (!hooked(commandInterpreter, command, IntPtr.Zero, IntPtr.Zero, false,
+                    0, IntPtr.Zero, folder, ref startup, out var info))
                 throw new Win32Exception(Marshal.GetLastWin32Error(),
-                    "Real USVFS could not launch hooked x64 child");
+                    "Real USVFS could not launch hooked x64 native child");
             try
             {
                 uint wait = WaitForSingleObject(info.process, 30_000);
                 bool gotExit = GetExitCodeProcess(info.process, out uint code);
-                string observations = File.Exists(diagnostic)
-                    ? File.ReadAllText(diagnostic) : "(child produced no diagnostic file)";
-                Console.WriteLine("USVFS hooked child observations: " + observations);
+                Console.WriteLine("USVFS hooked native observations: asi=" +
+                    (File.Exists(obsAsi) ? File.ReadAllText(obsAsi).Trim() : "(missing)") +
+                    " reds=" + (File.Exists(obsReds) ? File.ReadAllText(obsReds).Trim() : "(missing)"));
                 if (wait != 0 || !gotExit || code != 0)
                     throw new InvalidOperationException(
-                        "Hooked x64 process failed: wait=" + wait +
-                        " exit=0x" + code.ToString("X8") +
-                        " readExitCode=" + gotExit);
+                        "Hooked native x64 child failed: wait=" + wait +
+                        " exit=0x" + code.ToString("X8") + " readExitCode=" + gotExit);
             }
             finally
             {
                 CloseHandle(info.process);
                 CloseHandle(info.thread);
             }
+            if (!File.Exists(obsAsi) ||
+                File.ReadAllText(obsAsi).Trim() != "MO2_PROFILER_OVERRIDE" ||
+                !File.Exists(obsReds) ||
+                File.ReadAllText(obsReds).Trim() != "MO2_VIRTUAL_REDSCRIPT")
+                throw new InvalidDataException(
+                    "Hooked native process did not observe the selected-profile file overrides");
             if (File.ReadAllText(originalAsi) != "ORIGINAL_CET_BINARY_UNCHANGED" ||
                 File.ReadAllText(virtualAsi) != "MO2_PROFILER_OVERRIDE")
                 throw new InvalidDataException("Original physical game files were modified");
