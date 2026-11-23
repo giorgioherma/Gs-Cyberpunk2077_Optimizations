@@ -1,5 +1,12 @@
 using GTotalOptimizer.Core;
 
+// Focused MO2 Stage 1 source/profile contract (no native game or MO2 install claimed).
+if (args.Length > 0 && args[0] == "--mo2-profile-contract")
+{
+    Mo2ProfileSelectionTests.Run();
+    return;
+}
+
 // CI: inspect the actual ordered, real-source REDscript output archive through
 // the same final ZIP validator used by GCO, not a separate path heuristic.
 if (args.Length > 0 && args[0] == "--verify-combined-archive")
