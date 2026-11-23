@@ -1,1 +1,1 @@
-checkpoint=mo2-hmac-command-channel-selected-profile-launch-20261123
+checkpoint=mo2-stage3-owner-fixture-delta-and-bindings-20261123
