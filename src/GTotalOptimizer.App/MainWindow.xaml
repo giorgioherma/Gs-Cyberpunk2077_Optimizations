@@ -1009,10 +1009,6 @@
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"
                                              Margin="0"
                                              VerticalScrollBarVisibility="Auto"/>
-                                        <TextBlock x:Name="CetPlannedText" Visibility="Collapsed"
-                                                   Margin="2,0,0,0" Foreground="#B7CED6"
-                                                   FontSize="{Binding FontSize, ElementName=CetReportText}"
-                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <!-- Only visible when installed Hotscenes is found.
                                          English-only remains an explicit, unchecked player choice. -->
@@ -1047,10 +1043,6 @@
                                              Background="#081012" Foreground="#B7CED6" BorderThickness="0"
                                              Margin="0"
                                              VerticalScrollBarVisibility="Auto"/>
-                                        <TextBlock x:Name="RedPlannedText" Visibility="Collapsed"
-                                                   Margin="2,0,0,0" Foreground="#B7CED6"
-                                                   FontSize="{Binding FontSize, ElementName=RedReportText}"
-                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
