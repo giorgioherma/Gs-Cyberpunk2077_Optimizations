@@ -1,5 +1,14 @@
 # Product decisions and explicit delta to the October 16 design
 
+## 2026-11-23 — MO2 integration architecture approved for isolated development
+
+The owner approved a new GCO `MO2_integration` branch from `main` for planning/full staged implementation. **This supersedes older "MO2 deferred" product-scope decisions for work on that branch only**; shipped Direct mode remains unchanged and MO2 stays feature-gated until proven. Detailed [architecture](../integration/MO2-INTEGRATION-DESIGN.md) and [progression plan](../integration/MO2-INTEGRATION-PROGRESS.md) are authoritative.
+
+Approved UX: Direct/MO2 tabs inside existing Page 1 source section; MO2 folder chosen once, game root auto-detected, enumerate selected instance's profiles into a dropdown. GCO/API must automatically activate **that selected profile**, never expect the player to synchronize MO2 manually. Use one temporary MO2 mod to override CET profiler ASI and necessary 0-Engine scheduler/controls plus GRSP DLL/data, then launch selected profile, collect native F11 evidence from actual MO2 destinations, safely remove only owned temporary files, and proceed to unchanged Page 2 appearance. Effective CET Lua and `r6/scripts` sources on Page 2 are the selected profile's current effective winners, including physical game baseline. One GCO app, existing owned optimizers, same game-relative ZIP, no duplicate 0-Engine injection generator.
+
+Not yet proved: target-profile activation/priority when MO2 currently displays a different profile; actual USVFS native DLL/ASI loading; capture outputs in physical/Overwrite/custom destinations; crash-safe cleanup; legacy RootBuilder configurations. Do not claim implementation, full compatibility or gameplay proof before Stage 7 acceptance.
+
+
 ## 2026-11-22 — Exact framework omission in combined ZIP
 
 After full source-owner generation, omit only complete required framework groups whose installed files match the final required bytes by SHA-256. For G-REDruntime also require the verified bundled source hashes, not just copied installed custom bytes. No version-string inference, dependency shortcuts, or removal of differing/missing framework files. Preserve G-GC learning/calibration delivery. Recheck skipped dependencies before publication; record omission in external ownership report. This is a ZIP packaging policy only, not a semantic source-recognition hash lock. Unified app v1.2.6; owner versions remain independent.
