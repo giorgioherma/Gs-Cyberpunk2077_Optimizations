@@ -17,6 +17,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read  # download the already green, source-verified GCO owner-manager artifact
 
 jobs:
   mo2-real-components:
@@ -101,6 +102,55 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw 'REAL_USVFS_X64_OVERLAY_OR_OUTPUT_ISOLATION_FAILED'
           }
+
+      - name: Verify real CET and GRSP source-owner overlay generation
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Historical green GCO full artifact is a test fixture, not a user
+          # version lock. It already contains both official owner managers and
+          # the complete manifest of verified native payloads.
+          $bundleRoot = Join-Path $env:RUNNER_TEMP 'gco-mo2-owner-bundle'
+          $cetRoot = Join-Path $env:RUNNER_TEMP 'gco-mo2-cet-official'
+          New-Item -ItemType Directory -Path $bundleRoot, $cetRoot -Force | Out-Null
+          & gh run download 45264102868 --repo giorgioherma/Gs-Cyberpunk2077_Optimizations --name Gs-Cyberpunk2077_Optimizer-v1.2.7-run1125-a1 --dir $bundleRoot
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_VERIFIED_GCO_OWNER_ARTIFACT_DOWNLOAD_FAILED' }
+          $manifests = @(Get-ChildItem -LiteralPath $bundleRoot -Filter manifest.json -File -Recurse |
+            Where-Object { (Split-Path $_.DirectoryName -Leaf) -eq 'components' })
+          if ($manifests.Count -ne 1) { throw 'MO2_OWNER_COMPONENT_MANIFEST_AMBIGUOUS' }
+          $gcoPackage = Split-Path $manifests[0].DirectoryName -Parent
+
+          # An untouched, upstream official CET ASI is required to exercise the
+          # real manager's strict supported-native-source identity check.
+          $repoCet = 'maximegmd/CyberEngineTweaks'
+          $tagCet = 'v1.38.1'
+          $cetZip = 'cet_1_38_1.zip'
+          $cetRelease = (& gh api "repos/$repoCet/releases/tags/$tagCet") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $cetRelease.tag_name -ne $tagCet) {
+            throw 'MO2_CET_UPSTREAM_RELEASE_IDENTITY_MISSING'
+          }
+          $asset = @($cetRelease.assets | Where-Object {
+            $_.name -ceq $cetZip -and $_.size -eq 34868963 -and
+            $_.digest -eq 'sha256:2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73'
+          })
+          if ($asset.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_FIXTURE_MISMATCH' }
+          & gh release download $tagCet --repo $repoCet --pattern $cetZip --dir $cetRoot --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_OFFICIAL_CET_ASI_DOWNLOAD_FAILED' }
+          $zip = Join-Path $cetRoot $cetZip
+          $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne '2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73') {
+            throw 'MO2_OFFICIAL_CET_ARCHIVE_SHA256_MISMATCH'
+          }
+          $unpacked = Join-Path $cetRoot 'files'
+          New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
+          $candidate = @(Get-ChildItem -LiteralPath $unpacked -Filter 'cyber_engine_tweaks.asi' -File -Recurse)
+          if ($candidate.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_ABSENT_OR_AMBIGUOUS' }
+
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)"
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_SOURCE_OWNER_OVERLAY_GENERATION_FAILED' }
 
       - name: Preserve truthful MO2 validation boundary
         shell: pwsh
