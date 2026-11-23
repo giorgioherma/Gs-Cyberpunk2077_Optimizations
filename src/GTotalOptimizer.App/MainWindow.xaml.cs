@@ -407,6 +407,13 @@ public partial class MainWindow : Window
             PausePortrait();
             RenderPortrait(0);
         }
+        else if (stage == PortraitStage.Completed)
+        {
+            // Only verified completion is permanently full color. No waiting
+            // for the next glitch tick after ZIP publication / no-op DONE.
+            PausePortrait();
+            RenderPortrait(1);
+        }
         else StartGlitchIfVisible();
     }
 
@@ -478,6 +485,19 @@ public partial class MainWindow : Window
 
         public void SetStage(PortraitStage stage)
         {
+            if (stage == PortraitStage.Completed)
+            {
+                // DONE always settles instantly. Generating is deliberately
+                // nonterminal and continues to glitch until this transition.
+                pulses.Clear();
+                presence = from = target = color = 1;
+                remaining = restAfterBurst = 0;
+                inBurst = false;
+                stable = true;
+                transitionElapsed = transitionDuration = 1;
+                return;
+            }
+
             double next = stage switch
             {
                 PortraitStage.Installed => .025,
@@ -485,7 +505,8 @@ public partial class MainWindow : Window
                 PortraitStage.Collecting => .16,
                 PortraitStage.Results => .75,
                 PortraitStage.Analyzing => .90,
-                PortraitStage.Generating or PortraitStage.Completed => 1,
+                PortraitStage.Generating => .985,
+                PortraitStage.Completed => 1,
                 _ => 0
             };
             if (next == target) return;
@@ -503,7 +524,7 @@ public partial class MainWindow : Window
             transitionElapsed = 0;
             transitionDuration = stage switch
             {
-                PortraitStage.Generating or PortraitStage.Completed => 1.2,
+                PortraitStage.Generating => 1.2,
                 PortraitStage.Analyzing => 1.6,
                 PortraitStage.Results => 2.4,
                 _ => 2.8
@@ -579,6 +600,19 @@ public partial class MainWindow : Window
                 // irregular flicker clusters only: never hold the full image
                 // for seconds during any of the first three stages.
                 BeginEarlyFlickers(p);
+                return;
+            }
+
+            // GENERATING stays nearly fully colored, with one very brief
+            // irregular black signal drop every ~13-27 seconds. Only DONE
+            // locks the terminal full-color image without further ticks.
+            if (target >= .98 && target < 1)
+            {
+                pulses.Enqueue((random.NextDouble() < .30
+                    ? Range(.20, .45) : 0, Range(.05, .11)));
+                restAfterBurst = Range(13, 27);
+                inBurst = true;
+                (color, remaining) = pulses.Dequeue();
                 return;
             }
 
