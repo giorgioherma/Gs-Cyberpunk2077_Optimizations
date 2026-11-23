@@ -1,5 +1,10 @@
 # Mandatory unified optimizer startup / handoff
 
+## 2026-11-23 — MO2 chosen-profile mapper and signed local API checkpoints verified
+
+On isolated GCO branch `MO2_integration`, **native VFS and mock MO2 API proof, not user gameplay:** `IPluginFileMapper` attaches one GCO temporary profiler layer **after** the explicitly chosen profile and Overwrite; profile B stays unchanged while launching A. Official MO2 2.5.2 USVFS `0.5.6.1` passed real x64 profile/Overwrite mapping and second-profile noninheritance [CI #5](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45273499199), [#6](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45274481534). Python plugin has `createPlugins()` only (upstream loader otherwise ignores the mapper); one-shot controller and signed local HMAC command mailbox; GCO has matching `.NET` request client, profile identity/epoch checks and feature-gated launch. [CI #7 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45275626740) tested signed API plus native USVFS. **No running MO2 application or Cyberpunk gameplay validation.** Full source-owner overlay preparation, live plugin loading, Page 1, collection and Page 2 remain. Authoritative [design](../integration/MO2-INTEGRATION-DESIGN.md) and [stage ledger](../integration/MO2-INTEGRATION-PROGRESS.md). `main` and the separate integration branch are unchanged.
+
+
 ## 2026-11-23 — approved MO2 integration feature branch (design only)
 
 **MO2 feature branch:** `MO2_integration`, created from `main` commit `598fe0ec7bd3da1844e2b0431740ef2e3aab92aa`. This is **independent of ongoing REDscript/CET work**; do not reinterpret historical REDscript branch routing as authorization to merge or edit another branch. No MO2 source/installer/gameplay implementation is complete.
