@@ -23,6 +23,8 @@ jobs:
   mo2-real-components:
     runs-on: windows-2022
     timeout-minutes: 25
+    env:
+      MO2_PRIVATE_ZEROENGINE_AVAILABLE: ${{ secrets.GCET_STACK_SOURCES_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -103,6 +105,19 @@ jobs:
             throw 'REAL_USVFS_X64_OVERLAY_OR_OUTPUT_ISOLATION_FAILED'
           }
 
+      - name: Checkout historical real 0-Engine fixture (private, optional)
+        if: ${{ env.MO2_PRIVATE_ZEROENGINE_AVAILABLE == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .mo2-ci-private-cet
+          sparse-checkout: |
+            GCO-Capture-15112026_021913/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/
+          sparse-checkout-cone-mode: false
+
       - name: Verify real CET and GRSP source-owner overlay generation
         shell: pwsh
         env:
@@ -176,6 +191,15 @@ jobs:
 
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)"
           if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_SOURCE_OWNER_OVERLAY_GENERATION_FAILED' }
+
+          $privateZero = Join-Path $env:GITHUB_WORKSPACE '.mo2-ci-private-cet/GCO-Capture-15112026_021913/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine'
+          if (Test-Path -LiteralPath (Join-Path $privateZero 'init.lua')) {
+            Write-Host 'Running existing/namespaced 0-Engine REAL source-owner replay (private source never uploaded)'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$privateZero"
+            if ($LASTEXITCODE -ne 0) { throw 'MO2_HISTORICAL_0ENGINE_REAL_SOURCE_OWNER_REPLAY_FAILED' }
+          } else {
+            Write-Host 'NOT TESTED: private historical 0-Engine fixture not available on this runner.'
+          }
 
       - name: Preserve truthful MO2 validation boundary
         shell: pwsh
