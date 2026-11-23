@@ -222,6 +222,57 @@ internal static class Program
                 throw new InvalidDataException("USVFS captured output location/content not isolated");
             Console.WriteLine("PASS real USVFS x64: profile -> Overwrite -> GCO mapper precedence, " +
                 "CET ASI and REDscript overrides, user bytes intact, outputs to Overwrite");
+
+            // Same running MO2/USVFS controller, different profile mapping.
+            // GCO's one-shot mapper is NOT appended for this unrelated launch.
+            // No profile-specific files are ever edited by this test.
+            string profileB = Path.Combine(folder, "unselected-profile-B");
+            Put(Path.Combine(profileB, relativeAsi), "PROFILE_B_CET_ASI");
+            Put(Path.Combine(profileB, relativeReds), "PROFILE_B_REDSCRIPT");
+            Export<ClearMappings>(library, "usvfsClearVirtualMappings")();
+            if (!link(profileB, game, Recursive) ||
+                !link(overwrite, game, Recursive | CreateTarget))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to construct unrelated profile VFS");
+
+            string bAsi = Path.Combine(folder, "profile-b-asi.txt");
+            string bReds = Path.Combine(folder, "profile-b-reds.txt");
+            string bCmd = Path.Combine(folder, "profile-b-child.cmd");
+            var scriptB = new StringBuilder();
+            scriptB.AppendLine("@echo off");
+            scriptB.AppendLine("type \"" + originalAsi + "\" > \"" + bAsi + "\"");
+            scriptB.AppendLine("if errorlevel 1 exit /b 21");
+            scriptB.AppendLine("type \"" + Path.Combine(game, relativeReds) +
+                "\" > \"" + bReds + "\"");
+            scriptB.AppendLine("if errorlevel 1 exit /b 22");
+            File.WriteAllText(bCmd, scriptB.ToString(), Encoding.ASCII);
+            var commandB = new StringBuilder("\"" + commandInterpreter +
+                "\" /D /C \"" + bCmd + "\"");
+            if (!hooked(commandInterpreter, commandB, IntPtr.Zero, IntPtr.Zero, false,
+                    0, IntPtr.Zero, folder, ref startup, out var infoB))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to launch unrelated profile B");
+            try
+            {
+                uint waitB = WaitForSingleObject(infoB.process, 30_000);
+                bool haveExitB = GetExitCodeProcess(infoB.process, out uint exitB);
+                if (waitB != 0 || !haveExitB || exitB != 0)
+                    throw new InvalidOperationException("Profile B child failed: exit=0x" +
+                        exitB.ToString("X8") + " wait=" + waitB);
+            }
+            finally
+            {
+                CloseHandle(infoB.process);
+                CloseHandle(infoB.thread);
+            }
+            string fromBAsi = File.Exists(bAsi) ? File.ReadAllText(bAsi).Trim() : "";
+            string fromBReds = File.Exists(bReds) ? File.ReadAllText(bReds).Trim() : "";
+            if (fromBAsi != "USER_OVERWRITE_ASI_UNCHANGED" ||
+                fromBReds != "PROFILE_B_REDSCRIPT" ||
+                File.ReadAllText(Path.Combine(profileB, relativeAsi)) != "PROFILE_B_CET_ASI")
+                throw new InvalidDataException(
+                    "Profile B saw GCO profiler overlay or its own source/Overwrite was modified: " +
+                    "ASI=" + fromBAsi + " RED=" + fromBReds);
+            Console.WriteLine("PASS real USVFS x64: unrelated profile B sees its own REDscript + " +
+                "user Overwrite, NOT the temporary GCO profiler overlay");
         }
         finally
         {
