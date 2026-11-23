@@ -5,6 +5,7 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
 {
     Mo2ProfileSelectionTests.Run();
     Mo2CompanionDiscoveryTests.Run();
+    Mo2CommandClientTests.Run();
     return;
 }
 
