@@ -480,7 +480,7 @@ public partial class MainWindow : Window
             transitionElapsed = 0;
             transitionDuration = stage switch
             {
-                PortraitStage.Generating => 1.2,
+                PortraitStage.Generating or PortraitStage.Completed => 1.2,
                 PortraitStage.Analyzing => 1.6,
                 PortraitStage.Results => 2.4,
                 _ => 2.8
@@ -622,6 +622,10 @@ public partial class MainWindow : Window
                 }
             }
             restAfterBurst = Range(minQuiet, maxQuiet);
+            // During CONTINUE the emerging color-dominant signal must not
+            // inherit a full early-stage black interval.
+            if (target >= .75)
+                restAfterBurst = Math.Min(restAfterBurst, Range(.35, .85));
             inBurst = true;
             (color, remaining) = pulses.Dequeue();
         }
