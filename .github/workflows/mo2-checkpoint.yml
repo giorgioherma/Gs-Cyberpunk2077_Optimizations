@@ -217,6 +217,12 @@ jobs:
                 throw "MO2_REAL_OWNER_0ENGINE_VARIANT_FAILED: $($case.kind)"
               }
             }
+            $legacySource = Join-Path $env:GITHUB_WORKSPACE '.mo2-ci-private-cet/PHASE1+2FINAL/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine'
+            Write-Host 'Running partial legacy integrated case with missing root Scheduler.lua'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$legacySource" legacy-worker-missing
+            if ($LASTEXITCODE -ne 0) {
+              throw 'MO2_REAL_OWNER_LEGACY_MISSING_SCHEDULER_FAILED'
+            }
           } else {
             Write-Host 'NOT TESTED: private historical 0-Engine fixture not available on this runner.'
           }
