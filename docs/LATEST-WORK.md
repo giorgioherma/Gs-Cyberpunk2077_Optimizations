@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — Integration → main reconciliation
+
+- Official progression: main → REDscript handoff → dev/redscript/integration; do not replace latest integrated generators with historical main code. Merge base `3caccafb`; main has 74 commits after divergence, primarily earlier prototype reporting/build contracts. Integration had 1,240 subsequent commits at comparison.
+- Preserved main's independent owner-native CET/GRSP work-versus-call-frequency rankings (distinct, not additive CPU scopes) in the latest unified digest/timeline. Native rankings render and enter machine JSON only when the owner CSVs exist, preserving the modern sealed-capture reporter fallback. Existing real-report contract also checks nonempty/sorted rankings when present. Implementation `237e2823`, `6dca53e6`.
+- Retained main's GRSP native artifact safety floor `78dd87635bc7cba77c427c3928f10e0be18d7eea` before packaging a successful native instrumentation build. Implementation `f9396a10`.
+- Main-only README, reviewer validation guide and binary test fixtures are preserved as Git objects during merge. Newer integration code, documentation and CI replace obsolete prototype overlap; no source-owner packages, historical passes or user installation files are downgraded. Full main Windows CI required after merge; no green CI asserted for this reconciliation yet.
+
 ## 2026-11-23 — V signal tuning after owner visual inspection
 
 - Owner found initial Installed and Start flashes much too frequent and their long colored holds distracting. Reworked early signal to very short 28–110 ms irregular pulses only, with long black intervals after Installed (roughly 23–47 s between bursts), less rare Start (13–28 s), and more frequent Collect (4–9 s) without full-image holds. First activation is delayed after each button; in-flight bursts still complete naturally. These measured-in-simulation intervals supersede previous 12/20/38% color-presence estimates for early stages.
