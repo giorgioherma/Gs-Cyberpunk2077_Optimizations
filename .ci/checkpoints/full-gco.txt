@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-cet-ggc-v12-owner-pin-20261123
+checkpoint=v1.2.7-page2-source-mod-summary-20261123
