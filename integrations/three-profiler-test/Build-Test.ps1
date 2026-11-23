@@ -51,7 +51,7 @@ if ($gm.version -ne '1.0.0') { throw 'GRSP release version drift' }
 if (-not (Test-Path (Join-Path $grSource 'payload/G-REDscript-Profiler.dll'))) { throw 'GRSP native payload missing' }
 Write-Host 'PASS official GRSP v1.0.0 release ZIP integrity and payload'
 
-# The owner CI shipped Profiler and Resolver from the SAME pinned source.
+# CET #2616 shipped Profiler and Resolver from the same pinned V12 G-GC source.
 # We rebuild Resolver managed code below; these original artifact bytes serve
 # only as a native-service provenance anchor and baseline behavior oracle.
 $resolverArchive=Join-Path (Get-Location) 'downloaded-cet-resolver'
@@ -428,15 +428,15 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
 $nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
 $provenance=@{
   testOnly=$true
-  cet=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  cet=@{ sourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; referenceSourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; runId=45103360468; artifactId=14786511383; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
-  cetResolver=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; ownerReferenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  cetResolver=@{ sourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ownerReferenceSourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ownerCiRun=45103360468; ownerArtifactId=14787010559; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
   $entries=@(
-    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; referenceSourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ciRun=45103360468; artifactId=14786511383 },
     @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
   )
   foreach ($entry in $entries) {
@@ -460,10 +460,10 @@ if ($Integrated) {
   $resolverEntry=@{
     id='cet-resolver'
     executable='components/cet-resolver/app/G-CET-Resolver.exe'
-    sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'
-    ownerReferenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'
-    ownerCiRun=41820765951
-    ownerArtifactId=13317096524
+    sourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'
+    ownerReferenceSourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'
+    ownerCiRun=45103360468
+    ownerArtifactId=14787010559
     framework='net10.0-windows'
     nativeSha256=$nativeResolverHash
     files=$resolverAssetEntries
