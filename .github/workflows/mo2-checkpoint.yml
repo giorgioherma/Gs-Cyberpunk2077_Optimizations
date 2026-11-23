@@ -122,32 +122,57 @@ jobs:
           if ($manifests.Count -ne 1) { throw 'MO2_OWNER_COMPONENT_MANIFEST_AMBIGUOUS' }
           $gcoPackage = Split-Path $manifests[0].DirectoryName -Parent
 
-          # An untouched, upstream official CET ASI is required to exercise the
-          # real manager's strict supported-native-source identity check.
+          # Select the official untouched CET baseline required by the
+          # packaged authoritative manager manifest. These are pinned CI
+          # fixture assets, never version locks on user Lua mods.
+          $ownerManifest = Join-Path $gcoPackage 'components/cet/MANIFEST.json'
+          if (!(Test-Path -LiteralPath $ownerManifest)) {
+            throw 'MO2_CET_OWNER_MANIFEST_MISSING'
+          }
+          $owner = Get-Content -LiteralPath $ownerManifest -Raw | ConvertFrom-Json
+          $fixtures = @{
+            '1.37.1' = @{
+              tag = 'v1.37.1'
+              archive = 'cet_1.37.1.zip'
+              size = 35227011
+              hash = '1855017796a27f518199f5b7d7210ef1db7a5c5f0af468c68e04e6e666ad248c'
+            }
+            '1.38.1' = @{
+              tag = 'v1.38.1'
+              archive = 'cet_1_38_1.zip'
+              size = 34868963
+              hash = '2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73'
+            }
+          }
+          $sourceVersion = [string]$owner.targetCET.version
+          $chosen = $fixtures[$sourceVersion]
+          if ($null -eq $chosen) {
+            throw "MO2_CET_OWNER_VERSION_LACKS_PINNED_CI_FIXTURE: $sourceVersion"
+          }
           $repoCet = 'maximegmd/CyberEngineTweaks'
-          $tagCet = 'v1.38.1'
-          $cetZip = 'cet_1_38_1.zip'
-          $cetRelease = (& gh api "repos/$repoCet/releases/tags/$tagCet") | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or $cetRelease.tag_name -ne $tagCet) {
+          $cetRelease = (& gh api "repos/$repoCet/releases/tags/$($chosen.tag)") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $cetRelease.tag_name -ne $chosen.tag) {
             throw 'MO2_CET_UPSTREAM_RELEASE_IDENTITY_MISSING'
           }
           $asset = @($cetRelease.assets | Where-Object {
-            $_.name -ceq $cetZip -and $_.size -eq 34868963 -and
-            $_.digest -eq 'sha256:2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73'
+            $_.name -ceq $chosen.archive -and $_.size -eq $chosen.size -and
+            $_.digest -eq "sha256:$($chosen.hash)"
           })
           if ($asset.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_FIXTURE_MISMATCH' }
-          & gh release download $tagCet --repo $repoCet --pattern $cetZip --dir $cetRoot --clobber
+          & gh release download $chosen.tag --repo $repoCet --pattern $chosen.archive --dir $cetRoot --clobber
           if ($LASTEXITCODE -ne 0) { throw 'MO2_OFFICIAL_CET_ASI_DOWNLOAD_FAILED' }
-          $zip = Join-Path $cetRoot $cetZip
+          $zip = Join-Path $cetRoot $chosen.archive
           $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($sha -ne '2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73') {
-            throw 'MO2_OFFICIAL_CET_ARCHIVE_SHA256_MISMATCH'
-          }
+          if ($sha -ne $chosen.hash) { throw 'MO2_OFFICIAL_CET_ARCHIVE_SHA256_MISMATCH' }
           $unpacked = Join-Path $cetRoot 'files'
           New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
           Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
           $candidate = @(Get-ChildItem -LiteralPath $unpacked -Filter 'cyber_engine_tweaks.asi' -File -Recurse)
           if ($candidate.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_ABSENT_OR_AMBIGUOUS' }
+          $actualAsiSha = (Get-FileHash -LiteralPath $candidate[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualAsiSha -ne [string]$owner.targetCET.officialSha256) {
+            throw "MO2_CET_SOURCE_OWNER_OFFICIAL_BINARY_HASH_MISMATCH: manager=$sourceVersion asset=$actualAsiSha"
+          }
 
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)"
           if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_SOURCE_OWNER_OVERLAY_GENERATION_FAILED' }
