@@ -13,7 +13,7 @@ internal static class Mo2RealOwnerOverlayTests
             throw new InvalidDataException("GCO_MO2_OWNER_BUNDLE_UNVERIFIED: " + bundle.Detail);
 
         var folder = Path.Combine(Path.GetTempPath(), "gco-mo2-realowner-" + Guid.NewGuid().ToString("N"));
-        const string sessionId = "ecf0123456789abcdecf0123456789abd";
+        const string sessionId = "abcdef0123456789abcdef0123456789";
         try
         {
             string game = Path.Combine(folder, "game");
