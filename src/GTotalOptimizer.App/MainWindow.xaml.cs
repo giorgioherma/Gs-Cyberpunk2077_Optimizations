@@ -1385,8 +1385,28 @@ public partial class MainWindow : Window
     }
     private async void Refresh_Click(object sender, RoutedEventArgs e)
     {
+        if (ResultsPage.Visibility == Visibility.Visible)
+        {
+            // On Page 2 REFRESH means repaint the existing UI, not restore,
+            // re-analyze, regenerate or advance the V/progress/Done state.
+            RefreshResultsPresentationOnly();
+            return;
+        }
         ClearStatusPin();
         await RefreshSourceAsync();
+    }
+
+    private void RefreshResultsPresentationOnly()
+    {
+        // No owner inspection, file reads, session updates, status overrides,
+        // progress activities, action enablement or portrait stage changes.
+        // Preserve the current in-memory presentation, including a currently
+        // running Analyze/Generate operation, while invalidating its layout.
+        ResultsPage.InvalidateMeasure();
+        ResultsPage.InvalidateArrange();
+        ResultsPage.InvalidateVisual();
+        RootLayout.InvalidateVisual();
+        ResultsPage.UpdateLayout();
     }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
@@ -1639,14 +1659,16 @@ public partial class MainWindow : Window
     private async Task RefreshSourceAsync()
     {
         if (!initialized || busy) return;
+        // A deferred game/source refresh must not quietly progress Page 2
+        // either; the same UI-only behavior applies to both refresh paths.
+        if (ResultsPage.Visibility == Visibility.Visible)
+        {
+            RefreshResultsPresentationOnly();
+            return;
+        }
         long refreshActivity = BeginConsoleActivity("Checking game and profiler status");
         try
         {
-        if (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)
-        {
-            RefreshCompletedWorkspace();
-            return;
-        }
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
         var cancel = refreshCancellation = new CancellationTokenSource();
