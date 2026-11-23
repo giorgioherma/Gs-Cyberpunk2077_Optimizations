@@ -72,6 +72,10 @@ jobs:
             throw 'OFFICIAL_MO2_ARCHIVE_SIZE_MISMATCH'
           }
           $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+          # Integrity pin is for our CI test fixture, never a user-mod source lock.
+          if ($hash -ne 'E6376EFD87FD5DDD95AEE959405E8F067AFA526EA6C2C0C5AA03C5108BF4A815') {
+            throw 'OFFICIAL_MO2_RELEASE_FIXTURE_SHA256_MISMATCH'
+          }
           Write-Host "Verified upstream tag $tag; archive SHA256 $hash"
           & 7z x $file "-o$unpacked" -y | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'OFFICIAL_MO2_ARCHIVE_EXTRACT_FAILED' }
