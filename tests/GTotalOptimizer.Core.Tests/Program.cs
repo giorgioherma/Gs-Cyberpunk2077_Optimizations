@@ -287,6 +287,57 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
             "generated_optimizations", "pass-20261120_103300"))
         throw new InvalidDataException(
             "GCO_GENERATED_PASS_MUST_BE_TIMESTAMPED_OUTSIDE_PROFILER_RESULTS");
+
+    // ZIP filenames must be sequential across complete historical passes,
+    // including the original unnumbered ZIPs. Failed/pending output must not
+    // consume numbers, and the original timestamped folder layout stays intact.
+    var nextNameMethod = typeof(CombinedOptimizationPassService).GetMethod(
+        "NextGeneratedPassZipName",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_NUMBERED_PASS_ZIP_NAMING_MISSING");
+    string namingRoot = Path.Combine(Path.GetTempPath(),
+        "gco-numbered-passes-" + Guid.NewGuid().ToString("N"));
+    const string zipStem = "G-Cyberpunk2077_Optimization_Pass";
+    try
+    {
+        Directory.CreateDirectory(namingRoot);
+        string NextName() =>
+            (string?)nextNameMethod.Invoke(null, [namingRoot]) ??
+            throw new InvalidDataException("GCO_PASS_ZIP_NAME_UNAVAILABLE");
+        void Publish(string folder, string name, bool withSidecar)
+        {
+            string directory = Path.Combine(namingRoot, folder);
+            Directory.CreateDirectory(directory);
+            string zip = Path.Combine(directory, name);
+            using (var archive = System.IO.Compression.ZipFile.Open(
+                       zip, System.IO.Compression.ZipArchiveMode.Create))
+                archive.CreateEntry("r6/scripts/example.reds");
+            if (withSidecar)
+                File.WriteAllText(zip + ".ownership.json", "{}");
+        }
+        if (NextName() != zipStem + "_0001.zip")
+            throw new InvalidDataException("GCO_FIRST_PASS_ZIP_NOT_NUMBERED");
+        Publish("pass-20261120_100000", zipStem + ".zip", true);
+        if (NextName() != zipStem + "_0002.zip")
+            throw new InvalidDataException("GCO_LEGACY_PASS_NOT_IN_CHRONOLOGY");
+        Publish("pass-20261121_100000", zipStem + "_0002.zip", true);
+        Publish("pass-20261122_100000", zipStem + "_0003.zip", false);
+        Publish(".pass-pending-reservation", zipStem + "_9999.zip", true);
+        if (NextName() != zipStem + "_0003.zip")
+            throw new InvalidDataException("GCO_PENDING_OR_INCOMPLETE_PASS_COUNTED");
+        Publish("pass-20261123_100000", zipStem + "_0007.zip", true);
+        if (NextName() != zipStem + "_0008.zip" ||
+            !File.Exists(Path.Combine(namingRoot,
+                "pass-20261120_100000", zipStem + ".zip")))
+            throw new InvalidDataException("GCO_PASS_ZIP_SEQUENCE_REUSED_OR_OVERWROTE");
+    }
+    finally
+    {
+        if (Directory.Exists(namingRoot))
+            Directory.Delete(namingRoot, recursive: true);
+    }
+
     // BACK/CLOSE must forget only the last-workspace navigation pointer.
     string scratch = Path.Combine(Path.GetTempPath(),
         "gco-reset-" + Guid.NewGuid().ToString("N"));
