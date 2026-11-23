@@ -1,5 +1,16 @@
 # Mandatory unified optimizer startup / handoff
 
+## 2026-11-23 — approved MO2 integration feature branch (design only)
+
+**MO2 feature branch:** `MO2_integration`, created from `main` commit `598fe0ec7bd3da1844e2b0431740ef2e3aab92aa`. This is **independent of ongoing REDscript/CET work**; do not reinterpret historical REDscript branch routing as authorization to merge or edit another branch. No MO2 source/installer/gameplay implementation is complete.
+
+**MO2 agents read:** [authoritative architecture](../integration/MO2-INTEGRATION-DESIGN.md) → [staged plan and evidence ledger](../integration/MO2-INTEGRATION-PROGRESS.md) → [AGENTS rules](../../AGENTS.md) → existing core product and owner docs. This new approved design supersedes the older MO2-deferred *scope decision* in this feature branch, but the runtime feature remains disabled until fully validated.
+
+**User requirement:** one Direct/MO2 selector on existing Page 1, one MO2 folder picker with automatic game/profile discovery, dropdown of every configured selected-instance profile; **GCO itself must activate the temporary profiler mod on the selected profile**, even if MO2 UI is showing another one, and launch that profile through the API. One temporary virtual profiler overlay handles CET ASI, 0-Engine integration/controls and GRSP DLL/data; results collection and cleanup are MO2-aware. Direct physical installation path remains untouched. Page 2 reads the selected profile's actual effective CET/REDscript source and uses the same existing generators and combined ZIP.
+
+**Critical unresolved proof:** documented `startApplication(profile=...)` supports launch profile; programmatic `setActive/setPriority` targeting a *noncurrent* profile must be demonstrated, not assumed. Native ASI/RED4ext loading, source-winner equivalence, result destination and crash recovery also require real runtime proof. Run Stage 0 first; fail closed if any mandatory capability cannot be achieved safely.
+
+
 ## 2026-11-17 — REDscript pass-plan integration (verified)
 
 Read the **canonical** [R5/R6 work-elimination plan](../integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) for implementation and CI #657. GCO `dev/redscript/resolver_handoff` now bundles the GCO-owned REDscript Resolver in the **same self-contained .NET 10 app**, outputs a source-ranked ordered `REDscript_GenerationPlan.json` on ANALYZE, and lets the existing generators stage source from that manifest. **7 existing source generator families (6 source-scheduled + 1 capture-gated), 5 larger approved A–E systems not yet implemented.** On current CI source: **74 eligible edits / 44 staged `.reds` files / 131/131 tests / SCC 0.5.31 PASS**, no REDscript game ZIP or gameplay claim. See [CI #657](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44170790239) and [commit `92f453d`](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/92f453d345bb40294381951dd4e26579f3b68771).
