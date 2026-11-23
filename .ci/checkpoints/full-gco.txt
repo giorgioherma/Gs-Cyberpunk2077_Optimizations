@@ -1,1 +1,1 @@
-checkpoint=mo2-stage0-1-profile-companion-20261123
+checkpoint=mo2-stage0-1-companion-api-and-process-identity-20261123
