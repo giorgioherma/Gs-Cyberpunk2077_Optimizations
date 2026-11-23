@@ -4,6 +4,16 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+## 2026-11-23 — dedicated real-MO2 Windows/USVFS TXT checkpoint VERIFIED
+
+**Workflow:** [`.github/workflows/mo2-checkpoint.yml`](../../.github/workflows/mo2-checkpoint.yml), exclusively `MO2_integration`; triggers only on [`.ci/checkpoints/mo2.txt`](../../.ci/checkpoints/mo2.txt) changes or manual dispatch. Ordinary source/doc/test commits do **not** trigger the MO2 or full-GCO pipelines. Existing full-GCO and REDscript TXT checkpoints remain independent.
+
+**Actual evidence:** [MO2 CI #45271302385 — SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45271302385), source `93d6dda739dded99b10587cfa2d374e6f5da42f8`. Downloaded **official Mod Organizer 2 v2.5.2** release archive, pinned CI fixture SHA-256 `E6376EFD87FD5DDD95AEE959405E8F067AFA526EA6C2C0C5AA03C5108BF4A815` (this is *not* a Lua/mod version lock). The actual native USVFS `usvfs_x64.dll` reported `0.5.6.1`. The `net10.0` test controller used upstream `usvfsInitLogging → usvfsCreateVFS → usvfsVirtualLinkDirectoryStatic → usvfsCreateProcessHooked` to run a **native x64 Windows `cmd.exe` child** against an entirely disposable fake Cyberpunk root. The child read `MO2_PROFILER_OVERRIDE` from a virtual `cyber_engine_tweaks.asi`, read `MO2_VIRTUAL_REDSCRIPT` from virtual `r6/scripts`, wrote a GRSP-style capture into **Overwrite**, while the physical original ASI and source mod remained byte-identical. The test failed closed on wrong bytes, wrong write destination, missing files, process error or timeout. Python mock-MO2 plugin contract and C# selected-profile/companion contracts also passed.
+
+**Defect discovered and fixed in authoritative test fixture:** [initial CI #45270382320](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45270382320) and [diagnostic CI #45270767490](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45270767490) failed because hooking a managed .NET child caused `0xC0000005` before the child could run. The smoke now follows upstream USVFS initialization and uses a native Windows child; **the virtual-file and write-redirection assertions were never weakened or removed**.
+
+**Proof boundaries:** This is **genuine USVFS hooked-process file interception**, not merely a DLL presence check. It is **not** a running MO2 application with a selected noncurrent profile, nor a real Cyberpunk/CET/GRSP loaded capture. `Mo2FeatureGate.Enabled=false`; no profiler install/restore, game launch, selected-profile mutation, Page 2 effective USVFS source or gameplay is claimed. Next hard stage gate remains: prove GCO can activate its session-owned mod for dropdown-selected profile A while MO2 UI displays B, without modifying B or asking the user to switch.
+
 ## 2026-11-23 — isolated Stage 0/1 foundation committed; runtime gates still BLOCKED
 
 **Scope:** GCO `MO2_integration` only. Compared checkpoint workflow conventions with the separate `integration/phase2-main-reconcile-20261120` branch as an example; did not merge, change or reinterpret its implementation. Existing `.github/workflows/build-windows.yml` and `redscript-phase2-checkpoint.yml` now include `MO2_integration` **only in their pre-existing TXT checkpoint push filters** (`.ci/checkpoints/full-gco.txt`, `redscript.txt`). Ordinary source, test and docs commits do not launch CI.
@@ -19,7 +29,7 @@
 
 **Still required before any deployment:** test a supported API mechanism to activate a single session-owned profiler overlay for selected profile A while MO2 UI displays B, with B unchanged and no original source writes; prove CET ASI + GRSP loading and result locations in real MO2. Failure is a hard blocker, not a reason to enable `Mo2FeatureGate`.
 
-## Stage 0 — API and source-contract proof [IN PROGRESS — RUNTIME BLOCKED]
+## Stage 0 — API and source-contract proof [IN PROGRESS — NATIVE USVFS VERIFIED; PROFILE CONTROL NOT PROVEN]
 
 - Review `AGENTS.md`, `docs/HANDOFF/CORE.md`, WPF Page 1 and the current GCO/CET/GRSP owner source. Record current versioned MO2 Python API/Cyberpunk plugin capabilities, supported native loaders and RootBuilder exceptions.
 - Verify exact API semantics for `IOrganizer.startApplication(..., profile=...)`, `createMod`, `IModList.setActive/setPriority`, `removeMod`, virtual source winner resolution, game root/profile enumeration, and output routing.
