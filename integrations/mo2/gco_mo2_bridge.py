@@ -490,7 +490,7 @@ class GcoAuthenticatedMailbox:
             result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
                       "requestId": request["requestId"], "ok": True,
                       "processId": int(pid), "detail": detail}
-        except (OSError, ValueError, TypeError, AttributeError, GcoOverlayContractError,
+        except (OSError, RuntimeError, ValueError, TypeError, AttributeError,
                 json.JSONDecodeError) as exc:
             result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
                       "requestId": request.get("requestId", "") if isinstance(request, dict) else "",
