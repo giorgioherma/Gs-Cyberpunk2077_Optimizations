@@ -92,10 +92,11 @@ internal static class Mo2ProfilerOverlayBuilderTests
             }
             catch (InvalidOperationException) { }
 
-            string caseBase = Path.Combine(root, "case-stages");
             async Task ShouldReject(string name, Action<string> change)
             {
-                string id = name.PadRight(32, 'a');
+                string id = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(name))).ToLowerInvariant()[..32];
                 try
                 {
                     await Mo2ProfilerOverlayBuilder.PrepareAsync(game, stack, id,
