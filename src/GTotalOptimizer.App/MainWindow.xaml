@@ -1066,7 +1066,7 @@
                                  both temporary profilers have been uninstalled and restoration verified. -->
                             <TextBlock x:Name="OptimizationFooterNotice" Margin="3,12,0,0" FontSize="12.5" TextWrapping="Wrap">
                                  <Run Text="Installer does NOT change any of your game files."
-                                      Foreground="#FFF000" FontWeight="SemiBold"/>
+                                      Foreground="{StaticResource Cyan}" FontWeight="SemiBold"/>
                                  <Run Text="  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
                                       Foreground="#98A9B1"/>
                              </TextBlock>
@@ -1076,7 +1076,7 @@
                                  <Run Text="PASS READY - " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
                                  <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
                                  <Run Text="If installing manually, BACK UP first."
-                                      Foreground="#FFF000" FontWeight="Bold"/>
+                                      Foreground="{StaticResource Cyan}" FontWeight="Bold"/>
                              </TextBlock>
                         </StackPanel>
                     </ScrollViewer>
