@@ -309,6 +309,8 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                 self.directory = directory
             def absolutePath(self):
                 return str(self.directory)
+            def absoluteFilePath(self, name):
+                raise AssertionError("QDir.absoluteFilePath requires fileName, never call without it")
             def __str__(self):
                 return "<PyQt6 QDir representation, not a path>"
         with tempfile.TemporaryDirectory() as td:
