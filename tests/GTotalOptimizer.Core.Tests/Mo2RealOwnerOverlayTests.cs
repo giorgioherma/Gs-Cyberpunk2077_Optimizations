@@ -5,7 +5,7 @@ using System.Text.Json;
 internal static class Mo2RealOwnerOverlayTests
 {
     public static async Task RunAsync(string verifiedPackageRoot, string officialCetAsi,
-        string? realZeroEngineDirectory = null)
+        string? realZeroEngineDirectory = null, bool missingNamespacedWorker = false)
     {
         if (!File.Exists(officialCetAsi))
             throw new FileNotFoundException("Official CET fixture binary unavailable.", officialCetAsi);
@@ -42,6 +42,8 @@ internal static class Mo2RealOwnerOverlayTests
             // Optional private *historical real source* fixture. Never commit
             // or upload these files; CI checks them out read-only in RUNNER_TEMP.
             string? sourceZeroHash = null;
+            if (missingNamespacedWorker && string.IsNullOrWhiteSpace(realZeroEngineDirectory))
+                throw new InvalidDataException("MO2_PARTIAL_0ENGINE_REQUIRES_REAL_SOURCE");
             if (!string.IsNullOrWhiteSpace(realZeroEngineDirectory))
             {
                 var source = Path.GetFullPath(realZeroEngineDirectory);
@@ -59,6 +61,11 @@ internal static class Mo2RealOwnerOverlayTests
                     if (++files > 5000)
                         throw new InvalidDataException("MO2_REAL_0ENGINE_FIXTURE_OVERSIZED");
                     var relative = Path.GetRelativePath(source, file);
+                    var normalized = relative.Replace('\\', '/');
+                    if (missingNamespacedWorker &&
+                        normalized.Equals("modules/G-CET/Scheduler.lua",
+                            StringComparison.OrdinalIgnoreCase))
+                        continue; // Simulate one missing worker, never rewrite init.
                     var target = Path.Combine(destination, relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                     File.Copy(file, target);
@@ -79,6 +86,16 @@ internal static class Mo2RealOwnerOverlayTests
             var output = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
                 verifiedPackageRoot, game, effective, sessionId, localAppData: local);
             var names = output.Files.Select(x => x.GameRelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (missingNamespacedWorker)
+            {
+                const string missing = "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/G-CET/Scheduler.lua";
+                if (!names.Contains(missing) ||
+                    names.Contains("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua") ||
+                    names.Contains("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/Scheduler.lua") ||
+                    names.Contains("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/CETProfilerScheduler.lua"))
+                    throw new InvalidDataException(
+                        "MO2_PARTIAL_0ENGINE_OWNER_DUPLICATED_DISPATCH_OR_FAILED_TO_GENERATE_ONLY_MISSING_WORKER");
+            }
             if (!names.Contains("bin/x64/plugins/cyber_engine_tweaks.asi") ||
                 !names.Contains("red4ext/plugins/G-REDscript-Profiler.dll") ||
                 !names.Contains("bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/init.lua"))
@@ -109,7 +126,9 @@ internal static class Mo2RealOwnerOverlayTests
                     "plugins", "cyber_engine_tweaks", "mods", "0-Engine", "init.lua"))))
                 throw new InvalidDataException("MO2_REAL_0ENGINE_HISTORICAL_SOURCE_CHANGED");
             Console.WriteLine("PASS Stage 3 REAL CET + GRSP owner install on disposable " +
-                (realZeroEngineDirectory is null ? "original no-0-Engine" : "historical existing-0-Engine") +
+                (realZeroEngineDirectory is null ? "original no-0-Engine" :
+                    missingNamespacedWorker ? "PARTIAL existing-0-Engine missing namespaced worker" :
+                    "historical existing-0-Engine") +
                 " profile fixture: " + output.Files.Count +
                 " verified virtual overlay files; game and mod originals unchanged");
         }
