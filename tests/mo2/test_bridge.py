@@ -17,6 +17,14 @@ def _load_plugin():
     # not a fabricated capability to manipulate another profile.
     mobase = types.ModuleType("mobase")
     mobase.IPluginTool = object
+    mobase.IPluginFileMapper = object
+    class Mapping:
+        def __init__(self, source, destination, is_directory, create_target=False):
+            self.source = source
+            self.destination = destination
+            self.isDirectory = is_directory
+            self.createTarget = create_target
+    mobase.Mapping = Mapping
     mobase.VersionInfo = lambda *args: tuple(args)
     core = types.ModuleType("PyQt6.QtCore")
     core.QCoreApplication = types.SimpleNamespace(
@@ -61,6 +69,14 @@ class Organizer:
         return str(self.root / "overwrite")
     def onProfileChanged(self, callback):
         self.changed = callback
+    def profileNames(self):
+        return ["Heavy", "Other"]
+    def profileName(self):
+        return "Other"
+    def startApplication(self, executable, args, cwd, profile=""):
+        self.last_launch = (executable, args, cwd, profile)
+        self.mapped = self.mapper.mappings()
+        return 123456
 
 
 class TestReadOnlyCompanion(unittest.TestCase):
@@ -85,6 +101,145 @@ class TestReadOnlyCompanion(unittest.TestCase):
                 self.assertEqual(data["gameRoot"], module._canonical(organizer.managedGame().gameDirectory()))
                 organizer.changed(None, None)
                 self.assertTrue(reports[0].exists())
+
+
+
+
+class TestSelectedProfileOneShotMapper(unittest.TestCase):
+    SESSION = "0123456789abcdef0123456789abcdef"
+
+    def create(self, root, module):
+        local = root / "local"
+        game = root / "game"
+        stage = local / "GCO" / "MO2Bridge" / "staging" / self.SESSION
+        (game / "bin" / "x64").mkdir(parents=True)
+        (game / "bin" / "x64" / "Cyberpunk2077.exe").write_text("fake exe")
+        (stage / "bin" / "x64" / "plugins" / "cyber_engine_tweaks").mkdir(parents=True)
+        (stage / "bin" / "x64" / "plugins" / "cyber_engine_tweaks.asi").write_text("profiler")
+        init = stage / "bin" / "x64" / "plugins" / "cyber_engine_tweaks" / "mods" / "0-Engine" / "init.lua"
+        init.parent.mkdir(parents=True)
+        init.write_text("source-owned modified 0-Engine")
+        red = stage / "red4ext" / "plugins" / "G-REDscript-Profiler.dll"
+        red.parent.mkdir(parents=True)
+        red.write_text("GRSP")
+        return local, game, stage
+
+    def test_noncurrent_profile_mapping_only_during_selected_launch(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                plugins = module.createPlugins()
+                self.assertEqual(len(plugins), 2)
+                tool, mapper = plugins
+                self.assertEqual(mapper.name(), "GCO MO2 temporary profiler mapper")
+                self.assertEqual(mapper.mappings(), [])
+                organizer = Organizer(root)
+                organizer.mapper = mapper
+                # MO2 UI profile is 'Other', but request is 'Heavy'.
+                selected = tool._launch_controller.prepare(
+                    organizer, "Heavy", game, stage, self.SESSION)
+                self.assertEqual(selected, "Heavy")
+                self.assertEqual(mapper.mappings(), [])
+                before = organizer.profileName()
+                handle = tool._launch_controller.launch(organizer, "Heavy")
+                self.assertEqual(handle, 123456)
+                self.assertEqual(before, organizer.profileName())
+                self.assertEqual(organizer.last_launch[3], "Heavy")
+                self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(
+                    {Path(m.destination).relative_to(game).as_posix() for m in organizer.mapped},
+                    {"bin/x64/plugins", "red4ext/plugins"})
+                for mapping in organizer.mapped:
+                    self.assertTrue(mapping.isDirectory)
+                    self.assertFalse(mapping.createTarget)
+                    self.assertTrue(Path(mapping.source).is_dir())
+                    self.assertTrue(Path(mapping.destination).is_relative_to(game))
+                self.assertEqual(mapper.mappings(), [])
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.launch(organizer, "Heavy")
+
+    def test_refuse_different_profile_and_no_leak(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                tool, mapper = module.createPlugins()
+                organizer = Organizer(root)
+                organizer.mapper = mapper
+                tool._launch_controller.prepare(
+                    organizer, "Heavy", game, stage, self.SESSION)
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.launch(organizer, "Other")
+                self.assertEqual(mapper.mappings(), [])
+                self.assertFalse(hasattr(organizer, "last_launch"))
+                tool._launch_controller.cancel()
+
+    def test_refuse_unapproved_paths_and_wrong_game(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", root, stage, self.SESSION)
+                foreign = stage / "bin" / "x64" / "Cyberpunk2077.exe"
+                foreign.write_text("unapproved binary")
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", game, stage, self.SESSION)
+                foreign.unlink()
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        organizer, "Unknown", game, stage, self.SESSION)
+                self.assertEqual(mapper.mappings(), [])
+
+    def test_no_mapping_when_mo2_skips_or_duplicates_call(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                controller = tool._launch_controller
+                controller.prepare(organizer, "Heavy", game, stage, self.SESSION)
+                organizer.startApplication = lambda *args, **kwargs: 42
+                with self.assertRaises(module.GcoOverlayContractError):
+                    controller.launch(organizer, "Heavy")
+                self.assertEqual(mapper.mappings(), [])
+
+                controller.prepare(organizer, "Heavy", game, stage, self.SESSION)
+                def duplicate(*args, **kwargs):
+                    mapper.mappings()
+                    mapper.mappings()
+                    return 42
+                organizer.startApplication = duplicate
+                with self.assertRaises(module.GcoOverlayContractError):
+                    controller.launch(organizer, "Heavy")
+                self.assertEqual(mapper.mappings(), [])
+
+    def test_file_mapper_never_enables_mods(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                # Entire organizer mock intentionally has no setActive, setPriority
+                # or setCurrentProfile; using one would raise AttributeError.
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                tool._launch_controller.prepare(
+                    organizer, "Heavy", game, stage, self.SESSION)
+                tool._launch_controller.launch(organizer, "Heavy")
+                self.assertEqual(organizer.profileName(), "Other")
+                self.assertEqual(mapper.mappings(), [])
 
 
 if __name__ == "__main__":
