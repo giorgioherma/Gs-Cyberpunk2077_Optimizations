@@ -1,1 +1,1 @@
-checkpoint=mo2-stage3-owner-fixture-delta-and-bindings-20261123
+checkpoint=mo2-stage3-real-source-owner-install-supported-cet-20261123
