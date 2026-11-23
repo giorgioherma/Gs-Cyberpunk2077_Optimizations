@@ -19,7 +19,10 @@ def _load_plugin():
     # The real plugin imports MO2's embedded mobase/PyQt6. Test with stubs,
     # not a fabricated capability to manipulate another profile.
     mobase = types.ModuleType("mobase")
-    mobase.IPluginTool = object
+    class RealToolParentContract:
+        def _parentWidget(self):
+            return "verified-mo2-qt-parent"
+    mobase.IPluginTool = RealToolParentContract
     mobase.IPluginFileMapper = object
     class Mapping:
         def __init__(self, source, destination, is_directory, create_target=False):
@@ -89,7 +92,7 @@ class TestReadOnlyCompanion(unittest.TestCase):
         with patch.object(module.QMessageBox, "information") as info:
             tool.display()
             self.assertEqual(info.call_count, 1)
-            self.assertIsNone(info.call_args.args[0])
+            self.assertEqual(info.call_args.args[0], "verified-mo2-qt-parent")
 
     def test_reports_real_mo2_api_paths_and_never_mutates_mods(self):
         module = _load_plugin()
