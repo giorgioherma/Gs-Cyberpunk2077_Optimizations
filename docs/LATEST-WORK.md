@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — Page 2 comparable CET / REDscript source summaries
+
+- Removed misleading CET `1172 new optimizations planned` transform-operation count and REDscript `54 new optimizations planned` rule-family count from the side-by-side Page 2 boxes. Also removed `1 additional option requested` text; Hotscenes ENG-only remains an explicit opt-in and contributes one distinct pending CET source mod to the mod count only when not otherwise counted.
+- Both boxes now use three rows: `Source mods | Source files | Callback families | Generic candidates | Semantic rules`; `Already optimized | Other issues`; `Mods with optimizations`. CET source files are physically verified live Lua files; REDscript source files are admitted live `.reds`. REDscript source-mod roots and changed-source-mod roots are deduplicated from actual paths, not from edit or rule-family counts; the CET changed mod count uses its authoritative per-file `appliedTransforms > 0` manifest (not supporting G-GC/framework files). REDscript generic candidates use `EligibleSourceEdits` (173 on the owner's pictured source) instead of the ten generator families, semantic rules use actually applied staged semantic IDs. REDscript callback families come from GRSP's measured callback-pressure family column, displaying N/A when absent rather than inventing a zero. Other issues are CET material unresolved callback count and REDscript actual source-refused stage count, respectively.
+- Actual new operation/edit/file totals remain in Generate's console and external ownership sidecar; optimization summaries retain their three-line source units after Generate. No source generator changes, new UI options, game writes or version bump. High-value source-owner deduplication/measurement unit tests added. Windows GCO integration CI pending; actual owner-screen visual and gameplay validation pending.
+
+
 ## 2026-11-23 — CET G-GC V12 handed into GCO (owner-verified)
 
 - GCO's bundled .NET10 CET Resolver/Profiler manager is rebuilt from CET owner source `08a8b5790372fd9ec5893500489d2b5e24eb1f4b`, verified in CET [CI #2616, 6/6 GREEN](https://github.com/giorgioherma/G-CET_Runtime_Profiler/actions/runs/45103360468). Both CET standalone reference packages are now from that same verified run: Profiler artifact `14786511383`, Resolver artifact `14787010559`. The original native source/hash admission, managed CLR adaptation and unified orchestration are unchanged. The GCO package provenance and source contract pins match the actual owner source.
