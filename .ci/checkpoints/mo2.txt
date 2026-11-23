@@ -1,1 +1,1 @@
-checkpoint=mo2-native-profile-b-isolation-20261123
+checkpoint=mo2-hmac-command-channel-selected-profile-launch-20261123
