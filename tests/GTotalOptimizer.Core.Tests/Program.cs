@@ -37,7 +37,42 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
     if (red.RootElement.TryGetProperty("frameTime", out var legacy) &&
         legacy.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
         throw new InvalidDataException("GCO GRSP report silently consumed CapFrameX data.");
+    // Retain main's independent native-CSV cost and call-frequency rankings,
+    // where both owners supplied the requisite source evidence.
+    var nativeRanks = report.RootElement.GetProperty("rankings");
+    if (nativeRanks.ValueKind == System.Text.Json.JsonValueKind.Object)
+    {
+        foreach (var section in new[] {
+            "cetMods", "cetCallbacks", "redscriptMods", "redscriptFunctions"
+        })
+        {
+            var domain = nativeRanks.GetProperty(section);
+            foreach (var ordering in new[] { "byWork", "byFrequency" })
+            {
+                var entries = domain.GetProperty(ordering).EnumerateArray().ToArray();
+                if (entries.Length is < 1 or > 15)
+                    throw new InvalidDataException("GCO source-owned ranking missing/uncapped: " +
+                        section + "/" + ordering);
+                var sortKey = ordering == "byWork" ? "exclusiveMsPerSec" : "callsPerSec";
+                var previous = double.PositiveInfinity;
+                foreach (var entry in entries)
+                {
+                    var score = entry.GetProperty(sortKey).GetDouble();
+                    if (!double.IsFinite(score) || score < 0 ||
+                        score > previous + 0.000001 ||
+                        string.IsNullOrWhiteSpace(entry.GetProperty("owner").GetString()))
+                        throw new InvalidDataException("GCO source-owned ranking misordered: " +
+                            section + "/" + ordering);
+                    previous = score;
+                }
+            }
+        }
+    }
     var html = File.ReadAllText(output.HtmlPath);
+    if (nativeRanks.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        (!html.Contains("Source-owned hotspot rankings", StringComparison.Ordinal) ||
+         !html.Contains("Most frequent callbacks/functions", StringComparison.Ordinal)))
+        throw new InvalidDataException("GCO native source rankings missing from combined HTML");
     if (!html.Contains("CET/CET_Report.html", StringComparison.Ordinal) ||
         !html.Contains("GRSP/GRSP_Report.html", StringComparison.Ordinal) ||
         !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
