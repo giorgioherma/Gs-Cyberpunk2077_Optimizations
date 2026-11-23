@@ -44,11 +44,16 @@ internal static class Mo2CompanionDiscoveryTests
             };
             void Publish() => File.WriteAllText(statusPath, JsonSerializer.Serialize(source));
             Publish();
-            var live = Mo2CompanionDiscovery.Inspect(app, instance, root);
+            var live = Mo2CompanionDiscovery.Inspect(app, instance, root,
+                processImageForTesting: _ => Path.Combine(app, "ModOrganizer.exe"));
             if (!live.Connected || live.CurrentProfile != "Other" ||
                 live.CanMutateSelectedProfile || live.CanInstallProfilers ||
                 !string.Equals(live.GameDirectory, game, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("MO2_COMPANION_STATUS_VALIDATION_FAILED");
+
+            if (Mo2CompanionDiscovery.Inspect(app, instance, root,
+                    processImageForTesting: _ => Path.Combine(root, "foreign.exe")).Connected)
+                throw new InvalidDataException("MO2_REUSED_PID_WITH_FOREIGN_PROCESS_ACCEPTED");
 
             source["updatedUtc"] = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O");
             Publish();
