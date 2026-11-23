@@ -23,7 +23,10 @@ def _load_plugin():
         def _parentWidget(self):
             return "verified-mo2-qt-parent"
     mobase.IPluginTool = RealToolParentContract
-    mobase.IPluginFileMapper = object
+    class RealFileMapperInterfaceContract:
+        def init(self, organizer):
+            raise AssertionError("MO2 IPluginFileMapper requires explicit IPlugin.init implementation")
+    mobase.IPluginFileMapper = RealFileMapperInterfaceContract
     class Mapping:
         def __init__(self, source, destination, is_directory, create_target=False):
             self.source = source
@@ -104,6 +107,8 @@ class TestReadOnlyCompanion(unittest.TestCase):
                 self.assertEqual(mapper.mappings(), [])
                 organizer = Organizer(root)
                 self.assertTrue(plugin.init(organizer))
+                self.assertTrue(mapper.init(organizer))
+                self.assertIs(mapper._organizer, organizer)
                 self.assertIsNotNone(organizer.changed)
                 reports = list((root / "GCO" / "MO2Bridge").glob("instance-*.json"))
                 self.assertEqual(len(reports), 1)
