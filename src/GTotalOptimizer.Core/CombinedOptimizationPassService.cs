@@ -37,6 +37,14 @@ public sealed record CombinedPassAvailability(
 {
     public bool HasNewOptimizations => CetOptimizationTransforms > 0 || RedscriptEdits > 0;
     public int RedscriptOptimizationCount { get; init; }
+    // One physical source mod is counted once, regardless of files/edits.
+    public string[] CetOptimizedModNames { get; init; } = [];
+    public int RedscriptOptimizedModCount { get; init; }
+    public int RedscriptSourceModCount { get; init; }
+    // Measured callback families from GRSP's callback-pressure evidence.
+    // Null means no usable family evidence, never silently report zero.
+    public int? RedscriptCallbackFamilyCount { get; init; }
+    public int RedscriptSemanticRuleCount { get; init; }
 
     // Count actual applied rule families, not individual rewritten expressions
     // or configured catalogue entries. A multi-file stage counts once.
@@ -108,7 +116,28 @@ public sealed class CombinedOptimizationPassService
                 red.AppliedEdits, red.Skipped)
             {
                 RedscriptOptimizationCount = CombinedPassAvailability
-                    .CountCompletedRedscriptOptimizations(red.Completed)
+                    .CountCompletedRedscriptOptimizations(red.Completed),
+                CetOptimizedModNames = cetResult.OptimizedModNames,
+                RedscriptSemanticRuleCount = red.Completed
+                    .Where(item => item.Order > 10)
+                    .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
+                RedscriptSourceModCount = DistinctRedscriptSourceModNames(
+                    Directory.EnumerateFiles(Path.Combine(game, "r6", "scripts"),
+                            "*.reds", SearchOption.AllDirectories)
+                        .Select(file => Path.GetRelativePath(
+                            Path.Combine(game, "r6", "scripts"), file)))
+                    .Length,
+                RedscriptOptimizedModCount = DistinctRedscriptSourceModNames(
+                    Directory.Exists(Path.Combine(temp, "redscript-stage",
+                            "effective-preview", "r6", "scripts"))
+                        ? Directory.EnumerateFiles(Path.Combine(temp,
+                            "redscript-stage", "effective-preview", "r6", "scripts"),
+                            "*.reds", SearchOption.AllDirectories)
+                            .Select(file => Path.GetRelativePath(Path.Combine(temp,
+                                "redscript-stage", "effective-preview", "r6", "scripts"),
+                                file))
+                        : Array.Empty<string>()).Length,
+                RedscriptCallbackFamilyCount = ReadMeasuredRedscriptCallbackFamilies(analysis)
             };
         }
         finally
@@ -118,6 +147,50 @@ public sealed class CombinedOptimizationPassService
                 catch (IOException) { /* isolated preview cleanup only */ }
                 catch (UnauthorizedAccessException) { }
         }
+    }
+
+    // REDscript's source tree has owner folders and occasionally loose .reds
+    // files. A loose source is one source unit; nested files share their first
+    // physical folder. This is not a count of rewritten expressions or rules.
+    internal static string[] DistinctRedscriptSourceModNames(
+        IEnumerable<string> relativeFiles)
+    {
+        var mods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string source in relativeFiles)
+        {
+            string relative = source.Replace('\\', '/');
+            string[] parts = relative.Split('/');
+            if (parts.Any(x => x is "" or "." or "..") ||
+                !relative.EndsWith(".reds", StringComparison.OrdinalIgnoreCase) ||
+                Path.IsPathRooted(relative))
+                throw new InvalidDataException("GCO_REDSCRIPT_MOD_SOURCE_PATH_INVALID");
+            mods.Add(parts.Length > 1 ? parts[0] : "(root)/" + parts[0]);
+        }
+        return mods.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    // GRSP's own sealed callback-pressure rows already classify measured
+    // callback families. We read its disposable native analysis output rather
+    // than mistaking the 10 generic generator families for callback families.
+    internal static int? ReadMeasuredRedscriptCallbackFamilies(string analysisPath)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(analysisPath));
+        if (!document.RootElement.TryGetProperty("rawTables", out var tables) ||
+            !tables.TryGetProperty("Developer/RSP_CallbackPressure.csv", out var table) ||
+            !table.TryGetProperty("rows", out var rows) ||
+            rows.ValueKind != JsonValueKind.Array)
+            return null;
+        var families = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Object ||
+                !row.TryGetProperty("callback_family", out var family) ||
+                family.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(family.GetString()))
+                throw new InvalidDataException("GCO_GRSP_CALLBACK_FAMILY_ROW_INVALID");
+            families.Add(family.GetString()!);
+        }
+        return families.Count > 0 ? families.Count : null;
     }
 
     public async Task<CombinedPassOutcome> GenerateAsync(
