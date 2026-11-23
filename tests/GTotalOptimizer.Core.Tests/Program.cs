@@ -14,7 +14,7 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
 if (args.Length > 0 && args[0] == "--mo2-real-owner-overlay")
 {
     if (args.Length is not (3 or 4 or 5))
-        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI> [historical 0-Engine source directory] [namespaced-complete|namespaced-worker-missing|original-adaptive|legacy-integrated]");
+        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI> [historical 0-Engine source directory] [namespaced-complete|namespaced-worker-missing|original-adaptive|legacy-integrated|legacy-worker-missing]");
     await Mo2RealOwnerOverlayTests.RunAsync(
         args[1], args[2], args.Length >= 4 ? args[3] : null,
         args.Length == 5 ? args[4] : "namespaced-complete");
