@@ -1,1 +1,1 @@
-checkpoint=mo2-real-native-direct-vs-usvfs-spawn-error-contract-20261124
+checkpoint=mo2-real-noncurrent-profile-native-paths-basdir-corrected-20261124
