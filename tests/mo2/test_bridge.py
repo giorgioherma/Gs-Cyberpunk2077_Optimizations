@@ -488,6 +488,30 @@ class TestAuthenticatedMo2Bridge(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_real_mo2_runner_refusal_is_signed_failure_not_timeout(self):
+        temp, root, module, local, game, stage = self.fixture()
+        try:
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                tool.init(organizer)
+                def denied(*args, **kwargs):
+                    raise RuntimeError("ERROR_ACCESS_DENIED: real MO2 process runner refused")
+                organizer.startApplication = denied
+                mailbox = tool._mailbox
+                self.request(mailbox, "launch", "Heavy", game, stage,
+                             TestSelectedProfileOneShotMapper.SESSION)
+                self.assertTrue(mailbox.process_one())
+                reply = self.read_response(mailbox)
+                self.assertFalse(reply["ok"])
+                self.assertEqual(reply["processId"], 0)
+                self.assertIn("ERROR_ACCESS_DENIED", reply["detail"])
+                self.assertEqual(mapper.mappings(), [])
+                self.assertEqual(organizer.profileName(), "Other")
+        finally:
+            temp.cleanup()
+
     def test_replay_and_wrong_epoch_cannot_start_game(self):
         temp, root, module, local, game, stage = self.fixture()
         try:
