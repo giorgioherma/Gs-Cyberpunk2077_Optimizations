@@ -16,6 +16,7 @@ on:
       - ci/redscript-phase2-postgeneric
       - dev/redscript/resolver_handoff
       - dev/redscript/integration
+      - MO2_integration
     paths:
       - '.ci/checkpoints/redscript.txt'
 
