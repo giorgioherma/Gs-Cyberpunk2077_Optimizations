@@ -68,8 +68,9 @@ internal static class Mo2RealOwnerOverlayTests
             }
             var details = Mo2SourceInspector.Discover(instance);
             var effective = Mo2SourceInspector.Resolve(game, details, "Heavy");
+            var expectedCetOwners = string.IsNullOrWhiteSpace(realZeroEngineDirectory) ? 1 : 2;
             if (!effective.Ready || !effective.ProfileVerified || effective.GameOnlyFallback ||
-                !effective.HasCetAsi || effective.CetOwners != 1)
+                !effective.HasCetAsi || effective.CetOwners != expectedCetOwners)
                 throw new InvalidDataException("MO2_REAL_OWNER_SELECTED_PROFILE_NOT_ADMITTED");
 
             if (!string.IsNullOrWhiteSpace(realZeroEngineDirectory) &&
