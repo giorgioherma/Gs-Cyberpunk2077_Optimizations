@@ -43,7 +43,7 @@ internal static class Mo2RealOwnerOverlayTests
             // or upload these files; CI checks them out read-only in RUNNER_TEMP.
             string? sourceZeroHash = null;
             if (scenario is not ("namespaced-complete" or "namespaced-worker-missing" or
-                                 "original-adaptive" or "legacy-integrated"))
+                                 "original-adaptive" or "legacy-integrated" or "legacy-worker-missing"))
                 throw new InvalidDataException("MO2_UNKNOWN_REAL_OWNER_TEST_SCENARIO");
             if (scenario != "namespaced-complete" && string.IsNullOrWhiteSpace(realZeroEngineDirectory))
                 throw new InvalidDataException("MO2_VARIANT_0ENGINE_REQUIRES_REAL_SOURCE");
@@ -65,10 +65,13 @@ internal static class Mo2RealOwnerOverlayTests
                         throw new InvalidDataException("MO2_REAL_0ENGINE_FIXTURE_OVERSIZED");
                     var relative = Path.GetRelativePath(source, file);
                     var normalized = relative.Replace('\\', '/');
-                    if (scenario == "namespaced-worker-missing" &&
-                        normalized.Equals("modules/G-CET/Scheduler.lua",
-                            StringComparison.OrdinalIgnoreCase))
-                        continue; // Simulate one missing worker, never rewrite init.
+                    if ((scenario == "namespaced-worker-missing" &&
+                         normalized.Equals("modules/G-CET/Scheduler.lua",
+                             StringComparison.OrdinalIgnoreCase)) ||
+                        (scenario == "legacy-worker-missing" &&
+                         normalized.Equals("modules/Scheduler.lua",
+                             StringComparison.OrdinalIgnoreCase)))
+                        continue; // Simulate missing worker, preserving exact host init.
                     var target = Path.Combine(destination, relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                     File.Copy(file, target);
@@ -106,7 +109,8 @@ internal static class Mo2RealOwnerOverlayTests
                     "namespaced-complete" => !ownsInit && !ownsRoot && !ownsAdaptive && !ownsNamespaced,
                     "namespaced-worker-missing" => !ownsInit && !ownsRoot && !ownsAdaptive && ownsNamespaced,
                     "original-adaptive" => ownsInit && !ownsRoot && ownsAdaptive && !ownsNamespaced,
-                    "legacy-integrated" => !ownsInit && ownsRoot && !ownsAdaptive && !ownsNamespaced,
+                    "legacy-integrated" => !ownsInit && !ownsRoot && !ownsAdaptive && !ownsNamespaced,
+                    "legacy-worker-missing" => !ownsInit && ownsRoot && !ownsAdaptive && !ownsNamespaced,
                     _ => false
                 };
                 if (!good)
