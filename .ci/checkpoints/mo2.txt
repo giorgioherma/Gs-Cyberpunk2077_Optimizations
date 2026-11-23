@@ -1,1 +1,1 @@
-checkpoint=mo2-stage3-real-owner-fixture-id-fixed-20261123
+checkpoint=mo2-stage3-real-0engine-source-owner-replay-20261123
