@@ -26,13 +26,54 @@ if (!(Test-Path -LiteralPath $SourcePlugin) -or
 $game = Join-Path $env:RUNNER_TEMP ('gco-mo2-inert-game-' + [guid]::NewGuid().ToString('N'))
 $gameExeDir = Join-Path $game 'bin/x64'
 New-Item -ItemType Directory -Path $gameExeDir -Force | Out-Null
-[IO.File]::WriteAllBytes((Join-Path $gameExeDir 'Cyberpunk2077.exe'), [byte[]]@())
+# A real native x64 child is required: managed .NET apphosts previously faulted
+# when hooked by USVFS. Build only in the disposable Windows CI runner.
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+if (!(Test-Path -LiteralPath $vswhere)) { throw 'MO2_NATIVE_PROBE_MSVC_VSWHERE_MISSING' }
+$vsRoot = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+if ($LASTEXITCODE -ne 0 -or !$vsRoot) { throw 'MO2_NATIVE_PROBE_MSVC_TOOLCHAIN_MISSING' }
+$vcvars = Join-Path ($vsRoot.Trim()) 'VC/Auxiliary/Build/vcvars64.bat'
+if (!(Test-Path -LiteralPath $vcvars)) { throw 'MO2_NATIVE_PROBE_X64_ENV_MISSING' }
+$nativeSource = Join-Path $env:GITHUB_WORKSPACE 'integrations/mo2/NativeGameProbe.cpp'
+$nativeExe = Join-Path $gameExeDir 'Cyberpunk2077.exe'
+if (!(Test-Path -LiteralPath $nativeSource)) { throw 'MO2_NATIVE_PROBE_SOURCE_MISSING' }
+$compile = 'call "' + $vcvars + '" >nul && cl.exe /nologo /std:c++17 /EHsc /W4 /O2 /Fe:"' + $nativeExe + '" "' + $nativeSource + '"'
+& $env:ComSpec /D /C $compile
+if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $nativeExe)) {
+    throw 'MO2_NATIVE_PROBE_CXX_COMPILATION_FAILED'
+}
 New-Item -ItemType Directory -Path (Join-Path $game 'archive/pc/content') -Force | Out-Null
-foreach ($dir in @('profiles/Other','profiles/Heavy','mods','overwrite')) {
+foreach ($dir in @('profiles/Other','profiles/Heavy','mods','overwrite',
+                    'mods/ProfileHeavy/r6/scripts','mods/ProfileOther/r6/scripts')) {
     New-Item -ItemType Directory -Path (Join-Path $appDir $dir) -Force | Out-Null
 }
-Set-Content -LiteralPath (Join-Path $appDir 'profiles/Other/modlist.txt') -Value '' -NoNewline
-Set-Content -LiteralPath (Join-Path $appDir 'profiles/Heavy/modlist.txt') -Value '' -NoNewline
+Set-Content -LiteralPath (Join-Path $appDir 'profiles/Other/modlist.txt') -Value '+ProfileOther' -NoNewline
+Set-Content -LiteralPath (Join-Path $appDir 'profiles/Heavy/modlist.txt') -Value '+ProfileHeavy' -NoNewline
+$otherRed = Join-Path $appDir 'mods/ProfileOther/r6/scripts/GcoMo2ProfileSource.reds'
+$heavyRed = Join-Path $appDir 'mods/ProfileHeavy/r6/scripts/GcoMo2ProfileSource.reds'
+Set-Content -LiteralPath $otherRed -Value 'OTHER_PROFILE_RED' -NoNewline
+Set-Content -LiteralPath $heavyRed -Value 'HEAVY_PROFILE_RED' -NoNewline
+
+$relativeAsi = 'bin/x64/plugins/cyber_engine_tweaks.asi'
+$physicalAsi = Join-Path $game $relativeAsi
+$overwriteAsi = Join-Path $appDir ('overwrite/' + $relativeAsi)
+New-Item -ItemType Directory -Path (Split-Path $physicalAsi -Parent), (Split-Path $overwriteAsi -Parent) -Force | Out-Null
+Set-Content -LiteralPath $physicalAsi -Value 'PHYSICAL_CET_ASI' -NoNewline
+Set-Content -LiteralPath $overwriteAsi -Value 'USER_OVERWRITE_ASI' -NoNewline
+
+# Prepare exactly one session-owned virtual layer, without enabling or editing
+# any MO2 profile; the real Python mapper accepts only these profiler paths.
+$sessionId = '0123456789abcdef0123456789abcdef'
+$stage = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('GCO/MO2Bridge/staging/' + $sessionId)
+if (Test-Path -LiteralPath $stage) { throw 'MO2_NATIVE_PROBE_STAGE_COLLISION' }
+$stagedAsi = Join-Path $stage $relativeAsi
+$stagedGrsp = Join-Path $stage 'red4ext/plugins/G-REDscript-Profiler.dll'
+New-Item -ItemType Directory -Path (Split-Path $stagedAsi -Parent), (Split-Path $stagedGrsp -Parent) -Force | Out-Null
+Set-Content -LiteralPath $stagedAsi -Value 'GCO_PROFILER_OVERRIDE' -NoNewline
+Set-Content -LiteralPath $stagedGrsp -Value 'GCO_GRSP_OVERRIDE' -NoNewline
+$nativeObservation = Join-Path $env:RUNNER_TEMP ('gco-mo2-selected-profile-' + $sessionId + '.txt')
+$env:GCO_MO2_NATIVE_PROBE_OUTPUT = $nativeObservation
+
 
 # GameSettings::directory expects QSettings QByteArray under General.
 $gamePath = $game.Replace('\', '/')
@@ -63,6 +104,7 @@ try {
     Write-Host ("MO2 process launched PID=" + $process.Id)
     $statusFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'GCO/MO2Bridge'
     $status = $null
+    $statusPath = $null
     for ($i = 0; $i -lt 60; $i++) {
         Start-Sleep -Milliseconds 500
         if ($process.HasExited) {
@@ -74,6 +116,7 @@ try {
                 $observed = Get-Content -LiteralPath $candidate.FullName -Raw | ConvertFrom-Json
                 if ($observed.processId -eq $process.Id -and $observed.mo2Executable -and $observed.instanceRoot -and $observed.bridgeEpoch) {
                     $status = $observed
+                    $statusPath = $candidate.FullName
                     break
                 }
             }
@@ -88,6 +131,40 @@ try {
     dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-companion-probe "$appDir" "$appDir" "$game" Other
     if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_APP_SIGNED_COMPANION_PROBE_FAILED' }
     Write-Host 'PASS official MO2 application + embedded Python companion status and authenticated GCO probe'
+
+    Write-Host 'Testing real MO2 startApplication(profile=Heavy) while UI profile is Other'
+    $signedLaunch = & python integrations/mo2/SignRealMo2Launch.py "$statusPath" Heavy "$game" "$stage" "$sessionId"
+    if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_NONCURRENT_PROFILE_SIGNED_LAUNCH_FAILED' }
+    Write-Host ("Real MO2 HMAC launch response: " + ($signedLaunch -join ' '))
+    $observed = $null
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Milliseconds 250
+        if (Test-Path -LiteralPath $nativeObservation) {
+            $observed = Get-Content -LiteralPath $nativeObservation -Raw
+            break
+        }
+    }
+    if (!$observed) { throw 'MO2_REAL_NONCURRENT_PROFILE_NATIVE_CHILD_DID_NOT_RUN' }
+    Write-Host ("Native selected-profile child observations: " + $observed)
+    $expected = @(
+        'CET_ASI=GCO_PROFILER_OVERRIDE',
+        'RED=HEAVY_PROFILE_RED',
+        'GRSP=GCO_GRSP_OVERRIDE'
+    )
+    foreach ($value in $expected) {
+        if (!($observed -split '[\r\n]+' -ccontains $value)) {
+            throw ('MO2_REAL_SELECTED_PROFILE_VFS_WINNER_MISMATCH: ' + $value)
+        }
+    }
+    $current = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
+    if ($current.currentProfile -ne 'Other' -or
+        (Get-Content -LiteralPath $physicalAsi -Raw) -ne 'PHYSICAL_CET_ASI' -or
+        (Get-Content -LiteralPath $overwriteAsi -Raw) -ne 'USER_OVERWRITE_ASI' -or
+        (Get-Content -LiteralPath $otherRed -Raw) -ne 'OTHER_PROFILE_RED' -or
+        (Get-Content -LiteralPath $heavyRed -Raw) -ne 'HEAVY_PROFILE_RED') {
+        throw 'MO2_REAL_NONCURRENT_PROFILE_LAUNCH_MUTATED_USER_SOURCE_OR_VISIBLE_PROFILE'
+    }
+    Write-Host 'PASS official MO2 launched Heavy while GUI displayed Other: virtual CET and GRSP overrides won, Heavy REDscript winner read, originals and Overwrite unchanged'
 }
 catch {
     Write-Host ("MO2 app smoke blocked: " + $_.Exception.Message)
