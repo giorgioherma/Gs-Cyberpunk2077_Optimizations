@@ -156,6 +156,8 @@ class GcoLaunchMappingController:
         lower = tuple(component.casefold() for component in parts)
         if lower == ("bin", "x64", "plugins", "cyber_engine_tweaks.asi"):
             return True
+        if lower == ("bin", "x64", "plugins", "cyber_engine_tweaks", "bindings.json"):
+            return True
         if lower[:5] == ("bin", "x64", "plugins", "cyber_engine_tweaks", "mods"):
             if len(lower) < 7:
                 return False
@@ -163,12 +165,18 @@ class GcoLaunchMappingController:
             if sub == ("0-engine", "init.lua"):
                 return True
             if len(sub) >= 3 and sub[:2] == ("0-engine", "modules"):
-                # Source owner is the only producer of scheduler/integration
-                # files. Other 0-Engine modules must never be overlaid.
-                return sub[2] in ("scheduler.lua", "cetprofilerscheduler.lua") and len(sub) == 3
+                # Authoritative CET owner can generate integrated, adaptive or
+                # namespaced G-CET worker. Never accept other Lua modules.
+                return (
+                    (len(sub) == 3 and
+                     sub[2] in ("scheduler.lua", "cetprofilerscheduler.lua"))
+                    or (len(sub) == 4 and
+                        sub[2:] == ("g-cet", "scheduler.lua"))
+                )
             if sub[0] == "cetprofilercontrols":
                 return len(sub) >= 2 and all(p and not p.startswith(".") for p in sub) and (
                     lower[-1].endswith(".lua") or lower[-1].endswith(".json")
+                    or lower[-1].endswith(".txt")
                 )
         if lower[:3] == ("red4ext", "plugins", "g-redscript-profiler.dll") and len(lower) == 3:
             return True
