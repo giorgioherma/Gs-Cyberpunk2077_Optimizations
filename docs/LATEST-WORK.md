@@ -1,5 +1,14 @@
 # Latest work / evidence status
 
+## 2026-11-23 — MO2 integration foundation in isolated branch (runtime still blocked)
+
+- Only `MO2_integration` is modified; `main` and the separate integration branch remain untouched. The existing full GCO and REDscript workflows now recognize MO2's **TXT-only** checkpoint paths; ordinary code/documentation commits do not start CI.
+- Added read-only selected MO2 instance/profile admission (`Mo2ProfileSelectionService`), with real-game-root requirement and the existing `Mo2SourceInspector` as the single candidate source-winner authority. A profile from another instance, missing modlist or game-only fallback is refused for MO2 admission; candidate inventory cannot authorize installation/generation.
+- Added first Python MO2 companion `integrations/mo2/gco_mo2_bridge.py`: reports MO2's real managed-game path, current profile and configured Mods/Profiles/Overwrite through a local read-only JSON heartbeat. Added `Mo2CompanionDiscovery` validating schema, freshness, configured directories and the actual live process image path (not just PID). No MODLIST mutation, profiler deployment, launch or source installation in this stage.
+- Added C# focused `--mo2-profile-contract` regression fixtures plus mocked Python MO2 companion API tests. The normal GCO checkpoint includes the C# tests on MO2 branch, and next checkpoint also includes Python tests. **CI #1124** was started from commit `714c5262453b7eb42c5144abfac7dbbe0b287e1a`; any later source changes and Python tests require a later checkpoint. No MO2 runtime/gameplay validation.
+- **Hard Stage 0 blocker:** `IOrganizer.startApplication(profile=...)` explicitly launches a named profile, but documented `IModList.setActive/setPriority` cannot target a noncurrent profile by argument. The user requires selected dropdown profile A to be deployed automatically while MO2 UI may show B. Do not enable the MO2 feature, edit modlist files behind MO2, or expect the user to synchronize profiles. Need actual MO2 API/USVFS runtime proof, then source-owner profiler overlay, capture collection, recovery and Page 2 provider integration. See [MO2 staged evidence ledger](integration/MO2-INTEGRATION-PROGRESS.md).
+
+
 ## 2026-11-23 — MO2 integration branch and design baseline (DOCUMENTATION ONLY)
 
 - Created isolated GCO `MO2_integration` from `main` at `598fe0ec7bd3da1844e2b0431740ef2e3aab92aa`; production `main` was not modified.
