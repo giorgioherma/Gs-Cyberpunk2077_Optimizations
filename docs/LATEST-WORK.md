@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — dedicated MO2 real-USVFS native CI GREEN (Stage 0 partial)
+
+- Only `MO2_integration`. New `.github/workflows/mo2-checkpoint.yml` is isolated to **`.ci/checkpoints/mo2.txt` changes** or manual dispatch. Ordinary commits launch no CI; existing full-GCO and REDscript checkpoints stay independent. Fixture `integrations/mo2/USVFSProbe` uses a real native x64 process, not the mocked Python API.
+- [MO2 CI #45271302385 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45271302385), code `93d6dda739dded99b10587cfa2d374e6f5da42f8`: official MO2 v2.5.2 archive verified with CI-only SHA-256, real USVFS `0.5.6.1`, native hooked process read profiler ASI + REDscript virtual winners, generated data routed to Overwrite, real originals byte-identical. Mocked MO2 companion plus C# profile admission passed. First two native checkpoints failed with `0xC0000005` when hooking a managed .NET child; fixed by using upstream native initialization sequence and a native Win32 child while retaining all original assertions.
+- **Not yet verified:** running MO2 UI/app, activation for noncurrent selected profile, Cyberpunk DLL/ASI loading and profiler F11 capture. GCO MO2 installation feature gate remains **OFF**. Continue Stage 0 profile API proof and Stage 2 controlled deployment; do not request user gameplay until CI can cover all non-game dependencies. [MO2 plan/ledger](integration/MO2-INTEGRATION-PROGRESS.md).
+
+
 ## 2026-11-23 — MO2 integration foundation in isolated branch (runtime still blocked)
 
 - Only `MO2_integration` is modified; `main` and the separate integration branch remain untouched. The existing full GCO and REDscript workflows now recognize MO2's **TXT-only** checkpoint paths; ordinary code/documentation commits do not start CI.
