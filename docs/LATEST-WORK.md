@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-23 — MO2 integration branch and design baseline (DOCUMENTATION ONLY)
+
+- Created isolated GCO `MO2_integration` from `main` at `598fe0ec7bd3da1844e2b0431740ef2e3aab92aa`; production `main` was not modified.
+- Added [MO2 source/temporary profiler architecture](integration/MO2-INTEGRATION-DESIGN.md) and [Stage 0–7 progression/evidence ledger](integration/MO2-INTEGRATION-PROGRESS.md). Added binding MO2 rules to `AGENTS.md`, scope pointer to `docs/HANDOFF/CORE.md`, and user-approved decision to `docs/product/CURRENT-DECISIONS.md`. No application code, component owner code, tests, binaries, package, version, CI or release changed.
+- Key verified *API documentation* capability: `IOrganizer.startApplication(..., profile=<selected>)`. The unverified critical operation is **enabling/prioritizing the one temporary profiler mod for a noncurrent selected profile** via supported MO2 APIs; no user profile-coordination requirement, unsafe direct modlist edits, or implicit default-profile fallback is acceptable.
+- Next: Stage 0 compatibility/API runtime probe, then source UI, companion, isolated owner-based overlay preparation, actual game capture, collection/recovery, Page 2 selected-profile effective-source read and full acceptance. MO2 gate stays off; no runtime/gameplay verification claimed.
+
+
 ## 2026-11-23 — Chronological names for published optimization ZIPs
 
 - Preserve the established timestamped `generated_optimizations/pass-YYYYMMDD_HHMMSS/` folder and atomic game-relative ZIP + external ownership sidecar publication. The **actual generated ZIP** now uses `G-Cyberpunk2077_Optimization_Pass_0001.zip`, `_0002.zip`, etc., instead of repeating the same filename in every pass folder. The ownership JSON follows its selected ZIP filename as `*.zip.ownership.json`; Page 2 OPEN FOLDER and success-console paths already consume the exact returned path automatically.
