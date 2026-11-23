@@ -130,6 +130,14 @@ public static class Mo2ProfilerOverlayBuilder
             foreach (var (relative, previous) in baselines)
                 if (!Hash(owners[relative]).Equals(previous, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Live MO2 winner changed while owners prepared the overlay: " + relative);
+            // A MO2 file override cannot delete an existing source file.
+            // Refuse owners that remove any user file in the fixture, instead
+            // of leaving an active duplicate worker/callback under the VFS.
+            foreach (var removed in before.Keys.Except(after.Keys, StringComparer.OrdinalIgnoreCase))
+                if (!IsOwnerTransactionMetadata(removed))
+                    throw new InvalidDataException(
+                        "Source owner deleted a file not representable by a MO2 overlay: " + removed);
+
             var changes = new List<Mo2OverlayFile>();
             foreach (var (relative, sha) in after.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
