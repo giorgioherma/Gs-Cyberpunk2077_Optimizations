@@ -347,6 +347,84 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
                   new(12, "two", 8, 1, 0, [])]) != 2)
         throw new InvalidDataException("GCO_REDSCRIPT_PREVIEW_COUNT_MUST_COUNT_APPLIED_RULES");
 
+    // Panel "mods with optimizations" counts distinct real modified owners,
+    // never the number of transforms, rule families, or support-only files.
+    var cetModsMethod = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "CountOptimizedSourceMods",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_CET_MOD_COUNT_SOURCE_NOT_PRESENT");
+    string[] CetModNames(string manifest)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(manifest);
+        return (string[]?)cetModsMethod.Invoke(null, [document.RootElement]) ??
+            throw new InvalidDataException("GCO_CET_MOD_COUNT_UNAVAILABLE");
+    }
+    var cetMods = CetModNames("""
+        {"files":[
+          {"path":"ModA/init.lua","appliedTransforms":20},
+          {"path":"ModA/modules/logic.lua","appliedTransforms":6},
+          {"path":"ModB/init.lua","appliedTransforms":1},
+          {"path":"0-Engine/init.lua","appliedTransforms":0},
+          {"path":"G-GC/init.lua","appliedTransforms":0}
+        ]}
+        """);
+    if (cetMods.Length != 2 ||
+        !cetMods.Contains("ModA") || !cetMods.Contains("ModB") ||
+        CetModNames("""{"files":[{"path":"G-GC/init.lua","appliedTransforms":0}]}""").Length != 0)
+        throw new InvalidDataException("GCO_CET_MOD_COUNT_WRONGLY_COUNTS_TRANSFORMS_OR_SUPPORT");
+    bool refusedBadOwnerPath = false;
+    try { CetModNames("""{"files":[{"path":"../ModA/init.lua","appliedTransforms":3}]}"""); }
+    catch (System.Reflection.TargetInvocationException ex)
+        when (ex.InnerException is InvalidDataException)
+    { refusedBadOwnerPath = true; }
+    if (!refusedBadOwnerPath)
+        throw new InvalidDataException("GCO_CET_INVALID_MOD_SOURCE_PATH_WAS_COUNTED");
+
+    var redOwnersMethod = typeof(CombinedOptimizationPassService).GetMethod(
+        "DistinctRedscriptSourceModNames",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_REDSCRIPT_MOD_COUNT_SOURCE_NOT_PRESENT");
+    string[] RedModNames(string[] sourceFiles) =>
+        (string[]?)redOwnersMethod.Invoke(null, [sourceFiles]) ??
+        throw new InvalidDataException("GCO_REDSCRIPT_MOD_COUNT_UNAVAILABLE");
+    var redOwners = RedModNames([
+        "Dark Future/UI/first.reds", "Dark Future/Gameplay/second.reds",
+        "OtherMod/core.reds", "loose.reds"]);
+    if (redOwners.Length != 3 ||
+        !redOwners.Contains("Dark Future") || !redOwners.Contains("OtherMod") ||
+        !redOwners.Contains("(root)/loose.reds"))
+        throw new InvalidDataException("GCO_REDSCRIPT_MOD_COUNT_MISTOOK_FILES_FOR_OWNERS");
+
+    // This is a GRSP native callback family measurement, not the ten
+    // configured generic generator families or the edit count.
+    var familiesMethod = typeof(CombinedOptimizationPassService).GetMethod(
+        "ReadMeasuredRedscriptCallbackFamilies",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_MEASURED_REDSCRIPT_CALLBACK_FAMILIES_MISSING");
+    string familyFixture = Path.Combine(Path.GetTempPath(),
+        "gco-red-families-" + Guid.NewGuid().ToString("N") + ".json");
+    try
+    {
+        File.WriteAllText(familyFixture, """
+          {"rawTables":{"Developer/RSP_CallbackPressure.csv":{"rows":[
+            {"callback_family":"INPUT_ACTION"},
+            {"callback_family":"UPDATE_REFRESH"},
+            {"callback_family":"UPDATE_REFRESH"}
+          ]}}}
+          """);
+        var found = (int?)familiesMethod.Invoke(null, [familyFixture]);
+        if (found != 2)
+            throw new InvalidDataException("GCO_REDSCRIPT_FAMILIES_MISTAKEN_FOR_GENERATOR_FAMILIES");
+        File.WriteAllText(familyFixture, """{"rawTables":{}}""");
+        var absent = (int?)familiesMethod.Invoke(null, [familyFixture]);
+        if (absent is not null)
+            throw new InvalidDataException("GCO_REDSCRIPT_UNKNOWN_FAMILIES_FABRICATED_AS_ZERO");
+    }
+    finally { if (File.Exists(familyFixture)) File.Delete(familyFixture); }
+
     bool malformedRefused = false;
     try { _ = Count("""{"transforms":[{"unexpected":"no-type"}]}"""); }
     catch (System.Reflection.TargetInvocationException ex)
