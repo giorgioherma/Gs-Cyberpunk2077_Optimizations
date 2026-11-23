@@ -1,1 +1,1 @@
-checkpoint=mo2-native-child-diagnostic-20261123
+checkpoint=mo2-native-win32-child-and-init-sequence-20261123
