@@ -37,6 +37,18 @@ public static class GameInspector
         !string.IsNullOrWhiteSpace(next.GameRoot) &&
         string.Equals(previous.GameRoot, next.GameRoot, StringComparison.OrdinalIgnoreCase);
 
+    // Page 2 only offers the CET-owned English-only opt-in when the
+    // installed game contains the actual Hotscenes Lua entry point.
+    // External mod sources, capture filenames and bare directory names
+    // must not make this player preference appear.
+    public static bool HasInstalledHotscenes(string? gameRoot)
+    {
+        var current = Inspect(gameRoot);
+        return current.HasVerifiedPhysicalSource &&
+            current.CetModsRoot is not null &&
+            File.Exists(Path.Combine(current.CetModsRoot, "hotscenes", "init.lua"));
+    }
+
     public static GameInspection Inspect(string? selection)
     {
         if (string.IsNullOrWhiteSpace(selection))

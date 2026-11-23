@@ -2,12 +2,24 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.VisualBasic.FileIO;
+using GRedscript.Resolver.Phase2;
 
 namespace GRedscript.Resolver;
 
-internal static class Program
+public static class Program
 {
     private const string Schema = "grsp.resolver.input.v1";
+
+    // Invoke the existing verified CLI analyzer from GCO's one bundled
+    // .NET 10 runtime. No second capture parser or global dotnet install.
+    public static void AnalyzeCollected(string sessionFolder, string gameRoot,
+        string outputFile)
+    {
+        if (Main(["analyze", "--capture", sessionFolder, "--game", gameRoot,
+                  "--out", outputFile]) != 0 || !File.Exists(outputFile))
+            throw new InvalidDataException(
+                "REDscript Resolver rejected the indexed F11 capture or live source.");
+    }
 
     private static int Main(string[] args)
     {
@@ -19,6 +31,138 @@ internal static class Program
                 return RunGenericPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scan-generic")
                 return RunGenericScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-cname-membership")
+                return RunCnameMembershipScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-cname-membership")
+                return RunCnameMembershipPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "resolve-callbacks")
+                return RunCallbackSemantics(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-shared-work")
+                return RunSharedWorkScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-callback-work")
+                return RunGenericCallbackWorkScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-ui-outputs")
+                return RunUiOutputScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-quest-facts")
+                return RunQuestFactScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-player-position")
+                return RunPlayerPositionScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "plan-redscript")
+                return RunRedscriptPlan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "stage-redscript-plan")
+                return RunRedscriptPlanStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-footsteps")
+                return RunPhase2Footsteps(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-dark-future")
+                return RunPhase2DarkFuture(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-dark-future-icons")
+                return RunPhase2DarkFutureIcons(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-fe-input")
+                return RunPhase2FeInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-fe-input-hub")
+                return RunPhase2FeInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-grs-input-hub")
+                return RunPhase2GrsInputHub(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-grs-state")
+                return RunPhase2GrsState(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-vcp-quests")
+                return RunPhase2VcpQuests(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-cyberware-ex")
+                return RunPhase2CyberwareEx(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-stealth-pickpocket")
+                return RunPhase2StealthPickpocket(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-vehicle-mileage")
+                return RunPhase2VehicleMileage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-grs-poll")
+                return RunPhase2GrsPoll(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-sc-jobs")
+                return RunPhase2ScJobs(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-new-hot-owner")
+                return RunPhase2NewHotOwner(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-ncr-tick")
+                return RunPhase2NcrTick(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-drugdealer-input")
+                return RunPhase2DrugDealerInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-fe-pins")
+                return RunPhase2FePins(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-quickslots-input")
+                return RunPhase2QuickslotsInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-digitalvixen-ui")
+                return RunPhase2DigitalVixenUi(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-browser-journal")
+                return RunPhase2BrowserJournal(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-browser-input")
+                return RunPhase2BrowserInput(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-evs-ps")
+                return RunPhase2EvsPs(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-vad-spawn")
+                return RunPhase2VadSpawn(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-evs-camera")
+                return RunPhase2EvsCamera(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-holotravel-material")
+                return RunPhase2HoloTravelMaterial(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-redwindows-setters")
+                return RunPhase2RedWindowsSetters(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-dark-future-aggressive")
+                return RunPhase2DarkFutureAggressive(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-redwindows-render")
+                return RunPhase2RedWindowsRender(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-redwindows-cursors")
+                return RunPhase2RedWindowsCursors(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-hologirl-material")
+                return RunPhase2HoloGirlMaterial(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-disable-position-tracing")
+                return RunPhase2DisablePositionTracing(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-trigger-mode-tags")
+                return RunPhase2TriggerModeTags(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-redwindows-find")
+                return RunPhase2RedWindowsFind(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-quickhack-tags")
+                return RunPhase2QuickhackTags(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "phase2-quickslots-dpad")
+                return RunPhase2QuickslotsDpad(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-native-location-subscribers")
+                return RunNativeSubscriberScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-native-location-subscribers")
+                return RunNativeSubscriberPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "stage-shared-native")
+                return RunSharedNativeStage(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-callbacks")
+                return RunCallbackScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-pure-constants")
+                return RunPureConstantScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-pure-constants")
+                return RunPureConstantPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-stable-array-bound")
+                return RunStableArrayBoundScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-stable-array-bound")
+                return RunStableArrayBoundPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-blackboard-defs")
+                return RunBlackboardDefinitionScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-blackboard-defs")
+                return RunBlackboardDefinitionPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-late-system-read")
+                return RunLateSystemScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-late-system-read")
+                return RunLateSystemPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-angle-sort")
+                return RunAngleSortScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-angle-sort")
+                return RunAngleSortPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-shared-player")
+                return RunSharedPlayerScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-shared-player")
+                return RunSharedPlayerPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-action-snapshot")
+                return RunActionSnapshotScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-action-snapshot")
+                return RunActionSnapshotPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "scan-action-filter")
+                return RunActionFilterScan(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-action-filter")
+                return RunActionFilterPreview(ParseArguments(args.Skip(1).ToArray()));
+            if (args.Length > 0 && args[0] == "preview-callback-index")
+                return RunCallbackIndexPreview(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length > 0 && args[0] == "scc-headless")
                 return HeadlessScc.Run(ParseArguments(args.Skip(1).ToArray()));
             if (args.Length == 0 || args[0] != "analyze")
@@ -37,9 +181,13 @@ internal static class Program
                 throw new InvalidDataException(
                     "Refusing to write Resolver output into installed game or sealed capture");
 
-            string nativeRoot = Directory.Exists(Path.Combine(captureRoot, "G-REDscript"))
-                ? Path.Combine(captureRoot, "G-REDscript")
-                : captureRoot;
+            // Current dated GCO capture sessions use G-RED. Older flat
+            // sessions and standalone GRSP captures retain their layouts.
+            string nativeRoot = Directory.Exists(Path.Combine(captureRoot, "G-RED"))
+                ? Path.Combine(captureRoot, "G-RED")
+                : Directory.Exists(Path.Combine(captureRoot, "G-REDscript"))
+                    ? Path.Combine(captureRoot, "G-REDscript")
+                    : captureRoot;
             string metadata = Path.Combine(nativeRoot, "Data", "Metadata");
             string completion = Path.Combine(metadata, "GCO-F11-Complete.flag");
             if (!File.Exists(completion) ||
@@ -311,6 +459,42 @@ internal static class Program
         return 0;
     }
 
+
+    // Source-proven membership admission is independent of whether the
+    // measured playthrough happened to execute an eligible loop.
+    private static int RunCnameMembershipScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "CName membership scan accepts --game --out only");
+        var summary = GenericMembershipPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO source CName membership: files=" +
+            summary.SourceFiles + " eligible=" + summary.Eligible +
+            " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunCnameMembershipPreview(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+                "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "CName membership preview accepts --game --analysis --out [--base-preview]");
+        int count = GenericMembershipPass.PreviewOrdered(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var basePreview)
+                ? Path.GetFullPath(basePreview) : null);
+        Console.WriteLine("GCO source CName membership: transformed=" + count +
+            " gameplayValidated=false deployable=false");
+        return 0;
+    }
+
     // Read-only cross-mod discovery, separate from source preview generation.
     private static int RunGenericScan(Dictionary<string, string> options)
     {
@@ -329,6 +513,1109 @@ internal static class Program
         return 0;
     }
 
+    // Authoritative CET-style classification stage for all current REDscript
+    // callback sources, including PlayerPuppet @wrapMethod extensions.
+    private static int RunCallbackSemantics(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Callback semantic resolver accepts --game, --out, optional --analysis");
+        var result = CallbackSemanticResolver.Analyze(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? evidence)
+                ? Path.GetFullPath(evidence) : null);
+        Console.WriteLine("GCO REDscript callback semantic catalog: files=" +
+            result.Files + " callbacks=" + result.Callbacks +
+            " OnAction=" + result.OnAction +
+            " PlayerPuppetWraps=" + result.PlayerPuppetWraps +
+            " tracedForwarders=" + result.Forwarders +
+            " otherCallbacks=" + result.OtherCallbacks +
+            " measuredSourceMatched=" + result.MeasuredCallbacks +
+            " routeProofBlocked=" + result.UnprovenRoutes +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    // R5 source/callsite work analysis: no new profiler or generator
+    // admission. Ranking exclusions are supplied by the caller, not
+    // embedded as a hardcoded list in any generic source rule.
+    private static int RunGenericCallbackWorkScan(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+                "--out" or "--exclude-ranking-owners")))
+            throw new ArgumentException(
+                "Callback work scan accepts --game, --analysis, --out and optional --exclude-ranking-owners.");
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (options.TryGetValue("--exclude-ranking-owners", out string? owners))
+            foreach (var item in owners.Split(';', StringSplitOptions.TrimEntries |
+                StringSplitOptions.RemoveEmptyEntries))
+                excluded.Add(item);
+        var result = CallbackSemanticResolver.ScanGenericCallbackWork(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")), excluded);
+        Console.WriteLine("GCO generic callback work: files=" +
+            result.SourceFiles + " OnAction=" + result.OnActionMethods +
+            " ranked=" + result.RankedMethods +
+            " multiOwnerPatterns=" + result.CrossOwnerPatterns +
+            " measured=" + result.MeasuredMethods +
+            " generationAuthorized=false");
+        return 0;
+    }
+
+    // R5 high-value work elimination: read-only source-wide evidence with
+    // explicit first failed prerequisite. Uses the existing callback owner
+    // parser and verified F11 callsite join; NEVER authorizes a UI skip.
+    private static int RunSharedWorkScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Shared-work scan accepts --game, --out and optional --analysis only");
+        var summary = CallbackSemanticResolver.ScanSharedWork(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? analysis)
+                ? Path.GetFullPath(analysis) : null);
+        Console.WriteLine("GCO REDscript shared work: files=" + summary.SourceFiles +
+            " methods=" + summary.ExaminedMethods +
+            " measured=" + summary.SourceMatchedMeasured +
+            " unmeasured=" + summary.Unmeasured +
+            " sourceWrites=0 deployable=false savingsClaimed=false");
+        return 0;
+    }
+
+    // R5 generic UI output dependency audit: source-only structural evidence,
+    // verified optional F11 method join, never a permission to throttle.
+    private static int RunUiOutputScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "UI output scan accepts --game, --out and optional --analysis only");
+        var result = CallbackSemanticResolver.ScanUiOutputSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? evidence)
+                ? Path.GetFullPath(evidence) : null);
+        Console.WriteLine("GCO generic UI output slices: sourceFiles=" +
+            result.SourceFiles + " SetDataSites=" + result.SetDataSites +
+            " mixedStructuralAndTime=" + result.MixedTimerSites +
+            " sourceMatchedMethodSites=" + result.SourceMatchedMethodSites +
+            " sourceTypedReceiverSites=" + result.SourceTypedReceivers +
+            " generationAuthorized=false sourceWrites=0");
+        return 0;
+    }
+
+    // Quest fact exact-name/receiver-refusal evidence: no callback rewrites.
+    private static int RunQuestFactScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--analysis")))
+            throw new ArgumentException(
+                "Quest fact scan accepts --game, --out and optional --analysis only");
+        var scan = CallbackSemanticResolver.ScanQuestFactDependencies(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--analysis", out string? analysis)
+                ? Path.GetFullPath(analysis) : null);
+        Console.WriteLine("GCO quest fact graph: sourceFiles=" + scan.SourceFiles +
+            " sourceMethods=" + scan.SourceMethods +
+            " callsites=" + scan.FactCallsites +
+            " literal=" + scan.LiteralCallsites +
+            " dynamic=" + scan.DynamicCallsites +
+            " names=" + scan.LiteralFactNames +
+            " crossOwnerListenerNames=" + scan.CrossOwnerListenerFactNames +
+            " generationAuthorized=false sourceWrites=0");
+        return 0;
+    }
+
+    // Source-wide position origin and bounded helper traversal. This reports
+    // candidates, not rewrite permissions or native subscription admission.
+    private static int RunPlayerPositionScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "Player position scan accepts --game and --out only");
+        var summary = CallbackSemanticResolver.ScanPlayerPositionDependencies(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO player position source graph: files=" +
+            summary.SourceFiles + " calls=" + summary.WorldPositionCalls +
+            " local=" + summary.LocalPlayer + " npc=" + summary.Npc +
+            " vehicle=" + summary.Vehicle + " unknown=" +
+            summary.Unknown + " mixed=" + summary.Mixed +
+            " indirectConsumers=" + summary.IndirectConsumers +
+            " rewrites=0 productionZipAuthorized=false");
+        return 0;
+    }
+
+    // CET-inspired callback family discovery is deliberately read-only.
+    private static int RunRedscriptPlan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("REDscript plan needs --game and --out");
+        var plan = RedscriptGenerationPlan.Create(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("REDscript Resolver ordered generation plan: " +
+            " implementedRules=" + plan.ImplementedRuleCount +
+            " readyRules=" + plan.ReadyRuleCount +
+            " eligibleSourceEdits=" + plan.EligibleSourceEdits +
+            " deferredExperimentalSystems=" + plan.DeferredExperimentalSystems +
+            " zipCreated=false");
+        return 0;
+    }
+
+    private static int RunRedscriptPlanStage(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--plan" or
+            "--analysis" or "--out" or "--provided-runtime-owner")))
+            throw new ArgumentException(
+                "REDscript stage needs --game --plan --analysis --out [--provided-runtime-owner]");
+        var result = RedscriptGenerationPlan.Stage(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--plan")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--provided-runtime-owner", out string? owner)
+                ? Path.GetFullPath(owner) : null);
+        Console.WriteLine("REDscript pass generator consumed ordered plan: " +
+            " generatedFiles=" + result.GeneratedFiles +
+            " candidateEdits=" + result.AppliedEdits +
+            " passes=" + result.Completed.Length +
+            " productionZip=false");
+        return 0;
+    }
+
+
+    private static int RunPhase2VadSpawn(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("Virtual Atelier spawn pacing requires --game --out [--base-overlay]");
+        var result = VirtualAtelierSpawnPacingPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("Virtual Atelier spawn pacing: status=" + result.Status + " edits=" +
+            result.AppliedEdits + (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+
+    private static int RunPhase2EvsCamera(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("EVS camera registrations requires --game --out [--base-overlay]");
+        var result = EnhancedVehicleCameraRegistrationPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("EVS camera registrations: status=" + result.Status + " edits=" +
+            result.AppliedEdits + (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+
+    private static int RunPhase2HoloTravelMaterial(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("HQ HoloTravel material event requires --game --out [--base-overlay]");
+        var result = HoloTravelMaterialEventPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("HQ HoloTravel material event: status=" + result.Status + " edits=" +
+            result.AppliedEdits + (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+    private static int RunPhase2EvsPs(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Enhanced Vehicle System PS reuse requires --game --out [--base-overlay]");
+        var result = EnhancedVehicleOnActionPsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 EVS OnAction PS: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DrugDealerInput(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "DrugDealer InputHub needs --game --out [--base-overlay]");
+        var result = DrugDealerInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 DrugDealer InputHub: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            " owners=" + result.SourcePaths.Length +
+            " refused=" + result.Refusals.Length);
+        return 0;
+    }
+
+    private static int RunPhase2GrsState(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("GRS StateCache requires --game --out [--base-overlay]");
+        var result=GearRecoveryStateCachePass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 GRS StateCache: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Reason is null?"":" reason="+result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2VcpQuests(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException("VCP quest read reuse requires --game --out [--base-overlay]");
+        var result=VehicleCallQuestReusePass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 VCP quest reuse: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Refusals.Length==0?"":" refused="+string.Join(",",result.Refusals)));
+        return 0;
+    }
+
+    private static int RunPhase2CyberwareEx(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "CyberwareEx overclock InputHub requires --game --out [--base-overlay]");
+        var result=CyberwareExInputHubPass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 CyberwareEx InputHub: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Reason is null?"":" reason="+result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2StealthPickpocket(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "StealthRunner pickpocket InputHub needs --game --out [--base-overlay]");
+        var result=StealthRunnerPickpocketInputPass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 StealthRunner pickpocket: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Reason is null?"":" reason="+result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2VehicleMileage(
+        Dictionary<string,string> options)
+    {
+        if(options.Keys.Any(x=>x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "VehicleMileage scheduler needs --game --out [--base-overlay]");
+        var result=VehicleMileageSchedulerPass.Generate(
+            Path.GetFullPath(Required(options,"--game")),
+            Path.GetFullPath(Required(options,"--out")),
+            options.TryGetValue("--base-overlay",out string? prior)
+                ?Path.GetFullPath(prior):null);
+        Console.WriteLine("REDscript Phase 2 VehicleMileage scheduler: status="+
+            result.Status+" edits="+result.AppliedEdits+
+            (result.Refusals.Length==0?"":" refused="+
+                string.Join(",",result.Refusals)));
+        return 0;
+    }
+
+    private static int RunPhase2GrsPoll(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "GRS recurring polling needs --game --out [--base-overlay]");
+        var result = GearRecoveryPollingPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 GRS polling: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2NewHotOwner(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not
+            ("--game" or "--out" or "--base-overlay" or "--kind")))
+            throw new ArgumentException(
+                "Hot owner stage requires --kind --game --out [--base-overlay]");
+        var kind = Required(options, "--kind") switch
+        {
+            "apartment" => NewHotOwnerSemanticPass.Owner.Apartment,
+            "negotiable" => NewHotOwnerSemanticPass.Owner.Negotiable,
+            "shattered" => NewHotOwnerSemanticPass.Owner.Shattered,
+            _ => throw new ArgumentException("Unknown hot-owner stage kind")
+        };
+        var result = NewHotOwnerSemanticPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null, kind);
+        Console.WriteLine("REDscript hot-owner semantic: " + result.RuleId +
+            " status=" + result.Status + " edits=" + result.AppliedEdits +
+            " refusals=" + string.Join(" | ", result.Refusals));
+        return 0;
+    }
+
+    private static int RunPhase2ScJobs(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Shattered Chrome scheduling needs --game --out [--base-overlay]");
+        var result = ShatteredChromeJobsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Shattered Chrome jobs: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2NcrTick(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "NCR maintenance scheduler needs --game --out [--base-overlay]");
+        var result = NightCityRemembersTickPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 NCR maintenance scheduler: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2GrsInputHub(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "GearRecoverySystem InputHub needs --game --out [--base-overlay]");
+        var result = GearRecoveryInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 GRS InputHub: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2FeInputHub(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "FlushingEtiquette InputHub requires --game --out [--base-overlay]");
+        var result = FlushingEtiquetteInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 FE InputHub: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2BrowserInput(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "BrowserExtension input pass needs --game --out [--base-overlay]");
+        var result = BrowserExtensionInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 BrowserExtension InputHub: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2BrowserJournal(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "BrowserExtension journal cache needs --game --out [--base-overlay]");
+        var result = BrowserExtensionJournalCachePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 BrowserExtension journal handles: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DigitalVixenUi(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "DigitalVixenCore UI pass requires --game --out [--base-overlay]");
+        var result = DigitalVixenUiDormancyPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 DigitalVixenCore UI: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2RedWindowsSetters(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "RedWindows setter optimization requires --game --out [--base-overlay]");
+        var result = RedWindowsRedundantSettersPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 RedWindows setter guards: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DarkFutureAggressive(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Dark Future aggressive pass requires --game --out [--base-overlay]");
+        var result = DarkFutureHistoricalThrottlePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Dark Future 10/6/6: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2RedWindowsRender(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "RedWindows render pass needs --game --out [--base-overlay]");
+        var result = RedWindowsRenderDormancyPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 RedWindows render: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2RedWindowsCursors(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "RedWindows cursor pass needs --game --out [--base-overlay]");
+        var result = RedWindowsShapeLabelCursorsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 RedWindows cursors: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2HoloGirlMaterial(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "HQ HoloGirl pass needs --game --out [--base-overlay]");
+        var result = HqHoloGirlMaterialEventPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 HQ HoloGirl material: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DisablePositionTracing(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "DisablePositionReveal pass requires --game --out [--base-overlay]");
+        var result = DisablePositionRevealTracingPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 DisablePositionReveal: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2TriggerModeTags(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "TriggerModeControl pass requires --game --out [--base-overlay]");
+        var result = TriggerModeLiteralTagsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 TriggerMode tags: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2RedWindowsFind(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "RedWindows semantic needs --game --out [--base-overlay]");
+        var result = RedWindowsWidgetLookupPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 RedWindows Find: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2QuickhackTags(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Quickhack tag pass requires --game --out [--base-overlay]");
+        var result = QuickhackTagPredicatePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Quickhack tags: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2QuickslotsDpad(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Quickslots D-pad phase2 requires --game --out [--base-overlay]");
+        var result = CustomQuickslotsDpadCachePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Quickslots D-pad: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2QuickslotsInput(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Quickslots InputHub phase2 requires --game --out [--base-overlay]");
+        var result = CustomQuickslotsInputHubPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 quickslots input: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2FePins(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Phase 2 FE pins needs --game --out [--base-overlay]");
+        var result = FlushingEtiquetteWashroomPinsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 FE session pins: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            " files=" + result.SourcePaths.Length +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2FeInput(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Phase 2 FE input needs --game and --out [--base-overlay]");
+        var result = FlushingEtiquetteInputGatePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 FlushingEtiquette input: " +
+            "status=" + result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2Footsteps(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Phase 2 Footsteps needs --game and --out [--base-overlay]");
+        var result = DigitalVixenFootstepsPass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Footsteps: " +
+            "status=" + result.Status +
+            " edits=" + result.AppliedEdits +
+            " already=" + result.AlreadyComplete +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DarkFuture(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+            "--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Dark Future Phase 2 needs --game --out [--base-overlay]");
+        var result = DarkFutureInfiniteTagCachePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Dark Future: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            " already=" + result.AlreadyComplete +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunPhase2DarkFutureIcons(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out" or "--base-overlay")))
+            throw new ArgumentException(
+                "Dark Future icon cadence requires --game --out [--base-overlay]");
+        var result = DarkFutureStatusIconCadencePass.Generate(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-overlay", out string? prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("REDscript Phase 2 Dark Future icons: status=" +
+            result.Status + " edits=" + result.AppliedEdits +
+            (result.Reason is null ? "" : " reason=" + result.Reason));
+        return 0;
+    }
+
+    private static int RunCallbackScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Callback scan only accepts --game and --out");
+        var result = GenericCallbackRules.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript callback inventory: files=" + result.SourceFiles +
+            " callbacks=" + result.Callbacks +
+            " fixedIndexCandidates=" + result.IndexCandidates +
+            " already=" + result.AlreadyComplete +
+            " rejected=" + result.Rejected +
+            " generated=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunCallbackIndexPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Callback preview only accepts --game, --analysis and --out");
+        int count = GenericCallbackRules.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript fixed-index preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunActionFilterScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Action filter scan only accepts --game and --out");
+        var summary = GenericActionFilterPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript generic action filter: files=" +
+            summary.SourceFiles + " OnAction=" + summary.OnActionMethods +
+            " eligible=" + summary.Eligible + " already=" +
+            summary.AlreadyComplete + " refused=" + summary.Refused +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunActionFilterPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key =>
+                key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Action filter preview accepts only --game, --analysis, --out");
+        int rewritten = GenericActionFilterPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript action filter preview: transformed=" +
+            rewritten + " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    // One immutable action event, decoded once per interested input callback.
+    // This does not alter engine registrations, consumption or wrapper order.
+    private static int RunActionSnapshotScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Action snapshot scan accepts --game and --out");
+        var result = CallbackSemanticResolver.ScanActionEventSnapshots(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO shared input event snapshot: files=" +
+            result.SourceFiles + " eligible=" + result.Eligible +
+            " files=" + result.EligibleFiles +
+            " already=" + result.AlreadyComplete + " sourceWrites=0");
+        return 0;
+    }
+
+    private static int RunActionSnapshotPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not (
+                "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException("Action snapshot preview accepts --game, --analysis, --out, --base-preview");
+        int count = CallbackSemanticResolver.PreviewActionEventSnapshots(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var b) ?
+                Path.GetFullPath(b) : null);
+        Console.WriteLine("GCO shared input event generated .reds: transformed=" +
+            count + " gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    // G-PureConstantSlice: preserve the surrounding author method; substitute
+    // only source-proven pure final-static Bool literal getters, as a staged
+    // REDscript source preview for official SCC and user gameplay tests.
+    private static int RunPureConstantScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Pure constant scan accepts --game and --out only");
+        var result = CallbackSemanticResolver.ScanPureConstantSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO pure constant partial-work scan: files=" +
+            result.SourceFiles + " eligibleSites=" + result.EligibleSites +
+            " eligibleFiles=" + result.EligibleFiles +
+            " already=" + result.AlreadyComplete +
+            " refused=" + result.Refusals + " sourceWrites=0");
+        return 0;
+    }
+
+    private static int RunPureConstantPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "Pure constant preview accepts --game --analysis --out [--base-preview]");
+        int count = CallbackSemanticResolver.PreviewPureConstantSlices(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out string? basePreview)
+                ? Path.GetFullPath(basePreview) : null);
+        Console.WriteLine("GCO pure constant generated .reds preview: transformed=" +
+            count + " originalSourceWrites=0 compilerValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunStableArrayBoundScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Stable array-bound scan accepts --game and --out");
+        var result = GenericStableArrayBoundPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO stable array bound scan: files=" +
+            result.SourceFiles + " eligible=" + result.Eligible +
+            " already=" + result.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunStableArrayBoundPreview(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+            "--out" or "--base-preview")))
+            throw new ArgumentException("Stable array-bound preview accepts --game, --analysis, --out and optional --base-preview");
+        int count = GenericStableArrayBoundPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("GCO stable array bound preview: transformed=" +
+            count + " gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunBlackboardDefinitionScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Blackboard definition scan accepts --game, --out only");
+        var summary = GenericBlackboardDefinitionPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO blackboard definition scan: files=" + summary.Files +
+            " eligible=" + summary.Eligible + " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunBlackboardDefinitionPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException("Blackboard definition preview accepts --game, --analysis, --out, optional --base-preview only");
+        int count = GenericBlackboardDefinitionPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out string? basePreview)
+                ? Path.GetFullPath(basePreview) : null);
+        Console.WriteLine("GCO blackboard definition preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunLateSystemScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--out")))
+            throw new ArgumentException("Late-system scanner accepts --game and --out");
+        var result = GenericLateSystemReadPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO late system-read scan: files=" + result.Sources +
+            " eligible=" + result.Eligible + " already=" + result.Complete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunLateSystemPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(x => x is not ("--game" or "--analysis" or
+            "--out" or "--base-preview")))
+            throw new ArgumentException("Late-system preview accepts --game, --analysis, --out, --base-preview");
+        int count = GenericLateSystemReadPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")),
+            options.TryGetValue("--base-preview", out var prior)
+                ? Path.GetFullPath(prior) : null);
+        Console.WriteLine("GCO late system-read preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunAngleSortScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Angle-sort scanner accepts --game and --out only");
+        var summary = GenericAngleSortPass.Scan(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript generic angle-sort scan: files=" +
+            summary.Files + " eligible=" + summary.Eligible +
+            " already=" + summary.AlreadyComplete +
+            " sourceWrites=0 deployable=false");
+        return 0;
+    }
+
+    private static int RunAngleSortPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--analysis" or "--out")))
+            throw new ArgumentException("Angle-sort preview accepts --game, --analysis, --out only");
+        int count = GenericAngleSortPass.Preview(
+            Path.GetFullPath(Required(options, "--game")),
+            Path.GetFullPath(Required(options, "--analysis")),
+            Path.GetFullPath(Required(options, "--out")));
+        Console.WriteLine("GCO REDscript angle-sort preview: transformed=" + count +
+            " compilerValidated=false gameplayValidated=false deployable=false");
+        return 0;
+    }
+
+    private static int RunSharedPlayerScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException(
+                "Shared player scan accepts --game and --out only");
+        var result = GenericSharedPlayerSignalPass.Scan(
+            Required(options, "--game"), Required(options, "--out"));
+        Console.WriteLine("GCO shared player scan: eligible=" + result.Eligible +
+            " files=" + result.EligibleFiles + " complete=" +
+            result.AlreadyComplete);
+        return 0;
+    }
+
+    private static int RunSharedPlayerPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not (
+            "--game" or "--analysis" or "--out" or "--base-preview")))
+            throw new ArgumentException(
+                "Shared player preview accepts --game, --analysis, --out and --base-preview");
+        int edits = GenericSharedPlayerSignalPass.Preview(
+            Required(options, "--game"), Required(options, "--analysis"),
+            Required(options, "--out"),
+            options.GetValueOrDefault("--base-preview"));
+        Console.WriteLine("GCO shared player preview: edits=" + edits +
+            " productionZipAuthorized=false");
+        return 0;
+    }
+
+    private static int RunNativeSubscriberScan(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out")))
+            throw new ArgumentException("Native subscriber scan accepts --game and --out");
+        int count = GenericNativeLocationSubscriberPass.Scan(
+            Required(options, "--game"), Required(options, "--out"));
+        Console.WriteLine("GCO native location subscriber scan: eligible=" + count +
+            " deployable=false");
+        return 0;
+    }
+
+    private static int RunNativeSubscriberPreview(Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not ("--game" or "--out" or "--source-sha" or "--base-preview")))
+            throw new ArgumentException(
+                "Native subscriber preview accepts --game, --out, --source-sha, --base-preview");
+        int count = GenericNativeLocationSubscriberPass.Preview(
+            Required(options, "--game"), Required(options, "--out"),
+            options.GetValueOrDefault("--source-sha"),
+            options.GetValueOrDefault("--base-preview"));
+        Console.WriteLine("GCO native location subscriber preview: adapters=" +
+            count + " originalModSourcesUnchanged=true nativeFarPredicateEdits=true deployable=false");
+        return 0;
+    }
+
+    private static int RunSharedNativeStage(
+        Dictionary<string, string> options)
+    {
+        if (options.Keys.Any(key => key is not (
+            "--cet-runtime" or "--framework" or "--game" or "--out" or "--red-locations")))
+            throw new ArgumentException(
+                "Shared native stage accepts --cet-runtime, --framework, --game, --out, --red-locations");
+        var result = SharedNativeRuntimeStage.Stage(
+            Required(options, "--cet-runtime"),
+            Required(options, "--game"),
+            Required(options, "--out"),
+            Required(options, "--framework"),
+            options.GetValueOrDefault("--red-locations"));
+        Console.WriteLine(JsonSerializer.Serialize(result));
+        return 0;
+    }
+
     private static Dictionary<string, string> ParseArguments(string[] args)
     {
         if (args.Length % 2 != 0)
@@ -337,7 +1624,7 @@ internal static class Program
         for (int i = 0; i < args.Length; i += 2)
         {
             if (args[i] is not ("--capture" or "--game" or "--out" or "--analysis" or "--frame-evidence" or "--expected-source-sha256" or
-                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts"))
+                    "--workspace" or "--r6" or "--cache" or "--compiled" or "--scc-native" or "--log" or "--external-scripts" or "--base-preview" or "--base-overlay" or "--plan" or "--cet-runtime" or "--framework" or "--red-locations" or "--source-sha" or "--exclude-ranking-owners" or "--kind" or "--provided-runtime-owner"))
                 throw new ArgumentException("Unknown Resolver option: " + args[i]);
             if (!options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Duplicate Resolver option: " + args[i]);

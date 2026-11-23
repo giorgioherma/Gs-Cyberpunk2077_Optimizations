@@ -1,2 +1,1 @@
-# Main REDscript post-generic SCC milestone. Edit checkpoint after a validated source batch.
-checkpoint=not-run
+checkpoint=historical-na-fe-chipware-source-state-test-first-unlink-repair-20261122

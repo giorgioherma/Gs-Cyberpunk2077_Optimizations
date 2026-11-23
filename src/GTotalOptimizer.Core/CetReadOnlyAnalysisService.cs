@@ -19,7 +19,18 @@ public sealed record CetAnalysisOutcome(
     string FrameEvidence, string RuntimeInterpretation, string SourceVerification,
     string[] BlacklistedMods);
 
-public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount);
+public sealed record CetSkipDetail(
+    string Category, string Type, string? Owner, string? RuleId,
+    string? File, string Reason);
+
+public sealed record CetPassOutcome(string ZipPath, int FileCount, int TransformCount, int SkippedCount)
+{
+    // The CET owner's transform count includes per-capture G-GC calibration.
+    // Only actual work (including a proven obsolete runtime upgrade) qualifies.
+    public int OptimizationTransformCount { get; init; }
+    public CetSkipDetail[] SkipDetails { get; init; } = [];
+    public int HotscenesEnglishOnlyEdits { get; init; }
+}
 
 public sealed class CetReadOnlyAnalysisService
 {
@@ -34,14 +45,29 @@ public sealed class CetReadOnlyAnalysisService
 
     public async Task<CetPassOutcome> GenerateCetPassAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool hotscenesEnglishOnly = false)
         => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
-            generatePass: true, cancellationToken).ConfigureAwait(false)).Pass
+            generatePass: true, cancellationToken,
+            hotscenesEnglishOnly: hotscenesEnglishOnly).ConfigureAwait(false)).Pass
             ?? throw new InvalidOperationException("CET owner did not return a pass.");
+
+    // GCO's combined generator requests an isolated owner ZIP. The CET
+    // owner still performs every transformation and all source checks; only
+    // the publication destination differs.
+    public async Task<CetPassOutcome> GenerateCetStagedAsync(
+        string packageRoot, string gameRoot, string sessionId,
+        string externalZip, CancellationToken cancellationToken = default,
+        bool hotscenesEnglishOnly = false)
+        => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
+            generatePass: true, cancellationToken, externalZip, hotscenesEnglishOnly)
+            .ConfigureAwait(false)).Pass
+            ?? throw new InvalidOperationException("CET did not return a staged pass.");
 
     private async Task<(CetAnalysisOutcome Analysis, CetPassOutcome? Pass)> ExecuteAsync(
         string packageRoot, string gameRoot, string sessionId,
-        bool generatePass, CancellationToken cancellationToken)
+        bool generatePass, CancellationToken cancellationToken,
+        string? stagedOutput = null, bool hotscenesEnglishOnly = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         packageRoot = Path.GetFullPath(packageRoot);
@@ -140,12 +166,26 @@ public sealed class CetReadOnlyAnalysisService
             // The source owner already recomposes the current installed tree
             // during generation. Never publish if that tree drifted mid-pass.
             CetPassOutcome? generatedPass = null;
-            if (generatePass)
+            // A completed CET installation may have zero remaining work.
+            // Combined GCO generation can still publish REDscript changes
+            // without asking CET to synthesize an empty optimization ZIP.
+            if (generatePass && stagedOutput is not null &&
+                Nonnegative(cli, "MaterialRemainingCount") == 0 &&
+                Nonnegative(cli, "GenericResolvedCount") == 0 &&
+                Nonnegative(cli, "SemanticReadyRuleCount") == 0 &&
+                (!hotscenesEnglishOnly || !File.Exists(Path.Combine(
+                    source, "hotscenes", "init.lua"))))
+            {
+                generatedPass = new CetPassOutcome("", 0, 0, 0);
+            }
+            else if (generatePass)
             {
                 var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
+                // CET owns the source rewrite; only opt-in forwarding is
+                // performed here. The flag is never sent during ANALYZE.
                 using var generation = await RunOwnerAsync(executable,
-                    ["--capture", stagedCapture, "--game", gameRoot,
-                     "--generate-pass", "--pass-output", temporaryZip, "--json"],
+                    BuildGenerateOwnerArguments(stagedCapture, gameRoot,
+                        temporaryZip, hotscenesEnglishOnly),
                     packageRoot, cancellationToken).ConfigureAwait(false);
                 var cliPass = generation.RootElement;
                 RequireOk(cliPass, "CET pass generator");
@@ -166,7 +206,22 @@ public sealed class CetReadOnlyAnalysisService
                 // owner report/manifest, profiler binaries, or source files.
                 var results = Path.Combine(packageRoot, "RESULTS");
                 Directory.CreateDirectory(results);
-                var destination = Path.Combine(results, "G-CET_PASS_" + sessionId + ".zip");
+                var destination = stagedOutput is null
+                    ? Path.Combine(results, "G-CET_PASS_" + sessionId + ".zip")
+                    : Path.GetFullPath(stagedOutput);
+                if (stagedOutput is not null)
+                {
+                    var realGame = Path.GetFullPath(gameRoot).TrimEnd(
+                        Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    var realSession = Path.GetFullPath(sessionFolder).TrimEnd(
+                        Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (destination.StartsWith(realGame, StringComparison.OrdinalIgnoreCase) ||
+                        destination.StartsWith(realSession, StringComparison.OrdinalIgnoreCase) ||
+                        Directory.Exists(destination) ||
+                        !Directory.Exists(Path.GetDirectoryName(destination)))
+                        throw new InvalidDataException(
+                            "Combined CET intermediate must be an existing isolated directory.");
+                }
                 if (File.Exists(destination))
                     throw new IOException("A CET pass already exists for this capture; it was not overwritten.");
                 var publishing = destination + ".partial-" + Guid.NewGuid().ToString("N");
@@ -177,7 +232,14 @@ public sealed class CetReadOnlyAnalysisService
                 }
                 finally { if (File.Exists(publishing)) File.Delete(publishing); }
                 generatedPass = new CetPassOutcome(destination, expectedFiles,
-                    Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"));
+                    Nonnegative(pass, "TransformCount"), Nonnegative(pass, "SkippedCount"))
+                {
+                    OptimizationTransformCount =
+                        ReadOwnerOptimizationTransforms(pass, temporaryZip),
+                    SkipDetails = ReadOwnerSkipDetails(pass, temporaryZip),
+                    HotscenesEnglishOnlyEdits = ReadOwnerEnglishOnlyEdits(
+                        pass, temporaryZip, hotscenesEnglishOnly)
+                };
             }
 
             var grspCount = saved.Redscript.Files.Count;
@@ -212,6 +274,124 @@ public sealed class CetReadOnlyAnalysisService
                 catch (UnauthorizedAccessException e) { Trace.TraceWarning("Temporary CET analysis cleanup: " + e.Message); }
             }
         }
+    }
+
+    // The production CLI argument builder is also used by the integration
+    // contract to prove the localization cut is never enabled by default.
+    internal static IReadOnlyList<string> BuildGenerateOwnerArguments(
+        string capture, string game, string zip, bool hotscenesEnglishOnly)
+    {
+        var args = new List<string>
+        {
+            "--capture", capture, "--game", game,
+            "--generate-pass", "--pass-output", zip
+        };
+        if (hotscenesEnglishOnly)
+            args.Add("--hotscenes-english-only");
+        args.Add("--json");
+        return args;
+    }
+
+    // Ground actual new work in the CET owner's authoritative transform list.
+    // Calibration-only G-GC support never authorizes another ZIP. A proven
+    // obsolete installed G-GC runtime upgrade is actual source-changing work.
+    internal static int CountOptimizationTransforms(JsonElement manifest)
+    {
+        if (!manifest.TryGetProperty("transforms", out var rows) ||
+            rows.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
+        int count = 0;
+        foreach (var item in rows.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("type", out var type) ||
+                type.ValueKind != JsonValueKind.String)
+                throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_INVALID");
+            if (type.GetString() != "GC_CONTROLLER" ||
+                (item.TryGetProperty("runtimeUpgrade", out var runtimeUpgrade) &&
+                 runtimeUpgrade.ValueKind == JsonValueKind.True))
+                count++;
+        }
+        return count;
+    }
+
+    private static int ReadOwnerOptimizationTransforms(JsonElement pass, string zipPath)
+    {
+        string expected = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var location) ||
+            location.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(location.GetString() ?? ""),
+                Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(expected))
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_MISSING");
+        using var manifest = JsonDocument.Parse(File.ReadAllText(expected));
+        int count = CountOptimizationTransforms(manifest.RootElement);
+        int recorded = manifest.RootElement.GetProperty("transforms").GetArrayLength();
+        if (recorded != Nonnegative(pass, "TransformCount"))
+            throw new InvalidDataException("GCO_CET_TRANSFORM_MANIFEST_COUNT_MISMATCH");
+        return count;
+    }
+
+    private static int ReadOwnerEnglishOnlyEdits(
+        JsonElement pass, string zipPath, bool requested)
+    {
+        // Read the authoritative CET manifest, not an inferred Hotscenes
+        // source marker or the presence of unrelated generated Lua.
+        string manifestPath = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var output) ||
+            output.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(output.GetString() ?? ""),
+                Path.GetFullPath(manifestPath), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(manifestPath))
+            throw new InvalidDataException(
+                "CET owner did not provide its English-only opt-in audit manifest.");
+
+        using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var policy = manifest.RootElement.GetProperty("policy");
+        bool actualRequest = policy.GetProperty(
+            "personalEnglishOnlyHotscenesRequested").GetBoolean();
+        int applied = policy.GetProperty(
+            "personalEnglishOnlyHotscenesStages").GetInt32();
+        if (actualRequest != requested || applied is < 0 or > 1 ||
+            (!actualRequest && applied != 0))
+            throw new InvalidDataException(
+                "CET Hotscenes English-only opt-in differs from the owner output.");
+        return applied;
+    }
+
+    private static CetSkipDetail[] ReadOwnerSkipDetails(JsonElement pass, string zipPath)
+    {
+        // The CET source owner already emits an authoritative companion
+        // manifest with categorized skip reasons. Read that report as-is;
+        // never infer refused mods from callback counts or regenerate rules.
+        // Older owner packages may omit this companion: preserve the owner's
+        // numeric skipped count rather than blocking safe output.
+        string expected = Path.ChangeExtension(zipPath, ".json");
+        if (!pass.TryGetProperty("ManifestPath", out var location) ||
+            location.ValueKind != JsonValueKind.String ||
+            !string.Equals(Path.GetFullPath(location.GetString() ?? ""),
+                Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase) ||
+            !File.Exists(expected))
+            return [];
+        using var manifest = JsonDocument.Parse(File.ReadAllText(expected));
+        var root = manifest.RootElement;
+        if (!root.TryGetProperty("skipOutcomes", out var outcomes) ||
+            !outcomes.TryGetProperty("entries", out var rows) ||
+            rows.ValueKind != JsonValueKind.Array)
+            return [];
+
+        static string? Field(JsonElement row, string key) =>
+            row.TryGetProperty(key, out var value) &&
+            value.ValueKind == JsonValueKind.String
+                ? value.GetString() : null;
+        return rows.EnumerateArray()
+            .Where(row => row.ValueKind == JsonValueKind.Object)
+            .Select(row => new CetSkipDetail(
+                Field(row, "category") ?? "GENERATION_FAILURE",
+                Field(row, "type") ?? "UNKNOWN",
+                Field(row, "owner"), Field(row, "ruleId"),
+                Field(row, "file"), Field(row, "reason") ?? "No reason supplied"))
+            .ToArray();
     }
 
     private static void VerifyCetOverlay(string path, int expectedFiles)

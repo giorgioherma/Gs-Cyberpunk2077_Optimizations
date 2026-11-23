@@ -2,6 +2,8 @@
 
 **Status: reviewed from current repository source; not yet exercised end-to-end through the new app.** Recheck current heads/build packages before implementation; commands below describe the interfaces observed on 2026-11-04.
 
+**Current GCO development scope (2026-11-16):** [GCO-local REDscript handoff](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) and [R0–R10 blueprint](../integration/GRSP_REDscript_Resolver_Blueprint.md). GCO now owns the independent REDscript managed Resolver/Generator and full-stack SCC validation component; **GRSP owns native profiling, instrumentation and evidence only**; CET retains its original source-owned Lua Generator. Existing GRSP managed prototype is a migration source, not the future runtime owner. GCO keeps `PRESENTMON_2_6` reporting separate from ANALYZE and merges one clean ZIP. Missing PresentMon is `NOT_CAPTURED` rather than synthetic CapFrameX. **GCO-local managed source/tests are now under `src/GRedscript.Resolver/` and `tests/GRedscript.Resolver.Tests/`**, with [GCO CI #483 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43798781332) proving 41/41 CLI tests, private 2,319-file capture/source replay, original/optimized SCC and 323/323 packaging contracts. The superseded GRSP managed backend and its CI have been retired from its dev branch `a2fe918`. Page 2 generation wiring and gameplay are not yet verified.
+
 ## CET profiler
 
 Source: [CET `src/G.CETProfiler.App/Program.cs`](https://github.com/giorgioherma/G-CET_Runtime_Profiler/blob/dev/resolver-profiler-handoff/src/G.CETProfiler.App/Program.cs). Normal packaged root launcher delegates to .NET core; the same core owns install/restore and collection.
@@ -83,8 +85,8 @@ The [approved Page 1 handoff](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md) s
 ## 2026-11-06 — authoritative ownership and combined plan
 
 - **CET owns its existing Lua Resolver/Generator, native optimizations and G-GC.** GCO consumes its authoritative analysis/generation interfaces and does not reproduce CET source transformations or alter its fixed generation sequence.
-- **GRSP owns REDscript profiler instrumentation.** If the combined decision process needs missing REDscript measurements, extend GRSP's evidence source there.
-- **GCO owns the new REDscript Resolver/Generator** as well as a single combined CET+GRSP optimization plan, cross-domain prioritization, reporting, output compatibility validation and final ZIP. REDscript generation must preserve full source/compile safety.
+- **GRSP owns REDscript profiler instrumentation, native measurements, F11 evidence and native install/restore only.** Missing profiler measurements are fixed in GRSP; managed REDscript Resolver/Generator changes are made in GCO after the controlled migration.
+- **GCO owns orchestration, unified CET+GRSP candidate planning, genuine PresentMon reporting, the separate in-repo REDscript Resolver/Generator/SCC component, CET owner invocation, compatibility validation and final ZIP.** No second ordinary UI or separate managed runtime.
 - **G-REDruntime owns shared services for REDscript**, included in the generated ZIP only where an accepted optimization requires them.
 - **CET profiling requires 0-Engine v0.17.2+** under the user-approved GCO CET route. This is distinct from standalone CET's optional core-only profiler mode. GRSP-only does not require CET/0-Engine. No duplicate owner implementations.
 

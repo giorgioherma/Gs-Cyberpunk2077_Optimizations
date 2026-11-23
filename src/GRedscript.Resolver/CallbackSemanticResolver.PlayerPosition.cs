@@ -1,0 +1,949 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace GRedscript.Resolver;
+
+/// <summary>
+/// Read-only player-position provenance and bounded consumer graph. Uses the
+/// existing SourceAdmission token stream and CallbackSemanticResolver method
+/// spans; this is NOT a second parser or a rewrite admission decision.
+/// </summary>
+internal static partial class CallbackSemanticResolver
+{
+    internal sealed record PlayerPositionSummary(
+        int SourceFiles, int MethodSpans, int WorldPositionCalls,
+        int LocalPlayer, int Npc, int Vehicle, int OtherEntity,
+        int Unknown, int Mixed, int IndirectConsumers);
+
+    private sealed record PositionOrigin(string Kind, string Reason,
+        bool LocalPlayerProven = false, bool PlayerTypeHint = false)
+    {
+        internal static PositionOrigin Unknown(string reason) =>
+            new("UNKNOWN", reason);
+    }
+
+    private sealed record PositionSite(MethodSource? Method, FileSource File,
+        int At, int Line, string Receiver, PositionOrigin Origin,
+        string Lifetime, string Operation);
+
+    private sealed record PositionLink(MethodSource Caller,
+        MethodSource Callee, int Line, string Receiver,
+        bool DirectPositionArgument, bool ProvenLocalPositionArgument,
+        int CallTokenAt);
+
+    // These are callsite-specific observations, never a global replacement
+    // of the callee. The same helper may be called with NPC or saved positions.
+    private sealed record PositionParameterGeometryFlow(
+        MethodSource Caller, MethodSource Callee, int CallLine,
+        int ArgumentIndex, string Parameter, int GeometryLine,
+        string Operation, string OtherOperandOrigin);
+
+    private sealed record PositionGeometry(FileSource File,
+        MethodSource? Method, int At, int Line, string Operation,
+        string LeftOrigin, string RightOrigin, string Dependency,
+        bool DirectLocalPlayerOperand, bool DirectOtherOrUnknownOperand);
+
+    private static readonly PositionOrigin DirectLocal =
+        new("LOCAL_PLAYER", "SOURCE_LOCAL_PLAYER_GETTER", true);
+    private static readonly PositionOrigin NpcEntity =
+        new("NPC", "SOURCE_TYPED_NPC");
+    private static readonly PositionOrigin VehicleEntity =
+        new("VEHICLE", "SOURCE_TYPED_VEHICLE");
+
+    internal static PlayerPositionSummary ScanPlayerPositionDependencies(
+        string gameRoot, string outputPath)
+    {
+        string game = Path.GetFullPath(gameRoot);
+        string output = Path.GetFullPath(outputPath);
+        if (Inside(output, game) || File.Exists(output) ||
+            Directory.Exists(output))
+            throw new InvalidDataException("PLAYER_POSITION_SCAN_OUTPUT_COLLISION");
+        var admission = new SourceAdmission(game);
+        _ = admission.AuditAll();
+        var (files, methods) = ReadAllMethodSources(game, admission);
+        var byFile = methods.GroupBy(m => m.File.Path,
+            StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,
+            g => g.OrderBy(m => m.Close - m.Open).ToArray(),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Qualified source-defined member types, not variable-name guesses.
+        var fieldTypes = PositionFieldTypes(files, byFile);
+        var byOwnerMethod = methods.Where(m => m.Owner.Length != 0)
+            .GroupBy(m => m.Owner + "\0" + m.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+        var sites = new List<PositionSite>();
+        foreach (var file in files)
+        {
+            var t = file.Tokens;
+            byFile.TryGetValue(file.Path, out var inFile);
+            for (int i = 2; i + 1 < t.Count; i++)
+            {
+                if (t[i].Value != "GetWorldPosition" ||
+                    t[i - 1].Value != "." || t[i + 1].Value != "(")
+                    continue;
+                var method = inFile?.FirstOrDefault(m =>
+                    m.Open < i && m.Close > i);
+                var receiver = PositionReceiver(t, i);
+                var origin = ResolvePositionReceiver(method, file, i - 2,
+                    fieldTypes, methods, new HashSet<string>(StringComparer.Ordinal), 0);
+                string lifetime = PositionLifetime(t, method, i);
+                string operation = method is null ? "UNBOUND_METHOD" :
+                    PositionOperation(method);
+                sites.Add(new PositionSite(method, file, i, t[i].Line,
+                    receiver, origin, lifetime, operation));
+            }
+        }
+
+        // Include every active Vector4.Distance/Squared operation even if
+        // the player position came from a different helper or earlier frame.
+        // Same-method context is NOT sufficient to claim operand identity.
+        var geometries = new List<PositionGeometry>();
+        foreach (var file in files)
+        {
+            var t = file.Tokens;
+            byFile.TryGetValue(file.Path, out var inFile);
+            var fileSites = sites.Where(x => x.File.Path == file.Path).ToArray();
+            for (int i = 2; i + 1 < t.Count; i++)
+            {
+                if (t[i - 2].Value != "Vector4" ||
+                    t[i - 1].Value != "." ||
+                    t[i].Value is not ("Distance" or "DistanceSquared") ||
+                    t[i + 1].Value != "(") continue;
+                var method = inFile?.FirstOrDefault(m => m.Open < i && m.Close > i);
+                int end = Match(t, i + 1, "(", ")");
+                var operands = fileSites.Where(x => x.At > i + 1 &&
+                    x.At < end).ToArray();
+                // Distances must have two source-separated operands. A
+                // comma inside nested Vector4() is not an argument boundary.
+                int comma = -1, depth = 0;
+                for (int k = i + 2; k < end; k++)
+                {
+                    if (t[k].Value is "(" or "[" or "{") depth++;
+                    else if (t[k].Value is ")" or "]" or "}") depth--;
+                    else if (t[k].Value == "," && depth == 0)
+                    { comma = k; break; }
+                }
+                string left = comma > i + 2 ?
+                    PositionGeometryOperand(file, method, i + 2, comma,
+                        fileSites) : "UNKNOWN";
+                string right = comma >= 0 && comma + 1 < end ?
+                    PositionGeometryOperand(file, method, comma + 1, end,
+                        fileSites) : "UNKNOWN";
+                string dependency = PositionGeometryDependency(left, right);
+                geometries.Add(new PositionGeometry(file, method, i,
+                    t[i].Line, t[i].Value, left, right, dependency,
+                    operands.Any(x => x.Origin.LocalPlayerProven),
+                    operands.Any(x => !x.Origin.LocalPlayerProven)));
+            }
+        }
+
+        // Interprocedural CALL paths are evidence of potential downstream
+        // consumers, never proof that an arbitrary argument is the player.
+        // Resolve only a uniquely named, source-defined receiver class.
+        var links = PositionHelperLinks(methods, byOwnerMethod, fieldTypes,
+            sites);
+        var parameterFlows = PositionParameterGeometryFlows(
+            links, sites, geometries);
+        var forward = links.GroupBy(e => e.Caller.Identity,
+            StringComparer.Ordinal).ToDictionary(g => g.Key,
+            g => g.ToArray(), StringComparer.Ordinal);
+        var reverse = links.GroupBy(e => e.Callee.Identity,
+            StringComparer.Ordinal).ToDictionary(g => g.Key,
+            g => g.ToArray(), StringComparer.Ordinal);
+        var upstream = new Dictionary<string, object[]>(StringComparer.Ordinal);
+        var downstream = new Dictionary<string, object[]>(StringComparer.Ordinal);
+        var reachable = new HashSet<string>(StringComparer.Ordinal);
+        var valueForwarded = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var method in sites.Where(s => s.Method is not null)
+                     .Select(s => s.Method!).DistinctBy(m => m.Identity))
+        {
+            var found = new List<object>();
+            var visited = new HashSet<string>(StringComparer.Ordinal) {
+                method.Identity
+            };
+            var queue = new Queue<(MethodSource Node, int Depth)>();
+            queue.Enqueue((method, 0));
+            while (queue.Count > 0 && visited.Count < 80)
+            {
+                var (node, depth) = queue.Dequeue();
+                if (depth >= 3 || !reverse.TryGetValue(node.Identity, out var callers))
+                    continue;
+                foreach (var link in callers)
+                {
+                    if (!visited.Add(link.Caller.Identity)) continue;
+                    reachable.Add(link.Caller.Identity);
+                    found.Add(new {
+                        path = link.Caller.File.Relative,
+                        owner = link.Caller.Owner,
+                        method = link.Caller.Name,
+                        line = link.Line,
+                        via = link.Receiver,
+                        depth = depth + 1,
+                        receiverResolution = "SOURCE_UNIQUE_TYPE_OR_CLASS",
+                        parameterPositionOrigin = "UNPROVEN"
+                    });
+                    if (found.Count >= 64) break;
+                    queue.Enqueue((link.Caller, depth + 1));
+                }
+            }
+            upstream[method.Identity] = found.ToArray();
+            var outgoing = new List<object>();
+            var visitedCallees = new HashSet<string>(StringComparer.Ordinal) {
+                method.Identity
+            };
+            var calleeQueue = new Queue<(MethodSource Node, int Depth, bool Flow)>();
+            calleeQueue.Enqueue((method, 0, true));
+            while (calleeQueue.Count > 0 && visitedCallees.Count < 80)
+            {
+                var (node, depth, flow) = calleeQueue.Dequeue();
+                if (depth >= 3 || !forward.TryGetValue(node.Identity, out var edges))
+                    continue;
+                foreach (var link in edges)
+                {
+                    if (!visitedCallees.Add(link.Callee.Identity)) continue;
+                    bool directFlow = flow && link.ProvenLocalPositionArgument;
+                    if (directFlow) valueForwarded.Add(link.Callee.Identity);
+                    outgoing.Add(new {
+                        path = link.Callee.File.Relative,
+                        owner = link.Callee.Owner,
+                        method = link.Callee.Name,
+                        callsiteLine = link.Line,
+                        depth = depth + 1,
+                        operation = PositionOperation(link.Callee),
+                        directPositionArgument = link.DirectPositionArgument,
+                        provenLocalPositionArgument = directFlow,
+                        // A call edge does not prove consumption of the
+                        // passed parameter or safe downstream replacement.
+                        parameterUseClosureProven = false
+                    });
+                    if (outgoing.Count >= 64) break;
+                    calleeQueue.Enqueue((link.Callee, depth + 1, directFlow));
+                }
+            }
+            downstream[method.Identity] = outgoing.ToArray();
+        }
+
+        var sorted = sites.OrderBy(s => s.File.Relative, StringComparer.Ordinal)
+            .ThenBy(s => s.Line).ThenBy(s => s.At).ToArray();
+        // Stable schema: every category exists even if none was found in
+        // this installation. CI/report clients must not guess missing values.
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["LOCAL_PLAYER"] = 0,
+            ["NPC"] = 0,
+            ["VEHICLE"] = 0,
+            ["OTHER_ENTITY"] = 0,
+            ["UNKNOWN"] = 0,
+            ["MIXED"] = 0
+        };
+        foreach (var group in sorted.GroupBy(s => s.Origin.Kind))
+            counts[group.Key] = group.Count();
+        int N(string kind) => counts.GetValueOrDefault(kind);
+        int local = N("LOCAL_PLAYER");
+        static string OwnerFolder(string relative)
+        {
+            const string prefix = "r6/scripts/";
+            string rest = relative.StartsWith(prefix, StringComparison.Ordinal)
+                ? relative[prefix.Length..] : relative;
+            int separator = rest.IndexOf('/');
+            return separator < 0 ? "(root)" : rest[..separator];
+        }
+        int positionFiles = sorted.Select(x => x.File.Relative)
+            .Distinct(StringComparer.Ordinal).Count();
+        int positionFolders = sorted.Select(x => OwnerFolder(x.File.Relative))
+            .Distinct(StringComparer.Ordinal).Count();
+        int provenLocalFiles = sorted.Where(x => x.Origin.LocalPlayerProven)
+            .Select(x => x.File.Relative).Distinct(StringComparer.Ordinal).Count();
+        int provenLocalFolders = sorted.Where(x => x.Origin.LocalPlayerProven)
+            .Select(x => OwnerFolder(x.File.Relative))
+            .Distinct(StringComparer.Ordinal).Count();
+        var summary = new PlayerPositionSummary(
+            admission.InspectedFileCount, methods.Count, sites.Count,
+            local, N("NPC"), N("VEHICLE"), N("OTHER_ENTITY"),
+            N("UNKNOWN"), N("MIXED"), reachable.Count);
+        var report = new {
+            schemaVersion = "gco.redscript.player-position-dependencies.v1",
+            sourceStackSha256 = admission.SourceStackSha256,
+            sourceFiles = summary.SourceFiles,
+            methodSpans = summary.MethodSpans,
+            worldPositionCallsites = summary.WorldPositionCalls,
+            sourceFilesWithWorldPosition = positionFiles,
+            sourceOwnerFoldersWithWorldPosition = positionFolders,
+            provenLocalPlayerFiles = provenLocalFiles,
+            provenLocalPlayerOwnerFolders = provenLocalFolders,
+            categoryCounts = counts,
+            distanceCallsites = geometries.Count(x => x.Operation == "Distance"),
+            distanceSquaredCallsites = geometries.Count(x => x.Operation == "DistanceSquared"),
+            distanceCallsWithDirectLocalPlayerOperand =
+                geometries.Count(x => x.DirectLocalPlayerOperand),
+            geometryDependencyCounts = geometries.GroupBy(x => x.Dependency)
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .ToDictionary(x => x.Key, x => x.Count(),
+                    StringComparer.Ordinal),
+            geometries = geometries.OrderBy(x => x.File.Relative, StringComparer.Ordinal)
+                .ThenBy(x => x.Line).Select(x => new {
+                    path = x.File.Relative,
+                    owner = x.Method?.Owner ?? "",
+                    method = x.Method?.Name ?? "",
+                    line = x.Line,
+                    operation = x.Operation,
+                    leftOrigin = x.LeftOrigin,
+                    rightOrigin = x.RightOrigin,
+                    positionDependency = x.Dependency,
+                    directLocalPlayerOperand = x.DirectLocalPlayerOperand,
+                    directOtherOrUnknownOperand = x.DirectOtherOrUnknownOperand,
+                    operandOriginIfForwardedByAliases = "UNRESOLVED",
+                    generationAuthorized = false
+                }).ToArray(),
+            provenLocalPlayerCallsites = local,
+            callsiteScopedPlayerGeometryFlows = parameterFlows.Count,
+            helperParameterGeometryFlows = parameterFlows
+                .OrderBy(x => x.Caller.File.Relative, StringComparer.Ordinal)
+                .ThenBy(x => x.CallLine).ThenBy(x => x.ArgumentIndex)
+                .ThenBy(x => x.Callee.Identity, StringComparer.Ordinal)
+                .Select(x => new {
+                    callerPath = x.Caller.File.Relative,
+                    callerOwner = x.Caller.Owner,
+                    callerMethod = x.Caller.Name,
+                    callLine = x.CallLine,
+                    calleePath = x.Callee.File.Relative,
+                    calleeOwner = x.Callee.Owner,
+                    calleeMethod = x.Callee.Name,
+                    argumentIndex = x.ArgumentIndex,
+                    calleeParameter = x.Parameter,
+                    geometryLine = x.GeometryLine,
+                    operation = x.Operation,
+                    positionOrigin = "LOCAL_PLAYER",
+                    otherOperandOrigin = x.OtherOperandOrigin,
+                    sourceParameterUsedAsExactGeometryOperand = true,
+                    callsiteScoped = true,
+                    allCalleeCallersUseLocalPlayer = false,
+                    parameterMutationAndTimingClosureProven = false,
+                    nativePositionFreshnessProven = false,
+                    safeToRewriteCallee = false,
+                    generationAuthorized = false
+                }).ToArray(),
+            indirectConsumerMethods = summary.IndirectConsumers,
+            downstreamGeometryWithDirectPositionArguments = valueForwarded.Count,
+            sourceOnly = true,
+            captureNeededForDiscovery = false,
+            generationAuthorized = false,
+            gameplayValidated = false,
+            productionZipAuthorized = false,
+            originalSourcesModified = false,
+            // All matched calls are retained, including unknown and
+            // calls outside the parser's supported method-body spans.
+            callsites = sorted.Select(s => new {
+                path = s.File.Relative,
+                owner = s.Method?.Owner ?? "",
+                method = s.Method?.Name ?? "",
+                line = s.Line,
+                receiver = s.Receiver,
+                positionOrigin = s.Origin.Kind,
+                reason = s.Origin.Reason,
+                localPlayerProven = s.Origin.LocalPlayerProven,
+                playerTypeHint = s.Origin.PlayerTypeHint,
+                lifetime = s.Lifetime,
+                operation = s.Operation,
+                operationIsMethodContextNotVerifiedOperandUse = true,
+                downstreamHelpers = s.Method is not null &&
+                    downstream.TryGetValue(s.Method.Identity, out var callees)
+                        ? callees : [],
+                strategy = s.Origin.LocalPlayerProven
+                    ? s.Operation is "DISTANCE" or "DISTANCE_SQUARED"
+                        ? "PLAYER_POSITION_REUSE_CANDIDATE"
+                        : "PLAYER_POSITION_CONSUMER_REVIEW"
+                    : "NO_AUTOMATIC_REWRITE",
+                originalFallbackRequired = true,
+                helperCallers = s.Method is not null &&
+                    upstream.TryGetValue(s.Method.Identity, out var found)
+                        ? found : []
+            }).ToArray(),
+            helperGraph = new {
+                resolvedEdges = links.Count,
+                indirectConsumerMethods = reachable.Count,
+                downstreamMethodsWithDirectPositionArguments = valueForwarded.Count,
+                maxDepth = 3,
+                maxCallersPerDirectMethod = 64,
+                dynamicReceiversAndUnknownImportsAreNotAssumed = true,
+                sourceCallsDoNotProveRuntimeCallFrequency = true
+            }
+        };
+        if (!string.Equals(admission.SourceStackSha256,
+                admission.FingerprintCurrentSources(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("PLAYER_POSITION_SCAN_SOURCE_DRIFT");
+        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+        File.WriteAllText(output, JsonSerializer.Serialize(report,
+            new JsonSerializerOptions { WriteIndented = true }),
+            new UTF8Encoding(false));
+        return summary;
+    }
+
+    private static Dictionary<string, string> PositionFieldTypes(
+        IReadOnlyList<FileSource> files,
+        IReadOnlyDictionary<string, MethodSource[]> byFile)
+    {
+        var types = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            var t = file.Tokens;
+            byFile.TryGetValue(file.Path, out var methods);
+            for (int i = 0; i + 3 < t.Count; i++)
+            {
+                if (t[i].Value != "class" || !Ident(t[i + 1].Value))
+                    continue;
+                int open = i + 2;
+                while (open < t.Count && open < i + 40 &&
+                       t[open].Value is not ("{" or ";")) open++;
+                if (open >= t.Count || t[open].Value != "{") continue;
+                int close = Match(t, open, "{", "}");
+                string owner = t[i + 1].Value;
+                for (int k = open + 1; k + 3 < close; k++)
+                {
+                    if (t[k].Value != "let" || !Ident(t[k + 1].Value) ||
+                        t[k + 2].Value != ":") continue;
+                    if (methods?.Any(m => m.Open < k && m.Close > k) == true)
+                        continue;
+                    string type = PositionType(t, k + 3, close);
+                    if (type.Length != 0)
+                        types[file.Module + "\0" + owner + "\0" +
+                            t[k + 1].Value] = type;
+                }
+                i = close;
+            }
+        }
+        return types;
+    }
+
+    private static string PositionType(
+        IReadOnlyList<SourceAdmission.Token> t, int start, int end)
+    {
+        int max = Math.Min(end, start + 14);
+        var name = new StringBuilder();
+        for (int i = start; i < max; i++)
+        {
+            if (t[i].Value is "=" or ";" or "," or ")" or "{") break;
+            if (Ident(t[i].Value)) name.Append(t[i].Value);
+        }
+        return name.ToString();
+    }
+
+    private static PositionOrigin FromType(string type) =>
+        // ScriptedPuppet is not synonymous with NPCPuppet; it can
+        // describe broader puppet hierarchies and does not prove NPC.
+        type.Contains("NPCPuppet", StringComparison.Ordinal)
+            ? NpcEntity :
+        type.Contains("VehicleObject", StringComparison.Ordinal) ||
+        type.Contains("VehiclePuppet", StringComparison.Ordinal)
+            ? VehicleEntity :
+        type.Contains("PlayerPuppet", StringComparison.Ordinal)
+            ? new("UNKNOWN", "PLAYER_PUPPET_TYPE_NOT_LOCAL_PROVEN",
+                PlayerTypeHint: true) :
+        type.Contains("GameObject", StringComparison.Ordinal) ||
+        type.Contains("Entity", StringComparison.Ordinal)
+            ? PositionOrigin.Unknown("GENERIC_OBJECT_TYPE_NOT_LOCAL_PROVEN") :
+        PositionOrigin.Unknown("RECEIVER_TYPE_UNRESOLVED");
+
+    private static PositionOrigin ResolvePositionReceiver(MethodSource? method,
+        FileSource file, int receiverAt,
+        IReadOnlyDictionary<string, string> fields,
+        IReadOnlyList<MethodSource> all,
+        HashSet<string> visited, int depth)
+    {
+        var t = file.Tokens;
+        if (receiverAt < 0 || depth >= 5)
+            return PositionOrigin.Unknown("PROVENANCE_DEPTH_OR_RECEIVER_UNKNOWN");
+        if (t[receiverAt].Value == ")")
+        {
+            int open = receiverAt, level = 0;
+            for (; open >= 0; open--)
+            {
+                if (t[open].Value == ")") level++;
+                if (t[open].Value == "(" && --level == 0) break;
+            }
+            // A method called SomeObject.GetPlayer() is not the engine's
+            // global local-player getter.
+            if (open > 0 && t[open - 1].Value == "GetPlayer" &&
+                (open < 2 || t[open - 2].Value != "."))
+                return DirectLocal;
+            if (open > 0 && t[open - 1].Value ==
+                "GetLocalPlayerMainGameObject")
+                return DirectLocal;
+            return PositionOrigin.Unknown("CHAINED_RECEIVER_OR_CAST_UNRESOLVED");
+        }
+        string name = t[receiverAt].Value;
+        if (name == "this")
+        {
+            string owner = method?.Owner ?? "";
+            if (owner == "VehicleObject") return VehicleEntity;
+            if (owner == "NPCPuppet") return NpcEntity;
+            // Source-declared subclasses can use this.GetWorldPosition()
+            // without naming their base type in the method.
+            for (int k = 0; k + 3 < t.Count; k++)
+                if (t[k].Value == "class" && t[k + 1].Value == owner &&
+                    t[k + 2].Value == "extends")
+                {
+                    var baseType = FromType(t[k + 3].Value);
+                    if (baseType.Kind is "NPC" or "VEHICLE")
+                        return baseType;
+                    break;
+                }
+            if (owner == "PlayerPuppet")
+                return new("UNKNOWN", "PLAYER_PUPPET_CONTEXT_LOCAL_UNPROVEN",
+                    PlayerTypeHint: true);
+            return PositionOrigin.Unknown("THIS_RECEIVER_CLASS_UNRESOLVED");
+        }
+        if (!Ident(name))
+            return PositionOrigin.Unknown("RECEIVER_EXPRESSION_UNRESOLVED");
+        bool field = receiverAt >= 2 &&
+            t[receiverAt - 1].Value == "." &&
+            t[receiverAt - 2].Value == "this";
+        string key = (field ? "FIELD:" : "LOCAL:") + name;
+        if (!visited.Add(key))
+            return PositionOrigin.Unknown("ALIAS_CYCLE");
+        var assigned = new List<PositionOrigin>();
+        // Fields can be initialized in any method of their owning class.
+        foreach (var sourceMethod in field && method is not null ?
+            all.Where(m => m.File.Module == file.Module &&
+                           m.Owner == method.Owner) :
+            method is null ? [] : [method])
+        {
+            var st = sourceMethod.File.Tokens;
+            for (int i = sourceMethod.Open + 1; i + 1 < sourceMethod.Close; i++)
+            {
+                if (st[i].Value != name ||
+                    (field && (i < 2 || st[i - 1].Value != "." ||
+                               st[i - 2].Value != "this")))
+                    continue;
+                if (!field && i > 0 && st[i - 1].Value == ".") continue;
+                int assignAt = i + 1;
+                // let player: ref<PlayerPuppet> = GetPlayer(...)
+                // has a typed initializer rather than name = ... .
+                if (!field && assignAt < sourceMethod.Close &&
+                    st[assignAt].Value == ":")
+                {
+                    while (assignAt < sourceMethod.Close &&
+                           assignAt < i + 18 &&
+                           st[assignAt].Value is not ("=" or ";" or "{"))
+                        assignAt++;
+                }
+                if (assignAt >= sourceMethod.Close ||
+                    st[assignAt].Value != "=") continue;
+                int finish = assignAt + 1;
+                while (finish < sourceMethod.Close &&
+                       finish < assignAt + 45 &&
+                       st[finish].Value is not (";" or "{")) finish++;
+                var expr = st.Skip(assignAt + 1).Take(finish - assignAt - 1)
+                    .Select(x => x.Value).ToArray();
+                if (expr.Length == 0) continue;
+                if (PositionIsDirectLocalGetter(expr))
+                    assigned.Add(DirectLocal);
+                else if (expr.Contains("NPCPuppet"))
+                    assigned.Add(NpcEntity);
+                else if (expr.Contains("VehicleObject"))
+                    assigned.Add(VehicleEntity);
+                else if (expr.Length == 1 && expr[0] == "null")
+                {
+                    // Explicit lifecycle clear does not change a proven
+                    // assignment's origin, but cannot establish freshness.
+                }
+                else if (expr.Length == 1 && Ident(expr[0]))
+                    assigned.Add(ResolvePositionReceiver(sourceMethod,
+                        sourceMethod.File, assignAt + 1, fields, all,
+                        new HashSet<string>(visited, StringComparer.Ordinal),
+                        depth + 1));
+                else
+                    assigned.Add(PositionOrigin.Unknown(
+                        "ASSIGNMENT_EXPRESSION_UNRESOLVED"));
+            }
+        }
+        var origins = assigned.Select(x => x.Kind).Distinct().ToArray();
+        if (origins.Length > 1)
+            return new("MIXED", "SOURCE_ASSIGNMENTS_HAVE_MIXED_ORIGINS");
+        if (origins.Length == 1 && origins[0] != "UNKNOWN")
+            return assigned.First(x => x.Kind == origins[0]);
+        if (assigned.Count > 0)
+            return PositionOrigin.Unknown("SOURCE_ASSIGNMENT_UNPROVEN");
+
+        if (field && method is not null &&
+            fields.TryGetValue(file.Module + "\0" + method.Owner + "\0" + name,
+                out string? fieldType))
+            return FromType(fieldType);
+        if (method is not null)
+        {
+            var st = method.File.Tokens;
+            for (int k = method.SignatureOpen + 1;
+                 k + 2 < method.SignatureClose; k++)
+                if (st[k].Value == name && st[k + 1].Value == ":")
+                    return FromType(PositionType(st, k + 2,
+                        method.SignatureClose));
+            // Source-typed locally declared variables and cast expressions.
+            for (int k = method.Open + 1; k + 2 < receiverAt; k++)
+                if (st[k].Value == "let" && st[k + 1].Value == name &&
+                    st[k + 2].Value == ":")
+                    return FromType(PositionType(st, k + 3, receiverAt));
+        }
+        return PositionOrigin.Unknown("RECEIVER_ORIGIN_UNRESOLVED");
+    }
+
+    private static string PositionReceiver(
+        IReadOnlyList<SourceAdmission.Token> t, int i)
+    {
+        int at = i - 2;
+        if (at < 0) return "<unresolved>";
+        if (t[at].Value == ")") return "<call-result>";
+        if (at >= 2 && t[at - 1].Value == "." &&
+            t[at - 2].Value == "this") return "this." + t[at].Value;
+        return t[at].Value;
+    }
+
+    private static string PositionLifetime(
+        IReadOnlyList<SourceAdmission.Token> t, MethodSource? m, int i)
+    {
+        if (m is null) return "UNKNOWN";
+        int from = Math.Max(m.Open + 1, i - 24);
+        for (int k = i - 1; k >= from; k--)
+        {
+            if (t[k].Value is ";" or "{" or "}") break;
+            if (t[k].Value == "=" && k >= 3 && t[k - 1].Value is not ("=" or "!"))
+                return t[k - 1].Value is "position" or "lastPosition" ?
+                    "POSSIBLY_SAVED_POSITION" :
+                    (k >= 3 && t[k - 3].Value == "this" &&
+                     t[k - 2].Value == ".")
+                        ? "SAVED_TO_FIELD" : "CALL_LOCAL_OR_PASSED";
+        }
+        return "IMMEDIATE_OR_ARGUMENT";
+    }
+
+    private static string PositionGeometryOperand(FileSource file,
+        MethodSource? method, int start, int end,
+        IReadOnlyList<PositionSite> sameFileSites)
+    {
+        var t = file.Tokens;
+        if (start >= end || start < 0 || end > t.Count) return "UNKNOWN";
+        var calls = sameFileSites.Where(x => x.At >= start &&
+            x.At < end).ToArray();
+        if (calls.Length > 0)
+        {
+            var types = calls.Select(x => x.Origin.Kind).Distinct().ToArray();
+            return types.Length == 1 ? types[0] : "MIXED";
+        }
+
+        // Immutable numeric literal geometry is evidence of a literal
+        // coordinate expression, NOT a guarantee that an enclosing array
+        // or site registry stays immutable after construction.
+        string raw = file.Text[t[start].Start..t[end - 1].End].Trim();
+        var vector = Regex.Match(raw,
+            @"^(?:new\s+)?Vector4\s*\((?<components>[^()]*)\)$",
+            RegexOptions.CultureInvariant);
+        if (vector.Success)
+        {
+            var components = vector.Groups["components"].Value.Split(',');
+            if (components.Length == 4 && components.All(x =>
+                float.TryParse(x.Trim(), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out float v) &&
+                float.IsFinite(v)))
+                return "STATIC_LITERAL_VECTOR";
+        }
+
+        if (raw.StartsWith("this.", StringComparison.Ordinal))
+            return "STORED_OR_DYNAMIC_FIELD";
+
+        // Local position aliases: only an unambiguous, same-method
+        // assignment from a source-identified read can be propagated.
+        if (method is not null && end - start == 1 &&
+            Ident(t[start].Value))
+        {
+            string symbol = t[start].Value;
+            var bindings = new List<PositionOrigin>();
+            for (int k = method.Open + 1; k + 1 < start; k++)
+            {
+                if (t[k].Value != symbol ||
+                    (k > 0 && t[k - 1].Value == ".")) continue;
+                int assignAt = k + 1;
+                if (assignAt < start && t[assignAt].Value == ":")
+                {
+                    while (assignAt < start && assignAt < k + 14 &&
+                           t[assignAt].Value is not ("=" or ";" or "{"))
+                        assignAt++;
+                }
+                if (assignAt >= start || t[assignAt].Value != "=")
+                    continue;
+                int semi = assignAt + 1;
+                while (semi < start && t[semi].Value != ";") semi++;
+                var matches = sameFileSites.Where(x => x.At > assignAt &&
+                    x.At < semi).Select(x => x.Origin).ToArray();
+                if (matches.Length == 1)
+                    bindings.Add(matches[0]);
+                else
+                    bindings.Add(PositionOrigin.Unknown(
+                        "LOCAL_ALIAS_SOURCE_UNRESOLVED"));
+            }
+            if (bindings.Count == 1)
+                return bindings[0].Kind;
+            if (bindings.Count > 1)
+                return "MIXED";
+        }
+        return "UNKNOWN";
+    }
+
+    private static string PositionGeometryDependency(
+        string left, string right)
+    {
+        bool local = left == "LOCAL_PLAYER" || right == "LOCAL_PLAYER";
+        bool dynamic = left is "NPC" or "VEHICLE" ||
+                       right is "NPC" or "VEHICLE";
+        if (local && dynamic) return "PLAYER_AND_DYNAMIC_ENTITY";
+        if (local && (left == "STATIC_LITERAL_VECTOR" ||
+                      right == "STATIC_LITERAL_VECTOR"))
+            return "PLAYER_AND_LITERAL_POSITION";
+        if (local) return "PLAYER_WITH_UNRESOLVED_TARGET";
+        if ((left is "NPC" or "VEHICLE") &&
+            (right is "NPC" or "VEHICLE"))
+            return "NONPLAYER_ENTITY_DISTANCE";
+        return "GEOMETRY_ORIGIN_UNRESOLVED";
+    }
+
+    private static string PositionOperation(MethodSource method)
+    {
+        var t = method.File.Tokens;
+        bool sq = false, dist = false, near = false, other = false;
+        for (int i = method.Open + 1; i < method.Close; i++)
+        {
+            sq |= t[i].Value == "DistanceSquared";
+            dist |= t[i].Value is "Distance" or "GetDistanceTo";
+            near |= t[i].Value is "IsNear" or "IsInRange" or "PointInTriangle";
+            other |= t[i].Value is "Length" or "LengthSquared" or "IsPointIn";
+        }
+        return sq ? "DISTANCE_SQUARED" : dist ? "DISTANCE" :
+            near ? "CONTAINMENT_OR_RANGE_HELPER" :
+            other ? "VECTOR_OR_CONTAINMENT" : "POSITION_READ_OR_FORWARD";
+    }
+
+    private static List<PositionLink> PositionHelperLinks(
+        IReadOnlyList<MethodSource> methods,
+        IReadOnlyDictionary<string, MethodSource[]> byOwnerMethod,
+        IReadOnlyDictionary<string, string> fields,
+        IReadOnlyList<PositionSite> sites)
+    {
+        var links = new List<PositionLink>();
+        var siteIndex = sites.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+        foreach (var caller in methods)
+        {
+            var t = caller.File.Tokens;
+            for (int i = caller.Open + 1; i + 1 < caller.Close; i++)
+            {
+                if (t[i + 1].Value != "(" || !Ident(t[i].Value)) continue;
+                string? owner = null, receiver = "";
+                if (i >= 2 && t[i - 1].Value == "." &&
+                    Ident(t[i - 2].Value))
+                {
+                    receiver = t[i - 2].Value;
+                    if (receiver == "this") owner = caller.Owner;
+                    else if (i >= 4 && t[i - 3].Value == "." &&
+                        t[i - 4].Value == "this")
+                    {
+                        fields.TryGetValue(caller.File.Module + "\0" +
+                            caller.Owner + "\0" + receiver, out owner);
+                        if (owner is not null)
+                        {
+                            // ref<Foo> / wref<Foo> -> Foo. No dynamic
+                            // subtyping or override equivalence assumed.
+                            foreach (var prefix in new[] { "wref", "ref" })
+                                if (owner.StartsWith(prefix, StringComparison.Ordinal))
+                                    owner = owner[prefix.Length..];
+                        }
+                    }
+                    else owner = receiver;
+                }
+                else if (i < caller.File.Tokens.Count && t[i - 1].Value != ".")
+                {
+                    owner = caller.Owner;
+                    receiver = "this";
+                }
+                if (owner is null) continue;
+                var key = owner + "\0" + t[i].Value;
+                if (!byOwnerMethod.TryGetValue(key, out var candidates))
+                    continue;
+                // Prefer a unique method in the caller module. If not,
+                // require global uniqueness; overloads remain unresolved.
+                var same = candidates.Where(x =>
+                    x.File.Module == caller.File.Module).ToArray();
+                var target = same.Length == 1 ? same[0] :
+                    candidates.Length == 1 ? candidates[0] : null;
+                if (target is null || target.Identity == caller.Identity)
+                    continue;
+                int end = Match(t, i + 1, "(", ")");
+                siteIndex.TryGetValue(caller.Identity, out var directSites);
+                var arguments = directSites?.Where(site =>
+                    site.At > i + 1 && site.At < end).ToArray() ?? [];
+                links.Add(new PositionLink(caller, target, t[i].Line,
+                    receiver, arguments.Length > 0,
+                    arguments.Any(site => site.Origin.LocalPlayerProven),
+                    i));
+            }
+        }
+        return links.DistinctBy(x => x.Caller.Identity + "\0" +
+                x.Callee.Identity + "\0" + x.CallTokenAt).ToList();
+    }
+
+    // Require the getter to be the expression result, not an argument to
+    // arbitrary wrapper code (Identity(GetPlayer(game)), factory(...), etc).
+    private static bool PositionIsDirectLocalGetter(IReadOnlyList<string> e)
+    {
+        if (e.Count < 3) return false;
+        static int Close(IReadOnlyList<string> t, int at)
+        {
+            if (at >= t.Count || t[at] != "(") return -1;
+            int depth = 0;
+            for (int i = at; i < t.Count; i++)
+            {
+                if (t[i] == "(") depth++;
+                if (t[i] == ")" && --depth == 0) return i;
+            }
+            return -1;
+        }
+        static bool EndOrCast(IReadOnlyList<string> t, int end) =>
+            end == t.Count - 1 ||
+            (end == t.Count - 3 && t[end + 1] == "as" &&
+             t[end + 2] == "PlayerPuppet");
+
+        if (e[0] == "GetPlayer" && e[1] == "(")
+            return EndOrCast(e, Close(e, 1));
+
+        // GameInstance.GetPlayerSystem(game).GetLocalPlayerMainGameObject()
+        if (e.Count >= 10 && e[0] == "GameInstance" &&
+            e[1] == "." && e[2] == "GetPlayerSystem" && e[3] == "(")
+        {
+            int systemEnd = Close(e, 3);
+            if (systemEnd >= 0 && systemEnd + 4 < e.Count &&
+                e[systemEnd + 1] == "." &&
+                e[systemEnd + 2] == "GetLocalPlayerMainGameObject" &&
+                e[systemEnd + 3] == "(" &&
+                EndOrCast(e, Close(e, systemEnd + 3)))
+                return true;
+        }
+        return false;
+    }
+
+    // Extract argument spans at the *actual* callsite. Commas nested inside
+    // constructors, arrays and generic type arguments are not separators.
+    private static List<(int Start, int End)> PositionArgumentRanges(
+        IReadOnlyList<SourceAdmission.Token> t, int open, int close)
+    {
+        var ranges = new List<(int, int)>();
+        if (open < 0 || close <= open || t[open].Value != "(" ||
+            t[close].Value != ")") return ranges;
+        int start = open + 1, depth = 0;
+        for (int i = start; i < close; i++)
+        {
+            string value = t[i].Value;
+            if (value is "(" or "[" or "{" or "<") depth++;
+            else if (value is ")" or "]" or "}" or ">") depth--;
+            if (depth < 0) return [];
+            if (value == "," && depth == 0)
+            {
+                if (start >= i) return [];
+                ranges.Add((start, i));
+                start = i + 1;
+            }
+        }
+        if (depth != 0) return [];
+        if (start < close) ranges.Add((start, close));
+        return ranges;
+    }
+
+    private static List<PositionParameterGeometryFlow> PositionParameterGeometryFlows(
+        IReadOnlyList<PositionLink> links,
+        IReadOnlyList<PositionSite> sites,
+        IReadOnlyList<PositionGeometry> geometries)
+    {
+        var results = new List<PositionParameterGeometryFlow>();
+        var byMethodSites = sites.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+        var byGeometry = geometries.Where(x => x.Method is not null)
+            .GroupBy(x => x.Method!.Identity, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.Ordinal);
+        foreach (var link in links)
+        {
+            var caller = link.Caller;
+            var callee = link.Callee;
+            var ct = caller.File.Tokens;
+            int callOpen = link.CallTokenAt + 1;
+            if (callOpen >= ct.Count || ct[callOpen].Value != "(") continue;
+            int callClose = Match(ct, callOpen, "(", ")");
+            if (callClose <= callOpen) continue;
+            var arguments = PositionArgumentRanges(ct, callOpen, callClose);
+            var st = callee.File.Tokens;
+            var parameters = PositionArgumentRanges(st,
+                callee.SignatureOpen, callee.SignatureClose);
+            // Absent/optional/named parameters and overload ambiguities
+            // cannot establish a source-typed positional binding.
+            if (arguments.Count == 0 || arguments.Count != parameters.Count)
+                continue;
+            byMethodSites.TryGetValue(caller.Identity, out var callerSites);
+            byGeometry.TryGetValue(callee.Identity, out var calleeGeometries);
+            if (calleeGeometries is null || calleeGeometries.Length == 0)
+                continue;
+            for (int n = 0; n < arguments.Count; n++)
+            {
+                var formal = parameters[n];
+                if (formal.End - formal.Start < 3 ||
+                    !Ident(st[formal.Start].Value) ||
+                    st[formal.Start + 1].Value != ":" ||
+                    st[formal.Start + 2].Value != "Vector4")
+                    continue;
+                string name = st[formal.Start].Value;
+                var arg = arguments[n];
+                bool proven = false;
+                if (arg.End - arg.Start == 1 && callerSites is not null)
+                {
+                    proven = PositionGeometryOperand(caller.File, caller,
+                        arg.Start, arg.End, callerSites) == "LOCAL_PLAYER";
+                }
+                else if (callerSites is not null)
+                {
+                    proven = callerSites.Any(site =>
+                        site.Origin.LocalPlayerProven &&
+                        site.At == arg.End - 3 &&
+                        ct[site.At - 1].Value == "." &&
+                        ct[site.At + 1].Value == "(" &&
+                        ct[site.At + 2].Value == ")" &&
+                        (arg.Start == site.At - 2 ||
+                         (arg.Start == site.At - 4 &&
+                          ct[arg.Start].Value == "this" &&
+                          ct[arg.Start + 1].Value == ".") ||
+                         (ct[arg.Start].Value == "GetPlayer" &&
+                          arg.Start + 1 < site.At &&
+                          ct[arg.Start + 1].Value == "(" &&
+                          Match(ct, arg.Start + 1, "(", ")") == site.At - 2)));
+                }
+                if (!proven) continue;
+                foreach (var geometry in calleeGeometries)
+                {
+                    int go = geometry.At + 1;
+                    int gc = Match(st, go, "(", ")");
+                    if (gc <= go) continue;
+                    var operands = PositionArgumentRanges(st, go, gc);
+                    if (operands.Count != 2) continue;
+                    bool left = operands[0].End - operands[0].Start == 1 &&
+                        st[operands[0].Start].Value == name;
+                    bool right = operands[1].End - operands[1].Start == 1 &&
+                        st[operands[1].Start].Value == name;
+                    if (left == right) continue;
+                    results.Add(new PositionParameterGeometryFlow(
+                        caller, callee, link.Line, n, name, geometry.Line,
+                        geometry.Operation,
+                        left ? geometry.RightOrigin : geometry.LeftOrigin));
+                }
+            }
+        }
+        return results.Distinct().ToList();
+    }
+}

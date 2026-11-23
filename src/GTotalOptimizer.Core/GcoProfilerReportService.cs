@@ -36,6 +36,7 @@ public static class GcoProfilerReportService
         public double? CpuBusyMaxMs { get; set; }
         public double? GpuBusyMaxMs { get; set; }
         public double CetExclusiveMs { get; set; }
+        public int CetWindows { get; set; }
         public double RedscriptExclusiveMs { get; set; }
         public long RedscriptCalls { get; set; }
         public int RedscriptFrames { get; set; }
@@ -207,39 +208,10 @@ public static class GcoProfilerReportService
         Path.Combine(CollectedCaptureStore.SessionFolder(packageRoot, sessionId),
             "Reports", HtmlFile);
 
-    // A partial report directory is never an analyzer-ready capture. Verify
-    // both source-owned reports and the combined session identity in RESULTS.
-    public static bool HasCompletedReport(string packageRoot, string sessionId)
-    {
-        var html = ReportFile(packageRoot, sessionId);
-        var folder = Path.GetDirectoryName(html)!;
-        if (!File.Exists(html) ||
-            !File.Exists(Path.Combine(folder, JsonFile)) ||
-            !File.Exists(Path.Combine(folder, "CET", "CET_Report.html")) ||
-            !File.Exists(Path.Combine(folder, "CET", "CET_Resolver_Input.json")) ||
-            !File.Exists(Path.Combine(folder, "GRSP", "GRSP_Report.html")) ||
-            !File.Exists(Path.Combine(folder, "GRSP", "GRSP_Summary.json")))
-            return false;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(
-                Path.Combine(folder, JsonFile)));
-            var root = document.RootElement;
-            return root.TryGetProperty("schemaVersion", out var schema) &&
-                schema.ValueKind == JsonValueKind.String &&
-                schema.GetString() == "gco.profiler.report.v1" &&
-                root.TryGetProperty("sessionId", out var identity) &&
-                identity.ValueKind == JsonValueKind.String &&
-                identity.GetString() == sessionId;
-        }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-        catch (JsonException) { return false; }
-    }
-
     public static async Task<GcoProfilerReportOutcome> GenerateAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<WorkflowStepProgress>? progress = null)
     {
         packageRoot = Path.GetFullPath(packageRoot);
         var saved = CollectedCaptureStore.Read(packageRoot, gameRoot, sessionId,
@@ -253,13 +225,13 @@ public static class GcoProfilerReportService
         var machine = Path.Combine(outputFolder, JsonFile);
         // Results are derived, never part of the sealed native owner inventory.
         // A completed report is immutable; do not replace it on reopening GCO.
-        if (File.Exists(html) || File.Exists(machine))
+        if (File.Exists(html) && File.Exists(machine))
         {
-            if (!HasCompletedReport(packageRoot, sessionId))
-                throw new InvalidDataException(
-                    "Previous profiler report is incomplete; captured evidence is preserved.");
             using var existing = JsonDocument.Parse(File.ReadAllText(machine));
+            if (existing.RootElement.GetProperty("sessionId").GetString() != sessionId)
+                throw new InvalidDataException("Previous GCO report belongs to a different session.");
             var frameCount = existing.RootElement.GetProperty("presentMonFrameCount").GetInt32();
+            progress?.Report(new(10, 10, "COLLECT / EXISTING REPORT VERIFIED"));
             return new(html, machine, frameCount, 0, 0);
         }
 
@@ -287,20 +259,27 @@ public static class GcoProfilerReportService
                 cet, saved.Cet, cancellationToken);
             CopyOwner(CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "REDscript"),
                 red, saved.Redscript, cancellationToken);
+            // Keep the exact same hash-sealed GCO chronology that CET
+            // already consumes. GRSP will read a report-side copy; never
+            // create a second QPC conversion or touch the sealed capture.
+            string? stagedFrameHandoff = null;
             if (mon is not null)
-                _ = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
+                stagedFrameHandoff = GcoPresentMonFrameEvidence.WriteToStagedCetCapture(
                     sealedFolder, saved,
                     PresentMonCaptureAlignment.RequireOverlap(packageRoot, saved), cet);
 
+            progress?.Report(new(5, 10, "COLLECT / REPORT SOURCES READY"));
             // Run the ORIGINAL reporters on copies. Neither standalone owner
             // sees a made-up CapFrameX JSON or modifies the sealed capture.
             await RunOwnerAsync(bundle.CetExecutable,
                 ["--report", "--capture", cet, "--json"],
                 packageRoot, cancellationToken).ConfigureAwait(false);
+            progress?.Report(new(6, 10, "COLLECT / CET REPORT READY"));
             await RunOwnerAsync(bundle.GrspExecutable,
                 ["--report", "--capture", red, "--json"],
                 packageRoot, cancellationToken).ConfigureAwait(false);
 
+            progress?.Report(new(7, 10, "COLLECT / REDSCRIPT REPORT READY"));
             var cetSummary = Path.Combine(cet, "CET_Summary.json");
             var cetInput = Path.Combine(cet, "CET_Resolver_Input.json");
             var grspSummary = Path.Combine(red, "GRSP_Summary.json");
@@ -369,7 +348,9 @@ public static class GcoProfilerReportService
                     var start = Number(row, "BucketStartMs");
                     var exclusive = Number(row, "ExclusiveMs");
                     if (start is null || exclusive is null || exclusive < 0) return;
-                    At(start.Value).CetExclusiveMs += exclusive.Value;
+                    var bucket = At(start.Value);
+                    bucket.CetExclusiveMs += exclusive.Value;
+                    bucket.CetWindows++;
                     cetWindows++;
                 }, cancellationToken);
 
@@ -396,6 +377,27 @@ public static class GcoProfilerReportService
                     grspFrames++;
                 }, cancellationToken);
 
+            // The REDscript spike CSV has absolute native Unix clocks.
+            // Use the same CET F11 origin as the verified PresentMon chronology;
+            // do not align spikes by frame index, inferred lag or guessed timezone.
+            var redSpikeMarkers = new List<GcoProfilerSpike>();
+            var redSpikeCsv = FindNamed(red, "GRSP_Spikes.csv");
+            if (mon is not null && redSpikeCsv is not null)
+                ReadCsv(redSpikeCsv, row =>
+                {
+                    var unix = Number(row, "unix_ms");
+                    var cost = Number(row, "exclusive_instrumented_ms");
+                    if (unix is null || unix < 1_000_000_000_000 ||
+                        cost is null || cost <= 0) return;
+                    var relative = unix.Value - mon.CetStartUnixMs;
+                    if (relative < mon.OverlapStartUnixMs - mon.CetStartUnixMs ||
+                        relative >= mon.OverlapEndUnixMs - mon.CetStartUnixMs)
+                        return;
+                    var owner = row.TryGetValue("owner", out var name) ? name : "";
+                    redSpikeMarkers.Add(new GcoProfilerSpike(
+                        relative, "REDscript", owner, cost.Value));
+                }, cancellationToken);
+
             var rows = bins.Select(pair => new
             {
                 timeMs = pair.Key * BucketMs,
@@ -404,17 +406,48 @@ public static class GcoProfilerReportService
                 presentFrames = pair.Value.PresentCount,
                 cpuBusyMaxMs = pair.Value.CpuBusyMaxMs,
                 gpuBusyMaxMs = pair.Value.GpuBusyMaxMs,
-                cetExclusiveMeasuredMs = pair.Value.CetExclusiveMs,
-                redscriptExclusiveInstrumentedMs = mon is null
+                // A bucket without a CET measurement is unknown, not zero.
+                cetExclusiveMeasuredMs = pair.Value.CetWindows == 0
+                    ? (double?)null : pair.Value.CetExclusiveMs,
+                // No GRSP frame anchored in this 50ms window means
+                // NO OBSERVATION, not proof of zero REDscript execution.
+                redscriptExclusiveInstrumentedMs = mon is null ||
+                    pair.Value.RedscriptFrames == 0
                     ? (double?)null : pair.Value.RedscriptExclusiveMs,
-                redscriptCalls = mon is null ? (long?)null : pair.Value.RedscriptCalls,
+                redscriptCalls = mon is null || pair.Value.RedscriptFrames == 0
+                    ? (long?)null : pair.Value.RedscriptCalls,
                 redscriptNativeFrames = mon is null ? (int?)null : pair.Value.RedscriptFrames
             }).ToArray();
 
-            // Rank actual source-owner measurements. Never merge CET and
-            // GRSP timing domains or treat outgoing edges as callback entries.
-            var rankings = ReadRankings(cet, red, cancellationToken);
+            // Only source-owned owner summaries and verified coarse chronology
+            // feed the human digest. The original reports remain intact.
+            var timelineJson = JsonSerializer.Serialize(rows, Json);
+            var digest = GcoProfilerDigest.Build(
+                cetJson.RootElement, grspJson.RootElement,
+                mon is null ? Array.Empty<double>() :
+                    mon.Frames.Select(frame => frame.IntervalMs).ToArray(),
+                timelineJson, redSpikeMarkers);
+
+            // Preserve main's independently ordered cost/frequency rankings
+            // when the original source-owned CSVs are present. The newer
+            // digest still works for captures lacking those legacy exports.
+            string[] rankingInputs =
+            [
+                "CET_Runtime_Profile_ByMod.csv", "CET_Runtime_Profile_Detail.csv"
+            ];
+            string[] redRankingInputs =
+            [
+                "GRSP_Summary.csv", "GRSP_ByMod.csv", "GRSP_ByFunction.csv"
+            ];
+            Rankings? rankings = rankingInputs.All(name => FindNamed(cet, name) is not null) &&
+                redRankingInputs.All(name => FindNamed(red, name) is not null)
+                    ? ReadRankings(cet, red, cancellationToken) : null;
+
+            progress?.Report(new(8, 10, "COLLECT / TIMELINE DATA READY"));
             Directory.CreateDirectory(publishing);
+            if (stagedFrameHandoff is not null)
+                File.Copy(stagedFrameHandoff,
+                    Path.Combine(publishing, GcoPresentMonFrameEvidence.ContractFile));
             var report = new
             {
                 schemaVersion = "gco.profiler.report.v1",
@@ -425,6 +458,7 @@ public static class GcoProfilerReportService
                     provider = mon is null ? "NOT_CAPTURED" : "PRESENTMON_2_6",
                     source = mon?.SourceFile,
                     sha256 = mon?.SourceSha256,
+                    chronologyFile = mon is null ? null : GcoPresentMonFrameEvidence.ContractFile,
                     clock = mon?.Clock,
                     intervalSemantics = mon?.IntervalSemantics,
                     correlation = mon?.Correlation,
@@ -441,7 +475,10 @@ public static class GcoProfilerReportService
                 grspNativeSummary = "GRSP/GRSP_Summary.json",
                 cetWindows = cetWindows,
                 redscriptFrames = grspFrames,
+                digest = digest.Data,
+                // Independent native CSV rankings when their source inputs exist.
                 rankings,
+                spikeMarkers = digest.SpikeMarkers,
                 timeline = rows
             };
 
@@ -449,16 +486,25 @@ public static class GcoProfilerReportService
                 JsonSerializer.Serialize(report, Json), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(publishing, HtmlFile),
                 HtmlReport(report.frameEvidence.provider, mon?.Frames.Count ?? 0,
-                    JsonSerializer.Serialize(rows, Json), grspFrames, cetWindows,
-                    RankingsHtml(rankings)), new UTF8Encoding(false));
-            // Keep the full original CET and GRSP reports and their data links
-            // accessible beneath the consolidated report. This is RESULTS
-            // only, never part of the optimizer pass ZIP.
-            CopyTree(cet, Path.Combine(publishing, "CET"), cancellationToken);
-            CopyTree(red, Path.Combine(publishing, "GRSP"), cancellationToken);
+                    timelineJson, grspFrames, cetWindows,
+                    digest.Html, JsonSerializer.Serialize(digest.SpikeMarkers, Json),
+                    rankings is null ? "" :
+                        "<h2>Source-owned hotspot rankings</h2>" + RankingsHtml(rankings)),
+                new UTF8Encoding(false));
+            progress?.Report(new(9, 10, "COLLECT / COMBINED REPORT WRITTEN"));
+            // Keep the owner reports and all derived files. Byte-identical
+            // raw CSVs already exist in the hash-sealed owner capture, so link
+            // to that canonical copy instead of multiplying results storage.
+            PublishOwnerReport(cet, Path.Combine(publishing, "CET"),
+                CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "CET"),
+                cancellationToken);
+            PublishOwnerReport(red, Path.Combine(publishing, "GRSP"),
+                CollectedCaptureStore.DomainFolder(packageRoot, sessionId, "REDscript"),
+                cancellationToken);
             if (Directory.Exists(outputFolder))
                 throw new IOException("Another report already exists for this capture; no overwrite.");
             Directory.Move(publishing, outputFolder);
+            progress?.Report(new(10, 10, "COLLECT / REPORTS AND GRAPHS READY"));
             return new(html, machine, mon?.Frames.Count ?? 0, cetWindows, grspFrames);
         }
         finally
@@ -573,20 +619,85 @@ public static class GcoProfilerReportService
         }
     }
 
-    private static void CopyTree(string source, string dest, CancellationToken token)
+    private static bool SameBytesByHash(string first, string second)
     {
-        Directory.CreateDirectory(dest);
-        foreach (var folder in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        if (new FileInfo(first).Length != new FileInfo(second).Length)
+            return false;
+        // Native raw captures can be hundreds of MB. Compare streams rather
+        // than allocating two complete CSV files into GCO's managed heap.
+        using var a = File.OpenRead(first);
+        using var b = File.OpenRead(second);
+        return SHA256.HashData(a).AsSpan().SequenceEqual(SHA256.HashData(b));
+    }
+
+    private static void PublishOwnerReport(
+        string source, string destination, string sealedOriginals,
+        CancellationToken token)
+    {
+        // Report writers operate only on temporary, verified copies. Preserve
+        // every derived file, including summary JSON and original HTML.
+        // Only omit a CSV when its path AND contents match its sealed original.
+        // The HTML's downloadable CSV links then resolve back to the source
+        // capture, whose hash-indexed inventory remains unchanged.
+        string rawFolder = Path.GetFileName(
+            sealedOriginals.TrimEnd(Path.DirectorySeparatorChar));
+        var links = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(source, "*",
+                     SearchOption.AllDirectories))
         {
             token.ThrowIfCancellationRequested();
-            Directory.CreateDirectory(Path.Combine(dest, Path.GetRelativePath(source, folder)));
-        }
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            token.ThrowIfCancellationRequested();
-            var target = Path.Combine(dest, Path.GetRelativePath(source, file));
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked report output refused.");
+            string relative = Path.GetRelativePath(source, file).Replace('\\', '/');
+            if (relative.Split('/').Any(part => part is "" or "." or ".."))
+                throw new InvalidDataException("Unsafe report output path.");
+            string original = Path.Combine(sealedOriginals,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            if (relative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(original) &&
+                (File.GetAttributes(original) & FileAttributes.ReparsePoint) == 0 &&
+                SameBytesByHash(file, original))
+            {
+                links.Add(relative, "../../" + rawFolder + "/" + relative);
+                continue;
+            }
+
+            string target = Path.Combine(destination,
+                relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, overwrite: false);
+        }
+
+        // Owner HTML reports provide raw CSV download hyperlinks. Repoint
+        // only exact href targets, never rewrite source reports, measurements,
+        // embedded chart data, or an unrelated relative URL.
+        foreach (var html in Directory.EnumerateFiles(
+                     destination, "*.html", SearchOption.AllDirectories))
+        {
+            token.ThrowIfCancellationRequested();
+            string document = File.ReadAllText(html);
+            string localFolder = Path.GetRelativePath(destination,
+                Path.GetDirectoryName(html)!).Replace('\\', '/');
+            foreach (var (relative, originalLink) in links)
+            {
+                string localLink = localFolder == "." ? relative :
+                    Path.GetRelativePath(Path.GetDirectoryName(html)!,
+                        Path.Combine(destination,
+                            relative.Replace('/', Path.DirectorySeparatorChar)))
+                        .Replace('\\', '/');
+                string href = originalLink;
+                if (localFolder != ".")
+                {
+                    // Each ancestor below the report root needs one more "../".
+                    int depth = localFolder.Split('/').Length;
+                    href = string.Concat(Enumerable.Repeat("../", depth)) + originalLink;
+                }
+                document = document.Replace("href=\"" + localLink + "\"",
+                    "href=\"" + href + "\"", StringComparison.Ordinal);
+                document = document.Replace("href='" + localLink + "'",
+                    "href='" + href + "'", StringComparison.Ordinal);
+            }
+            File.WriteAllText(html, document, new UTF8Encoding(false));
         }
     }
 
@@ -647,7 +758,8 @@ public static class GcoProfilerReportService
     }
 
     private static string HtmlReport(string provider, int monFrames,
-        string timelineJson, int grspFrames, int cetWindows, string rankingHtml)
+        string timelineJson, int grspFrames, int cetWindows,
+        string digestHtml, string markersJson, string rankingHtml)
     {
         // Standalone/offline HTML: no CDN, network, external scripts or files.
         // Three independent y-axis ranges with ONE shared F11 time axis.
@@ -673,37 +785,80 @@ button:hover{background:#1f3f49}.toolbar{display:flex;align-items:center;gap:12p
 .rankgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:12px;margin:12px 0 23px}
 .rankcard{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px}
 .rankcard h3{font-size:14px;color:var(--yellow);margin:3px 0 12px}
-.rankscroll{overflow:auto;max-height:420px}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #2b454f;vertical-align:top}
-th{font-size:12px;position:sticky;top:0;background:#172832;color:#b8d8e0}
-td:nth-child(n+3),th:nth-child(n+3){text-align:right;white-space:nowrap}
-td strong{font-size:12px}td .muted{font-size:11px;max-width:420px;overflow-wrap:anywhere}
+.rankscroll{overflow:auto;max-height:420px}.rankscroll table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rankscroll th,.rankscroll td{text-align:left;padding:7px 8px;border-bottom:1px solid #2b454f;vertical-align:top}
+.rankscroll th{font-size:12px;position:sticky;top:0;background:#172832;color:#b8d8e0}
+.rankscroll td:nth-child(n+3),.rankscroll th:nth-child(n+3){text-align:right;white-space:nowrap}
+.rankscroll td strong{font-size:12px}.rankscroll td .muted{font-size:11px;max-width:420px;overflow-wrap:anywhere}
+.digest-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.digest-metric{background:#101b21;border:1px solid var(--border);padding:14px;border-radius:8px}
+.digest-metric span{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em}
+.digest-metric strong{display:block;font-size:22px;margin:7px 0}
+.digest-metric small{display:block;font-size:12px;line-height:1.4;color:var(--muted)}
+.side-by-side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.digest-panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;min-width:0}
+.digest-panel h3{font-size:15px;color:#e5f7fa;margin:0 0 12px}
+.finding{padding:10px 0;border-bottom:1px solid #243b45}.finding:last-child{border-bottom:0}
+.finding strong{color:#e4edf1;font-size:13px}.finding p{color:var(--muted);font-size:12px;margin:5px 0 0;line-height:1.5}
+.digest-table{border-collapse:collapse;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums;font-size:12px}
+.digest-table th{font-weight:600;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);padding:7px}
+.digest-table td{border-bottom:1px solid #243b45;padding:8px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.digest-table tr:last-child td{border-bottom:0}
+.digest-table.ranking th:first-child,.digest-table.ranking td:first-child{width:60%}
+.digest-table.ranking th:nth-child(2),.digest-table.ranking td:nth-child(2){width:23%}
+.digest-table.ranking th:last-child,.digest-table.ranking td:last-child{width:17%}
+.digest-table.spikes th:first-child,.digest-table.spikes td:first-child{width:20%}
+.digest-table.spikes th:nth-child(2),.digest-table.spikes td:nth-child(2){width:57%;text-align:left}
+.digest-table.spikes th:last-child,.digest-table.spikes td:last-child{width:23%}
+.digest-table.windows th:first-child,.digest-table.windows td:first-child{width:14%}
+.digest-table.windows th:not(:first-child),.digest-table.windows td:not(:first-child){width:21.5%}
+
+.digest-table td:first-child{max-width:0}
+.digest-table td:not(:first-child),.digest-table th:not(:first-child){text-align:right}
+.digest-table .jump-row,.jump-row{cursor:pointer}
+.digest-table .jump-row:hover,.jump-row:hover{background:#173741}
+.table-scroll{overflow-x:auto}
+.facts{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:12px;margin:0}
+.facts dt{color:var(--muted)}.facts dd{margin:0;text-align:right;font-weight:600}
+.small{font-size:12px}
+.chartbox canvas{height:410px}
+.graph-tabs{display:flex;gap:0;align-items:flex-end;margin-top:14px;border-bottom:1px solid var(--border)}
+.graph-tabs [role="tab"]{border:1px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;background:transparent;color:var(--muted);padding:11px 18px;font-weight:600;letter-spacing:.02em}
+.graph-tabs [role="tab"]:hover{color:var(--fg);background:#162d36}
+.graph-tabs [role="tab"][aria-selected="true"]{color:var(--cyan);background:var(--panel);border-color:var(--border);box-shadow:inset 0 3px 0 var(--cyan)}
+.graph-tabs [role="tab"]:focus-visible{outline:2px solid var(--yellow);outline-offset:-3px}
+.chartbox [role="tabpanel"][hidden]{display:none}
+.chartbox [role="tabpanel"]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+#scaleNote{font-size:12px;min-height:20px;margin-top:8px;color:var(--muted)}
+@media(max-width:850px){.side-by-side{grid-template-columns:1fr}}
 @media(max-width:650px){.rankgrid{grid-template-columns:1fr}}
-@media(max-width:650px){main{padding:12px}canvas{height:450px}}
+@media(max-width:650px){main{padding:12px}.chartbox canvas{height:400px}.toolbar{flex-wrap:wrap}.digest-kpis{grid-template-columns:1fr 1fr}}
 </style></head><body><main>
 <h1>GCO / Combined Profiler Report</h1>
 <p class="muted">Real source-owned CET and REDscript measurements, alongside <strong>__PROVIDER__</strong> frame evidence. Derived from the collected capture; no game or original capture files modified.</p>
-<section class="grid">
-<div class="card">Frame-time source<strong>__PROVIDER__</strong><span class="muted">No CapFrameX substitution or synthetic frame data</span></div>
-<div class="card">PresentMon frames<strong>__MONFRAMES__</strong><span class="muted">Verified common F11 intersection</span></div>
-<div class="card">CET timeline rows<strong>__CETWINDOWS__</strong><span class="muted">Measured native 50 ms owner buckets</span></div>
-<div class="card">GRSP frames<strong>__REDFRAMES__</strong><span class="muted">Measured instrumented call-edge work in the overlap</span></div>
-</section>
-<h2>CET + REDscript + PresentMon</h2>
+__DIGEST__
+<h2>CET + REDscript + PresentMon timeline</h2>
 <div class="note"><strong>Measurement boundaries:</strong> PresentMon measures present-to-present intervals, not displayed latency. CET and REDscript values are distinct observed/instrumented workloads, not whole-process CPU; they can overlap and must <strong>not</strong> be added or subtracted. Timing alignment is coarse 50 ms association using recorded QPC/Unix F11 anchors, not proof that either profiler caused a particular hitch. PC latency and frame-generation flags are NOT_CAPTURED.</div>
+<div class="graph-tabs" role="tablist" aria-label="Timeline graph selection">
+<button id="combined" role="tab" aria-controls="panel-combined" aria-selected="true" tabindex="0">Combined timeline</button>
+<button id="tracks" role="tab" aria-controls="panel-tracks" aria-selected="false" tabindex="-1">Three synchronized tracks</button>
+</div>
 <div class="chartbox"><div class="toolbar">
-<button id="full">Full capture</button><button id="worst">Worst PresentMon interval</button>
-<span class="muted">Hold Shift and scroll to zoom · Hover for actual values</span></div>
-<canvas id="graph" role="img" aria-label="Three aligned time-series panels: PresentMon, measured CET and REDscript work"></canvas>
+<button id="full">Full capture</button>
+<button id="worst">Worst PresentMon interval</button>
+<span class="muted">Shift + scroll to zoom · Select a time in the tables above</span>
+</div>
+<div id="panel-combined" role="tabpanel" aria-labelledby="combined" tabindex="0">
+<canvas id="graph" role="img" aria-label="Combined CET REDscript and PresentMon normalized timeline"></canvas>
+</div>
+<div id="panel-tracks" role="tabpanel" aria-labelledby="tracks" tabindex="0" hidden></div>
 <div class="tip" id="tip"></div><div class="legend">
 <span style="color:var(--cyan)"><i class="sw"></i>PresentMon maximum interval / 50ms bucket</span>
 <span style="color:var(--yellow)"><i class="sw"></i>CET measured exclusive work / 50ms bucket</span>
 <span style="color:var(--magenta)"><i class="sw"></i>GRSP measured exclusive instrumented work / 50ms bucket</span>
-</div></div>
-<p class="muted">A missing PresentMon capture is shown as NOT_CAPTURED. GRSP's recorded frame Unix clocks and CET 50ms bucket clocks are used directly; no frame-index lag fitting or CapFrameX format is synthesized.</p>
-<h2>Source-owned hotspot rankings</h2>
-<div class="note">Ranked by <strong>exclusive measured work per second</strong> and separately by <strong>observed call frequency</strong>. CET and GRSP are independent measurement domains and must not be combined. GRSP source-function calls are <strong>outgoing edges, not callback entries</strong>; wrapper attribution is provisional.</div>
-__RANKING_SECTIONS__
+</div><div id="scaleNote"></div></div>
+<p class="muted">Combined view scales each source to its own visible peak to compare <strong>timing patterns</strong>, not CPU cost. Three-track mode shows each source in measured milliseconds with independent axes and verified native spike timestamps. Short dashed colored connectors across missing 50 ms samples are <strong>unobserved time, not interpolated measurements</strong>; solid segments contain actual observations. GRSP uses absolute Unix F11 anchors; no frame-index lag fitting or CapFrameX substitution.</p>
+__NATIVE_RANKINGS__
 <h2>Full source-owned profiler reports</h2>
 <nav><a href="CET/CET_Report.html">Full CET report (native/GC/allocations/callbacks)</a>
 <a href="GRSP/GRSP_Report.html">Full REDscript report (functions/frames/spikes)</a>
@@ -713,65 +868,175 @@ __RANKING_SECTIONS__
 </main>
 <script>
 (function(){
-const data=__TIMELINE__,canvas=document.getElementById('graph'),tip=document.getElementById('tip');
-if(!data.length){canvas.replaceWith(document.createTextNode("No synchronized timeline available; native reports remain accessible."));return;}
-let xmin=data[0].timeMs,xmax=data[data.length-1].timeMs+50;
-const fullMin=xmin,fullMax=xmax;let worst=data.find(p=>p.presentIntervalMaxMs!=null)||data[0];
+const data=__TIMELINE__,spikes=__SPIKES__,canvas=document.getElementById('graph');
+const tip=document.getElementById('tip'),scaleNote=document.getElementById('scaleNote');
+if(!data.length){canvas.replaceWith(document.createTextNode("No synchronized timeline available. The native CET and REDscript reports remain available below."));return;}
+let xmin=data[0].timeMs,xmax=data[data.length-1].timeMs+50,mode='combined';
+const fullMin=xmin,fullMax=xmax;
+let worst=data.find(p=>p.presentIntervalMaxMs!=null)||data[0];
 for(const p of data)if((p.presentIntervalMaxMs||0)>(worst.presentIntervalMaxMs||0))worst=p;
-const panels=[
- {key:'presentIntervalMaxMs',name:'PRESENTMON / present interval',color:'#33daec'},
- {key:'cetExclusiveMeasuredMs',name:'CET / measured exclusive work',color:'#f9d854'},
- {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented exclusive work',color:'#ef71c2'}
+const series=[
+ {key:'presentIntervalMaxMs',name:'PRESENTMON / maximum present interval',short:'PresentMon',color:'#33daec'},
+ {key:'cetExclusiveMeasuredMs',name:'CET / exclusive Lua work',short:'CET',color:'#f9d854'},
+ {key:'redscriptExclusiveInstrumentedMs',name:'REDSCRIPT / instrumented VM work',short:'REDscript',color:'#ef71c2'}
 ];
-const wPad=61,rPad=20,top=16,bottom=28;
-function visible(){return data.filter(p=>p.timeMs+50>=xmin&&p.timeMs<=xmax);}
+const wPad=88,rPad=18,top=14,bottom=31;
+function visible(){
+ // Include one neighboring bucket beyond each side of the zoom viewport,
+ // so a zoom/focus does not accidentally cut a legitimate line segment.
+ let first=data.findIndex(p=>p.timeMs+50>=xmin);
+ if(first<0)return [];
+ let end=first;
+ while(end<data.length&&data[end].timeMs<=xmax)end++;
+ return data.slice(Math.max(0,first-1),Math.min(data.length,end+1));
+}
 function draw(){
- const w=canvas.clientWidth,h=canvas.clientHeight,ctx=canvas.getContext('2d');
+ const ctx=canvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight;
  ctx.clearRect(0,0,w,h);
- const view=visible(),span=Math.max(1,xmax-xmin),panelH=(h-top-bottom)/3;
- const x=t=>wPad+(t-xmin)/span*(w-wPad-rPad);
- for(let i=0;i<3;i++){
-  const p=panels[i],y0=top+i*panelH,vals=view.map(d=>d[p.key]).filter(v=>v!=null);
-  const yMax=Math.max(1,...vals)*1.12;
-  ctx.fillStyle='#10242c';ctx.fillRect(wPad,y0,w-wPad-rPad,panelH-14);
-  ctx.fillStyle=p.color;ctx.font='12px Segoe UI';ctx.fillText(p.name,5,y0+13);
-  ctx.textAlign='right';ctx.fillStyle='#a4b8bf';ctx.fillText(yMax.toFixed(1)+' ms',wPad-6,y0+30);
-  ctx.textAlign='left';ctx.strokeStyle='#243f4b';ctx.lineWidth=1;
-  for(let k=0;k<=3;k++){const y=y0+25+(panelH-52)*k/3;ctx.beginPath();ctx.moveTo(wPad,y);ctx.lineTo(w-rPad,y);ctx.stroke();}
-  ctx.strokeStyle=p.color;ctx.lineWidth=1.35;ctx.beginPath();let started=false;
-  for(const d of view){
-   const v=d[p.key];if(v==null){started=false;continue;}
-   const xx=x(d.timeMs),yy=y0+25+(1-Math.min(1,v/yMax))*(panelH-52);
-   if(!started){ctx.moveTo(xx,yy);started=true;}else ctx.lineTo(xx,yy);
+ const view=visible(),span=Math.max(1,xmax-xmin),plotW=Math.max(20,w-wPad-rPad);
+ const x=t=>wPad+(t-xmin)/span*plotW;
+ const peaks=series.map(s=>{let peak=0;for(const row of view){const value=row[s.key];if(value!=null&&value>peak)peak=value;}return peak;});
+ const panels=mode==='combined'?1:3,panelH=(h-top-bottom)/panels;
+ for(let i=0;i<panels;i++){
+  const y0=top+i*panelH,yt=y0+26,yb=y0+panelH-24,box=Math.max(1,yb-yt);
+  ctx.fillStyle='#10242c';ctx.fillRect(wPad,y0,plotW,panelH-5);
+  ctx.strokeStyle='#243f4b';ctx.lineWidth=1;
+  for(let k=0;k<=4;k++){
+   const y=yt+box*k/4;ctx.beginPath();ctx.moveTo(wPad,y);ctx.lineTo(w-rPad,y);ctx.stroke();
   }
-  ctx.stroke();
+  ctx.textAlign='left';ctx.font='12px Segoe UI';
+  if(mode==='combined'){
+   ctx.fillStyle='#d2e1e6';
+   ctx.fillText('RELATIVE TO EACH VISIBLE SERIES PEAK',5,y0+13);
+   ctx.fillStyle='#a6bbc4';ctx.fillText('peak',wPad-47,yt+4);
+   ctx.fillText('zero',wPad-34,yb+1);
+  }else{
+   const s=series[i],mx=Math.max(1,peaks[i])*1.08;
+   ctx.fillStyle=s.color;ctx.fillText(s.name,6,y0+14);
+   ctx.fillStyle='#a6bbc4';ctx.fillText(mx.toFixed(1)+' ms',wPad-66,yt+4);
+   ctx.fillText('0 ms',wPad-45,yb+1);
+  }
+  for(let j=0;j<series.length;j++){
+   if(mode!=='combined'&&i!==j)continue;
+   const s=series[j],max=mode==='combined'?Math.max(0.000001,peaks[j]):Math.max(1,peaks[j])*1.08;
+   ctx.strokeStyle=s.color;ctx.lineWidth=mode==='combined'?1.8:1.4;
+   // Null means no matched observation, not a measured zero. Zoom/focus
+   // must keep real samples continuous without painting invented readings.
+   // Bridge only visually with a distinctly dashed UNKNOWN interval.
+   ctx.save();ctx.beginPath();ctx.rect(wPad,y0,plotW,panelH-5);ctx.clip();
+   ctx.beginPath();let previous=null,hadUnobserved=false;
+   for(const p of view){
+    const v=p[s.key];
+    if(v==null){hadUnobserved=true;continue;}
+    const xx=x(p.timeMs),yy=yb-Math.min(1,Math.max(0,v/max))*box;
+    if(previous==null){ctx.moveTo(xx,yy);}
+    else if(hadUnobserved||p.timeMs-previous.timeMs>50.001){
+     // Solid only between two consecutive measured 50ms buckets.
+     ctx.stroke();
+     ctx.save();ctx.setLineDash([5,5]);ctx.globalAlpha=.65;
+     ctx.beginPath();ctx.moveTo(previous.x,previous.y);ctx.lineTo(xx,yy);
+     ctx.stroke();ctx.restore();
+     ctx.beginPath();ctx.moveTo(xx,yy);
+    }else ctx.lineTo(xx,yy);
+    previous={x:xx,y:yy,timeMs:p.timeMs};
+    hadUnobserved=false;
+   }
+   ctx.stroke();ctx.restore();
+  }
  }
- ctx.fillStyle='#a6bbc4';ctx.font='12px Segoe UI';ctx.fillText((xmin/1000).toFixed(1)+' s',wPad,h-8);
- ctx.textAlign='right';ctx.fillText((xmax/1000).toFixed(1)+' s',w-rPad,h-8);ctx.textAlign='left';
+ if(mode==='tracks'){
+  // Only top source-owned events. Markers are time coincidences, not
+  // cause assignments to the corresponding PresentMon intervals.
+  ctx.setLineDash([4,5]);ctx.lineWidth=1;
+  for(const s of spikes){
+   if(s.timeMs<xmin||s.timeMs>xmax)continue;
+   ctx.strokeStyle=s.domain==='CET'?'#f9d85499':'#ef71c299';
+   ctx.beginPath();ctx.moveTo(x(s.timeMs),top);ctx.lineTo(x(s.timeMs),h-bottom);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+ }
+ ctx.font='12px Segoe UI';ctx.fillStyle='#a6bbc4';ctx.textAlign='left';
+ for(let k=0;k<=4;k++){
+  const t=xmin+k*(xmax-xmin)/4,xx=x(t);
+  ctx.fillText((t/1000).toFixed(1)+'s',Math.max(2,Math.min(w-52,xx-17)),h-8);
+ }
+ scaleNote.textContent=mode==='combined'
+  ? 'Visible peaks (raw): '+series.map((s,i)=>s.short+' '+peaks[i].toFixed(2)+' ms').join('  ·  ')+' — short dashed connectors indicate unobserved intervals, NOT measured values.'
+  : 'Three independent millisecond axes. Short dashed color segments bridge UNOBSERVED measurement gaps (not zero); vertical dashed lines mark recorded spikes. Shared F11 origin.';
 }
 function resize(){
+ canvas.style.height=mode==='combined'?'410px':'575px';
  const ratio=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth),h=canvas.clientHeight;
  canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);
  canvas.getContext('2d').setTransform(ratio,0,0,ratio,0,0);draw();
 }
+function setMode(next,focusTab=false){
+ if(next!=='combined'&&next!=='tracks')return;
+ mode=next;
+ for(const name of ['combined','tracks']){
+  const active=name===mode,tab=document.getElementById(name),panel=document.getElementById('panel-'+name);
+  tab.setAttribute('aria-selected',String(active));
+  tab.tabIndex=active?0:-1;
+  panel.hidden=!active;
+ }
+ const currentPanel=document.getElementById('panel-'+mode);
+ currentPanel.appendChild(canvas);
+ canvas.setAttribute('aria-label',mode==='combined'
+  ?'Combined CET REDscript and PresentMon normalized timeline'
+  :'Three synchronized millisecond graphs for PresentMon CET and REDscript, with spike markers');
+ tip.style.display='none';
+ resize();
+ if(focusTab)document.getElementById(mode).focus();
+}
+function focusAt(t){
+ if(!Number.isFinite(t))return;
+ const windowMs=Math.min(8000,fullMax-fullMin),half=windowMs/2;
+ xmin=Math.max(fullMin,Math.min(fullMax-windowMs,t-half));
+ xmax=xmin+windowMs;setMode('tracks');
+ document.querySelector('.chartbox').scrollIntoView({block:'center',behavior:'smooth'});
+}
+for(const name of ['combined','tracks']){
+ const tab=document.getElementById(name);
+ tab.addEventListener('click',()=>setMode(name));
+ tab.addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+  e.preventDefault();
+  const next=e.key==='Home'?'combined':e.key==='End'?'tracks':
+    (name==='combined'?'tracks':'combined');
+  setMode(next,true);
+ });
+}
 document.getElementById('full').onclick=()=>{xmin=fullMin;xmax=fullMax;draw();};
-document.getElementById('worst').onclick=()=>{xmin=Math.max(fullMin,worst.timeMs-5000);xmax=Math.min(fullMax,worst.timeMs+5000);draw();};
+document.getElementById('worst').onclick=()=>focusAt(worst.timeMs);
+document.querySelectorAll('[data-jump]').forEach(node=>{
+ node.setAttribute('tabindex','0');node.setAttribute('role','button');
+ const jump=()=>focusAt(Number(node.getAttribute('data-jump')));
+ node.addEventListener('click',jump);
+ node.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();jump();}});
+});
 canvas.addEventListener('mousemove',e=>{
  const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad)));
  const t=xmin+ratio*(xmax-xmin);let lo=0,hi=data.length-1;
- while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}const p=data[Math.max(0,lo-1)];
- if(!p)return;const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
- tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresentMon: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' frames)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET measured: '+fmt(p.cetExclusiveMeasuredMs)+'\nGRSP measured: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED calls: '+(p.redscriptCalls??'NOT_CAPTURED');
- tip.style.display='block';tip.style.left=Math.max(5,Math.min(r.width-290,e.clientX-r.left+10))+'px';tip.style.top=Math.max(3,e.clientY-r.top-95)+'px';
+ while(lo<hi){const m=(lo+hi)>>1;if(data[m].timeMs<t)lo=m+1;else hi=m;}
+ const p=data[Math.max(0,lo-1)];if(!p)return;
+ const fmt=v=>v==null?'NOT_CAPTURED':v.toFixed(3)+' ms';
+ const near=spikes.filter(s=>Math.abs(s.timeMs-p.timeMs)<75).sort((a,b)=>b.exclusiveMs-a.exclusiveMs).slice(0,2);
+ const markerText=near.length?'\nNearby profiler marker(s): '+near.map(s=>s.domain+' '+s.owner+' '+s.exclusiveMs.toFixed(2)+' ms').join(' | '):'';
+ tip.textContent=(p.timeMs/1000).toFixed(3)+' s (CET F11 origin)\nPresent interval max: '+fmt(p.presentIntervalMaxMs)+' ('+p.presentFrames+' presents)\nCPU busy max: '+fmt(p.cpuBusyMaxMs)+'\nGPU busy max: '+fmt(p.gpuBusyMaxMs)+'\nCET exclusive: '+fmt(p.cetExclusiveMeasuredMs)+'\nREDscript instrumented: '+fmt(p.redscriptExclusiveInstrumentedMs)+'\nRED outgoing calls: '+(p.redscriptCalls??'NOT_CAPTURED')+markerText;
+ tip.style.display='block';tip.style.left=Math.max(4,Math.min(r.width-305,e.clientX-r.left+9))+'px';
+ tip.style.top=Math.max(5,e.clientY-r.top-115)+'px';
 });
 canvas.addEventListener('mouseleave',()=>tip.style.display='none');
 canvas.addEventListener('wheel',e=>{
  if(!e.shiftKey)return;e.preventDefault();
- const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad))),anchor=xmin+ratio*(xmax-xmin);
- const next=Math.max(500,Math.min(fullMax-fullMin,(xmax-xmin)*(e.deltaY<0?.78:1.28)));
- let a=anchor-ratio*next,b=a+next;if(a<fullMin){a=fullMin;b=a+next;}if(b>fullMax){b=fullMax;a=b-next;}
+ const r=canvas.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left-wPad)/(r.width-wPad-rPad)));
+ const anchor=xmin+ratio*(xmax-xmin),next=Math.max(500,Math.min(fullMax-fullMin,(xmax-xmin)*(e.deltaY<0?.78:1.28)));
+ let a=anchor-ratio*next,b=a+next;
+ if(a<fullMin){a=fullMin;b=a+next;}if(b>fullMax){b=fullMax;a=b-next;}
  xmin=a;xmax=b;draw();
-},{passive:false});window.addEventListener('resize',resize);requestAnimationFrame(resize);
+},{passive:false});
+window.addEventListener('resize',resize);
+requestAnimationFrame(resize);
 })();
 </script></body></html>
 """;
@@ -780,6 +1045,8 @@ canvas.addEventListener('wheel',e=>{
             .Replace("__CETWINDOWS__", cetWindows.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__REDFRAMES__", grspFrames.ToString("N0", CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("__TIMELINE__", timelineJson, StringComparison.Ordinal)
-            .Replace("__RANKING_SECTIONS__", rankingHtml, StringComparison.Ordinal);
+            .Replace("__DIGEST__", digestHtml, StringComparison.Ordinal)
+            .Replace("__NATIVE_RANKINGS__", rankingHtml, StringComparison.Ordinal)
+            .Replace("__SPIKES__", markersJson, StringComparison.Ordinal);
     }
 }

@@ -1,0 +1,314 @@
+"""Shared CET/REDscript native dispatcher: real staged assets, ownership and
+idempotence. No second DLL, no game installation, no optimization ZIP.
+"""
+import struct
+import tempfile
+import subprocess
+import unittest
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+DLL = ROOT / "src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll"
+PROJECT = ROOT / "src/GRedscript.Resolver/GRSP.Resolver.csproj"
+NATIVE = "red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll"
+LOCATIONS = "red4ext/plugins/G-CET-StaticLocations/G-CET.locations"
+BRIDGE = "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds"
+REQUIRED = (
+    b"ScriptGameInstance", b"GCETStaticReady",
+    b"GCETStaticCoordinatorState", b"GCETStaticOwnerCount",
+    b"GCETStaticOwnerAnchor", b"GCETStaticState",
+    b"GCETPlayerVector4Live", b"GCETPlayerVector4Valid"
+)
+
+
+def table(rows):
+    data = bytearray(b"GCAS" + struct.pack("<III", 1, len(rows), 0))
+    for index, (owner, x, y, z, radius, xy) in enumerate(rows, 1):
+        data.extend(struct.pack("<iffffii", index, x, y, z, radius, xy, owner))
+    return bytes(data)
+
+
+def decode(data):
+    assert data[:4] == b"GCAS"
+    size, = struct.unpack_from("<I", data, 8)
+    assert len(data) == 16 + 28 * size
+    return [struct.unpack_from("<iffffii", data, 16 + i * 28)
+            for i in range(size)]
+
+
+@unittest.skipUnless(
+    os.environ.get("GCO_REDSCRIPT_RESEARCH_TESTS") == "1",
+    "Historical/manual REDscript diagnostic or experimental feature; not a shipped generator contract"
+)
+class NativeSharedAssetContracts(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not DLL.exists():
+            subprocess.run(["dotnet", "build", str(PROJECT),
+                            "-c", "Release", "--nologo"], check=True)
+
+    def setUp(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        self.root = Path(td.name)
+        self.cet = self.root / "cet-package"
+        self.output = self.root / "shared-overlay"
+        self.game = self.root / "game"
+        self.game.mkdir()
+        self.framework = self.root / "G-REDruntime"
+        self.bridge_source = (self.framework /
+            "optional-native/r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds")
+        self.bridge_source.parent.mkdir(parents=True)
+        self.bridge_source.write_text("""module GRedRuntime
+@addMethod(GameInstance)
+public static native func GCETStaticSubscribe(consumer: Int32, owner: Int32) -> Bool
+@addMethod(GameInstance)
+public static native func GCETPlayerVector4Live() -> Vector4
+@addMethod(GameInstance)
+public static native func GCETPlayerVector4Valid() -> Bool
+public abstract class GCETNativePlayerVector {
+  public static func LiveOrOriginal(player: ref<PlayerPuppet>) -> Vector4 {
+    let position: Vector4 = GameInstance.GCETPlayerVector4Live();
+    if GameInstance.GCETPlayerVector4Valid() {
+      return position;
+    }
+    return player.GetWorldPosition();
+  }
+}
+public class GCETNativeLocationBackend extends NativeLocationBackend {}
+""", encoding="utf-8")
+        dll = self.cet / "runtime/native/GCETStaticLocations.dll"
+        dll.parent.mkdir(parents=True)
+        dll.write_bytes(b"MZ" + b"\\0" * 2048 + b"\\0".join(REQUIRED))
+
+    def run_stage(self, *args):
+        return subprocess.run(
+            ["dotnet", str(DLL), "stage-shared-native",
+             "--cet-runtime", str(self.cet),
+             "--game", str(self.game),
+             "--framework", str(self.framework),
+             "--out", str(self.output), *map(str, args)],
+            text=True, capture_output=True, timeout=120)
+
+    def test_red_first_creates_one_native_asset_and_empty_gcas(self):
+        r = self.run_stage()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.output / NATIVE).is_file())
+        self.assertEqual(decode((self.output / LOCATIONS).read_bytes()), [])
+        source = (self.output / BRIDGE).read_text()
+        self.assertIn("@addMethod(GameInstance)", source)
+        self.assertIn("public static native func GCETStaticSubscribe(", source)
+        self.assertIn("extends NativeLocationBackend", source)
+        self.assertIn("native func GCETPlayerVector4Live() -> Vector4", source)
+        self.assertIn("native func GCETPlayerVector4Valid() -> Bool", source)
+        self.assertIn("GameInstance.GCETPlayerVector4Valid()", source)
+        self.assertIn("return player.GetWorldPosition();", source)
+        self.assertEqual(source, self.bridge_source.read_text())
+        self.assertNotIn("Schedule.Every", source)
+        self.assertNotIn("native func GCETPlayerVector4()", source)
+        self.assertFalse(list(self.root.rglob("*.zip")))
+
+    def test_literal_sphere_sites_share_one_native_manifest(self):
+        f = self.game / "r6/scripts/Sample/Proximity.reds"
+        f.parent.mkdir(parents=True)
+        f.write_text("""
+module Sample
+public func StaticPlaces() -> array<SampleSite> {
+  return [
+    SampleSite(SiteKind.First, Vector4(12.0, 34.0, 56.0, 1.0), 2.5, TypeKind.A),
+    SampleSite(SiteKind.Second, Vector4(-13.0, -35.0, 57.0, 1.0), 5.0, TypeKind.B)
+  ];
+}
+""")
+        result = self.run_stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        entries = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(entries), 2)
+        self.assertEqual([x[5] for x in entries], [0, 0])  # XYZ
+        self.assertEqual([x[4] for x in entries], [18.5, 21.0])
+        self.assertEqual([(x[1], x[2], x[3]) for x in entries],
+                         [(12.0, 34.0, 56.0), (-13.0, -35.0, 57.0)])
+        self.assertEqual(entries[0][-1], entries[1][-1])  # source owner
+        original = (self.output / LOCATIONS).read_bytes()
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual((self.output / LOCATIONS).read_bytes(), original)
+
+    def test_live_redscript_quads_compile_inert_xy_native_anchors(self):
+        target = self.game / "r6/scripts/IndependentAuthor/Areas.reds"
+        target.parent.mkdir(parents=True)
+        target.write_text("""
+module IndependentAuthor
+public class Areas {
+    public func Find() -> Bool {
+        let sites = [
+          SquareArea( // source comment safely skipped
+            new Vector2(-2.0, 3.0),
+            new Vector2( 2.0, 3.0),
+            new Vector2( 2.0, 7.0),
+            new Vector2(-2.0, 7.0)
+          )
+        ];
+        return true;
+    }
+}
+""")
+        result = self.run_stage()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        entries = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(entries), 1)
+        id, x, y, z, radius, xy, owner = entries[0]
+        self.assertEqual(id, 1)
+        self.assertAlmostEqual(x, 0.0)
+        self.assertAlmostEqual(y, 5.0)
+        self.assertEqual(z, 0)
+        self.assertEqual(xy, 1)
+        self.assertGreater(radius, 18)
+        self.assertGreater(owner, 100000000)
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual(decode((self.output / LOCATIONS).read_bytes()), entries)
+
+    def test_source_driven_fixed_location_groups_emit_shared_native_sites(self):
+        one = self.game / "r6/scripts/UrbanFacilities/Places.reds"
+        one.parent.mkdir(parents=True)
+        one.write_text("""module Urban.Facilities
+public abstract class Places {
+  public static func IsAtFacility(player: ref<GameObject>) -> Bool {
+    let places = Places.Locations();
+    return Places.Close(player.GetWorldPosition(), places, 2.0);
+  }
+  public static func Locations() -> array<Vector4> {
+    let points: array<Vector4> = [
+      new Vector4(11.0, 22.0, 33.0, 1.0),
+      new Vector4(44.0, 55.0, 66.0, 1.0)
+    ];
+    return points;
+  }
+  private static func Close(pos: Vector4, spots: array<Vector4>, radius: Float) -> Bool {
+    for site in spots {
+      if Vector4.Distance(pos, site) < radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        two = self.game / "r6/scripts/WorldQuests/Locations.reds"
+        two.parent.mkdir(parents=True)
+        two.write_text("""module World.Quests
+public abstract class QuestZones {
+  public static func IsInArea(player: ref<PlayerPuppet>) -> Bool {
+    let markers: array<Vector4> = [
+      new Vector4(-101.0, 20.0, 0.0, 1.0)
+    ];
+    return QuestZones.InRange(player.GetWorldPosition(), markers, 75.0);
+  }
+  private static func InRange(pos: Vector4, sites: array<Vector4>, radius: Float) -> Bool {
+    for site in sites {
+      if Vector4.Distance(pos, site) <= radius { return true; }
+    }
+    return false;
+  }
+}
+""")
+        staged = self.run_stage()
+        self.assertEqual(staged.returncode, 0, staged.stdout + staged.stderr)
+        rows = decode((self.output / LOCATIONS).read_bytes())
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([(r[1], r[2], r[3]) for r in rows],
+                         [(11., 22., 33.), (44., 55., 66.),
+                          (-101., 20., 0.)])
+        self.assertTrue(all(row[4] == 256.0 and row[5] == 0
+                            for row in rows))
+        self.assertEqual(rows[0][6], rows[1][6])
+        self.assertNotEqual(rows[0][6], rows[2][6])
+        identical = (self.output / LOCATIONS).read_bytes()
+        self.assertEqual(self.run_stage().returncode, 0)
+        self.assertEqual((self.output / LOCATIONS).read_bytes(), identical)
+
+    def test_cet_first_then_red_owner_merge_and_repeat_idempotent(self):
+        target = self.output / LOCATIONS
+        target.parent.mkdir(parents=True)
+        target.write_bytes(table([(10, 1., 2., 3., 4., 0)]))
+        incoming = self.root / "red-locations"
+        incoming.write_bytes(table([(20, 5., 6., 7., 8., 1)]))
+        r = self.run_stage("--red-locations", incoming)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        rows = decode(target.read_bytes())
+        self.assertEqual([x[-1] for x in rows], [10, 20])
+        previous = target.read_bytes()
+        repeat = self.run_stage("--red-locations", incoming)
+        self.assertEqual(repeat.returncode, 0, repeat.stdout + repeat.stderr)
+        self.assertEqual(target.read_bytes(), previous)
+        self.assertIn("ALREADY_PRESENT", repeat.stdout)
+
+    def test_red_first_then_cet_owner_merge_and_original_native_preserved(self):
+        red = self.root / "red-locations"
+        red.write_bytes(table([(20, 5., 6., 7., 8., 0)]))
+        self.assertEqual(self.run_stage("--red-locations", red).returncode, 0)
+        original_dll = (self.output / NATIVE).read_bytes()
+        # New CET owner is merged after RED owner; no native overwrite.
+        cet = self.root / "cet-locations"
+        cet.write_bytes(table([(10, 1., 2., 3., 4., 1)]))
+        r = self.run_stage("--red-locations", cet)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual([x[-1] for x in decode(
+            (self.output / LOCATIONS).read_bytes())], [20, 10])
+        self.assertEqual((self.output / NATIVE).read_bytes(), original_dll)
+
+    def test_collision_cannot_destroy_existing_stage(self):
+        original = table([(20, 5., 6., 7., 8., 0)])
+        target = self.output / LOCATIONS
+        target.parent.mkdir(parents=True)
+        target.write_bytes(original)
+        conflicting = self.root / "red-locations"
+        conflicting.write_bytes(table([(20, 5., 6., 7., 9., 0)]))
+        r = self.run_stage("--red-locations", conflicting)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("SHARED_NATIVE_OWNER_SOURCE_COLLISION",
+                      r.stdout + r.stderr)
+        self.assertEqual(target.read_bytes(), original)
+        self.assertFalse((self.output / NATIVE).exists())
+
+    def test_refuses_to_write_into_real_game(self):
+        self.output = self.game
+        run = self.run_stage()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("SHARED_NATIVE_GAME_OUTPUT_FORBIDDEN",
+                      run.stdout + run.stderr)
+        self.assertFalse((self.game / NATIVE).exists())
+
+    def test_missing_authoritative_framework_backend_is_not_generated(self):
+        self.bridge_source.unlink()
+        run = self.run_stage()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_MISSING",
+                      run.stdout + run.stderr)
+        self.assertFalse((self.output / BRIDGE).exists())
+
+    def test_incomplete_player_vector_bridge_refused_before_any_output(self):
+        for marker in ("native func GCETPlayerVector4Live()",
+                       "native func GCETPlayerVector4Valid()",
+                       "return player.GetWorldPosition();"):
+            original = self.bridge_source.read_text()
+            self.bridge_source.write_text(original.replace(marker,
+                                                          "missing_native_symbol"))
+            result = self.run_stage()
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("SHARED_NATIVE_FRAMEWORK_OWNER_BACKEND_INVALID",
+                          result.stdout + result.stderr)
+            self.assertFalse((self.output / NATIVE).exists())
+            self.assertFalse((self.output / BRIDGE).exists())
+            self.bridge_source.write_text(original)
+
+    def test_invalid_manifest_and_missing_native_fail_without_output(self):
+        invalid = self.root / "invalid"
+        invalid.write_bytes(b"GCAS" + b"\\0" * 12)
+        self.assertNotEqual(self.run_stage("--red-locations", invalid).returncode, 0)
+        self.assertFalse(self.output.exists())
+        (self.cet / "runtime/native/GCETStaticLocations.dll").unlink()
+        self.assertNotEqual(self.run_stage().returncode, 0)
+        self.assertFalse(self.output.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

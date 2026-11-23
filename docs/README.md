@@ -9,6 +9,13 @@
 | System boundaries, ownership and state machine | [Architecture](technical/ARCHITECTURE.md) |
 | Verified-from-source standalone CLI and capture APIs | [Component contracts](technical/COMPONENT-CONTRACTS.md) |
 | Shared runtime and CapFrameX compatibility | [One private .NET 10 Desktop runtime — validation contract](technical/SHARED-NET-RUNTIME.md) |
+| Active GRSP-owned REDscript implementation blueprint (R0–R10) | [Full REDscript blueprint](integration/GRSP_REDscript_Resolver_Blueprint.md) |
+| **Blackboard generic code implemented, exact CI and remaining framework work** | [R5 BLACKBOARD / shared-state status](integration/R5-BLACKBOARD-SHARED-STATE-STATUS.md) |
+| **Source-verified CET → REDscript shared-state, location and observer design** | [CET lessons for G-REDruntime generic passes](integration/R5-CET-SHARED-SERVICES-TRANSFER.md) |
+| **Evidence-ranked G-REDruntime generic candidate rules, no mod exclusions** | [Framework-backed generic opportunities](integration/R5-GREDRUNTIME-GENERIC-OPPORTUNITIES.md) |
+| **Current REDscript generic work-elimination priorities and new-capture plan (2026-11-17)** | [R5 measured work-elimination opportunities](integration/R5-WORK-ELIMINATION-OPPORTUNITIES.md) |
+| REDscript decisions, stage/CI/compile/gameplay ledger | [REDscript progress ledger](integration/REDSCRIPT-RESOLVER-PROGRESS.md) |
+| Completed genuine PresentMon consolidated report contract | [GCO three-profiler reporting](integration/GCO-PRESENTMON-PROFILER-REPORTING.md) |
 | Development execution order | [Roadmap](ROADMAP.md) |
 | Progress, failures, actual evidence | [Latest work](LATEST-WORK.md) |
 | Agent-specific initial context | [Handoff CORE](HANDOFF/CORE.md) |

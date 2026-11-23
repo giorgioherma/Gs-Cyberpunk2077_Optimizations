@@ -1,0 +1,38 @@
+# REDscript Phase 2 — checkpoint CI source contract (2026-11-20)
+
+**Current authority:** dedicated GCO `main` workflow `.github/workflows/redscript-phase2-checkpoint.yml` and `tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1`. [Phase 2 checkpoint #1 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776264193) and [main checkpoint #2 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44776660392). Narrow [PR #3](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/3) merged into `main` at `271a4c58`.
+
+## Chronological input / checkpoint sequence
+
+1. **Generic optimization stage:** Existing ten generic REDscript rules are generated/validated from the unoptimized installed source in the established generic generator CI. Keep the archived 2,319-file capture-correlated private baseline for its historical regression tests; no capture should be reinterpreted as a new source snapshot.
+2. **Post-generic stock stage:** The user already uploaded `giorgioherma/original_cet_source/main/base_after_generic/r6/scripts` containing **2,331** real .reds source files. This is the **stock input to Phase 2 semantics**. Do not re-run generics over it or copy historical whole-file semantic ZIPs into it.
+3. **Dedicated Phase 2 checkpoint:** Independent fast Windows CI fetches only the post-generic source and private `Compiler` assets; builds existing .NET 10 GCO Resolver `scc-headless` and compiles the isolated *effective source* with official SCC **0.5.31** and real native plugin scripts. Checks generic markers, framework, dependency presence, native compiler fingerprint, SCC output/cache evidence and unchanged original bytes; deletes private CI fixtures. **No CET capture replay, WPF build, long product packaging or distributed SCC.**
+4. **Approved semantic rule integration, later:** Extend this **same** checkpoint with actual owner-local semantic output on top of post-generic source, and tests for stock → full one-run completion, partial → only missing, complete → no-op, custom/newer compatible → applied, incompatible target → narrow refusal and exact idempotence. Compile the **combined source with all applicable other passes** in official SCC CI. Do not claim baseline compilation proves semantic correctness or gameplay.
+
+This is a **logical chronological checkpoint after generic output**, not a required wait for the long application workflow or a separate runtime compiler implementation. Generic and full integrated app CI remain their own owners. The old extra `-PostGenericSourceRoot` scenario was **removed from the long development workflow and SCC harness** once the new checkpoint passed; it should not be reintroduced.
+
+**Result update, 2026-11-20:** The dedicated checkpoint now generates and SCC-compiles the **first approved real semantic overlay**, DigitalVixenCore Footsteps, with the existing 2,331-file post-generic stack. [CI #19 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44785775165): **10** source-state tests, `phase2-footsteps` reported `APPLIED edits=1`, official SCC 0.5.31 compiled **43,481,923 bytes**, unchanged baseline; one-game-run generic-first staging and partial completion are tested. The full app/package CI remains a separate required integration gate; no gameplay/FPS claim. [Conflict-blocked dev-to-main integration PR #2](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/pull/2) is distinct and remains unmerged. Never force-merge its 26 overlapping branch paths.
+
+## First rule integration verified
+
+The actual one-invocation GCO `RedscriptGenerationPlan.Stage` first composes ten generic rules, then `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` against the **effective sources**, without historical passes or repair passes. The same generator runs in fast CI with `phase2-footsteps --game <post-generic-root> --out <isolated-stage> [--base-overlay <existing-generic-stage>]`; compatible partial/full/custom/direct-return cases are in `test_phase2_footsteps.py`. The client includes accepted semantic files in the game-relative ZIP and ownership sidecar without running SCC locally.
+
+[Full GCO CI #1006 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617357): ten generic rules yielded 173 eligible original edits; one Footsteps semantic edit makes **79 composed generated `.reds` files**. Actual canonical output matched independent generic-plus-semantic composition. Official SCC compiled complete source, native plugin dependencies and 12 authoritative framework files. ZIP topology and packaged Windows .NET10 app passed. This is build/integration evidence, **not gameplay or FPS proof**. Latest structural variant tests passed in focused #19. Conflicted dev-to-main PR #2 has **not** merged.
+
+## Second semantic stage accepted on the fast checkpoint
+
+`phase2-dark-future` follows `phase2-footsteps` and consumes the same
+already-generic `base_after_generic` source with the prior Footsteps output
+as an isolated base overlay. Its only accepted output is the current installed
+Dark Future UI owner `.reds` file; the CI joins that file to Footsteps and
+compiles both in **one** official SCC 0.5.31 invocation. The main GCO
+`RedscriptGenerationPlan.Stage` independently composes the ten generic rules,
+then Footsteps (order 11), then Dark Future immutable tag cache (order 12),
+inside the existing combined ZIP path. No legacy pass, repair or player-side SCC.
+
+[Phase 2 #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848):
+21 semantic state tests; original 2,331 post-generic files + 2 semantic output
+files; 43,482,205-byte compiled output; original sources unchanged.
+Version-fluid tests include relocated owner path, partial implementation,
+repeat no-op, independent source composition and safe alias/mutation refusal.
+Do not treat SCC as proof of game behavior or measured frame-time benefit.

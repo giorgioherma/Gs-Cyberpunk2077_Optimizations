@@ -8,6 +8,20 @@
     <AssemblyName>GRedscript.Resolver</AssemblyName>
     <RootNamespace>GRedscript.Resolver</RootNamespace>
     <SelfContained>false</SelfContained>
+    <!-- Hosted in GCO's single .NET 10 process; CLI entry remains accessible via dotnet DLL. -->
+    <UseAppHost>false</UseAppHost>
+    <!-- This CLI is also referenced as a managed library by GCO. During
+         win-x64 publication, suppress the second RID-specific CLI
+         runtimeconfig/deps copy; the non-RID CLI build used for tests
+         retains both files and the entry point. -->
+    <GenerateRuntimeConfigurationFiles Condition="'$(RuntimeIdentifier)' != ''">false</GenerateRuntimeConfigurationFiles>
+    <GenerateDependencyFile Condition="'$(RuntimeIdentifier)' != ''">false</GenerateDependencyFile>
     <IsPublishable>true</IsPublishable>
   </PropertyGroup>
+  <!-- Build the exact Pass 4 owner generators into the single managed resolver. -->
+  <ItemGroup>
+    <Compile Include="../GRedscript.Pass4/Pass4Program.cs" Link="Phase2/Pass4/Pass4Program.cs" />
+    <Compile Include="../GRedscript.Pass4/Pass4Source.cs" Link="Phase2/Pass4/Pass4Source.cs" />
+    <Compile Include="../GRedscript.Pass4/ReinforcementsPass.cs" Link="Phase2/Pass4/ReinforcementsPass.cs" />
+  </ItemGroup>
 </Project>

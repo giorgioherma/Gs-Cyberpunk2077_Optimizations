@@ -1,8 +1,8 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using Color = System.Windows.Media.Color;
 using Brush = System.Windows.Media.Brush;
@@ -10,6 +10,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Point = System.Windows.Point;
 using System.Windows.Threading;
 using GTotalOptimizer.Core;
+using GRedscript.Resolver;
 
 namespace GTotalOptimizer.App;
 
@@ -17,24 +18,53 @@ namespace GTotalOptimizer.App;
 // in the authoritative CET and GRSP owner managers via UnifiedProfilerWorkflow.
 public partial class MainWindow : Window
 {
-    private enum PortraitStage { Black, Capturing, Collecting, Collected }
+    private enum PortraitStage { Black, Installed, Capturing, Collecting, Results, Analyzing, Generating, Completed }
+    private static readonly Brush AnalyzeYellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
+    private static readonly Brush AnalyzeOkGreen = new SolidColorBrush(Color.FromRgb(101, 220, 162));
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
     private readonly DispatcherTimer glitchTimer = new();
+    // One WPF-only progress indicator shared by Capture and Analyze consoles.
+    // Tokens keep independent operations (for example report generation)
+    // from stopping another operation's indicator prematurely.
+    private readonly DispatcherTimer consoleActivityTimer = new()
+        { Interval = TimeSpan.FromMilliseconds(350) };
+    // A UI-only interpolator, active only while Collect/Analyze/Generate runs.
+    private readonly DispatcherTimer workProgressTimer = new()
+        { Interval = TimeSpan.FromMilliseconds(80) };
+    private readonly Stopwatch workProgressClock = new();
+    private readonly CheckpointProgressSmoother progressSmoother = new();
+    private sealed record ConsoleActivity(
+        string Message, bool Results, string PreviousText, long StatusRevision);
+    private long captureConsoleRevision;
+    private long resultsConsoleRevision;
+    private string latestCaptureConsoleText = "";
+    private string latestResultsConsoleText = "";
+    private readonly Dictionary<long, ConsoleActivity> consoleActivities = new();
+    private long nextConsoleActivityId;
+    private int consoleActivityDots;
+    private string? lastActivityRender;
     // Windows start notifications and process-handle exit events are idle
     // until the game transitions. Only start a slow timer if WMI is unavailable.
     private readonly GameProcessEvents gameProcesses = new();
     private readonly DispatcherTimer gameStateTimer = new()
         { Interval = TimeSpan.FromSeconds(10) };
-    private readonly Random glitchRandom = new();
+    private readonly PortraitSignal portraitSignal = new();
+    private readonly Stopwatch portraitClock = new();
     private CancellationTokenSource? refreshCancellation;
     private GameInspection inspection = GameInspector.Inspect(null);
     private LiveProfilerState? liveState;
     private CollectedCaptureIndex? savedCapture;
-    private string? resultsFolder;
     private string? completedSessionId;
     private string? completedGameRoot;
     private bool captureAndRestoreVerified;
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
+    private readonly CombinedOptimizationPassService combinedPassGenerator = new();
+    private bool redscriptPlanReady;
+    private CombinedPassAvailability? analyzedAvailability;
+    private bool hotscenesOptInRefused;
+    // This session's successfully published combined optimization ZIP only.
+    // OPEN FOLDER selects the actual file, not the GCO application root.
+    private string? generatedPassZipPath;
     private CancellationTokenSource? analysisCancellation;
     private bool analysisRunning;
     private bool generationRunning;
@@ -77,6 +107,7 @@ public partial class MainWindow : Window
     private Grid[]? maximizedCardColumns;
     private Thickness[]? normalCardMargins;
     private readonly Thickness originalConsoleMargin;
+    private readonly Thickness originalResultsConsoleMargin;
 
     // Fullscreen-only visual tuning: fixed normal XAML values are authoritative.
     // Width/gap/height knobs intentionally do not scale child text or SVGs.
@@ -90,19 +121,172 @@ public partial class MainWindow : Window
     private const double ExpandedConsolePortraitClearance = 112.0;
     private const double ExpandedConsoleRaise = 19.0;
     internal bool WpfVerificationMode { get; set; }
-    private int glitchTicks;
     private PortraitStage portraitStage = PortraitStage.Black;
 
     private UnifiedProfilerWorkflow Workflow => new(packageRoot);
     private static bool GameRunning() => Process.GetProcessesByName("Cyberpunk2077").Length != 0;
     private static bool HasNative(CollectedCaptureIndex? capture) =>
         capture?.Cet is not null || capture?.Redscript is not null;
+
+    private void SetHotscenesOptionVisible(bool installed)
+    {
+        if (!installed)
+            HotscenesEnglishOnlyCheckBox.IsChecked = false;
+        var visibility = installed ? Visibility.Visible : Visibility.Collapsed;
+        HotscenesEnglishOnlyCheckBox.Visibility = visibility;
+        HotscenesEnglishOnlyDescription.Visibility = visibility;
+    }
+
+    private void RefreshHotscenesOption()
+    {
+        // Check the CURRENT physical game source, not the sealed capture.
+        // Removing/changing the mod revokes a previously checked option.
+        bool installed = captureAndRestoreVerified &&
+            ResultsPage.Visibility == Visibility.Visible &&
+            GameInspector.HasInstalledHotscenes(completedGameRoot);
+        SetHotscenesOptionVisible(installed);
+    }
+
+    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
+    private static bool HasCompletedHotscenesEnglishOnly(string game)
+    {
+        try
+        {
+            string file = Path.Combine(game, "bin", "x64", "plugins",
+                "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (!File.Exists(file)) return false;
+            string source = File.ReadAllText(file);
+            return source.Contains("-- G-CET personal:hotscenes-english-only-v1",
+                       StringComparison.Ordinal) &&
+                !source.Contains("function loadAllLanguageFiles()", StringComparison.Ordinal) &&
+                !source.Contains("function getGameUILanguage(", StringComparison.Ordinal) &&
+                !source.Contains("function loadLocalizedStrings(", StringComparison.Ordinal);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private bool HasPendingHotscenesOptIn()
+    {
+        if (hotscenesOptInRefused || completedGameRoot is null ||
+            HotscenesEnglishOnlyCheckBox.Visibility != Visibility.Visible ||
+            HotscenesEnglishOnlyCheckBox.IsChecked != true) return false;
+        try
+        {
+            string file = Path.Combine(completedGameRoot, "bin", "x64",
+                "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (!File.Exists(file)) return false;
+            // Incomplete generated markers are not a new optimization:
+            // the CET owner must refuse them rather than reapply a partial pass.
+            return !File.ReadAllText(file).Contains(
+                "-- G-CET personal:hotscenes-english-only-v1", StringComparison.Ordinal);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private bool HasNewOptimizationAvailable() =>
+        analyzedAvailability?.HasNewOptimizations == true ||
+        HasPendingHotscenesOptIn();
+
+    private string NoNewOptimizationStatus()
+    {
+        int refused = analyzedAvailability?.RedscriptSkipped.Length ?? 0;
+        return "NO NEW OPTIMIZATIONS AVAILABLE. All proven compatible work is already installed." +
+            (refused > 0
+                ? Environment.NewLine + refused +
+                  " REDscript operation(s) remain source-refused; not counted as new work."
+                : "");
+    }
+
+    private bool HasPublishedOptimizationZip() =>
+        generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
+
+    // The same DONE action closes the verified workflow after a real pass or
+    // after an analyzed no-op. Unproven source refusals do not force a ZIP.
+    internal static bool ShouldShowDone(bool publishedZip, bool verifiedAnalysis,
+        bool hasNewWork, bool operationRunning) =>
+        !operationRunning && (publishedZip || (verifiedAnalysis && !hasNewWork));
+
+    private void RefreshDoneAvailability()
+    {
+        bool verifiedAnalysis = captureAndRestoreVerified &&
+            analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
+            redscriptPlanReady && analyzedAvailability is not null;
+        bool published = HasPublishedOptimizationZip();
+        bool hasNewWork = HasNewOptimizationAvailable();
+        bool done = ShouldShowDone(published, verifiedAnalysis, hasNewWork,
+            analysisRunning || generationRunning);
+        CloseAfterGenerationButton.Visibility =
+            done ? Visibility.Visible : Visibility.Collapsed;
+        // The terminal V state is also reached by a verified no-op Analyze,
+        // where DONE is available without ever running Generate.
+        if (ResultsPage.Visibility == Visibility.Visible &&
+            verifiedAnalysis && !analysisRunning && !generationRunning)
+        {
+            if (done) SetPortraitStage(PortraitStage.Completed);
+            else if (portraitStage == PortraitStage.Completed)
+                SetPortraitStage(PortraitStage.Analyzing);
+        }
+    }
+
+    private void RefreshPlannedWork()
+    {
+        var preview = analyzedAvailability;
+        bool show = preview is not null && redscriptPlanReady &&
+            analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
+            !HasPublishedOptimizationZip();
+        CetPlannedText.Visibility = RedPlannedText.Visibility =
+            show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show || preview is null)
+        {
+            CetPlannedText.Text = RedPlannedText.Text = string.Empty;
+            return;
+        }
+
+        static string CountText(int count) => count == 0
+            ? "No new optimizations planned"
+            : count == 1 ? "1 new optimization planned" : count + " new optimizations planned";
+
+        CetPlannedText.Text = CountText(preview.CetOptimizationTransforms);
+        // This personal option has not been verified by the source owner yet.
+        if (HasPendingHotscenesOptIn())
+            CetPlannedText.Text += " | 1 additional option requested";
+        RedPlannedText.Text = CountText(preview.RedscriptOptimizationCount);
+    }
+
+    private void RefreshGenerateEligibility()
+    {
+        if (analyzedSessionId is null || analyzedSessionId != completedSessionId ||
+            !redscriptPlanReady || analyzedAvailability is null) return;
+        RefreshPlannedWork();
+        bool ready = HasNewOptimizationAvailable();
+        RefreshDoneAvailability();
+        GenerateButton.IsEnabled = !analysisRunning && !generationRunning &&
+            !HasPublishedOptimizationZip() && ready;
+        if (!analysisRunning && !generationRunning && !HasPublishedOptimizationZip())
+            SetResultsConsoleStatus(ready
+                ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
+                : NoNewOptimizationStatus());
+    }
+
     private bool ClosedOrClosing => !IsLoaded && initialized;
 
     public MainWindow()
     {
         InitializeComponent();
+        HotscenesEnglishOnlyCheckBox.Checked += (_, _) =>
+        {
+            hotscenesOptInRefused = false;
+            RefreshGenerateEligibility();
+        };
+        HotscenesEnglishOnlyCheckBox.Unchecked += (_, _) =>
+        {
+            hotscenesOptInRefused = false;
+            RefreshGenerateEligibility();
+        };
         originalConsoleMargin = ConsoleTextHost.Margin;
+        originalResultsConsoleMargin = ResultsConsoleScroll.Margin;
         CapturePage.SizeChanged += (_, _) =>
         {
             UpdateMaximizedCaptureGeometry();
@@ -121,6 +305,16 @@ public partial class MainWindow : Window
         Title = $"G's Cyberpunk 2077 Optimizer — v{version}";
         BuildVersionText.Text = $"v{version}";
         glitchTimer.Tick += GlitchTick;
+        Deactivated += (_, _) => PausePortrait();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible) StartGlitchIfVisible();
+            else PausePortrait();
+        };
+        consoleActivityTimer.Tick += (_, _) => AdvanceConsoleActivity();
+        workProgressTimer.Tick += (_, _) =>
+            WorkflowProgressBar.Value = progressSmoother.Advance(
+                workProgressClock.Elapsed.TotalSeconds);
         gameStateTimer.Tick += GameStateTimer_Tick;
         gameProcesses.Started += pid => DispatchGameEvent(() => GameStarted(pid));
         gameProcesses.Exited += pid => DispatchGameEvent(() => GameExited(pid));
@@ -176,51 +370,265 @@ public partial class MainWindow : Window
             Trace.TraceError("Missing/undecodable Regular border PNG in assets/ui/elements.");
     }
 
+    // The same aligned owner images serve both pages. Only their signal
+    // intensity changes; this effect is never workflow/completion evidence.
     private void SetPortraitStage(PortraitStage stage)
     {
-        portraitStage = stage;
-        glitchTimer.Stop();
-        VBlackImage.BeginAnimation(UIElement.OpacityProperty, null);
-        if (stage == PortraitStage.Collected)
+        if (portraitStage != stage)
         {
-            var fade = new DoubleAnimation(VBlackImage.Opacity, 0.0,
-                TimeSpan.FromMilliseconds(850)) { FillBehavior = FillBehavior.HoldEnd };
-            VBlackImage.BeginAnimation(UIElement.OpacityProperty, fade);
-            return;
+            portraitStage = stage;
+            portraitSignal.SetStage(stage);
         }
-        VBlackImage.Opacity = 1.0;
-        if (stage is PortraitStage.Capturing or PortraitStage.Collecting)
-            StartGlitchIfVisible();
+        if (stage == PortraitStage.Black)
+        {
+            PausePortrait();
+            RenderPortrait(0);
+        }
+        else StartGlitchIfVisible();
+    }
+
+    private void RenderPortrait(double color)
+    {
+        // Explicit endpoints prevent color leaking through the black PNG's
+        // transparent perimeter. Interior weak pulses use the original pair.
+        if (VColorImage.Opacity != color) VColorImage.Opacity = color;
+        if (VBlackImage.Opacity != 1 - color) VBlackImage.Opacity = 1 - color;
+    }
+
+    private void PausePortrait()
+    {
+        glitchTimer.Stop();
+        portraitClock.Reset();
     }
 
     private void StartGlitchIfVisible()
     {
-        if (!IsActive ||
-            VBlackImage.Source is null || VColorImage.Source is null)
-            return;
-        glitchTimer.Interval = TimeSpan.FromMilliseconds(350 + glitchRandom.Next(1100));
+        if (WpfVerificationMode || !IsActive || !IsVisible ||
+            WindowState == System.Windows.WindowState.Minimized ||
+            VBlackImage.Source is null || VColorImage.Source is null ||
+            !portraitSignal.NeedsTicks || glitchTimer.IsEnabled) return;
+        portraitClock.Restart();
+        glitchTimer.Interval = TimeSpan.FromMilliseconds(portraitSignal.NextTickMilliseconds);
         glitchTimer.Start();
     }
 
     private void GlitchTick(object? sender, EventArgs e)
     {
-        if (portraitStage is not (PortraitStage.Capturing or PortraitStage.Collecting) ||
-            !IsActive)
+        if (WpfVerificationMode || !IsActive || !IsVisible ||
+            WindowState == System.Windows.WindowState.Minimized)
         {
-            glitchTimer.Stop();
-            VBlackImage.Opacity = 1;
+            PausePortrait();
             return;
         }
-        ++glitchTicks;
-        var longBlack = glitchTicks % 8 == 0;
-        var colored = VBlackImage.Opacity > 0.5 && !longBlack;
-        VBlackImage.Opacity = colored ? 0 : 1;
-        // Flashing does NOT indicate progress, capture success or validation.
-        var next = longBlack ? 2400 + glitchRandom.Next(5000)
-            : colored ? 30 + glitchRandom.Next(portraitStage == PortraitStage.Collecting ? 110 : 200)
-            : portraitStage == PortraitStage.Collecting ? 90 + glitchRandom.Next(800)
-              : 240 + glitchRandom.Next(2200);
-        glitchTimer.Interval = TimeSpan.FromMilliseconds(next);
+        double seconds = Math.Min(0.35, portraitClock.Elapsed.TotalSeconds);
+        portraitClock.Restart();
+        RenderPortrait(portraitSignal.Advance(seconds));
+        if (!portraitSignal.NeedsTicks) PausePortrait();
+        else glitchTimer.Interval =
+            TimeSpan.FromMilliseconds(portraitSignal.NextTickMilliseconds);
+    }
+
+    // Variable-length pulses and pauses, not a uniform alternating blink.
+    // Interpolate the requested density without resetting an in-flight burst.
+    private sealed class PortraitSignal
+    {
+        private readonly Random random = new();
+        private readonly Queue<(double Color, double Seconds)> pulses = new();
+        private double presence;
+        private double from;
+        private double target;
+        private double transitionElapsed;
+        private double transitionDuration = 1;
+        private double color;
+        private double remaining;
+        private double restAfterBurst;
+        private double burstMajority;
+        private double burstPresence;
+        private bool inBurst;
+        private bool stable;
+        public bool NeedsTicks => target > 0 && !stable;
+        public double NextTickMilliseconds =>
+            transitionElapsed < transitionDuration ? 33 :
+            Math.Clamp(remaining * 1000, 20, 250);
+
+        private double Range(double min, double max) => min + random.NextDouble() * (max - min);
+
+        public void SetStage(PortraitStage stage)
+        {
+            double next = stage switch
+            {
+                PortraitStage.Installed => .025,
+                PortraitStage.Capturing => .055,
+                PortraitStage.Collecting => .16,
+                PortraitStage.Results => .75,
+                PortraitStage.Analyzing => .90,
+                PortraitStage.Generating or PortraitStage.Completed => 1,
+                _ => 0
+            };
+            if (next == target) return;
+            if (next == 0)
+            {
+                pulses.Clear();
+                presence = from = target = color = remaining = 0;
+                inBurst = stable = false;
+                transitionElapsed = transitionDuration;
+                return;
+            }
+            from = presence;
+            target = next;
+            stable = false;
+            transitionElapsed = 0;
+            transitionDuration = stage switch
+            {
+                PortraitStage.Generating or PortraitStage.Completed => 1.2,
+                PortraitStage.Analyzing => 1.6,
+                PortraitStage.Results => 2.4,
+                _ => 2.8
+            };
+            // Keep an ongoing cluster intact, but do not wait through the
+            // previous profile's entire quiet hold before the new one emerges.
+            if (!inBurst)
+            {
+                double firstWait = stage switch
+                {
+                    PortraitStage.Installed => Range(12, 25),
+                    PortraitStage.Capturing => Range(7, 15),
+                    PortraitStage.Collecting => Range(3, 7),
+                    _ => Range(.4, 1.2)
+                };
+                remaining = remaining <= 0 ? firstWait :
+                    Math.Min(remaining, firstWait);
+            }
+        }
+
+        public double Advance(double seconds)
+        {
+            if (!NeedsTicks) return color;
+            transitionElapsed = Math.Min(transitionDuration, transitionElapsed + seconds);
+            double t = transitionElapsed / transitionDuration;
+            double blend = t * t * (3 - 2 * t);
+            presence = from + (target - from) * blend;
+            if (target == 1 && t >= 1)
+            {
+                pulses.Clear();
+                inBurst = false;
+                stable = true;
+                color = 1;
+                return color;
+            }
+
+            remaining -= seconds;
+            if (remaining <= 0)
+            {
+                if (pulses.Count != 0)
+                    (color, remaining) = pulses.Dequeue();
+                else if (inBurst)
+                {
+                    inBurst = false;
+                    color = burstMajority;
+                    // Never inherit a long quiet period from a much less
+                    // active stage after CONTINUE or another state change.
+                    remaining = Math.Abs(presence - burstPresence) > .10
+                        ? Math.Min(restAfterBurst, Range(.45, 1.1))
+                        : restAfterBurst;
+                }
+                else
+                    BeginBurst();
+            }
+            // Only the terminal ramp settles the last interruptions away;
+            // all earlier state transitions change frequency/duty, not fade.
+            if (target == 1)
+            {
+                double settle = Math.Clamp((t - .5) * 2, 0, 1);
+                return color + (1 - color) * settle * settle;
+            }
+            return color;
+        }
+
+        private void BeginBurst()
+        {
+            double p = Math.Clamp(presence, .005, .975);
+            burstPresence = p;
+            burstMajority = p >= .5 ? 1 : 0;
+            if (burstMajority == 0)
+            {
+                // Install/Start/Collect must remain black-dominant. Quick
+                // irregular flicker clusters only: never hold the full image
+                // for seconds during any of the first three stages.
+                BeginEarlyFlickers(p);
+                return;
+            }
+
+            // On Page 2 the full color image remains dominant, interrupted
+            // by uneven black glitches. Analyze remains almost stable.
+            double minority = 1 - p;
+            int count = random.Next(1, 6);
+            double minoritySeconds = 0;
+            double gapSeconds = 0;
+            int longBlackIndex = target == .75 && p >= .62 &&
+                random.NextDouble() < .16 ? random.Next(count) : -1;
+            for (int i = 0; i < count; ++i)
+            {
+                // An occasional 1.5–3.5 second blackout only on Continue,
+                // never while analyzing or in the first three stages.
+                double duration = i == longBlackIndex
+                    ? Range(1.5, 3.5)
+                    : random.NextDouble() < .23
+                        ? Range(.18, .36) : Range(.045, .14);
+                double strength = i == longBlackIndex ? 1 :
+                    duration < .14 && random.NextDouble() < .55
+                        ? Range(.25, .65) : 1;
+                pulses.Enqueue((1 - strength, duration));
+                minoritySeconds += duration;
+                if (i + 1 < count)
+                {
+                    double gap = random.NextDouble() < .30 ?
+                        Range(.16, .40) : Range(.04, .13);
+                    pulses.Enqueue((1, gap));
+                    gapSeconds += gap;
+                }
+            }
+            restAfterBurst = Math.Clamp(
+                (minoritySeconds * (1 - minority) / minority - gapSeconds) *
+                    Range(.72, 1.28), .18, 18);
+            inBurst = true;
+            (color, remaining) = pulses.Dequeue();
+        }
+
+        private void BeginEarlyFlickers(double p)
+        {
+            // Gradually reduce the quiet intervals from rare Install flashes
+            // to more frequent Collect glitches, without introducing slow
+            // full-image holds. All individual flashes stay under 110 ms.
+            double captureMix = Math.Clamp((p - .025) / .030, 0, 1);
+            double collectMix = Math.Clamp((p - .055) / .105, 0, 1);
+            double minQuiet = 23 - 10 * captureMix - 9 * collectMix;
+            double maxQuiet = 47 - 19 * captureMix - 19 * collectMix;
+            double minFlash = .028 + .009 * captureMix + .006 * collectMix;
+            double maxFlash = .065 + .020 * captureMix + .025 * collectMix;
+            int count = random.Next(2, 6);
+            for (int i = 0; i < count; ++i)
+            {
+                // Rapid pair/triplet, an occasionally weak flicker, uneven
+                // gaps, then a long black rest. Not a repeated blink loop.
+                double strength = random.NextDouble() < .30
+                    ? Range(.20, .55) : 1;
+                pulses.Enqueue((strength, Range(minFlash, maxFlash)));
+                if (i + 1 < count)
+                {
+                    double gap = random.NextDouble() < .25
+                        ? Range(.10, .22) : Range(.025, .09);
+                    pulses.Enqueue((0, gap));
+                }
+            }
+            restAfterBurst = Range(minQuiet, maxQuiet);
+            // During CONTINUE the emerging color-dominant signal must not
+            // inherit a full early-stage black interval.
+            if (target >= .75)
+                restAfterBurst = Math.Min(restAfterBurst, Range(.35, .85));
+            inBurst = true;
+            (color, remaining) = pulses.Dequeue();
+        }
     }
 
     // Preserve the old narrow V content-column reservation. The new
@@ -402,6 +810,7 @@ public partial class MainWindow : Window
         maximizedWorkflowCards.Height = normalWorkflowHeight;
         maximizedWorkflowCards.MinHeight = normalWorkflowMinHeight;
         ConsoleTextHost.Margin = originalConsoleMargin;
+        ResultsConsoleScroll.Margin = originalResultsConsoleMargin;
         var scrollOffset = normalCaptureScrollOffset;
         maximizedGameRootSection = null;
         maximizedWorkflowCards = null;
@@ -432,8 +841,20 @@ public partial class MainWindow : Window
 
     private void UpdateMaximizedCaptureGeometry()
     {
-        if (WindowState != System.Windows.WindowState.Maximized ||
-            maximizedGameRootSection is null || maximizedWorkflowCards is null ||
+        if (WindowState != System.Windows.WindowState.Maximized) return;
+
+        // Both console text origins must move by the SAME portrait clearance
+        // in fullscreen. Shift only the Analyze console's scroll viewport,
+        // leaving its DONE button and the rest of Page 2 untouched.
+        var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
+        var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
+        var resultsMargin = new Thickness(originalResultsConsoleMargin.Left + shift,
+            originalResultsConsoleMargin.Top, originalResultsConsoleMargin.Right,
+            originalResultsConsoleMargin.Bottom);
+        if (ResultsConsoleScroll.Margin != resultsMargin)
+            ResultsConsoleScroll.Margin = resultsMargin;
+
+        if (maximizedGameRootSection is null || maximizedWorkflowCards is null ||
             CapturePage.ActualHeight <= 0)
             return;
 
@@ -476,10 +897,8 @@ public partial class MainWindow : Window
                     maximizedCardColumns[i].Margin = expanded;
             }
 
-        // The current maximized console is unnecessarily far right.
-        // Keep it outside the portrait edge while reducing that extra shift.
-        var overhang = VPortraitHost.Width - ArtworkColumn.Width.Value;
-        var shift = Math.Max(0, overhang - ExpandedConsolePortraitClearance);
+        // Preserve the existing Capture clearance but apply its same
+        // horizontal shift to Analyze above, avoiding per-page visual drift.
         var console = new Thickness(originalConsoleMargin.Left + shift,
             originalConsoleMargin.Top - ExpandedConsoleRaise, originalConsoleMargin.Right,
             originalConsoleMargin.Bottom + ExpandedConsoleRaise);
@@ -581,8 +1000,13 @@ public partial class MainWindow : Window
             captureAndRestoreVerified = true;
             savedCapture = saved;
             UpdateResultTexts(saved);
-            SetPortraitStage(PortraitStage.Collected);
-            ShowResultsPage();
+            SetPortraitStage(PortraitStage.Results);
+            CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
+            ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
+            SetActiveTab(true);
             RefreshCompletedWorkspace();
         }
         catch (Exception ex)
@@ -591,17 +1015,6 @@ public partial class MainWindow : Window
             PinStatus("Saved Analyze workspace unavailable. Capture files are unchanged.",
                 ex.ToString());
         }
-    }
-
-    // Page 2 occupies only the original content row. Preserve the same bottom
-    // console from Capture and release its space from the Continue button.
-    internal void ShowResultsPage()
-    {
-        CapturePage.Visibility = Visibility.Collapsed;
-        ResultsPage.Visibility = Visibility.Visible;
-        ContinueButton.Visibility = Visibility.Collapsed;
-        Grid.SetColumnSpan(ConsoleTextHost, 2);
-        SetActiveTab(true);
     }
 
     private void DispatchGameEvent(Action action)
@@ -802,10 +1215,9 @@ public partial class MainWindow : Window
     private void Window_Activated(object sender, EventArgs e)
     {
         if (WpfVerificationMode) return;
-        if (!initialized || busy ||
+        if (!initialized ||
             WindowState == System.Windows.WindowState.Minimized) return;
-        if (portraitStage is PortraitStage.Capturing or PortraitStage.Collecting)
-            StartGlitchIfVisible();
+        StartGlitchIfVisible();
         // Activation is presentation-only. Initial load, user REFRESH,
         // process transitions and workflow actions already re-inspect sources.
         // Repeating owner CLIs and package hashing on Alt-Tab was redundant.
@@ -817,7 +1229,7 @@ public partial class MainWindow : Window
         if (WpfVerificationMode) return;
         if (WindowState == System.Windows.WindowState.Minimized)
         {
-            glitchTimer.Stop();
+            PausePortrait();
             return;
         }
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
@@ -827,6 +1239,7 @@ public partial class MainWindow : Window
             {
                 Activate();
                 Focus();
+                StartGlitchIfVisible();
             }
         }));
     }
@@ -850,7 +1263,12 @@ public partial class MainWindow : Window
     {
         gameStateTimer.Stop();
         gameProcesses.Dispose();
-        glitchTimer.Stop();
+        PausePortrait();
+        consoleActivityTimer.Stop();
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
+        consoleActivities.Clear();
         refreshCancellation?.Cancel();
         refreshCancellation?.Dispose();
         analysisCancellation?.Cancel();
@@ -953,14 +1371,158 @@ public partial class MainWindow : Window
             QueueGameReconciliation();
     }
 
+    // The same three-step animation is used by every actual asynchronous
+    // operation. It does not imply measured progress or create game files.
+    internal long BeginConsoleActivity(string message)
+    {
+        long id = ++nextConsoleActivityId;
+        bool results = ResultsPage.Visibility == Visibility.Visible;
+        string previous = results ? ResultsStatusText.Text : StatusText.Text;
+        consoleActivities.Add(id, new ConsoleActivity(message, results, previous,
+            results ? resultsConsoleRevision : captureConsoleRevision));
+        consoleActivityDots = 0;
+        consoleActivityTimer.Start();
+        AdvanceConsoleActivity();
+        return id;
+    }
+
+    internal void AdvanceConsoleActivity()
+    {
+        if (consoleActivities.Count == 0) return;
+        var activity = consoleActivities.MaxBy(pair => pair.Key).Value;
+        consoleActivityDots = consoleActivityDots % 3 + 1;
+        string rendered = activity.Message + new string('.', consoleActivityDots);
+        lastActivityRender = activity.Results
+            ? rendered : UserFacingConsoleText.Render(rendered);
+        if (activity.Results)
+            ResultsStatusText.Text = lastActivityRender;
+        else
+            StatusText.Text = lastActivityRender;
+    }
+
+    internal void EndConsoleActivity(long id)
+    {
+        if (!consoleActivities.Remove(id, out var completed)) return;
+        bool sameText = lastActivityRender is not null &&
+            (completed.Results ? ResultsStatusText.Text : StatusText.Text) ==
+            lastActivityRender;
+        if (consoleActivities.Count > 0)
+        {
+            consoleActivityDots = 0;
+            AdvanceConsoleActivity();
+            return;
+        }
+        consoleActivityTimer.Stop();
+        lastActivityRender = null;
+        // A timer tick may follow a final status while a cleanup await is
+        // still pending. Final success/failure messages must win over dots.
+        if (completed.Results && resultsConsoleRevision != completed.StatusRevision)
+            ResultsStatusText.Text = latestResultsConsoleText;
+        else if (!completed.Results &&
+                 captureConsoleRevision != completed.StatusRevision)
+            StatusText.Text = latestCaptureConsoleText;
+        else if (sameText)
+        {
+            if (completed.Results)
+                ResultsStatusText.Text = completed.PreviousText;
+            else
+                StatusText.Text = completed.PreviousText;
+        }
+    }
+
+    // Real source milestones remain authoritative. A UI-only estimate eases
+    // toward the next checkpoint and is never allowed to indicate completion.
+    private enum WorkPhase { None, Collect, Analyze, Generate }
+    private WorkPhase activeWorkPhase = WorkPhase.None;
+    private long activeWorkToken;
+
+    private long BeginWorkProgress(WorkPhase phase, string label)
+    {
+        workProgressTimer.Stop();
+        activeWorkPhase = phase;
+        long token = ++activeWorkToken;
+        progressSmoother.Start(phase switch
+        {
+            WorkPhase.Collect => 10,
+            WorkPhase.Analyze => 5,
+            WorkPhase.Generate => 6,
+            _ => 1
+        });
+        workProgressClock.Restart();
+        WorkflowProgressBar.Value = 0;
+        WorkflowProgressText.Text = label;
+        WorkflowProgressHost.Visibility = Visibility.Visible;
+        workProgressTimer.Start();
+        return token;
+    }
+
+    private void SetWorkProgress(long token, WorkPhase phase, int completed, int total, string label)
+    {
+        if (token != activeWorkToken || activeWorkPhase != phase || total <= 0) return;
+        progressSmoother.Confirm(completed, total,
+            workProgressClock.Elapsed.TotalSeconds);
+        WorkflowProgressText.Text = label;
+    }
+
+    private IProgress<WorkflowStepProgress> WorkProgressReporter(WorkPhase phase, long token) =>
+        new Progress<WorkflowStepProgress>(step =>
+            SetWorkProgress(token, phase, step.Completed, step.Total, step.Detail));
+
+    private void FinishWorkProgress(long token, WorkPhase phase, bool success)
+    {
+        if (token != activeWorkToken || activeWorkPhase != phase) return;
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
+        if (success)
+        {
+            WorkflowProgressBar.Value = 100;
+            WorkflowProgressText.Text = phase switch
+            {
+                WorkPhase.Collect => "COLLECT / REPORTS READY",
+                WorkPhase.Analyze => "ANALYSIS READY",
+                WorkPhase.Generate => "ZIP READY",
+                _ => "READY"
+            };
+        }
+        // Completion is reported by the buttons and console. The shared
+        // progress row is visible only while Collect, Analyze or Generate runs.
+        WorkflowProgressHost.Visibility = Visibility.Collapsed;
+        activeWorkPhase = WorkPhase.None;
+    }
+
+    private void ClearWorkProgress()
+    {
+        ++activeWorkToken;
+        workProgressTimer.Stop();
+        workProgressClock.Stop();
+        progressSmoother.Stop();
+        activeWorkPhase = WorkPhase.None;
+        WorkflowProgressBar.Value = 0;
+        WorkflowProgressHost.Visibility = Visibility.Collapsed;
+    }
+
+    internal void SetResultsConsoleStatus(string message)
+    {
+        latestResultsConsoleText = message;
+        ++resultsConsoleRevision;
+        ResultsStatusText.Text = message;
+    }
+
     // The Capture console is the main workflow guide: brief normal statuses,
     // distinct action rows for framework blockers and missing capture evidence.
-    private void SetStatus(string message) =>
-        StatusText.Text = UserFacingConsoleText.Render(consolePinned ?? message);
+    private void SetStatus(string message)
+    {
+        latestCaptureConsoleText = UserFacingConsoleText.Render(consolePinned ?? message);
+        ++captureConsoleRevision;
+        StatusText.Text = latestCaptureConsoleText;
+    }
     private void PinStatus(string message, string? detail = null)
     {
         consolePinned = message;
-        StatusText.Text = UserFacingConsoleText.Render(message);
+        latestCaptureConsoleText = UserFacingConsoleText.Render(message);
+        ++captureConsoleRevision;
+        StatusText.Text = latestCaptureConsoleText;
         if (!string.IsNullOrWhiteSpace(detail))
             Trace.TraceInformation("GCO capture status detail: " + detail);
     }
@@ -1020,6 +1582,9 @@ public partial class MainWindow : Window
     private async Task RefreshSourceAsync()
     {
         if (!initialized || busy) return;
+        long refreshActivity = BeginConsoleActivity("Checking game and profiler status");
+        try
+        {
         if (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)
         {
             RefreshCompletedWorkspace();
@@ -1057,6 +1622,7 @@ public partial class MainWindow : Window
         // cached permissions before awaiting any owner status.
         if (sourceChanged)
         {
+            SetPortraitStage(PortraitStage.Black);
             SetFrameworkStatuses(null);
             liveState = null;
             savedCapture = null;
@@ -1157,15 +1723,33 @@ public partial class MainWindow : Window
             LaunchButton.IsEnabled = pinnedFramework &&
                 !running && !processLaunchPending;
             CollectButton.IsEnabled = !running && readyToCollect;
-            ContinueButton.IsEnabled = !running &&
-                CaptureAdmissionPolicy.CanContinue(saved, frame is null);
+            ContinueButton.IsEnabled = !running && !profilerReportRunning &&
+                CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
+                saved is not null && HasCompletedProfilerReport(packageRoot, saved.SessionId);
+            // Reconstruct Page 1's decorative state from the authoritative
+            // journal after tray hibernation/reopen, not from a local flag.
+            SetPortraitStage(CaptureAdmissionPolicy.CanContinue(saved, frame is null)
+                ? PortraitStage.Collecting
+                : !state.BothInstalled || !session ? PortraitStage.Black
+                : captureStarted && saved?.CollectInvoked != true
+                    ? PortraitStage.Capturing
+                    : PortraitStage.Installed);
+            // Recover a sealed capture on restart or REFRESH without allowing
+            // Continue to skip unfinished derived report generation.
+            if (!running && saved is not null &&
+                CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
+                !profilerReportRunning && !HasCompletedProfilerReport(packageRoot, saved.SessionId))
+            {
+                await GenerateCollectedProfilerReportAsync(current.GameRoot!, saved.SessionId);
+                if (cancel.IsCancellationRequested || !IsLoaded || busy) return;
+                ContinueButton.IsEnabled = HasCompletedProfilerReport(packageRoot, saved.SessionId);
+            }
             // Adapt the captions to actual verified workflow state. Disabled
             // controls never suggest an unverified domain is installed.
             LaunchButton.Content = running ? "GAME RUNNING"
                 : processLaunchPending ? "STARTING CYBERPUNK"
                 : "START CYBERPUNK";
             CollectButton.Content = "COLLECT RESULTS";
-            resultsFolder = HasNative(saved) ? CollectedCaptureStore.SessionFolder(packageRoot, saved!.SessionId) : null;
 
             // Gameplay status replaces stale event/exit pins, rather than
             // reporting "Game closed" while Cyberpunk is still running.
@@ -1188,9 +1772,6 @@ public partial class MainWindow : Window
                             : session
                                 ? "Profiler recovery needed. Close the game and click RESTORE PROFILERS."
                                 : $"G-CET Profiler: {cetProfiler} | G-REDscript Profiler: {redProfiler}");
-            if (CaptureAdmissionPolicy.CanContinue(saved, frame is null) &&
-                portraitStage != PortraitStage.Collected)
-                SetPortraitStage(PortraitStage.Collected);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -1206,6 +1787,11 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("Profiler status inspection: " + ex);
                 SetStatus("Profiler status unavailable. Retry Refresh.");
             }
+        }
+        }
+        finally
+        {
+            EndConsoleActivity(refreshActivity);
         }
     }
 
@@ -1229,20 +1815,30 @@ public partial class MainWindow : Window
             return;
         }
         SetBusy(true);
+        SetPortraitStage(PortraitStage.Installed);
         SetStatus("Installing CET and REDscript profilers...");
+        long installActivity = BeginConsoleActivity("Installing profilers");
         try
         {
             var result = await Workflow.InstallAsync(inspection.GameRoot);
             if (result.Ok)
             {
-                SetPortraitStage(PortraitStage.Black);
+                SetPortraitStage(PortraitStage.Installed);
                 // InstallAsync already re-inspects both source-owned managers.
                 PinStatus("Profilers installed. Ready to start Cyberpunk.");
             }
-            else Warn(result.Detail, "Profiler installation");
+            else
+            {
+                SetPortraitStage(PortraitStage.Black);
+                Warn(result.Detail, "Profiler installation");
+            }
         }
-        catch (Exception ex) { Warn(ex.Message, "Profiler installation"); }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        catch (Exception ex)
+        {
+            SetPortraitStage(PortraitStage.Black);
+            Warn(ex.Message, "Profiler installation");
+        }
+        finally { EndConsoleActivity(installActivity); SetBusy(false); await RefreshSourceAsync(); }
     }
 
     // A new GCO or directly observed Cyberpunk launch follows the exact same
@@ -1320,6 +1916,7 @@ public partial class MainWindow : Window
             !Workflow.HasSessionForGame(inspection.GameRoot)) return;
         var game = inspection.GameRoot;
         SetBusy(true);
+        long externalStartActivity = BeginConsoleActivity("Preparing capture for detected game");
         try
         {
             var state = await Workflow.InspectAsync(game);
@@ -1341,7 +1938,7 @@ public partial class MainWindow : Window
             PinStatus("Capture restart failed. Close Cyberpunk and use Restore.",
                 ex.ToString());
         }
-        finally { SetBusy(false); }
+        finally { EndConsoleActivity(externalStartActivity); SetBusy(false); }
     }
 
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
@@ -1364,6 +1961,8 @@ public partial class MainWindow : Window
         ClearStatusPin();
         var launched = false;
         SetBusy(true);
+        SetPortraitStage(PortraitStage.Capturing);
+        long launchActivity = BeginConsoleActivity("Preparing profilers and starting Cyberpunk");
         try
         {
             var state = await Workflow.InspectAsync(game);
@@ -1420,7 +2019,9 @@ public partial class MainWindow : Window
         {
             gcoLaunchInProgress = false;
             gcoLaunchedGamePid = null;
+            EndConsoleActivity(launchActivity);
             SetBusy(false);
+            if (!launched) SetPortraitStage(PortraitStage.Installed);
             // Handoff when the launch request succeeds. The native tray and
             // observer are independent of whether Cyberpunk is observable
             // yet; the user can reopen GCO after a slow start or crash.
@@ -1471,6 +2072,8 @@ public partial class MainWindow : Window
         SetBusy(true);
         SetPortraitStage(PortraitStage.Collecting);
         SetStatus("Collecting profiler results...");
+        long collectActivity = BeginConsoleActivity("Collecting and verifying profiler results");
+        long collectProgress = BeginWorkProgress(WorkPhase.Collect, "COLLECT / VERIFY CAPTURES");
         var sealedSuccess = false;
         try
         {
@@ -1489,7 +2092,11 @@ public partial class MainWindow : Window
             var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot,
                 clearTracking: false);
             string? frameWarning = stop.Error;
+            if (stop.Stopped)
+                SetWorkProgress(collectProgress, WorkPhase.Collect, 1, 10, "COLLECT / PRESENTMON STOPPED");
             var native = await Workflow.CollectResultsAsync(game);
+            if (native.Ok)
+                SetWorkProgress(collectProgress, WorkPhase.Collect, 2, 10, "COLLECT / CET + REDSCRIPT");
             if (native.Ok && stop.Stopped && stop.Csv is not null)
             {
                 var expectedRoot = CollectedCaptureStore.SessionFolder(packageRoot, attempt.SessionId) +
@@ -1515,6 +2122,7 @@ public partial class MainWindow : Window
                     }
                 }
             }
+            SetWorkProgress(collectProgress, WorkPhase.Collect, 3, 10, "COLLECT / FRAME EVIDENCE CHECKED");
             // Do not seal a failed/empty native collection. Keep the pending
             // capture intact so Collect may be retried or the run abandoned.
             var collected = Workflow.ReadCollected(game, verifyHashes: true);
@@ -1530,28 +2138,20 @@ public partial class MainWindow : Window
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             sealedSuccess = true;
+            SetWorkProgress(collectProgress, WorkPhase.Collect, 4, 10, "COLLECT / CAPTURES VERIFIED");
             if (saved.Cet is not null && saved.Redscript is not null)
             {
-                resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-                SetPortraitStage(PortraitStage.Collected);
+                // Keep Collect's black-dominant signal through report
+                // building and while awaiting CONTINUE.
                 UpdateResultTexts(saved);
             }
             else SetPortraitStage(PortraitStage.Black);
 
-            // COLLECT finishes the actual reports now, before enabling CONTINUE.
-            // A report failure preserves sealed evidence and cannot block
-            // profiler restoration, but it must not claim resolver readiness.
-            SetStatus("Preparing CET, REDscript and PresentMon reports...");
-            var reportsReady = await GenerateCollectedProfilerReportAsync(game, saved.SessionId);
-            UpdateResultTexts(saved);
             var nativeWarning = native.Ok &&
                 (saved.CetReadyBeforeAttempt || saved.RedscriptReadyBeforeAttempt)
                     ? native.Detail : native.Ok ? null : native.Detail;
-            PinStatus(reportsReady
-                    ? "Results and reports saved. Click CONTINUE."
-                    : "Capture saved. Reports incomplete; CONTINUE still restores profilers.",
+            PinStatus(UserFacingConsoleText.CollectionGuidance(saved),
                 "Collection: " + native.Detail +
-                " | Reports: " + (reportsReady ? "COMPLETE" : "INCOMPLETE") +
                 (frameWarning is null ? "" : " | PresentMon: " + frameWarning) +
                 (nativeWarning is null ? "" : " | Native: " + nativeWarning));
         }
@@ -1588,44 +2188,108 @@ public partial class MainWindow : Window
                 SetPortraitStage(PortraitStage.Black);
                 PinStatus("Collect failed. START again or RESTORE.");
             }
+            EndConsoleActivity(collectActivity);
+            bool reportsReady = false;
+            if (sealedSuccess && savedCapture is { } complete)
+                reportsReady = await GenerateCollectedProfilerReportAsync(game, complete.SessionId);
+            FinishWorkProgress(collectProgress, WorkPhase.Collect, sealedSuccess && reportsReady);
             SetBusy(false);
             await RefreshSourceAsync();
+        }
+    }
+
+    internal static bool HasCompletedProfilerReport(string packageRoot, string sessionId)
+    {
+        var html = GcoProfilerReportService.ReportFile(packageRoot, sessionId);
+        var json = Path.Combine(Path.GetDirectoryName(html)!,
+            GcoProfilerReportService.JsonFile);
+        if (!File.Exists(html) || !File.Exists(json)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(json));
+            return document.RootElement.TryGetProperty("sessionId", out var id) &&
+                id.GetString() == sessionId &&
+                new FileInfo(html).Length > 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or InvalidOperationException)
+        {
+            Trace.TraceWarning("Combined report readiness: " + ex.Message);
+            return false;
         }
     }
 
     private async Task<bool> GenerateCollectedProfilerReportAsync(string game, string sessionId)
     {
         if (profilerReportRunning) return false;
+        if (HasCompletedProfilerReport(packageRoot, sessionId))
+        {
+            if (activeWorkPhase == WorkPhase.Collect)
+                SetWorkProgress(activeWorkToken, WorkPhase.Collect, 10, 10, "COLLECT / REPORTS VERIFIED");
+            return true;
+        }
+        bool ownsRail = activeWorkPhase != WorkPhase.Collect;
+        long reportToken = ownsRail
+            ? BeginWorkProgress(WorkPhase.Collect, "COLLECT / BUILDING REPORTS")
+            : activeWorkToken;
+        bool reportReady = false;
         profilerReportRunning = true;
+        ContinueButton.IsEnabled = false;
+        long reportActivity = BeginConsoleActivity("Preparing performance graphs and report");
         try
         {
+            var reporter = WorkProgressReporter(WorkPhase.Collect, reportToken);
             var result = await Task.Run(() =>
-                GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId));
+                GcoProfilerReportService.GenerateAsync(packageRoot, game, sessionId,
+                    progress: reporter));
+            if (!HasCompletedProfilerReport(packageRoot, sessionId))
+                throw new InvalidDataException("Combined profiler report was not published completely.");
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
-            return GcoProfilerReportService.HasCompletedReport(packageRoot, sessionId);
+            ClearStatusPin();
+            SetStatus("Combined profiler report ready. Click CONTINUE.");
+            reportReady = true;
+            return true;
         }
         catch (Exception ex)
         {
-            // Keep the immutable capture and the existing owner-restore path.
+            // Never discard sealed native captures on a derived report failure.
+            // REFRESH can retry reporting; emergency RESTORE remains available.
             Trace.TraceWarning("GCO combined profiler reporting: " + ex);
+            PinStatus("Combined report failed. Click REFRESH to retry. " +
+                "Captures are saved; CONTINUE is unavailable.", ex.ToString());
             return false;
         }
-        finally { profilerReportRunning = false; }
+        finally
+        {
+            EndConsoleActivity(reportActivity);
+            profilerReportRunning = false;
+            if (ownsRail) FinishWorkProgress(reportToken, WorkPhase.Collect, reportReady);
+        }
     }
 
     private void UpdateResultTexts(CollectedCaptureIndex saved)
     {
-        var reportsReady = GcoProfilerReportService.HasCompletedReport(packageRoot, saved.SessionId);
-        CetReportText.Text = saved.Cet is null
-            ? "CET: NOT_CAPTURED"
-            : "CET: captured" + (reportsReady ? " · report saved" : " · reports incomplete");
-        RedReportText.Text = saved.Redscript is null
-            ? "REDscript: NOT_CAPTURED"
-            : "REDscript: captured" + (reportsReady ? " · report saved" : " · reports incomplete");
-        RedReportText.Text += saved.FrameTimeCsv is null
-            ? Environment.NewLine + "PresentMon: NOT_CAPTURED"
-            : Environment.NewLine + "PresentMon: captured";
+        // Page 2 retains the restoration confirmation above both panels.
+        // The redundant capture-domain OK row is no longer displayed.
+        ResultsRestoreStatusText.Text = saved.Restored
+            ? "Both profilers uninstalled. All game files are restored."
+            : "Profiler restoration has not yet been verified.";
+        ResultsRestoreStatusText.Foreground = saved.Restored
+            ? (System.Windows.Media.Brush)FindResource("Cyan") : AnalyzeYellow;
+
+        // A normal refresh must not erase a completed analysis or replace
+        // it with capture paths, compiler details, or development diagnostics.
+        if (analyzedSessionId != saved.SessionId)
+        {
+            RefreshPlannedWork();
+            CetReportText.Text = saved.Cet is null
+                ? "CET capture unavailable."
+                : "Capture verified. Click ANALYZE for optimization candidates.";
+            RedReportText.Text = saved.Redscript is null
+                ? "REDscript capture unavailable."
+                : "Capture verified. Click ANALYZE for optimization candidates.";
+        }
     }
 
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
@@ -1635,7 +2299,15 @@ public partial class MainWindow : Window
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
-            ShowResultsPage();
+            if (portraitStage is PortraitStage.Black or PortraitStage.Installed or
+                PortraitStage.Capturing or PortraitStage.Collecting)
+                SetPortraitStage(PortraitStage.Results);
+            CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
+            ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
+            SetActiveTab(true);
             return;
         }
         var game = inspection.GameRoot;
@@ -1651,7 +2323,15 @@ public partial class MainWindow : Window
             Warn("Collect CET and REDscript first, or use Restore.", "Continue");
             return;
         }
+        if (profilerReportRunning || saved is null ||
+            !HasCompletedProfilerReport(packageRoot, saved.SessionId))
+        {
+            Warn("Wait for the combined profiler report to finish. " +
+                "If reporting failed, click REFRESH to retry.", "Continue");
+            return;
+        }
         SetBusy(true);
+        long continueActivity = BeginConsoleActivity("Restoring profilers and preparing analysis");
         try
         {
             // Only source-owner restoration can authorize Page 2. Missing
@@ -1665,6 +2345,8 @@ public partial class MainWindow : Window
                 Warn(result.Detail, "Restoration blocked");
                 return;
             }
+            if (completedSessionId != saved.SessionId)
+                HotscenesEnglishOnlyCheckBox.IsChecked = false;
             completedSessionId = saved.SessionId;
             completedGameRoot = game;
             captureAndRestoreVerified = true;
@@ -1677,12 +2359,18 @@ public partial class MainWindow : Window
                 Trace.TraceWarning("Workspace reopening metadata: " + ex);
             }
             UpdateResultTexts(saved);
-            ShowResultsPage();
+            SetPortraitStage(PortraitStage.Results);
+            CapturePage.Visibility = Visibility.Collapsed;
+            CaptureFooterHost.Visibility = Visibility.Collapsed;
+            ResultsPage.Visibility = Visibility.Visible;
+            BackToCaptureButton.Visibility = Visibility.Visible;
+            ClearWorkProgress();
+            SetActiveTab(true);
             RefreshCompletedWorkspace();
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
-        finally { SetBusy(false); }
+        finally { EndConsoleActivity(continueActivity); SetBusy(false); }
     }
 
     private void RefreshCompletedWorkspace()
@@ -1691,142 +2379,396 @@ public partial class MainWindow : Window
             return;
         try
         {
+            // Verify the sealed native evidence AND the recorded owner
+            // restoration before presenting Page 2 as ready.
             var saved = CollectedCaptureStore.ReadRestored(
                 packageRoot, completedGameRoot, completedSessionId);
-            if (!HasNative(saved))
-                throw new InvalidDataException("The restored capture has no CET or REDscript native evidence.");
             UpdateResultTexts(saved);
-            resultsFolder = CollectedCaptureStore.SessionFolder(packageRoot, saved.SessionId);
-            var reportsReady = GcoProfilerReportService.HasCompletedReport(packageRoot, saved.SessionId);
-            ResultsStatusText.Text = reportsReady
-                ? "Results and reports saved. Profilers restored and uninstalled."
-                : "Captures saved and profilers restored. Profiler reports incomplete.";
-            PinStatus(reportsReady
-                ? "Reports saved in RESULTS. Profilers uninstalled. ANALYZE next."
-                : "Capture saved; reports incomplete. Profilers uninstalled.");
-            OpenResultsButton.IsEnabled = true;
-            AnalyzeButton.IsEnabled = reportsReady;
-            GenerateButton.IsEnabled = false;
+            RefreshHotscenesOption();
+            if (analyzedSessionId != saved.SessionId && !analysisRunning)
+                SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
+            AnalyzeButton.IsEnabled = !analysisRunning && !generationRunning &&
+                analyzedSessionId != saved.SessionId;
+            if (!analysisRunning)
+                AnalyzeButton.Content = analyzedSessionId == saved.SessionId
+                    ? "ANALYZED" : "ANALYZE";
+            RefreshDoneAvailability();
+            GenerateButton.IsEnabled = !generationRunning && !analysisRunning &&
+                analyzedSessionId == saved.SessionId && redscriptPlanReady &&
+                !HasPublishedOptimizationZip() && HasNewOptimizationAvailable();
+            if (analyzedSessionId == saved.SessionId && !generationRunning &&
+                !HasPublishedOptimizationZip() && analyzedAvailability is not null &&
+                !HasNewOptimizationAvailable())
+                SetResultsConsoleStatus(NoNewOptimizationStatus());
+            OpenFolderButton.IsEnabled = !generationRunning &&
+                generatedPassZipPath is not null && File.Exists(generatedPassZipPath);
         }
         catch (Exception ex)
         {
-            ResultsStatusText.Text = "Saved capture verification failed: " + ex.Message;
+            SetHotscenesOptionVisible(false);
+            SetResultsConsoleStatus("Saved capture verification failed: " + ex.Message);
+            ResultsRestoreStatusText.Text = "Restoration or capture verification unavailable.";
+            ResultsRestoreStatusText.Foreground = AnalyzeYellow;
             AnalyzeButton.IsEnabled = false;
             GenerateButton.IsEnabled = false;
-            OpenResultsButton.IsEnabled = false;
+            OpenFolderButton.IsEnabled = false;
+            CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
         }
     }
 
-    // The current Page 2 is a validated handoff, not an implicit analysis
-    // request. The future combined CET + GRSP Resolver will own this action.
-    private void Analyze_Click(object sender, RoutedEventArgs e) =>
-        PinStatus("ANALYZE is reserved for the combined CET and REDscript Resolvers.");
+    private async void Analyze_Click(object sender, RoutedEventArgs e)
+    {
+        if (analysisRunning || generationRunning || !captureAndRestoreVerified ||
+            completedSessionId is null || completedGameRoot is null ||
+            analyzedSessionId == completedSessionId) return;
+        try
+        {
+            // Manual user decision. CONTINUE and reopening never launch a
+            // Resolver. The original captures remain hash-sealed.
+            var saved = CollectedCaptureStore.ReadRestored(
+                packageRoot, completedGameRoot, completedSessionId);
+            await RunReadOnlyAnalysisAsync(saved);
+        }
+        catch (Exception ex)
+        {
+            // Verify safety first, then retain the actual error in the
+            // console if the captured workspace is still usable.
+            RefreshCompletedWorkspace(); // disables actions if provenance failed
+            SetResultsConsoleStatus("Cannot analyze: " + ex.Message);
+            Trace.TraceWarning("Manual Analyze refused: " + ex);
+        }
+    }
 
     private async Task RunReadOnlyAnalysisAsync(CollectedCaptureIndex saved)
     {
-        // Automatically launched by CONTINUE and by reopening a previously
-        // verified, restored workspace. No new mandatory Analyze action.
+        // Explicit ANALYZE click only; CONTINUE solely restores profilers
+        // and displays verified capture readiness.
         if (analysisRunning ||
             completedGameRoot is null || completedSessionId != saved.SessionId ||
             ResultsPage.Visibility != Visibility.Visible)
             return;
 
         analysisRunning = true;
+        SetPortraitStage(PortraitStage.Analyzing);
+        redscriptPlanReady = false;
+        analyzedAvailability = null;
+        RefreshPlannedWork();
+        hotscenesOptInRefused = false;
         analysisCancellation?.Dispose();
         analysisCancellation = new CancellationTokenSource();
         var cancel = analysisCancellation;
         AnalyzeButton.Content = "ANALYZING";
         AnalyzeButton.IsEnabled = false;
         GenerateButton.IsEnabled = false;
-        ResultsStatusText.Text = "Analyzing verified CET capture and current source...";
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
+        long analyzeActivity = BeginConsoleActivity("Analyzing CET and REDscript sources");
+        long analyzeProgress = BeginWorkProgress(WorkPhase.Analyze, "ANALYZE / CET SOURCES");
         try
         {
             var report = await readOnlyAnalyzer.AnalyzeAsync(
                 packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
-            analyzedSessionId = saved.SessionId;
+            SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 5, "ANALYZE / REDSCRIPT SOURCES");
+            // Do not mark the session ANALYZED until both CET and the
+            // REDscript generation plan have completed successfully.
+            // MaterialRemaining is an analysis callback count, not a
+            // generation refusal count. Below-threshold work is not shown here.
             CetReportText.Text = "CET source mods: " + report.InstalledCetMods +
-                " | Measured callback families: " + report.MeasuredCallbackFamilies +
-                " | Ranked callbacks: " + report.RankedCallbacks + Environment.NewLine +
+                " | Callback families: " + report.MeasuredCallbackFamilies +
+                " | Measured callbacks: " + report.RankedCallbacks + " | " +
                 "Generic candidates: " + report.GenericCandidates +
-                " | Semantic candidates: " + report.SemanticCandidates +
-                " | Already satisfied: " + report.AlreadySatisfied + Environment.NewLine +
-                "Remaining: " + report.MaterialRemaining +
-                " | Unresolved: " + report.Unresolved + Environment.NewLine +
-                "PresentMon: " + (report.HasPresentMon
-                    ? "QPC F11-aligned (" + report.PresentMonFrames + " intervals)"
-                    : "NOT_CAPTURED") + Environment.NewLine +
-                "Source: current installation verified read-only. Historical capture/source identity is unproven.";
-            RedReportText.Text = "REDscript captured: " + report.CapturedRedscriptFiles +
-                " verified files." + Environment.NewLine +
-                "REDscript optimization is not implemented in this stage; no REDscript performance gains claimed.";
-            if (File.Exists(GcoProfilerReportService.ReportFile(packageRoot, saved.SessionId)))
-                RedReportText.Text += Environment.NewLine +
-                    "Combined profiler report: RESULTS / Reports / GCO_Profiler_Report.html";
-            AnalyzeButton.Content = "ANALYZED";
-            ResultsStatusText.Text = "CET Resolver ready. Generate a CET-only pass from current mod sources.";
+                " | Semantic rules: " + report.SemanticCandidates +
+                " | Already optimized: " + report.AlreadySatisfied + " | " +
+                "Priority unresolved callbacks: " + report.MaterialRemaining;
+            // REDscript is no longer reported as absent: use the actual
+            // bundled GCO-local Resolver to decide source-specific passes and
+            // their generation order. This is a plan, not an optimization ZIP.
+            // The six existing source-generators and the five still-unbuilt
+            // experimental systems are deliberately counted separately.
+            string redPlanStatus;
+            try
+            {
+                string sourceRoot = completedGameRoot!;
+                string sessionRoot = CollectedCaptureStore.SessionFolder(
+                    packageRoot, saved.SessionId);
+                string planPath = Path.Combine(sessionRoot,
+                    "REDscript_GenerationPlan.json");
+                var planned = await Task.Run(() =>
+                {
+                    cancel.Token.ThrowIfCancellationRequested();
+                    Directory.CreateDirectory(sessionRoot);
+                    string tempPlan = Path.Combine(sessionRoot,
+                        "REDscript_GenerationPlan." +
+                        Guid.NewGuid().ToString("N") + ".tmp");
+                    try
+                    {
+                        var result = RedscriptGenerationPlan.Create(
+                            sourceRoot, tempPlan);
+                        cancel.Token.ThrowIfCancellationRequested();
+                        File.Move(tempPlan, planPath, overwrite: true);
+                        return result;
+                    }
+                    finally
+                    {
+                        if (File.Exists(tempPlan)) File.Delete(tempPlan);
+                    }
+                }, cancel.Token);
+                if (cancel.IsCancellationRequested || !IsLoaded ||
+                    completedSessionId != saved.SessionId) return;
+                redscriptPlanReady = true;
+                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 2, 5,
+                    "ANALYZE / VERIFYING APPLICABLE RULES");
+                var ready = planned.Rules.Where(rule =>
+                    rule.Status == "READY_FOR_GENERATOR").ToArray();
+                var affected = ready.SelectMany(rule => rule.SourceFolders)
+                    .Distinct(StringComparer.Ordinal).Count();
+                int alreadyComplete = planned.Rules
+                    .Where(rule => rule.Order is not null)
+                    .Sum(rule => rule.AlreadyComplete ?? 0);
+                // The initial plan reports candidate counts; the disposable
+                // production preview below reports actual applied operations.
+                redPlanStatus = "REDscript source files: " + planned.SourceFiles +
+                    " | Generic source groups: " + affected + " | " +
+                    "Generic candidates: " + ready.Length +
+                    " | Semantic stages: " +
+                    RedscriptGenerationPlan.ConfiguredSemanticStages +
+                    " configured | " +
+                    "Eligible generic edits: " + planned.EligibleSourceEdits +
+                    " | Already optimized: " + alreadyComplete + " | " +
+                    "Semantic compatibility checked against installed source.";
+                var sourceRefused = planned.Rules.Where(rule =>
+                    rule.Status == "SOURCE_REFUSED").ToArray();
+                if (sourceRefused.Length > 0)
+                    redPlanStatus += " | Source-specific rules skipped: " + sourceRefused.Length +
+                        " (" + string.Join(", ", sourceRefused.Select(x => x.Id)) + ").";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                redscriptPlanReady = false;
+                redPlanStatus = "REDscript current-source generation plan unavailable: " +
+                    ex.Message + " | Existing generated source rules remain preview-only.";
+                Trace.TraceWarning("REDscript Resolver plan: " + ex);
+            }
+            if (redscriptPlanReady)
+            {
+                // Probe source-aware eligibility in disposable output using
+                // the existing CET and REDscript generators. Hotscenes remains
+                // Generate-only, as required by the owner's opt-in contract.
+                analyzedAvailability = await combinedPassGenerator.InspectAvailableAsync(
+                    packageRoot, completedGameRoot!, saved.SessionId, cancel.Token,
+                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress));
+                if (cancel.IsCancellationRequested || !IsLoaded ||
+                    completedSessionId != saved.SessionId) return;
+                SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 5, 5,
+                    "ANALYZE / APPLICABLE RULES VERIFIED");
+                if (analyzedAvailability.RedscriptSkipped.Length > 0)
+                    Trace.TraceInformation("REDscript source-specific refusals: " +
+                        string.Join(" | ", analyzedAvailability.RedscriptSkipped.Select(
+                            item => item.Id + ": " + item.Reason)));
+            }
+            RedReportText.Text = redPlanStatus;
+            if (analyzedAvailability?.RedscriptSkipped is { Length: > 0 } skipped)
+                RedReportText.Text += " | Source-refused operations (not applied): " +
+                    string.Join(", ", skipped.Select(item => item.Id)
+                        .Distinct(StringComparer.Ordinal));
+            analyzedSessionId = redscriptPlanReady ? saved.SessionId : null;
+            RefreshPlannedWork();
+            AnalyzeButton.Content = redscriptPlanReady ? "ANALYZED" : "ANALYZE";
+            SetResultsConsoleStatus(!redscriptPlanReady
+                ? "REDscript plan unavailable. GENERATE remains disabled; the source and capture are unchanged."
+                : HasNewOptimizationAvailable()
+                    ? "CET + REDscript analysis ready. GENERATE creates one ZIP containing all optimizations."
+                    : NoNewOptimizationStatus());
         }
         catch (OperationCanceledException) { /* Closing/reopening cancels only this derived analysis. */ }
         catch (Exception ex)
         {
             if (cancel.IsCancellationRequested || !IsLoaded) return;
             Trace.TraceWarning("Read-only CET analysis: " + ex);
-            ResultsStatusText.Text = "CET analysis unavailable: " + ex.Message +
-                " Collected results remain untouched.";
+            SetResultsConsoleStatus("CET analysis unavailable: " + ex.Message +
+                " Collected results remain untouched.");
             analyzedSessionId = null;
+            analyzedAvailability = null;
+            RefreshPlannedWork();
             CetReportText.Text = "CET Resolver unavailable. The collected capture is unchanged.";
             AnalyzeButton.Content = "UNAVAILABLE";
         }
         finally
         {
+            EndConsoleActivity(analyzeActivity);
+            FinishWorkProgress(analyzeProgress, WorkPhase.Analyze,
+                analyzedSessionId == saved.SessionId && redscriptPlanReady);
             analysisRunning = false;
-            GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
+            if (analyzedSessionId != saved.SessionId || !redscriptPlanReady)
+                SetPortraitStage(PortraitStage.Results);
+            RefreshDoneAvailability();
+            AnalyzeButton.IsEnabled = analyzedSessionId != saved.SessionId &&
                 !generationRunning;
+            if (analyzedSessionId != saved.SessionId)
+                AnalyzeButton.Content = "ANALYZE";
+            GenerateButton.IsEnabled = analyzedSessionId == saved.SessionId &&
+                redscriptPlanReady && analyzedAvailability is not null &&
+                HasNewOptimizationAvailable() && !generationRunning &&
+                !HasPublishedOptimizationZip();
         }
     }
 
     private async void GenerateCetPass_Click(object sender, RoutedEventArgs e)
     {
-        if (generationRunning || analysisRunning || completedSessionId is null ||
-            completedGameRoot is null || analyzedSessionId != completedSessionId)
+        if (generationRunning || analysisRunning ||
+            HasPublishedOptimizationZip() ||
+            completedSessionId is null || completedGameRoot is null ||
+            analyzedSessionId != completedSessionId ||
+            !redscriptPlanReady || !captureAndRestoreVerified ||
+            !HasNewOptimizationAvailable())
             return;
+        if (GameRunning())
+        {
+            Warn("Close Cyberpunk before generating the optimization ZIP.", "Generate");
+            return;
+        }
 
+        // Recheck the live installed source immediately before Generate.
+        // A removed Hotscenes mod must not leave a stale ENG-only request.
+        RefreshHotscenesOption();
+        // Snapshot the explicit player choice for this generation only.
+        bool hotscenesEnglishOnly =
+            HotscenesEnglishOnlyCheckBox.Visibility == Visibility.Visible &&
+            HotscenesEnglishOnlyCheckBox.IsChecked == true;
         generationRunning = true;
+        SetPortraitStage(PortraitStage.Generating);
+        generatedPassZipPath = null;
+        ClearWorkProgress();
+        GeneratedPassNotice.Visibility = Visibility.Collapsed;
+        HotscenesEnglishOnlyCheckBox.IsEnabled = false;
         GenerateButton.IsEnabled = false;
+        OpenFolderButton.IsEnabled = false;
         var session = completedSessionId;
         var game = completedGameRoot;
         var cancellation = new CancellationTokenSource();
         analysisCancellation?.Dispose();
         analysisCancellation = cancellation;
-        ResultsStatusText.Text = "Generating CET pass from current sources...";
+        GenerateButton.Content = "GENERATING...";
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
+        long generateActivity = BeginConsoleActivity("Generating CET and REDscript optimizations");
+        long generateProgress = BeginWorkProgress(WorkPhase.Generate, "GENERATE / CET OPTIMIZATIONS");
         try
         {
-            // Exactly the source owner's established --generate-pass pipeline.
-            // No second GCO generator, no REDscript transform and no mod writes.
-            var pass = await readOnlyAnalyzer.GenerateCetPassAsync(
-                packageRoot, game, session, cancellation.Token);
+            // CET retains its owner generator; GCO-local REDscript stages
+            // the canonical ordered plan. Only one game-relative ZIP is
+            // published after source drift and ZIP ownership/integrity checks.
+            var pass = await combinedPassGenerator.GenerateAsync(
+                packageRoot, game, session, cancellation.Token,
+                hotscenesEnglishOnly, WorkProgressReporter(WorkPhase.Generate, generateProgress));
             if (cancellation.IsCancellationRequested || !IsLoaded) return;
-            resultsFolder = Path.GetDirectoryName(pass.ZipPath);
-            ResultsStatusText.Text = "CET pass created: " + Path.GetFileName(pass.ZipPath) +
-                " | Files: " + pass.FileCount + " | Transforms: " +
-                pass.TransformCount + ". REDscript generation is separate.";
-            OpenResultsButton.IsEnabled = true;
+            // Keep analysis counts distinct from actual published output and refusals.
+            // CET candidate counts are not counts of applied generator rules.
+            CetReportText.Text += " | Transforms applied: " + pass.CetTransforms +
+                " | Output files: " + pass.CetFiles;
+            if (pass.HotscenesEnglishOnlyRequested &&
+                (pass.HotscenesEnglishOnlyEdits > 0 ||
+                 !HasCompletedHotscenesEnglishOnly(game)))
+                CetReportText.Text += " | Hotscenes ENG-only: " +
+                    (pass.HotscenesEnglishOnlyEdits > 0
+                        ? "applied (" + pass.HotscenesEnglishOnlyEdits + " edits)"
+                        : "not applied (see pass details)");
+            CetReportText.Text += " | Skipped entries: " + pass.CetSkipped;
+            var skippedCetOwners = pass.CetSkipDetails
+                .Select(item => item.Owner)
+                .Where(owner => !string.IsNullOrWhiteSpace(owner))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (pass.CetSkipped > 0 && skippedCetOwners.Length > 0)
+                CetReportText.Text += " (" + string.Join(", ", skippedCetOwners) + ")";
+
+            int unavailableRuleFamilies = pass.RedscriptSkipped
+                .Select(item => item.Id)
+                .Distinct(StringComparer.Ordinal).Count();
+            string sourceSummary = string.Join(" | ", RedReportText.Text
+                .Split(" | ", StringSplitOptions.None).Take(2));
+            RedReportText.Text = sourceSummary + " | Generic rules applied: " + pass.GenericRedscriptRules +
+                " | Semantic rules applied: " + pass.SemanticRedscriptRules +
+                " | Generic edits: " + pass.GenericRedscriptEdits +
+                " | Semantic edits: " + pass.SemanticRedscriptEdits +
+                " | Output files: " + pass.RedscriptFiles +
+                " | Skipped operations: " + pass.RedscriptSkipped.Length;
+            if (pass.RedscriptSkipped.Length > 0)
+                RedReportText.Text += " (" + unavailableRuleFamilies +
+                    " rule families). See ZIP ownership details.";
+
+            string summary = "ZIP generated. CET: " + pass.CetTransforms +
+                " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
+            // Publish access only after the combined owner returns a real ZIP.
+            generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
+            if (generatedPassZipPath is not null)
+                summary += Environment.NewLine + "in GCO folder /" +
+                    Path.GetRelativePath(packageRoot, generatedPassZipPath).Replace('\\', '/');
+            if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
+            {
+                summary += Environment.NewLine + "Unavailable: CET " +
+                    pass.CetSkipped + " entries";
+                if (pass.CetSkipped > 0 && skippedCetOwners.Length > 0)
+                    summary += " (" + string.Join(", ", skippedCetOwners) + ")";
+                summary += " | REDscript " + unavailableRuleFamilies + " rule families (" +
+                    pass.RedscriptSkipped.Length + " operations).";
+            }
+            if (pass.HotscenesEnglishOnlyRequested &&
+                pass.HotscenesEnglishOnlyEdits == 0 &&
+                !HasCompletedHotscenesEnglishOnly(game))
+                summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
+            SetResultsConsoleStatus(summary);
+            RefreshPlannedWork();
+            if (generatedPassZipPath is not null)
+            {
+                GeneratedPassNotice.Visibility = Visibility.Visible;
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+                {
+                    if (GeneratedPassNotice.Visibility == Visibility.Visible)
+                        GeneratedPassNotice.BringIntoView();
+                }));
+            }
+            OpenFolderButton.IsEnabled = generatedPassZipPath is not null;
+            CloseAfterGenerationButton.Visibility = Visibility.Visible;
         }
         catch (OperationCanceledException) { }
+        catch (NoNewOptimizationsException)
+        {
+            // A source-dependent Hotscenes attempt may have been refused:
+            // do not re-enable an identical unsuccessful Generate forever.
+            hotscenesOptInRefused = true;
+            analyzedAvailability = new CombinedPassAvailability(0, 0,
+                analyzedAvailability?.RedscriptSkipped ?? []);
+            RefreshPlannedWork();
+            SetResultsConsoleStatus(NoNewOptimizationStatus());
+        }
         catch (Exception ex)
         {
             if (!cancellation.IsCancellationRequested && IsLoaded)
             {
-                Trace.TraceWarning("CET owner pass generation: " + ex);
-                ResultsStatusText.Text = "CET pass not generated: " + ex.Message;
+                Trace.TraceWarning("Combined pass generation: " + ex);
+                SetResultsConsoleStatus("Combined pass refused: " + ex.Message +
+                    " Original game and capture files were not changed.");
             }
         }
         finally
         {
+            EndConsoleActivity(generateActivity);
+            FinishWorkProgress(generateProgress, WorkPhase.Generate,
+                generatedPassZipPath is not null && File.Exists(generatedPassZipPath));
             generationRunning = false;
             if (IsLoaded)
-                GenerateButton.IsEnabled = analyzedSessionId == session;
+            {
+                bool generated = HasPublishedOptimizationZip();
+                if (!generated) SetPortraitStage(PortraitStage.Analyzing);
+                RefreshDoneAvailability();
+                HotscenesEnglishOnlyCheckBox.IsEnabled = !generated;
+                OpenFolderButton.IsEnabled = generated && generatedPassZipPath is not null &&
+                    File.Exists(generatedPassZipPath);
+                GenerateButton.Content = generated ? "GENERATED" :
+                    "GENERATE OPTIMIZATION ZIP";
+                GenerateButton.IsEnabled = !generated && analyzedSessionId == session &&
+                    redscriptPlanReady && HasNewOptimizationAvailable();
+            }
         }
     }
 
@@ -1852,6 +2794,7 @@ public partial class MainWindow : Window
         ClearStatusPin();
         SetBusy(true);
         SetStatus("Restoring original game files...");
+        long restoreActivity = BeginConsoleActivity("Restoring original game files");
         try
         {
             // No capture index/collection attempt is required. Recover even
@@ -1891,13 +2834,119 @@ public partial class MainWindow : Window
                 fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
-        finally { SetBusy(false); await RefreshSourceAsync(); }
+        finally { EndConsoleActivity(restoreActivity); SetBusy(false); await RefreshSourceAsync(); }
     }
 
-    private void OpenResults_Click(object sender, RoutedEventArgs e)
+    // Reset only the active workflow and resume bookmark, never the
+    // hash-sealed RESULTS or previously published game-only ZIPs.
+    internal bool ResetCompletedWorkflowForNextCapture()
     {
-        if (!string.IsNullOrWhiteSpace(resultsFolder) && Directory.Exists(resultsFolder))
-            Process.Start(new ProcessStartInfo(resultsFolder) { UseShellExecute = true });
+        if (busy || analysisRunning || generationRunning || profilerReportRunning ||
+            Workflow.HasRecoveryJournal || ResultsPage.Visibility != Visibility.Visible)
+            return false;
+
+        CollectedCaptureStore.ForgetLastRestored(packageRoot);
+        analyzedSessionId = null;
+        completedSessionId = null;
+        completedGameRoot = null;
+        captureAndRestoreVerified = false;
+        redscriptPlanReady = false;
+        analyzedAvailability = null;
+        hotscenesOptInRefused = false;
+        savedCapture = null;
+        generatedPassZipPath = null;
+        RefreshPlannedWork();
+        ClearWorkProgress();
+        GeneratedPassNotice.Visibility = Visibility.Collapsed;
+        OpenFolderButton.IsEnabled = false;
+        SetHotscenesOptionVisible(false);
+        HotscenesEnglishOnlyCheckBox.IsEnabled = true;
+        CetReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
+        RedReportText.Text = "Capture verified. Click ANALYZE for optimization candidates.";
+        AnalyzeButton.Content = "ANALYZE";
+        AnalyzeButton.IsEnabled = false;
+        GenerateButton.Content = "GENERATE OPTIMIZATION ZIP";
+        GenerateButton.IsEnabled = false;
+        CloseAfterGenerationButton.Visibility = Visibility.Collapsed;
+        SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
+        ResultsScrollViewer.ScrollToTop();
+        ClearStatusPin();
+        SetPortraitStage(PortraitStage.Black);
+        ResultsPage.Visibility = Visibility.Collapsed;
+        BackToCaptureButton.Visibility = Visibility.Collapsed;
+        CapturePage.Visibility = Visibility.Visible;
+        CaptureFooterHost.Visibility = Visibility.Visible;
+        SetActiveTab(false);
+        SetStatus("Ready for a new profiler capture.");
+        return true;
+    }
+
+    private async void BackToCapture_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || analysisRunning || generationRunning || profilerReportRunning)
+        {
+            Warn("Finish the current operation before returning to Capture.", "Back");
+            return;
+        }
+        if (System.Windows.MessageBox.Show(this,
+                "Return to page one. This will reset your captures and return you to the first page." +
+                Environment.NewLine + Environment.NewLine +
+                "Do you want to continue?",
+                "Return to Capture", MessageBoxButton.YesNo,
+                MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+        try
+        {
+            if (ResetCompletedWorkflowForNextCapture())
+                await RefreshSourceAsync();
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not reset the active workflow: " + ex.Message, "Back");
+        }
+    }
+
+    private void CloseAfterGeneration_Click(object sender, RoutedEventArgs e)
+    {
+        if (CloseAfterGenerationButton.Visibility != Visibility.Visible) return;
+        try
+        {
+            if (ResetCompletedWorkflowForNextCapture())
+                Close(); // full exit, not capture-hibernation tray
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not reset the active workflow: " + ex.Message, "Close");
+        }
+    }
+
+    private void OpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        // The source of truth is the exact ZIP returned by GenerateAsync.
+        // Never open a prior pass or the application root before completion.
+        if (generationRunning || generatedPassZipPath is null ||
+            !File.Exists(generatedPassZipPath))
+        {
+            OpenFolderButton.IsEnabled = false;
+            return;
+        }
+        try
+        {
+            // OPEN FOLDER opens the pass folder with the generated ZIP selected.
+            // Use ArgumentList so spaces in the game/package path stay intact.
+            var explorer = new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = false
+            };
+            explorer.ArgumentList.Add("/select,");
+            explorer.ArgumentList.Add(generatedPassZipPath);
+            Process.Start(explorer);
+        }
+        catch (Exception ex)
+        {
+            Warn("Could not show the generated optimization ZIP: " +
+                ex.Message, "Open folder");
+        }
     }
 
     // The pinned console is the one normal diagnostic channel. No modal popup
@@ -1905,6 +2954,10 @@ public partial class MainWindow : Window
     private void Warn(string message, string title)
     {
         Trace.TraceWarning(title + ": " + message);
-        PinStatus(UserFacingConsoleText.Failure(title, message), title + ": " + message);
+        var summary = UserFacingConsoleText.Failure(title, message);
+        if (ResultsPage.Visibility == Visibility.Visible)
+            SetResultsConsoleStatus(summary);
+        else
+            PinStatus(summary, title + ": " + message);
     }
 }

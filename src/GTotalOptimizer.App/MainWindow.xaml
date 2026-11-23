@@ -47,6 +47,36 @@
         <FontFamily x:Key="Oxanium">./Fonts/Oxanium/#Oxanium</FontFamily>
         <SolidColorBrush x:Key="Yellow" Color="#FFF000"/>
         <SolidColorBrush x:Key="Cyan" Color="#00E2F2"/>
+        <LinearGradientBrush x:Key="GcoProgressFill" StartPoint="0,0.5" EndPoint="1,0.5">
+            <GradientStop Color="#FFF000" Offset="0"/>
+            <GradientStop Color="#00E2F2" Offset="1"/>
+        </LinearGradientBrush>
+        <!-- One slim, glowing rail reused by the three long operations. -->
+        <Style x:Key="GcoProgressRail" TargetType="{x:Type ProgressBar}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ProgressBar}">
+                        <Grid Height="6" SnapsToDevicePixels="True">
+                            <Border Background="#152C32" BorderBrush="#35565D"
+                                    BorderThickness="0.6" CornerRadius="3"/>
+                            <Grid x:Name="PART_Track" Background="Transparent">
+                                <Grid x:Name="PART_Indicator" Height="4.5"
+                                      VerticalAlignment="Center" HorizontalAlignment="Left">
+                                    <Border Background="{StaticResource GcoProgressFill}"
+                                            CornerRadius="3" Opacity="0.65">
+                                        <Border.Effect>
+                                            <BlurEffect Radius="4"/>
+                                        </Border.Effect>
+                                    </Border>
+                                    <Border Background="{StaticResource GcoProgressFill}"
+                                            CornerRadius="3"/>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <SolidColorBrush x:Key="Muted" Color="#A8B3B5"/>
         <!-- Fallback for non-spatial outlines. The framed UI below uses
              one spatial color field anchored to V and the cyan skyline. -->
@@ -143,6 +173,16 @@
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#FFF000"/>
                             </Trigger>
+                            <!-- Apply the same scene-space neon field as the Page 1 cards
+                                 only to enabled Page 2 action buttons. Disabled
+                                 buttons retain their original quiet outline. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="SpatialNeon"/>
+                                    <Condition Property="IsEnabled" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ButtonFrame" Property="SpatialStroke" Value="True"/>
+                            </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#788588"/>
                                 <Setter TargetName="ButtonFrame" Property="Stroke" Value="#304347"/>
@@ -156,6 +196,13 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <!-- Page 2 uses Page 1's scene-space yellow-left / skyline-cyan-right
+             neon on enabled controls; Page 1 buttons are not restyled. -->
+        <Style x:Key="ResultsActionButton" TargetType="Button"
+               BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Tag" Value="SpatialNeon"/>
+            <Setter Property="BorderBrush" Value="{StaticResource NeonStroke}"/>
         </Style>
         <!-- Owner-standardized 760x112 SVGs: active yellow v2.9, inactive v3.3,
              restore v1.4. One shared shell, uniform scaling, live WPF text. -->
@@ -322,6 +369,15 @@
                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <!-- Page 2 CLOSE shares the color field; Page 1 CONTINUE
+                                 keeps its owner-approved gold border. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="SpatialNeon"/>
+                                    <Condition Property="IsEnabled" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ContinueShape" Property="SpatialStroke" Value="True"/>
+                            </MultiTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ContinueShape" Property="Stroke" Value="#00E2F2"/>
                                 <Setter TargetName="ContinueShape" Property="Fill" Value="{StaticResource GoldenMetalHot}"/>
@@ -408,6 +464,10 @@
               Background="Transparent" Margin="10,6,10,0">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
                         HorizontalAlignment="Right" Margin="0,13,23,0">
+                <Button x:Name="BackToCaptureButton" Content="← BACK"
+                        Style="{StaticResource MinorButton}" Click="BackToCapture_Click"
+                        Height="27" MinWidth="94" Margin="0,0,8,0"
+                        Visibility="Collapsed"/>
                 <Button x:Name="RefreshButton" Content="⟳  REFRESH"
                         Style="{StaticResource MinorButton}" Click="Refresh_Click"
                         Height="27" MinWidth="94" Margin="0,0,16,0"/>
@@ -529,7 +589,7 @@
                     <StackPanel Margin="15,0,15,4">
                         <!-- Larger hero headline over the blue skyline. -->
                         <!-- Move title and its description together. -->
-                        <StackPanel x:Name="HeroSection" Margin="62,17,0,8">
+                        <StackPanel x:Name="HeroSection" Margin="32,17,0,8">
                             <TextBlock x:Name="HeroTitle" Margin="0"
                                        FontFamily="{StaticResource Oxanium}" FontSize="19"
                                        FontWeight="Bold" TextWrapping="Wrap" LineHeight="33">
@@ -869,24 +929,32 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- Console and recovery never hide behind scrolling content. -->
-                <Grid Grid.Row="1" Margin="14,6,14,8">
+                <!-- Capture and Analyze consoles share an identical content-local X anchor.
+                     The 26-DIP original offset is split equally between them. -->
+                <!-- Capture-only status and CONTINUE are explicitly removed
+                     from layout during Analyze; no stale controls underlay Page 2. -->
+                <Grid x:Name="CaptureFooterHost" Grid.Row="1" Margin="14,6,14,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="188"/>
                     </Grid.ColumnDefinitions>
                     <!-- RESTORE reuses the first stage action, not a footer button. -->
                     <Grid x:Name="ConsoleTextHost" Grid.Column="0"
-                          Margin="-7,-6,9,4" Background="Transparent">
+                          Margin="-7,-6,9,24" Background="Transparent" ClipToBounds="True">
+                        <!-- Position console text near the upper edge of the cyan slash;
+                             footer button and capture content keep their original positions. -->
+                        <Grid.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </Grid.RenderTransform>
                         <!-- Restore multiple visible guidance rows; allow scrolling
                              if all five framework gates fail at once. Keep the
                              standard one-line status centered in this space. -->
                         <ScrollViewer x:Name="CaptureConsoleScroll" FocusVisualStyle="{x:Null}"
-                                      Margin="25,0,5,0" MaxHeight="80"
+                                      Margin="38,0,5,0" MaxHeight="80"
                                       HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
-                            <TextBlock x:Name="StatusText" Foreground="#BFE0E6"
+                            <TextBlock x:Name="StatusText" Foreground="{StaticResource Cyan}"
                                        Width="{Binding ViewportWidth, ElementName=CaptureConsoleScroll}"
                                        FontSize="12.5" LineHeight="16.5"
                                        TextWrapping="Wrap"
@@ -902,9 +970,18 @@
                             IsEnabled="False"/>
                 </Grid>
 
-                <Grid x:Name="ResultsPage" Grid.Row="0" Visibility="Collapsed"
-                      Background="Transparent" Margin="0,3,0,3">
-                    <ScrollViewer x:Name="ResultsScrollViewer" FocusVisualStyle="{x:Null}"
+                <!-- Page 2 only: reveal the full V fade at left. Keep this
+                     overlay transparent so the already-loaded shared cyan
+                     SkylineHost remains visible behind its heading. Do not
+                     shift Page 1's capture cards or duplicate portrait art. -->
+                <Grid x:Name="ResultsPage" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed"
+                      Background="Transparent" Margin="40,3,0,3">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ScrollViewer x:Name="ResultsScrollViewer" Grid.Row="0" FocusVisualStyle="{x:Null}"
+                                  Background="Transparent"
                                   VerticalScrollBarVisibility="Auto">
                         <ScrollViewer.Resources>
                             <Style TargetType="{x:Type ScrollBar}"
@@ -914,39 +991,148 @@
                             <TextBlock Text="ANALYZE &amp; OPTIMIZE" Foreground="#FFF000"
                                        FontFamily="{StaticResource Oxanium}"
                                        FontSize="23" FontWeight="ExtraBold"/>
-                            <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
-                                       TextWrapping="Wrap" FontSize="13" Margin="0,6,0,0"/>
-                            <!-- No second panel: reuse the black canvas and
-                                 existing V side-image fade behind these texts. -->
-                            <StackPanel Margin="3,18,0,0">
-                                <TextBlock x:Name="CetReportText" Text="CET capture not collected."
-                                           Foreground="#B7CED6" FontSize="13"
-                                           TextWrapping="Wrap" Margin="0,0,0,7"/>
-                                <TextBlock x:Name="RedReportText" Text="REDscript capture not collected."
-                                           Foreground="#B7CED6" FontSize="13"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <Grid Margin="0,12,0,0">
+                            <TextBlock x:Name="ResultsRestoreStatusText" Foreground="{StaticResource Yellow}"
+                                       TextWrapping="Wrap" FontSize="14" FontWeight="Bold"
+                                       Margin="0,7,0,0" Text="Restoration status pending."/>
+                            <Grid Margin="0,18,0,0">
+                                <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
+                                                   SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14"
+                                                   IsHitTestVisible="False"/>
+                                <StackPanel Margin="14">
+                                    <TextBlock x:Name="CetOptimizationHeading" Text="CET mod Optimizations:"
+                                               Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
+                                               FontWeight="Bold" FontSize="14"/>
+                                    <StackPanel MinHeight="70" Margin="0,7,0,0">
+                                        <TextBox x:Name="CetReportText" Text="No verified CET capture analyzed."
+                                             IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                                             Background="#081012" Foreground="#B7CED6" BorderThickness="0"
+                                             Margin="0"
+                                             VerticalScrollBarVisibility="Auto"/>
+                                        <TextBlock x:Name="CetPlannedText" Visibility="Collapsed"
+                                                   Margin="2,0,0,0" Foreground="#B7CED6"
+                                                   FontSize="{Binding FontSize, ElementName=CetReportText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <!-- Only visible when installed Hotscenes is found.
+                                         English-only remains an explicit, unchecked player choice. -->
+                                    <Grid Margin="1,7,0,0">
+                                         <Grid.ColumnDefinitions>
+                                             <ColumnDefinition Width="Auto"/>
+                                             <ColumnDefinition Width="*"/>
+                                         </Grid.ColumnDefinitions>
+                                         <CheckBox x:Name="HotscenesEnglishOnlyCheckBox" Grid.Column="0"
+                                                   Visibility="Collapsed" IsChecked="False" IsThreeState="False"
+                                                   Foreground="#FFF000" FontSize="13"
+                                                   VerticalAlignment="Center" Content="Hotscenes ENG only"/>
+                                         <TextBlock x:Name="HotscenesEnglishOnlyDescription" Grid.Column="1"
+                                                    Visibility="Collapsed" Foreground="#98A9B1" FontSize="11.5"
+                                                    Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                    Text="Check only if you use English. Removes Hotscenes localization from the generated ZIP to make room for optimizations."/>
+                                     </Grid>
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,16,0,0">
+                                <fx:ChamferOutline Fill="#081012" Stroke="{StaticResource NeonStroke}"
+                                                   SpatialStroke="True"
+                                                   StrokeThickness="2.0" CornerCut="14"
+                                                   IsHitTestVisible="False"/>
+                                <StackPanel Margin="14">
+                                    <TextBlock x:Name="RedOptimizationHeading" Text="REDscript mod Optimizations:"
+                                               Foreground="#FFF000" FontFamily="{StaticResource Oxanium}"
+                                               FontWeight="Bold" FontSize="14"/>
+                                    <StackPanel MinHeight="70" Margin="0,7,0,0">
+                                        <TextBox x:Name="RedReportText" Text="No verified REDscript capture analyzed."
+                                             IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                                             Background="#081012" Foreground="#B7CED6" BorderThickness="0"
+                                             Margin="0"
+                                             VerticalScrollBarVisibility="Auto"/>
+                                        <TextBlock x:Name="RedPlannedText" Visibility="Collapsed"
+                                                   Margin="2,0,0,0" Foreground="#B7CED6"
+                                                   FontSize="{Binding FontSize, ElementName=RedReportText}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,18,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="AnalyzeButton" Grid.Column="0" Content="ANALYZE"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="0,0,4,0"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="0,0,6,0"
                                         Click="Analyze_Click"/>
-                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE ZIP"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False" Margin="4,0,4,0"/>
-                                <Button x:Name="OpenResultsButton" Grid.Column="2" Content="OPEN RESULTS"
-                                        Style="{StaticResource ActionButton}" IsEnabled="False"
-                                        Margin="4,0,0,0" Click="OpenResults_Click"/>
+                                <Button x:Name="GenerateButton" Grid.Column="1" Content="GENERATE OPTIMIZATION ZIP"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False" Margin="6,0,6,0"
+                                        Click="GenerateCetPass_Click"/>
+                                <Button x:Name="OpenFolderButton" Grid.Column="2" Content="OPEN FOLDER"
+                                        Style="{StaticResource ResultsActionButton}" IsEnabled="False"
+                                        Margin="6,0,0,0" Click="OpenFolder_Click"/>
                             </Grid>
-                            <TextBlock Text="Resolver analysis and unified ZIP generation will be enabled when both backends are integrated."
-                                       Foreground="#98A9B1" TextWrapping="Wrap" FontSize="12"
-                                       Margin="3,9,0,0"/>
+                            <!-- This Page 2 statement refers to the installer/output stage after
+                                 both temporary profilers have been uninstalled and restoration verified. -->
+                            <TextBlock x:Name="OptimizationFooterNotice" Margin="3,12,0,0" FontSize="12.5" TextWrapping="Wrap">
+                                 <Run Text="Installer does NOT change any of your game files."
+                                      Foreground="#FFF000" FontWeight="SemiBold"/>
+                                 <Run Text="  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
+                                      Foreground="#98A9B1"/>
+                             </TextBlock>
+                             <!-- Completion guidance is one compact row. The published path belongs in the console. -->
+                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,14,0,0"
+                                        FontSize="12.5" TextWrapping="Wrap" Foreground="#B7CED6">
+                                 <Run Text="PASS READY - " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
+                                 <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
+                                 <Run Text="If installing manually, BACK UP first."
+                                      Foreground="#FFF000" FontWeight="Bold"/>
+                             </TextBlock>
                         </StackPanel>
                     </ScrollViewer>
+                    <!-- Analyze console and DONE share a single footer row.
+                         DONE also appears after a verified no-new-work analysis.
+                         Hidden DONE releases its Auto column to the console. -->
+                    <Grid Grid.Row="1" Margin="5,0,8,23" MinHeight="49">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer x:Name="ResultsConsoleScroll" Grid.Column="0"
+                                      FocusVisualStyle="{x:Null}" HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Center" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      MaxHeight="62" MinHeight="34" Margin="0,0,12,6">
+                            <!-- Lower the text slightly; retain bottom clearance above the shared rail. -->
+                            <ScrollViewer.RenderTransform>
+                                <TranslateTransform Y="-3"/>
+                            </ScrollViewer.RenderTransform>
+                            <TextBlock x:Name="ResultsStatusText" Foreground="#00E2F2"
+                                       Width="{Binding ViewportWidth, ElementName=ResultsConsoleScroll}"
+                                       TextWrapping="Wrap" FontSize="12.5" LineHeight="17"
+                                       Text="Capture verified. Click ANALYZE to find optimizations."/>
+                        </ScrollViewer>
+                        <Button x:Name="CloseAfterGenerationButton" Grid.Column="1"
+                                Content="DONE" Width="160" Height="49" Visibility="Collapsed"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource ContinueStyle}" Tag="SpatialNeon"
+                                Click="CloseAfterGeneration_Click"/>
+                    </Grid>
                 </Grid>
+            </Grid>
+            <!-- Shared rail in the protected space below both consoles, clear of the outer frame. -->
+            <Grid x:Name="WorkflowProgressHost" Grid.Column="1" Panel.ZIndex="6"
+                  Height="17" VerticalAlignment="Bottom" Margin="40,0,31,7"
+                  Visibility="Collapsed" IsHitTestVisible="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="242"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="WorkflowProgressText" Grid.Column="0"
+                           Foreground="{StaticResource Yellow}" FontFamily="{StaticResource Oxanium}"
+                           FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" Margin="0,0,13,0"/>
+                <ProgressBar x:Name="WorkflowProgressBar" Grid.Column="1" Height="6"
+                             Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center"
+                             Style="{StaticResource GcoProgressRail}"/>
             </Grid>
         </Grid>
 

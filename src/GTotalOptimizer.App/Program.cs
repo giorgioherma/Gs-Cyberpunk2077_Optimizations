@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using GTotalOptimizer.Core;
+using GRedscript.Resolver;
 
 namespace GTotalOptimizer.App;
 
@@ -16,15 +17,29 @@ internal static class Program
         {
             var root = PortablePackagePaths.CurrentPackageRoot();
             var verification = ComponentBundleVerifier.Inspect(root);
+            // REDscript must use the SAME single GCO self-contained .NET 10
+            // runtime: Resolver's managed assembly sits beside the GUI and
+            // is invoked in-process. Do not ship a second Resolver runtime.
+            string resolverAssembly = typeof(RedscriptGenerationPlan).Assembly.Location;
+            bool resolverInBundledApp = File.Exists(resolverAssembly) &&
+                string.Equals(Path.GetDirectoryName(resolverAssembly),
+                    AppContext.BaseDirectory.TrimEnd(
+                        Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase);
+            bool sharedNet10 = System.Runtime.InteropServices.RuntimeInformation
+                .FrameworkDescription.StartsWith(".NET 10.", StringComparison.Ordinal);
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                ok = verification.Ready,
+                ok = verification.Ready && resolverInBundledApp && sharedNet10,
                 root,
                 manifest = Path.Combine(root, "components", "manifest.json"),
                 process = Environment.ProcessPath,
-                details = verification.Detail
+                details = verification.Detail,
+                redscriptResolverInSameProcess = resolverInBundledApp,
+                sameBundledNet10Runtime = sharedNet10,
+                redscriptResolverAssembly = Path.GetFileName(resolverAssembly)
             }));
-            return verification.Ready ? 0 : 2;
+            return verification.Ready && resolverInBundledApp && sharedNet10 ? 0 : 2;
         }
 
         // Render the packaged UI, not owner-selected aesthetic coordinates.
@@ -251,6 +266,40 @@ internal static class Program
             }
 
 
+            // Missing, incomplete, stale and corrupt derived reports must
+            // never unlock CONTINUE, even when F11 captures are sealed.
+            var reportFixtureRoot = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "GCO-Report-Gate-" + Guid.NewGuid().ToString("N"));
+            const string reportFixtureSession = "0123456789abcdef0123456789abcdef";
+            try
+            {
+                var html = GcoProfilerReportService.ReportFile(reportFixtureRoot,
+                    reportFixtureSession);
+                var json = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(html)!,
+                    GcoProfilerReportService.JsonFile);
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Missing report unlocked CONTINUE.");
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(html)!);
+                System.IO.File.WriteAllText(html, "<html>ready</html>");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("HTML-only report unlocked CONTINUE.");
+                System.IO.File.WriteAllText(json, "{\"sessionId\":\"another-session\"}");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Wrong-session report unlocked CONTINUE.");
+                System.IO.File.WriteAllText(json, JsonSerializer.Serialize(new { sessionId = reportFixtureSession }));
+                if (!MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Complete report did not unlock CONTINUE.");
+                System.IO.File.WriteAllText(json, "{broken");
+                if (MainWindow.HasCompletedProfilerReport(reportFixtureRoot, reportFixtureSession))
+                    throw new InvalidOperationException("Corrupt report unlocked CONTINUE.");
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(reportFixtureRoot))
+                    System.IO.Directory.Delete(reportFixtureRoot, recursive: true);
+            }
+
             static void VerifyAtSize(MainWindow window, double width, double height)
             {
                 var root = window.Content as System.Windows.FrameworkElement
@@ -269,7 +318,7 @@ internal static class Program
                 foreach (var scroll in new[]
                          {
                              window.CapturePage, window.CaptureConsoleScroll,
-                             window.ResultsScrollViewer
+                             window.ResultsScrollViewer, window.ResultsConsoleScroll
                          })
                 {
                     if (scroll.FocusVisualStyle is not null)
@@ -283,7 +332,7 @@ internal static class Program
                              window.RefreshButton, window.BrowseButton,
                              window.GamePathBox, window.InstallButton,
                              window.LaunchButton, window.CollectButton,
-                             window.ContinueButton, window.OpenResultsButton
+                             window.ContinueButton, window.OpenFolderButton
                          })
                 {
                     if (!control.Focusable || !control.IsTabStop)
@@ -425,6 +474,29 @@ internal static class Program
                     throw new InvalidOperationException(
                         $"Console does not fill available width: text={window.StatusText.ActualWidth:F1}, " +
                         $"viewport={viewportWidth:F1}");
+
+                // Saturated console content must stay above the shared rail;
+                // use measured WPF bounds rather than hardcoded pixel positions.
+                var priorCaptureText = window.StatusText.Text;
+                window.StatusText.Text = string.Join(Environment.NewLine,
+                    Enumerable.Repeat("Lengthy profiler guidance remains scrollable.", 8));
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var captureRailTop = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).Y;
+                var captureConsoleBottom = window.CaptureConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, window.CaptureConsoleScroll.ActualHeight), root).Y;
+                var railBottom = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, window.WorkflowProgressHost.ActualHeight), root).Y;
+                var contentBottom = window.ContentRegion.TranslatePoint(
+                    new System.Windows.Point(0, window.ContentRegion.ActualHeight), root).Y;
+                if (captureConsoleBottom > captureRailTop ||
+                    railBottom >= contentBottom)
+                    throw new InvalidOperationException(
+                        "Capture console overlaps progress or progress reaches the outer frame.");
+                window.StatusText.Text = priorCaptureText;
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
 
                 // The taller multiline-console footer must not enlarge Continue
                 // or pull it into the workflow cards. Its intrinsic height stays
@@ -572,12 +644,266 @@ internal static class Program
                     frame.Render(root);
                 }
 
+                // Preserve the same on-screen text origin when switching pages.
+                var captureStartX = window.CaptureConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).X;
                 Render();
+                window.CapturePage.Visibility = System.Windows.Visibility.Collapsed;
+                window.CaptureFooterHost.Visibility = System.Windows.Visibility.Collapsed;
                 window.ResultsPage.Visibility = System.Windows.Visibility.Visible;
+                window.BackToCaptureButton.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                var analyzeStartX = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).X;
+                if (Math.Abs(captureStartX - analyzeStartX) > 1)
+                    throw new InvalidOperationException(
+                        $"Capture and Analyze console text origins differ: {captureStartX:F1} vs {analyzeStartX:F1}.");
+                if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Collapsed ||
+                    window.ContinueButton.Visibility != System.Windows.Visibility.Visible ||
+                    window.ConsoleTextHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.ResultsStatusText.Visibility != System.Windows.Visibility.Visible ||
+                    window.CaptureFooterHost.ActualHeight > 0)
+                    throw new InvalidOperationException(
+                        "Analyze must hide the entire Capture footer, including stale status and CONTINUE, while retaining its own bottom console.");
+                // Restored/capture health stays at the top. Operational
+                // messages must be INSIDE the scrollable console BELOW actions.
+                if (window.AnalyzeButton.ActualWidth <= 0 ||
+                    window.ResultsRestoreStatusText.ActualWidth <= 0 ||
+                    window.ResultsConsoleScroll.ActualWidth <= 0 ||
+                    !ReferenceEquals(window.ResultsConsoleScroll.Content,
+                        window.ResultsStatusText) ||
+                    ReferenceEquals(window.ResultsRestoreStatusText.Parent,
+                        window.ResultsStatusText.Parent) ||
+                    window.ResultsConsoleScroll.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y <=
+                    window.AnalyzeButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.ResultsPage).Y)
+                    throw new InvalidOperationException(
+                        "Analyze console must be visible below buttons; restoration status stays above panels.");
+
+                if (window.BackToCaptureButton.Visibility !=
+                        System.Windows.Visibility.Visible ||
+                    window.BackToCaptureButton.ActualHeight < 24 ||
+                    window.BackToCaptureButton.Content?.ToString() != "← BACK" ||
+                    window.BackToCaptureButton.Style != window.RefreshButton.Style ||
+                    window.BackToCaptureButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.TopHeaderHost).X >=
+                    window.RefreshButton.TranslatePoint(
+                        new System.Windows.Point(0, 0), window.TopHeaderHost).X ||
+                    window.CloseAfterGenerationButton.Content?.ToString() != "DONE" ||
+                    window.CloseAfterGenerationButton.Visibility !=
+                        System.Windows.Visibility.Collapsed ||
+                    window.OpenFolderButton.IsEnabled)
+                    throw new InvalidOperationException(
+                        "Analyze BACK must match REFRESH; DONE is hidden and OPEN FOLDER disabled before generation.");
+
+                // Long Analyze messages scroll inside the footer and never
+                // extend into the dedicated shared progress strip.
+                var priorAnalyzeText = window.ResultsStatusText.Text;
+                window.ResultsStatusText.Text = string.Join(Environment.NewLine,
+                    Enumerable.Repeat("Lengthy REDscript source diagnostics remain scrollable.", 8));
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var analyzeRailTop = window.WorkflowProgressHost.TranslatePoint(
+                    new System.Windows.Point(0, 0), root).Y;
+                var analyzeConsoleBottom = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, window.ResultsConsoleScroll.ActualHeight), root).Y;
+                if (analyzeConsoleBottom > analyzeRailTop)
+                    throw new InvalidOperationException(
+                        "Analyze console overlaps the dedicated progress strip.");
+                window.ResultsStatusText.Text = priorAnalyzeText;
+                window.WorkflowProgressHost.Visibility = System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
+
+                // DONE shares the footer row with the console. Simulating its
+                // visibility must not shift status messages or overlap them.
+                // The user intentionally placed the console ABOVE the button
+                // center, so do not assert arbitrary visual center alignment.
+                var originalConsoleWidth = window.ResultsConsoleScroll.ActualWidth;
+                var originalConsoleTop = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                window.CloseAfterGenerationButton.Visibility =
+                    System.Windows.Visibility.Visible;
+                root.UpdateLayout();
+                var doneLeft = window.CloseAfterGenerationButton.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).X;
+                var consoleRight = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(window.ResultsConsoleScroll.ActualWidth, 0),
+                    window.ResultsPage).X;
+                var consoleTop = window.ResultsConsoleScroll.TranslatePoint(
+                    new System.Windows.Point(0, 0), window.ResultsPage).Y;
+                if (consoleRight > doneLeft ||
+                    Math.Abs(consoleTop - originalConsoleTop) > 1 ||
+                    window.ResultsConsoleScroll.ActualWidth >= originalConsoleWidth ||
+                    window.CloseAfterGenerationButton.ActualWidth <= 0 ||
+                    window.OpenFolderButton.Content?.ToString() != "OPEN FOLDER" ||
+                    window.OpenFolderButton.IsEnabled)
+                    throw new InvalidOperationException(
+                        "DONE must not overlap or shift the console; OPEN FOLDER requires a generated ZIP.");
+                window.CloseAfterGenerationButton.Visibility =
+                    System.Windows.Visibility.Collapsed;
+                root.UpdateLayout();
+                if (Math.Abs(window.ResultsConsoleScroll.ActualWidth - originalConsoleWidth) > 1)
+                    throw new InvalidOperationException(
+                        "Hidden DONE must release the full Analyze console width.");
+
+                if (Math.Abs(width - 1280) < 1 && Math.Abs(height - 760) < 1 &&
+                    window.ResultsScrollViewer.ComputedVerticalScrollBarVisibility ==
+                        System.Windows.Visibility.Visible)
+                    throw new InvalidOperationException(
+                        "Default Analyze layout requires vertical scrolling before any expanded analysis results.");
+
+                // The Page 2 overlay must not hide the original shared
+                // skyline and V art; Capture layout must remain unchanged.
+                static bool Transparent(System.Windows.Media.Brush? value) =>
+                    value is System.Windows.Media.SolidColorBrush brush &&
+                    brush.Color.A == 0;
+                if (!Transparent(window.ResultsPage.Background) ||
+                    !Transparent(window.ResultsScrollViewer.Background) ||
+                    window.ResultsPage.Margin.Left < 35 ||
+                    window.ResultsPage.ActualWidth < 650 ||
+                    window.SkylineHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.CityImage.Source is null)
+                    throw new InvalidOperationException(
+                        "Analyze page hides the existing skyline, covers V, or clips the shifted content.");
+
+                // Hotscenes English-only removes the language system from
+                // generated Lua, so it must always be an explicit default-OFF
+                // user choice inside the CET (not REDscript) summary.
+                static bool IsWithin(System.Windows.DependencyObject item,
+                    System.Windows.DependencyObject ancestor)
+                {
+                    for (System.Windows.DependencyObject? current = item;
+                         current is not null;
+                         current = System.Windows.LogicalTreeHelper.GetParent(current))
+                        if (ReferenceEquals(current, ancestor)) return true;
+                    return false;
+                }
+                var englishCheck = window.HotscenesEnglishOnlyCheckBox;
+                if (englishCheck.IsChecked != false ||
+                    englishCheck.IsThreeState ||
+                    englishCheck.Content?.ToString() != "Hotscenes ENG only" ||
+                    window.CetOptimizationHeading.Parent is not System.Windows.DependencyObject cetPanel ||
+                    !IsWithin(englishCheck, cetPanel) ||
+                    !IsWithin(window.CetReportText, cetPanel) ||
+                    !IsWithin(window.HotscenesEnglishOnlyDescription, cetPanel) ||
+                    IsWithin(window.RedReportText, cetPanel) ||
+                    !window.HotscenesEnglishOnlyDescription.Text.Contains(
+                        "Removes Hotscenes localization", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Hotscenes ENG-only must be clearly explained and unchecked in the CET box.");
+                englishCheck.IsChecked = true;
+                if (englishCheck.IsChecked != true)
+                    throw new InvalidOperationException(
+                        "Hotscenes ENG-only explicit opt-in could not be selected.");
+                englishCheck.IsChecked = false;
+
+                // Pending restoration must not be displayed as verified.
+                if (window.ResultsRestoreStatusText.Foreground is not
+                        System.Windows.Media.SolidColorBrush pendingRestore ||
+                    pendingRestore.Color != System.Windows.Media.Color.FromRgb(255, 240, 0))
+                    throw new InvalidOperationException(
+                        "Unverified restoration must retain its warning state.");
+
+                static string FlattenWhitespace(string value) =>
+                    System.Text.RegularExpressions.Regex.Replace(
+                        value, @"\s+", " ").Trim();
+                if (window.CetOptimizationHeading.Text != "CET mod Optimizations:" ||
+                    window.RedOptimizationHeading.Text != "REDscript mod Optimizations:")
+                    throw new InvalidOperationException("Incorrect Analyze headings: CET=" +
+                        window.CetOptimizationHeading.Text + " REDscript=" +
+                        window.RedOptimizationHeading.Text);
+                // Only assert meaningful guidance, not an exact UI sentence:
+                // wording and spacing are presentation decisions, not a
+                // release-blocking CI contract.
+                // Colored WPF inlines are the authored content. Reading the
+                // Text dependency property during offscreen layout can miss
+                // the inline text. Join actual runs and avoid coupling to
+                // punctuation or capitalization in the editable notice.
+                var guide = FlattenWhitespace(string.Join(" ",
+                    window.OptimizationFooterNotice.Inlines
+                        .OfType<System.Windows.Documents.Run>()
+                        .Select(run => run.Text)));
+                if (!guide.Contains("game files", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("not", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("CET", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("REDscript", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("ZIP", StringComparison.OrdinalIgnoreCase) ||
+                    !guide.Contains("Vortex", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(
+                        "Analyze footer guidance missing required concepts; actual inline text: " + guide);
+
+                // DONE is an exit after either confirmed publication or
+                // completed analysis with zero safe work, not a way to dismiss
+                // unverified source failures.
+                if (!GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, false, false) ||
+                    !GTotalOptimizer.App.MainWindow.ShouldShowDone(true, true, true, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, true, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, false, false, false) ||
+                    GTotalOptimizer.App.MainWindow.ShouldShowDone(false, true, false, true))
+                    throw new InvalidOperationException(
+                        "DONE eligibility must require completed no-work analysis or published ZIP.");
+                // Exercise the exact timer state machine deterministically:
+                // one, two, three dots, then repeat, and restore prior
+                // completed console text without replacing real diagnostics.
+                const string baseProgress = "Analyzing";
+                string prior = window.ResultsStatusText.Text;
+                long activity = window.BeginConsoleActivity(baseProgress);
+                if (window.ResultsStatusText.Text != "Analyzing.")
+                    throw new InvalidOperationException("Console spinner initial dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing..")
+                    throw new InvalidOperationException("Console spinner second dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing...")
+                    throw new InvalidOperationException("Console spinner third dot missing.");
+                window.AdvanceConsoleActivity();
+                if (window.ResultsStatusText.Text != "Analyzing.")
+                    throw new InvalidOperationException("Console spinner cycle failed.");
+                window.EndConsoleActivity(activity);
+                if (window.ResultsStatusText.Text != prior)
+                    throw new InvalidOperationException(
+                        "Console spinner damaged the prior status after work ended.");
+
+                // A completed error can arrive while another async cleanup
+                // awaits and a timer tick is still possible. Never let the
+                // final dots erase the meaningful outcome.
+                long failedActivity = window.BeginConsoleActivity("Analyzing");
+                window.SetResultsConsoleStatus("Cannot analyze: source unavailable.");
+                window.AdvanceConsoleActivity();
+                window.EndConsoleActivity(failedActivity);
+                if (window.ResultsStatusText.Text != "Cannot analyze: source unavailable.")
+                    throw new InvalidOperationException(
+                        "Activity tick erased an actual Analyze failure message.");
+
                 Render();
                 window.ResultsPage.Visibility = System.Windows.Visibility.Collapsed;
+                window.CapturePage.Visibility = System.Windows.Visibility.Visible;
+                window.CaptureFooterHost.Visibility = System.Windows.Visibility.Visible;
                 root.UpdateLayout();
+                if (window.CaptureFooterHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.ConsoleTextHost.Visibility != System.Windows.Visibility.Visible ||
+                    window.ContinueButton.Visibility != System.Windows.Visibility.Visible ||
+                    window.CaptureFooterHost.ActualHeight <= 0)
+                    throw new InvalidOperationException(
+                        "Capture return must restore the original footer and CONTINUE control.");
+
+                // The same activity animation must work in the older Page 1
+                // console without changing the Capture image/card structure.
+                string capturePrevious = window.StatusText.Text;
+                long collecting = window.BeginConsoleActivity("Collecting results");
+                if (window.StatusText.Text != "Collecting results.")
+                    throw new InvalidOperationException(
+                        "Capture console spinner initial dot missing.");
+                window.AdvanceConsoleActivity();
+                window.AdvanceConsoleActivity();
+                if (window.StatusText.Text != "Collecting results...")
+                    throw new InvalidOperationException(
+                        "Capture console spinner three-dot step missing.");
+                window.EndConsoleActivity(collecting);
+                if (window.StatusText.Text != capturePrevious)
+                    throw new InvalidOperationException(
+                        "Capture spinner did not restore previous console status.");
             }
 
 
@@ -602,6 +928,7 @@ internal static class Program
             var gameMargin = gameSection.Margin;
             var headingMargin = structural.CaptureWorkflowHeading.Margin;
             var statusMargin = structural.ConsoleTextHost.Margin;
+            var resultsStatusMargin = structural.ResultsConsoleScroll.Margin;
             var cardHeight = cards.Height;
             var cardMinHeight = cards.MinHeight;
             var originalGameRootHeight = structural.GameRootPanel.Height;
@@ -617,6 +944,11 @@ internal static class Program
                 ArrangeOffscreen(structural, 1700, 900);
                 structural.ApplyMaximizedCaptureLayout();
                 ArrangeOffscreen(structural, 1700, 900);
+                if (Math.Abs(
+                    (structural.ConsoleTextHost.Margin.Left - statusMargin.Left) -
+                    (structural.ResultsConsoleScroll.Margin.Left - resultsStatusMargin.Left)) > 1)
+                    throw new InvalidOperationException(
+                        "Maximized Capture/Analyze console offsets must follow the same portrait clearance.");
                 if (!ReferenceEquals(structural.CapturePage.Content, originalPanel) ||
                     originalPanel.Children.Count != 4 ||
                     cards.Height <= cardHeight + 15 ||
@@ -650,6 +982,7 @@ internal static class Program
                     gameSection.Margin != gameMargin ||
                     structural.CaptureWorkflowHeading.Margin != headingMargin ||
                     structural.ConsoleTextHost.Margin != statusMargin ||
+                    structural.ResultsConsoleScroll.Margin != resultsStatusMargin ||
                     structural.GameRootPanel.Height != originalGameRootHeight ||
                     cardPanels.Where((card, index) => card.Margin != originalCardMargins[index]).Any() ||
                     cards.Height != cardHeight || cards.MinHeight != cardMinHeight ||
@@ -789,6 +1122,93 @@ internal static class Program
             DrainDispatcher();
             Console.WriteLine("PASS START capture handoff unloads WPF before Cyberpunk is observed");
 
+            // The display estimate is distinct from confirmed completion:
+            // simulate slow and fast checkpoint intervals on different PCs.
+            // No fixed runtime is asserted; only monotonic, bounded behavior.
+            var smooth = new CheckpointProgressSmoother();
+            smooth.Start(5);
+            var initialEstimate = smooth.Advance(2.0);
+            var slowerEstimate = smooth.Advance(6.0);
+            if (initialEstimate <= 0 || slowerEstimate <= initialEstimate ||
+                slowerEstimate >= 20)
+                throw new InvalidOperationException(
+                    "Progress estimator failed to advance within the first real stage.");
+            smooth.Confirm(1, 5, 7.0);
+            var firstCheckpoint = smooth.Advance(7.1);
+            smooth.Confirm(2, 5, 8.0); // next checkpoint arrives much faster
+            var afterFastCheckpoint = smooth.Advance(8.1);
+            smooth.Confirm(5, 5, 9.0); // all stages verified; work may still publish
+            var waitingForPublish = smooth.Advance(25.0);
+            if (firstCheckpoint < slowerEstimate ||
+                afterFastCheckpoint < firstCheckpoint ||
+                waitingForPublish < afterFastCheckpoint ||
+                waitingForPublish > CheckpointProgressSmoother.EstimatedCeiling ||
+                waitingForPublish >= 100)
+                throw new InvalidOperationException(
+                    "Progress estimator regressed or claimed unverified completion.");
+            smooth.Stop();
+            var stoppedValue = smooth.Advance(300);
+            if (stoppedValue != waitingForPublish)
+                throw new InvalidOperationException(
+                    "Stopped progress estimator continued advancing after work ended.");
+            smooth.Start(10);
+            if (smooth.Value != 0 || smooth.Advance(1.0) <= 0)
+                throw new InvalidOperationException(
+                    "New progress operation did not reset the prior estimate.");
+
+            // Replay representative workflow milestones, not visual pixel positions.
+            // The expensive generation work must occupy most of the progress
+            // interval, with the final archive work remaining proportional.
+            static double TickProgress(CheckpointProgressSmoother model, double from, double to)
+            {
+                for (double t = from + 0.1; t < to; t += 0.1)
+                    model.Advance(t);
+                return model.Advance(to);
+            }
+
+            smooth.Start(6);
+            double cetEstimate = TickProgress(smooth, 0, 73);
+            if (cetEstimate < 35 || cetEstimate >= 46)
+                throw new InvalidOperationException(
+                    $"Generate CET estimate did not approach its weighted checkpoint: {cetEstimate:F2}.");
+            smooth.Confirm(1, 6, 73);
+            TickProgress(smooth, 73, 83);
+            smooth.Confirm(2, 6, 83);
+            double redEstimate = TickProgress(smooth, 83, 152);
+            if (redEstimate < 85 || redEstimate >= 95)
+                throw new InvalidOperationException(
+                    $"Generate REDscript estimate left disproportionate final work: {redEstimate:F2}.");
+            smooth.Confirm(3, 6, 152);
+            TickProgress(smooth, 152, 154);
+            smooth.Confirm(4, 6, 154);
+            double beforeZipEntries = TickProgress(smooth, 154, 155);
+            smooth.Confirm(450, 600, 157); // 50 / 100 ZIP entries in stage 4 -> 5
+            double duringZip = TickProgress(smooth, 155, 160);
+            if (duringZip < beforeZipEntries ||
+                duringZip > CheckpointProgressSmoother.EstimatedCeiling)
+                throw new InvalidOperationException(
+                    "Fractional ZIP checkpoints regressed or exceeded the safety ceiling.");
+
+            // Same normalized work on faster/slower machines should learn
+            // different elapsed durations but reach comparable estimates.
+            static double SecondAnalyzeEstimate(double speed)
+            {
+                var model = new CheckpointProgressSmoother();
+                model.Start(5);
+                TickProgress(model, 0, 57 * speed);
+                model.Confirm(1, 5, 57 * speed);
+                return TickProgress(model, 57 * speed, 80 * speed);
+            }
+
+            double fastEstimate = SecondAnalyzeEstimate(0.5);
+            double slowEstimate = SecondAnalyzeEstimate(2.0);
+            if (fastEstimate < 30 || slowEstimate < 30 ||
+                Math.Abs(fastEstimate - slowEstimate) > 2)
+                throw new InvalidOperationException(
+                    $"Progress failed to adapt proportionally: fast={fastEstimate:F2}, slow={slowEstimate:F2}.");
+
+            Console.WriteLine("PASS weighted workflow progress, proportional timing adaptation and ZIP ceiling");
+
             var normal = new MainWindow();
             VerifyAtSize(normal, normal.Width, normal.Height);
 
@@ -798,26 +1218,6 @@ internal static class Program
             // though responsive card scaling was intentionally reverted.
             VerifyAtSize(new MainWindow(), 1700, 900);
             VerifyAtSize(new MainWindow(), 1920, 1080);
-
-            // Capture and Analyze reuse the same bottom-row console. The
-            // Analysis overlay must not cover the owner portrait transition.
-            var resultsLayout = new MainWindow { WpfVerificationMode = true };
-            resultsLayout.ShowResultsPage();
-            resultsLayout.RootLayout.Measure(new System.Windows.Size(1280, 760));
-            resultsLayout.RootLayout.Arrange(new System.Windows.Rect(0, 0, 1280, 760));
-            resultsLayout.RootLayout.UpdateLayout();
-            if (resultsLayout.ResultsPage.Visibility != System.Windows.Visibility.Visible ||
-                resultsLayout.CapturePage.Visibility != System.Windows.Visibility.Collapsed ||
-                System.Windows.Controls.Grid.GetRowSpan(resultsLayout.ResultsPage) != 1 ||
-                resultsLayout.ResultsPage.Background is not System.Windows.Media.SolidColorBrush resultsBg ||
-                resultsBg.Color.A != 0 ||
-                resultsLayout.ContinueButton.Visibility != System.Windows.Visibility.Collapsed ||
-                System.Windows.Controls.Grid.GetColumnSpan(resultsLayout.ConsoleTextHost) != 2 ||
-                resultsLayout.AnalyzeButton.IsEnabled ||
-                resultsLayout.GenerateButton.IsEnabled)
-                throw new InvalidOperationException(
-                    "Page 2 must retain original transparent portrait, footer console, no automatic analysis.");
-            Console.WriteLine("PASS Page 2 uses original black/portrait background and shared console; analysis deferred");
 
             Console.WriteLine(
                 "PASS packaged native WPF Normal-Maximized-Normal pixel identity, maximized-only card growth and both pages");

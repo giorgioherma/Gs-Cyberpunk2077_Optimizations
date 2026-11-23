@@ -1,3 +1,1 @@
-# Main full GCO integration milestone. Edit checkpoint only when ready to validate a group of changes.
-# Keep the value short and meaningful, e.g. checkpoint=combined-passes-2-10
-checkpoint=not-run
+checkpoint=v1.2.7-progress-vsignal-test-20261122

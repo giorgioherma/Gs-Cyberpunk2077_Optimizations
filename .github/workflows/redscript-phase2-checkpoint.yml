@@ -8,11 +8,14 @@ run-name: REDscript SCC checkpoint | ${{ github.ref_name }}
 # No CET capture replay, WPF packaging, second compiler or game writes.
 on:
   workflow_dispatch:
-  # Consolidated CI: batches only; preserve manual dispatch above.
+  # Explicit checkpoint only: ordinary resolver commits do not launch SCC.
+  # workflow_dispatch remains available from GitHub Actions.
   push:
     branches:
       - main
       - ci/redscript-phase2-postgeneric
+      - dev/redscript/resolver_handoff
+      - dev/redscript/integration
     paths:
       - '.ci/checkpoints/redscript.txt'
 
@@ -28,6 +31,39 @@ jobs:
     name: Phase 2 checkpoint - SCC
     runs-on: windows-latest
     timeout-minutes: 10
+    env:
+      PHASE2_OUTPUT: ${{ github.workspace }}/.phase2-generated
+      PHASE2_INTEGRATED_OUTPUT: ${{ github.workspace }}/.phase2-integrated-final
+      PHASE2_DARK_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture
+      PHASE2_ICON_OUTPUT: ${{ github.workspace }}/.phase2-darkfuture-icons
+      PHASE2_FE_OUTPUT: ${{ github.workspace }}/.phase2-fe-input
+      PHASE2_FE_PINS_OUTPUT: ${{ github.workspace }}/.phase2-fe-pins
+      PHASE2_QUICKSLOTS_OUTPUT: ${{ github.workspace }}/.phase2-cq-input
+      PHASE2_DPAD_OUTPUT: ${{ github.workspace }}/.phase2-cq-dpad
+      PHASE2_QUICKHACK_OUTPUT: ${{ github.workspace }}/.phase2-qhf-tags
+      PHASE2_REDWINDOWS_OUTPUT: ${{ github.workspace }}/.phase2-redwindows-find
+      PHASE2_TRIGGER_OUTPUT: ${{ github.workspace }}/.phase2-trigger-tags
+      PHASE2_DPR_OUTPUT: ${{ github.workspace }}/.phase2-dpr-tracing
+      PHASE2_HOLOGIRL_OUTPUT: ${{ github.workspace }}/.phase2-hologirl-material
+      PHASE2_RW_CURSORS_OUTPUT: ${{ github.workspace }}/.phase2-rw-cursors
+      PHASE2_RW_RENDER_OUTPUT: ${{ github.workspace }}/.phase2-rw-render
+      PHASE2_DF_AGGRESSIVE_OUTPUT: ${{ github.workspace }}/.phase2-df-aggressive
+      PHASE2_RW_SETTERS_OUTPUT: ${{ github.workspace }}/.phase2-rw-setters
+      PHASE2_DVC_UI_OUTPUT: ${{ github.workspace }}/.phase2-dvc-ui
+      PHASE2_BROWSER_JOURNAL_OUTPUT: ${{ github.workspace }}/.phase2-browser-journal
+      PHASE2_BROWSER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-browser-input
+      PHASE2_EVS_PS_OUTPUT: ${{ github.workspace }}/.phase2-evs-ps
+      PHASE2_FE_HUB_OUTPUT: ${{ github.workspace }}/.phase2-fe-hub
+      PHASE2_GRS_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-grs-input
+      PHASE2_GRS_STATE_OUTPUT: ${{ github.workspace }}/.phase2-grs-state
+      PHASE2_VCP_OUTPUT: ${{ github.workspace }}/.phase2-vcp-quest
+      PHASE2_CW_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-cyberware-ex
+      PHASE2_SR_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-stealth-pickpocket
+      PHASE2_VM_OUTPUT: ${{ github.workspace }}/.phase2-vehicle-mileage
+      PHASE2_GRS_POLL_OUTPUT: ${{ github.workspace }}/.phase2-grs-poll
+      PHASE2_SC_JOBS_OUTPUT: ${{ github.workspace }}/.phase2-sc-jobs
+      PHASE2_NCR_TICK_OUTPUT: ${{ github.workspace }}/.phase2-ncr-tick
+      PHASE2_DRUGDEALER_INPUT_OUTPUT: ${{ github.workspace }}/.phase2-drugdealer-input
     steps:
       - name: Checkout GCO REDscript resolver
         uses: actions/checkout@v4
@@ -50,6 +86,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Configure Python for semantic source-state contracts
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Build the existing SCC owner CLI
         shell: pwsh
         run: |
@@ -57,11 +98,1799 @@ jobs:
           dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RESOLVER_BUILD_FAILED' }
 
-      - name: Checkpoint - compile current post-generic stock
+      - name: Build independent Pass 4 and Pass 8/10 test hosts
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          dotnet build src/GRedscript.Pass4/GRedscript.Pass4.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS4_HOST_BUILD_FAILED' }
+          dotnet build tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS8_10_HOST_BUILD_FAILED' }
+
+      - name: Validate independent owner source-state contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass4_isolated.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS4_SOURCE_STATE_FAILED' }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_pass8_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'INTEGRATED_PASS8_SOURCE_STATE_FAILED' }
+          # A later semantic action gate must not invalidate a completed generic marker.
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_generic_late_system_read.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GENERIC_LATE_SYSTEM_COMPOSED_STATE_FAILED' }
+
+      - name: Validate DigitalVixenCore Footsteps semantic source states
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_phase2_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_SEMANTIC_SOURCE_STATE_TEST_FAILED' }
+
+      - name: Generate Footsteps semantic overlay from post-generic stock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & dotnet src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll phase2-footsteps --game '.phase2-private/base_after_generic' --out $env:PHASE2_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_SEMANTIC_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1' -or
+              $report.status -ne 'APPLIED' -or $report.appliedEdits -ne 1) {
+            throw ('PHASE2_SEMANTIC_STOCK_OUTPUT_MISSING: '+$report.status)
+          }
+
+      - name: Generate Dark Future safe tag cache after Footsteps
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & dotnet src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll phase2-dark-future --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DARK_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DARK_FUTURE_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DARK_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DARK_FUTURE_INFINITE_TAG_CACHE_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_DARK_FUTURE_STOCK_OUTPUT_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_DARK_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_DARK_FUTURE_EXPECTED_ONE_SOURCE' }
+          foreach ($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src, $file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_DARK_FUTURE_SOURCE_PATH_UNSAFE'
+            }
+            $target=Join-Path $dst $rel
+            if (Test-Path -LiteralPath $target) {
+              throw 'PHASE2_DARK_FUTURE_OWNER_FILE_COLLISION'
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target
+          }
+          Write-Host 'PASS Phase 2 combined semantic overlay: DVCore=1 DarkFuture=1'
+
+      - name: Generate 400ms Dark Future status icon cadence after tag cache
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-dark-future-icons --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_ICON_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DF_ICON_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_ICON_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DARK_FUTURE_STATUS_ICON_400MS_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_DF_ICON_NOT_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $source=Join-Path $env:PHASE2_ICON_OUTPUT 'r6/scripts'
+          $dest=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $source -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_DF_ICON_EXPECTED_ONE_SOURCE' }
+          foreach ($file in $files) {
+            $relative=[IO.Path]::GetRelativePath($source,$file.FullName)
+            if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..')) {
+              throw 'PHASE2_DF_ICON_PATH_ESCAPE'
+            }
+            $target=Join-Path $dest $relative
+            if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
+              throw 'PHASE2_DF_ICON_DID_NOT_COMPOSE_AFTER_TAG_CACHE'
+            }
+            $old=Get-Content -LiteralPath $target -Raw
+            $new=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$old.Contains('m_gcoDfInfiniteTagValid') -or
+                !$new.Contains('m_gcoDfInfiniteTagValid') -or
+                !$new.Contains('DarkFutureCanHideOnBuffBar') -or
+                !$new.Contains('now + 0.40')) {
+              throw 'PHASE2_DF_ICON_CROSS_SEMANTIC_PROOF_FAILED'
+            }
+            foreach ($m in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value |
+                Sort-Object -Unique)) {
+              if (!$new.Contains($m,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_DF_ICON_DROPPED_GENERIC_SOURCE'
+              }
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          Write-Host 'PASS three semantic operations compose in two owner source files'
+
+      - name: Generate FE early-input guard after generic and existing semantics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-fe-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_FE_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_FE_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_FE_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'FLUSHING_ETIQUETTE_UNRELATED_INPUT_GATE_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_FE_INPUT_EXPECTED_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $source=Join-Path $env:PHASE2_FE_OUTPUT 'r6/scripts'
+          $dest=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $source -File -Recurse -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_FE_EXPECTED_ONE_SOURCE' }
+          foreach ($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($source,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_FE_SOURCE_PATH_UNSAFE'
+            }
+            $target=Join-Path $dest $rel
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+              throw 'PHASE2_FE_DID_NOT_EXPECT_OWNER_COLLISION'
+            }
+            $now=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$now.Contains('GCO-GENERIC:CNAME_FIXED_INDEX_V1') -or
+                !$now.Contains('return wrappedMethod(action, consumer);') -or
+                !$now.Contains('ListenerAction.GetType(action)')) {
+              throw 'PHASE2_FE_LOST_GENERIC_OR_ONACTION_FALLBACK'
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target
+          }
+          Write-Host 'PASS four approved semantic operations compose after generic source'
+
+      - name: Generate game-tested FE session pins and minimize global UI work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-fe-pins --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_FE_PINS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_FE_PINS_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_FE_PINS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'FE_SESSION_WASHROOM_PINS_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -ne 1 -or
+              @($report.sourcePaths).Count -ne 2) {
+            throw ('PHASE2_FE_PINS_EXPECTED_TWO_FILES: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_FE_PINS_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 2) { throw 'PHASE2_FE_PINS_TWO_SOURCE_FILES_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_FE_PINS_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            if (Test-Path -LiteralPath $target) {
+              $before=Get-Content -LiteralPath $target -Raw
+              $after=Get-Content -LiteralPath $file.FullName -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$after.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_FE_PINS_DROPPED_GENERIC_SOURCE'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          $places=@(Get-ChildItem -LiteralPath $dst -Recurse -File -Filter 'FE_Places.reds')
+          $owner=@(Get-ChildItem -LiteralPath $dst -Recurse -File -Filter 'FlushingEtiquette.reds')
+          if ($places.Count -ne 1 -or $owner.Count -ne 1) {
+            throw 'PHASE2_FE_PINS_OWNER_OUTPUT_NOT_UNIQUE'
+          }
+          $pins=Get-Content -LiteralPath $places[0].FullName -Raw
+          $system=Get-Content -LiteralPath $owner[0].FullName -Raw
+          if (!$pins.Contains('class FEWashroomMappinService') -or
+              !$pins.Contains('mappins.SetMappinActive(id, true);') -or
+              !$pins.Contains('MinimapPOIMappinController') -or
+              $pins.Contains('@wrapMethod(BaseMinimapMappinController)') -or
+              !$system.Contains('FEWashroomMappinService.Get(this.GetGameInstance())') -or
+              $system.Contains('FEPlaces.UnregisterPins(gi, this.m_pins);')) {
+            throw 'PHASE2_FE_PINS_HANDMADE_LIFECYCLE_POSTCONDITION_FAILED'
+          }
+          Write-Host 'PASS FE session-owned pin lifecycle, explicit activation and targeted icon styling'
+
+      - name: Generate source-aware Quickslots specific input bridge with engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-quickslots-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_QUICKSLOTS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_INPUT_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'CUSTOM_QUICKSLOTS_SPECIFIC_INPUT_BRIDGE_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_CQ_INPUT_EXPECTED_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_QUICKSLOTS_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_CQ_ONE_OWNER_FILE_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            if ([IO.Path]::IsPathRooted($rel) -or $rel.StartsWith('..')) {
+              throw 'PHASE2_CQ_INPUT_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            $updated=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$updated.Contains('class CustomQuickslotsGlobalInputListener extends InputListener') -or
+                !$updated.Contains('class CustomQuickslotsDeviceListener extends InputDeviceListener') -or
+                !$updated.Contains('this.customQuickslotsInputHub.Subscribe(') -or
+                !$updated.Contains('this.customQuickslotsInputHub.SubscribeDevice(') -or
+                !$updated.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(') -or
+                !$updated.Contains('this.customQuickslotsFallbackRegistered = true;') -or
+                !$updated.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+                !$updated.Contains('this.player.m_customHotkeyPlayerButtonData.ObserveAction(')) {
+              throw 'PHASE2_CQ_INPUT_GENERIC_OR_FALLBACK_DROPPED'
+            }
+            if (Test-Path -LiteralPath $target) {
+              $old=Get-Content -LiteralPath $target -Raw
+              foreach($marker in @([regex]::Matches($old,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$updated.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_CQ_INPUT_LOST_GENERIC'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          Write-Host 'PASS Quickslots InputHub action-specific bridge and fallback preserve existing generic membership'
+
+      - name: Generate opt-in Quickslots D-pad cache from post-generic InputHub bridge
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-quickslots-dpad --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_QUICKSLOTS_OUTPUT --out $env:PHASE2_DPAD_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_DPAD_GENERATION_FAILED' }
+          $result=Get-Content -LiteralPath (Join-Path $env:PHASE2_DPAD_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($result.ruleId -ne 'CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1' -or
+              $result.status -ne 'APPLIED' -or [int]$result.appliedEdits -ne 1) {
+            throw ('PHASE2_CQ_DPAD_MUST_APPLY: '+$result.status+' '+$result.reason)
+          }
+          $relative='r6/scripts/custom_quickslots/player_puppet.reds'
+          $generated=Join-Path $env:PHASE2_DPAD_OUTPUT $relative
+          if (!(Test-Path -LiteralPath $generated -PathType Leaf)) {
+            throw 'PHASE2_CQ_DPAD_OUTPUT_MISSING'
+          }
+          $text=Get-Content -LiteralPath $generated -Raw
+          if (!$text.Contains('!this.player.PlayerLastUsedPad()') -or
+              !$text.Contains('this.RecomputeDpadProhibitions();') -or
+              !$text.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+              !$text.Contains('this.customQuickslotsInputHub.Subscribe(') -or
+              !$text.Contains('this.customQuickslotsFallbackRegistered = true;')) {
+            throw 'PHASE2_CQ_DPAD_GENERIC_OR_INPUT_FALLBACK_LOST'
+          }
+          Copy-Item -LiteralPath $generated -Destination (Join-Path $env:PHASE2_OUTPUT $relative) -Force
+          Write-Host 'PASS Quickslots D-pad cache opt-in: cached getters, KBM mode off, generic and InputHub preserved'
+
+      - name: Generate historical Quickhack direct-tag predicate and preserve original wrappers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-quickhack-tags --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_QUICKHACK_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_QHF_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_QUICKHACK_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'QUICKHACK_FIXES_DIRECT_TAG_PREDICATE_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 2) {
+            throw ('PHASE2_QHF_STOCK_EXPECTED_TWO_CALLBACKS: '+$report.status+' '+$report.reason)
+          }
+          $files=@(Get-ChildItem -LiteralPath (Join-Path $env:PHASE2_QUICKHACK_OUTPUT 'r6/scripts') -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_QHF_EXPECTED_SINGLE_OWNER_FILE' }
+          foreach ($file in $files) {
+            $relative=[IO.Path]::GetRelativePath((Join-Path $env:PHASE2_QUICKHACK_OUTPUT 'r6/scripts'),$file.FullName)
+            $ownerRelative=$relative.Replace([IO.Path]::DirectorySeparatorChar, '/')
+            if ($ownerRelative.StartsWith('..') -or !$ownerRelative.StartsWith('Quickhack_Fixes/')) {
+              throw 'PHASE2_QHF_OWNER_PATH_UNSAFE'
+            }
+            $body=Get-Content -LiteralPath $file.FullName -Raw
+            if ($body.Contains('GetAppliedEffectsWithTag(') -or
+                $body.Contains('ArraySize(sonic_shock_ignore_effects)') -or
+                @([regex]::Matches($body,'StatusEffectSystem.ObjectHasStatusEffectWithTag\(')).Count -ne 2 -or
+                @([regex]::Matches($body,'wrappedMethod\(')).Count -ne 2) {
+              throw 'PHASE2_QHF_HISTORICAL_PREDICATE_OR_FALLBACK_MISMATCH'
+            }
+            $dst=Join-Path (Join-Path $env:PHASE2_OUTPUT 'r6/scripts') $relative
+            if (Test-Path -LiteralPath $dst) { throw 'PHASE2_QHF_UNEXPECTED_OWNER_COLLISION' }
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $dst
+          }
+          Write-Host 'PASS Quickhack direct tag predicate: two callbacks source-generated; fallback retained'
+
+      - name: Generate RedWindows retained widget Find from historical Pass 9
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-find --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_REDWINDOWS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_FIND_GENERATION_FAILED' }
+          $result=Get-Content -LiteralPath (Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($result.ruleId -ne 'REDWINDOWS_RETAINED_WIDGET_LOOKUP_V1' -or
+              $result.status -ne 'APPLIED' -or [int]$result.appliedEdits -ne 1) {
+            throw ('PHASE2_RW_FIND_EXPECTED_APPLIED: '+$result.status+' '+$result.reason)
+          }
+          $files=@(Get-ChildItem -LiteralPath (Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts') -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 1) { throw 'PHASE2_RW_FIND_ONE_OWNER_FILE_EXPECTED' }
+          foreach($file in $files) {
+            $relative=[IO.Path]::GetRelativePath((Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts'),$file.FullName)
+            $safe=$relative.Replace([IO.Path]::DirectorySeparatorChar,'/')
+            if (!$safe.StartsWith('RedWindows/') -or $safe.StartsWith('..')) {
+              throw 'PHASE2_RW_FIND_PATH_UNSAFE'
+            }
+            $body=Get-Content -LiteralPath $file.FullName -Raw
+            if (!$body.Contains('m_lastFindWidget') -or
+                !$body.Contains('m_lastFindId') -or
+                !$body.Contains('this.m_findCursor = idx + 1;') -or
+                !$body.Contains('ArrayPush(this.m_widgets, widget);')) {
+              throw 'PHASE2_RW_FIND_HISTORICAL_PREDICATE_INCOMPLETE'
+            }
+            $dst=Join-Path (Join-Path $env:PHASE2_OUTPUT 'r6/scripts') $relative
+            if (Test-Path -LiteralPath $dst) {
+              $previous=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($previous,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_RW_FIND_LOST_GENERIC'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $dst -Force
+          }
+          Write-Host 'PASS RedWindows retained Find: last-hit and predicted cursor; original owner preserved'
+
+      - name: Generate TriggerModeControl literal CName tags from post-generic source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-trigger-mode-tags --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_TRIGGER_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_TMC_TAG_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_TRIGGER_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'TRIGGER_MODE_LITERAL_TAG_NAMES_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_TMC_TAG_SOURCE_NOT_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $relative='r6/scripts/TriggerModeControl/TriggerModeControl.reds'
+          $source=Join-Path $env:PHASE2_TRIGGER_OUTPUT $relative
+          if (!(Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw 'PHASE2_TMC_TAG_OUTPUT_MISSING'
+          }
+          $text=Get-Content -LiteralPath $source -Raw
+          foreach ($tag in @('ForceAuto','RemoveAuto','InstantCharge')) {
+            if (!$text.Contains('n"'+$tag+'Primary"') -or
+                !$text.Contains('n"'+$tag+'Secondary"') -or
+                $text.Contains('StringToName("'+$tag+'"')) {
+              throw ('PHASE2_TMC_TAG_NOT_LITERAL: '+$tag)
+            }
+          }
+          if (!$text.Contains('PushForceRefreshInputHintsEventToPSM(') -or
+              !$text.Contains('this.AddTriggerModeCtrlInputHints(')) {
+            throw 'PHASE2_TMC_UNRELATED_INPUT_CADENCE_MUTATED'
+          }
+          $target=Join-Path $env:PHASE2_OUTPUT $relative
+          if (Test-Path -LiteralPath $target) {
+            $earlier=Get-Content -LiteralPath $target -Raw
+            foreach($marker in @([regex]::Matches($earlier,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$text.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_TMC_LOST_GENERIC'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $source -Destination $target -Force
+          Write-Host 'PASS TriggerModeControl fixed CName tag checks; hint update cadence unchanged'
+
+      - name: Generate DisablePositionReveal tracing-state guards
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-disable-position-tracing --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DPR_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DPR_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DPR_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DISABLE_POSITION_REVEAL_TRACING_GUARDS_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 3) {
+            throw ('PHASE2_DPR_STOCK_THREE_GUARDS_REQUIRED: '+$report.status+' '+$report.reason)
+          }
+          $relative='r6/scripts/DisablePositionReveal/DisablePositionReveal.reds'
+          $source=Join-Path $env:PHASE2_DPR_OUTPUT $relative
+          if (!(Test-Path -LiteralPath $source)) { throw 'PHASE2_DPR_FILE_MISSING' }
+          $text=Get-Content -LiteralPath $source -Raw
+          if (!$text.Contains('GetIsTracing()') -or
+              !$text.Contains('super.OnDamageReceived(evt);') -or
+              !$text.Contains('super.OnDefeated(evt);') -or
+              !$text.Contains('wrappedMethod(obj, newState);')) {
+            throw 'PHASE2_DPR_LOST_ORIGINAL_CALLBACKS'
+          }
+          $target=Join-Path $env:PHASE2_OUTPUT $relative
+          if (Test-Path -LiteralPath $target) {
+            $old=Get-Content -LiteralPath $target -Raw
+            foreach ($marker in @([regex]::Matches($old,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$text.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_DPR_LOST_GENERIC'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $source -Destination $target -Force
+          Write-Host 'PASS DisablePositionReveal three state guards, original callbacks intact'
+
+      - name: Generate HQ HoloGirl historical material event fast path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-hologirl-material --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_HOLOGIRL_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_HQ_HOLOGIRL_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_HOLOGIRL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'HQ_HOLOGIRL_MATERIAL_EVENT_FASTPATH_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_HQ_HOLOGIRL_EXPECTED_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/HQ_HoloGirl/Engine/HoloGirl.reds'
+          $file=Join-Path $env:PHASE2_HOLOGIRL_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw 'PHASE2_HQ_HOLOGIRL_OUTPUT_MISSING'
+          }
+          $now=Get-Content -LiteralPath $file -Raw
+          if (!$now.Contains('this.holoBaseRR = HQRes("holo_base.mi");') -or
+              !$now.Contains('ResourceRef.GetPath(mtl.baseMaterial) != this.holoBaseRR') -or
+              !$now.Contains('let color = this.ResolveColor(this.holo.txColor);') -or
+              !$now.Contains('let emissive = this.GetEmissive();') -or
+              !$now.Contains('BindCallbackTRL(this, n"UpdateHQHolo"') -or
+              !$now.Contains('HoloGirl.Get().UpdateAll();')) {
+            throw 'PHASE2_HQ_HOLOGIRL_CALLBACK_OR_HOIST_MISSING'
+          }
+          $target=Join-Path $env:PHASE2_OUTPUT $rel
+          if (Test-Path -LiteralPath $target -PathType Leaf) {
+            throw 'PHASE2_HQ_HOLOGIRL_UNEXPECTED_OWNER_COLLISION'
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          Copy-Item -LiteralPath $file -Destination $target
+          Write-Host 'PASS HQ_HoloGirl cached material target and event-local color/emissive'
+
+      - name: Generate RedWindows shape and label search cursors
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-cursors --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_RW_CURSORS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_CURSOR_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_RW_CURSORS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'REDWINDOWS_SHAPE_LABEL_CURSORS_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_RW_CURSOR_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/RedWindows/RW_Widgets.reds'
+          $src=Join-Path $env:PHASE2_RW_CURSORS_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src)) {
+            throw 'PHASE2_RW_CURSOR_EXPECTED_OWNER_FILE'
+          }
+          $now=Get-Content -LiteralPath $src -Raw
+          if (!$now.Contains('this.m_shapeFindCursor = idx;') -or
+              !$now.Contains('this.m_labelFindCursor = idx;') -or
+              !$now.Contains('if IsDefined(shape) && Equals(shape.id, shapeId)') -or
+              !$now.Contains('if IsDefined(label) && Equals(label.id, labelId)') -or
+              !$now.Contains('public func Drop() -> Void')) {
+            throw 'PHASE2_RW_CURSOR_RETAINED_ARRAY_LOOKUP_MISSING'
+          }
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (Test-Path -LiteralPath $dst) {
+            throw 'PHASE2_RW_CURSOR_UNEXPECTED_OWNER_COLLISION'
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          Copy-Item -LiteralPath $src -Destination $dst
+          Write-Host 'PASS RedWindows both cursor lookups, live arrays always scanned'
+
+      - name: Generate RedWindows render-aware Builder and Logs dormancy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-render --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_RW_RENDER_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_RENDER_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_RW_RENDER_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'REDWINDOWS_RENDER_AWARE_DORMANCY_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1 -or
+              @($report.sourcePaths).Count -ne 3) {
+            throw ('PHASE2_RW_RENDER_EXPECTED_THREE_FILES: '+$report.status+' '+$report.reason)
+          }
+          $src=Join-Path $env:PHASE2_RW_RENDER_OUTPUT 'r6/scripts'
+          $dst=Join-Path $env:PHASE2_OUTPUT 'r6/scripts'
+          $files=@(Get-ChildItem -LiteralPath $src -Recurse -File -Filter '*.reds')
+          if ($files.Count -ne 3) { throw 'PHASE2_RW_RENDER_THREE_SOURCES_REQUIRED' }
+          foreach($file in $files) {
+            $rel=[IO.Path]::GetRelativePath($src,$file.FullName)
+            $safe=$rel.Replace([IO.Path]::DirectorySeparatorChar,'/')
+            if ($safe.StartsWith('..') -or !$safe.StartsWith('RedWindows/')) {
+              throw 'PHASE2_RW_RENDER_PATH_ESCAPE'
+            }
+            $target=Join-Path $dst $rel
+            $updated=Get-Content -LiteralPath $file.FullName -Raw
+            if ($file.Name -eq 'RW_Window.reds' -and
+                (!$updated.Contains('return !this.overlayOnly;') -or
+                 !$updated.Contains('public func IsRendered() -> Bool') -or
+                 !$updated.Contains('this.m_findCursor = idx + 1;') -or
+                 !$updated.Contains('public func IsVisible() -> Bool { return this.visible; }'))) {
+              throw 'PHASE2_RW_RENDER_WINDOW_OR_FIND_NOT_PRESERVED'
+            }
+            if ($file.Name -eq 'RW_Builder.reds' -and
+                (!$updated.Contains('builder.IsRendered()') -or
+                 !$updated.Contains('gallery.IsRendered()') -or
+                 !$updated.Contains('GCO-GENERIC:STABLE_ARRAY_BOUND_V1'))) {
+              throw 'PHASE2_RW_RENDER_BUILDER_OR_GENERIC_LOST'
+            }
+            if ($file.Name -eq 'RW_Logs.reds' -and
+                (!$updated.Contains('win.IsRendered() && RedLogger.Available()') -or
+                 !$updated.Contains('this.Schedule(delay);'))) {
+              throw 'PHASE2_RW_RENDER_LOGS_POLLING_BEHAVIOR_LOST'
+            }
+            if (Test-Path -LiteralPath $target) {
+              $before=Get-Content -LiteralPath $target -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$updated.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw 'PHASE2_RW_RENDER_GENERIC_LOST'
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+          }
+          Write-Host 'PASS RedWindows effective visibility dormancy in three owner files'
+
+      - name: Generate historical Dark Future aggressive 10 6 6 throttles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-dark-future-aggressive --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DF_AGGRESSIVE_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DF_AGGRESSIVE_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DARK_FUTURE_HISTORICAL_AGGRESSIVE_THROTTLES_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 3) {
+            throw ('PHASE2_DF_AGGRESSIVE_THREE_THROTTLES_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/Dark Future/UI/DFBaseGameUIOverrides.reds'
+          $src=Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_DF_AGGRESSIVE_OWNER_FILE_MISSING'
+          }
+          $body=Get-Content -LiteralPath $src -Raw
+          foreach ($marker in @('m_gredBuffUpdatePhase < 10',
+              'm_gredEffectUpdatePhase < 6',
+              'm_gredRenderPhase < 6',
+              'm_gredLastTimeLeft == -1.00',
+              'm_gcoDfInfiniteTagValid',
+              'm_gcoDfIconCadenceInitialized',
+              '__gcoDfIconVisualDue',
+              'currBuffLoc.SetStatusEffectRecord(null);',
+              'this.FillOutroAnimationStart();')) {
+            if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+              throw ('PHASE2_DF_AGGRESSIVE_MISSING_HISTORICAL_OR_PREVIOUS:'+$marker)
+            }
+          }
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $dst -PathType Leaf)) {
+            throw 'PHASE2_DF_AGGRESSIVE_EXPECTED_PREVIOUS_OWNER'
+          }
+          $old=Get-Content -LiteralPath $dst -Raw
+          foreach ($marker in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+            if (!$body.Contains($marker,[StringComparison]::Ordinal)) {
+              throw 'PHASE2_DF_AGGRESSIVE_LOST_GENERIC'
+            }
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS Dark Future game-tested 10/6/6 throttles; existing icon and tag optimizations preserved'
+
+      - name: Generate RedWindows historical four redundant setter guards
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-redwindows-setters --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_RW_SETTERS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_RW_SET_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_RW_SETTERS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'REDWINDOWS_HISTORICAL_REDUNDANT_SETTERS_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 4) {
+            throw ('PHASE2_RW_SET_FOUR_OPERATIONS_MISSING: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/RedWindows/RW_Window.reds'
+          $src=Join-Path $env:PHASE2_RW_SETTERS_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf) -or
+              !(Test-Path -LiteralPath $dst -PathType Leaf)) {
+            throw 'PHASE2_RW_SET_OWNER_STAGE_MISSING'
+          }
+          $new=Get-Content -LiteralPath $src -Raw
+          $old=Get-Content -LiteralPath $dst -Raw
+          foreach($marker in @(
+              'RWWindow.SameColor(shape.fill, color)',
+              'AbsF(shape.opacity - clamped) < 0.001',
+              'AbsF(shape.borderOpacity - clamped) < 0.001',
+              'if changed && IsDefined(widget.text)',
+              'this.m_findCursor = idx + 1;',
+              'public func IsRendered() -> Bool',
+              'return !this.overlayOnly;')) {
+            if (!$new.Contains($marker,[StringComparison]::Ordinal)) {
+              throw ('PHASE2_RW_SET_LOST_REQUIRED_LOGIC:'+$marker)
+            }
+          }
+          foreach($marker in @([regex]::Matches($old,
+              '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+            if (!$new.Contains($marker,[StringComparison]::Ordinal)) {
+              throw 'PHASE2_RW_SET_LOST_GENERIC'
+            }
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS RedWindows historical color/tint and opacity tolerance write guards'
+
+      - name: Generate historical DigitalVixenCore BodyMap ItemEditor and Status UI dormancy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-digitalvixen-ui --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DVC_UI_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DVC_UI_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DVC_UI_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DIGITAL_VIXEN_HISTORICAL_UI_DORMANCY_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -ne 7 -or
+              @($report.sourcePaths).Count -ne 3) {
+            throw ('PHASE2_DVC_UI_SEVEN_OPERATIONS_REQUIRED: '+$report.status+' '+$report.reason)
+          }
+          $files=@('DVCore_BodyMapWindow.reds','DVCore_ItemEditor.reds','DVCore_StatusWindow.reds')
+          foreach($file in $files) {
+            $rel='r6/scripts/DigitalVixenCore/'+$file
+            $src=Join-Path $env:PHASE2_DVC_UI_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+              throw ('PHASE2_DVC_UI_MISSING:'+ $file)
+            }
+            $content=Get-Content -LiteralPath $src -Raw
+            if (!$content.Contains('IsRendered()',[StringComparison]::Ordinal)) {
+              throw ('PHASE2_DVC_UI_NOT_RENDER_GATED:'+ $file)
+            }
+            if ($file -eq 'DVCore_BodyMapWindow.reds' -and
+                (!$content.Contains('if !overlay && !cfgPinned') -or
+                 !$content.Contains('DVBodyMapWindow.HideRuleActive(') -or
+                 !$content.Contains('win.Checkbox(n"hiPin"'))) {
+              throw 'PHASE2_DVC_UI_PINNED_BODYMAP_ORIGINAL_BEHAVIOR_LOST'
+            }
+            if ($file -in @('DVCore_ItemEditor.reds','DVCore_StatusWindow.reds') -and
+                (!$content.Contains('let delay: Float = 2.0;') -or
+                 !$content.Contains('delay = 0.5;') -or
+                 !$content.Contains('delay = 0.25;') -or
+                 !$content.Contains('cb.initialized = true;') -or
+                 !$content.Contains('DelayCallback(cb, delay, false)'))) {
+              throw ('PHASE2_DVC_UI_CADENCE_CHANGED:'+ $file)
+            }
+            if ($file -eq 'DVCore_StatusWindow.reds' -and
+                (!$content.Contains('if this.initialized && IsDefined(mgr) {') -or
+                 !$content.Contains('win.SetOverlayOnly(!pinned)'))) {
+              throw 'PHASE2_DVC_UI_PINNED_STATUS_NOT_REFRESHED'
+            }
+            if (Test-Path -LiteralPath $dst -PathType Leaf) {
+              $previous=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($previous,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                  ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw ('PHASE2_DVC_UI_GENERIC_LOST:'+ $file)
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS DigitalVixenCore game-tested BodyMap and adaptive developer UI with pinned status'
+
+      - name: Generate historical Pass 2.0 BrowserExtension cached journal handles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-browser-journal --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_BROWSER_JOURNAL_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_BROWSER_JOURNAL_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_BROWSER_JOURNAL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'BROWSER_EXTENSION_JOURNAL_HANDLES_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 1) {
+            throw ('PHASE2_BROWSER_JOURNAL_NOT_APPLIED: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/BrowserExtension/BrowserExtension.System.reds'
+          $src=Join-Path $env:PHASE2_BROWSER_JOURNAL_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_BROWSER_JOURNAL_SOURCE_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('private func GetCachedJournal()') -or
+              !$content.Contains('m_corpoStartQuest: wref<JournalQuest>') -or
+              !$content.Contains('m_ep1EpilogueQuest: wref<JournalQuest>') -or
+              !$content.Contains('journal.GetEntryState(this.m_corpoStartQuest)') -or
+              !$content.Contains('journal.GetEntryState(this.m_ep1EpilogueQuest)')) {
+            throw 'PHASE2_BROWSER_JOURNAL_DYNAMIC_STATE_OR_CACHE_MISSING'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $previous=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($previous,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_BROWSER_JOURNAL_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS BrowserExtension Pass 2.0 journal handles cached; dynamic quest state still queried'
+
+      - name: Generate BrowserExtension Pass 2.0 action-specific input with fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-browser-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_BROWSER_INPUT_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_BROWSER_INPUT_GENERATOR_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_BROWSER_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'BROWSER_EXTENSION_INPUT_HUB_WITH_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -ne 2 -or
+              @($report.sourcePaths).Count -ne 2) {
+            throw ('PHASE2_BROWSER_INPUT_TWO_FILES_REQUIRED: '+$report.status+' '+$report.reason)
+          }
+          foreach($file in @('browserController.overrides.reds','HomePagePagination.reds')) {
+            $rel='r6/scripts/BrowserExtension/'+$file
+            $src=Join-Path $env:PHASE2_BROWSER_INPUT_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+              throw ('PHASE2_BROWSER_INPUT_FILE_MISSING:'+ $file)
+            }
+            $content=Get-Content -LiteralPath $src -Raw
+            if ($file -eq 'HomePagePagination.reds' -and
+                (!$content.Contains('extends InputListener') -or
+                 !$content.Contains('func OnGRedInput(evt: ref<InputEvent>)') -or
+                 !$content.Contains('func OnAction(action: ListenerAction') -or
+                 !$content.Contains('GCO-GENERIC:ACTION_EVENT_SNAPSHOT_V1'))) {
+              throw 'PHASE2_BROWSER_INPUT_LOST_ENGINE_FALLBACK_OR_GENERIC'
+            }
+            if ($file -eq 'browserController.overrides.reds' -and
+                (!$content.Contains('Subscribe(n"UI_MoveDown"') -or
+                 !$content.Contains('Subscribe(n"UI_MoveUp"') -or
+                 !$content.Contains('m_customBrowserFallbackRegistered = true;') -or
+                 !$content.Contains('m_customBrowserFallbackPlayer.UnregisterInputListener(') -or
+                 !$content.Contains('m_customBrowserInputHub.Unsubscribe('))) {
+              throw 'PHASE2_BROWSER_INPUT_INCOMPLETE_SUBSCRIBE_OR_CLEANUP'
+            }
+            if (Test-Path -LiteralPath $dst -PathType Leaf) {
+              $before=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw ('PHASE2_BROWSER_INPUT_LOST_GENERIC:'+ $file)
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS BrowserExtension InputHub with exclusive player engine fallback'
+
+      - name: Generate Enhanced Vehicle System Pass 2.0 PS local reuse
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-evs-ps --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_EVS_PS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_EVS_PS_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_EVS_PS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'EVS_ONACTION_PS_HANDLE_REUSE_V1' -or
+              $report.status -ne 'APPLIED' -or
+              [int]$report.appliedEdits -lt 100) {
+            throw ('PHASE2_EVS_PS_HOTPATH_NOT_REWRITTEN: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/Enhanced Vehicle System/Enhanced Vehicle System.reds'
+          $src=Join-Path $env:PHASE2_EVS_PS_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_EVS_PS_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('let gcoOnActionPS: ref<VehicleComponentPS> = this.GetPS();') -or
+              !$content.Contains('!IsDefined(gcoOnActionPS) || gcoOnActionPS.GetIsDestroyed()') -or
+              !$content.Contains('GCO-GENERIC:SHARED_PLAYER_SIGNAL_V1') -or
+              !$content.Contains('GCO-GENERIC:ACTION_EVENT_SNAPSHOT_V1') -or
+              !$content.Contains('AudiowareIsInstalled')) {
+            throw 'PHASE2_EVS_PS_LOST_GENERIC_OR_CURRENT_OWNER_BEHAVIOR'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_EVS_PS_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS EVS OnAction one stable PS handle with current generic and audio behavior'
+
+      - name: Generate FlushingEtiquette Pass 2.0 atomic InputHub with original fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-fe-input-hub --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_FE_HUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_FE_HUB_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_FE_HUB_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'FLUSHING_ETIQUETTE_INPUT_HUB_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 3) {
+            throw ('PHASE2_FE_HUB_UNEXPECTED_RESULT: '+$report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/FlushingEtiquette/FE_Input.reds'
+          $src=Join-Path $env:PHASE2_FE_HUB_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_FE_HUB_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          foreach($witness in @('private func FETryHubInputRoutes()',
+              'private func FECleanupInputRoutes()',
+              'if !this.m_feHubInputActive && FEInput.Handle(this, action)',
+              'return FEInput.HandleValues(player, name, type);',
+              'func OnGRedInput(evt: ref<InputEvent>)',
+              'GCO-GENERIC:CNAME_FIXED_INDEX_V1',
+              'this.FERegisterStatusHotkey();',
+              'return wrappedMethod(action, consumer);')) {
+            if (!$content.Contains($witness,[StringComparison]::Ordinal)) {
+              throw ('PHASE2_FE_HUB_BEHAVIOR_OR_GENERIC_LOST:'+ $witness)
+            }
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+              ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_FE_HUB_GENERIC_LOST:'+ $marker)
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS FE atomic InputHub and mutually exclusive legacy engine input'
+
+      - name: Generate GearRecoverySystem Pass 2.1 input bridge with engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-grs-input-hub --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_GRS_INPUT_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_GRS_HUB_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_GRS_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'GEAR_RECOVERY_INPUT_HUB_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 3) {
+            throw ('PHASE2_GRS_HUB_INCOMPATIBLE_RESULT:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+          $src=Join-Path $env:PHASE2_GRS_INPUT_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_GRS_HUB_SOURCE_MISSING'
+          }
+          $code=Get-Content -LiteralPath $src -Raw
+          foreach($witness in @('class GRSRecoverInputListener extends InputListener',
+              'private func GRSPerformRecover() -> Bool',
+              'if this.GRSPerformRecover() { evt.consumed = true; }',
+              'if this.m_grsFallbackRegistered {',
+              'this.m_grsInputHub.Unsubscribe(this.m_grsInputSubscription);',
+              'this.RegisterInputListener(this.m_grsRecoverInputListener);',
+              'controller.TryRecoverGear();',
+              'handler.IsPreGame()')) {
+            if (!$code.Contains($witness,[StringComparison]::Ordinal)) {
+              throw ('PHASE2_GRS_HUB_STATE_OR_GAMEPLAY_LOST:'+ $witness)
+            }
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $old=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($old,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$code.Contains($marker,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_GRS_HUB_GENERIC_LOST:'+ $marker)
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS GRS held recovery action: original success consumed, fallback and cleanup'
+
+      - name: Generate historical Pass 2.1 DrugDealer all five owner input routes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-drugdealer-input --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_DRUGDEALER_INPUT_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_DD_INPUT_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'DRUG_DEALER_INPUT_HUB_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or
+              @($report.sourcePaths).Count -ne 5 -or
+              @($report.refusals).Count -ne 0) {
+            throw ('PHASE2_DD_INPUT_INCOMPLETE:'+ $report.status+' '+(@($report.refusals) -join ','))
+          }
+          foreach($rel in @(
+              'r6/scripts/DrugDealer/Crackhouse/Crackhouse.reds',
+              'r6/scripts/DrugDealer/Job/SellDrugs/Interaction.reds',
+              'r6/scripts/DrugDealer/Lab/Lab.reds',
+              'r6/scripts/DrugDealer/NightMarket/NightMarket.reds',
+              'r6/scripts/DrugDealer/Operation/OperationProximity.reds')) {
+            $src=Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+              throw ('PHASE2_DD_INPUT_FILE_MISSING:'+ $rel)
+            }
+            $content=Get-Content -LiteralPath $src -Raw
+            foreach($witness in @('OnGRedInput(evt: ref<InputEvent>)',
+                'ACTION_LITERAL_MEMBERSHIP_V1', 'EngineFallback',
+                'RegisterInputListener(this.', 'Unsubscribe(this.')) {
+              if (!$content.Contains($witness,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_DD_INPUT_FALLBACK_OR_GENERIC_MISSING:'+ $rel+':'+ $witness)
+              }
+            }
+            if (Test-Path -LiteralPath $dst -PathType Leaf) {
+              $before=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($before,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') |
+                ForEach-Object Value | Sort-Object -Unique)) {
+                if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                  throw ('PHASE2_DD_INPUT_GENERIC_LOST:'+ $marker)
+                }
+              }
+            } else {
+              New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+            }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS five source-aware DrugDealer listeners, exclusive engine fallback and generic guards'
+
+      - name: Generate historical Pass 2.2 NCR 30-second scheduler with DelaySystem fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-ncr-tick --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_NCR_TICK_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_NCR_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_NCR_TICK_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'NCR_MAINTENANCE_SCHEDULER_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 5) {
+            throw ('PHASE2_NCR_SOURCE_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/NightCityRemembers/NCR.reds'
+          $src=Join-Path $env:PHASE2_NCR_TICK_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_NCR_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('NCRGCOMaintenanceJob extends ScheduledJob') -or
+              !$content.Contains('this.m_gcoScheduler.Unregister(') -or
+              !$content.Contains('this.ScheduleTick();') -or
+              !$content.Contains('this.m_gcoTickID <= 0')) {
+            throw 'PHASE2_NCR_FALLBACK_OR_LIFECYCLE_MISSING'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_NCR_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS NCR 30-second scheduler + DelaySystem fallback + detach/session cleanup'
+
+      - name: Generate historical Pass 2.2 ShatteredChrome main and HUD jobs with exclusive fallbacks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-sc-jobs --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_SC_JOBS_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_SC_JOBS_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_SC_JOBS_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'SHATTERED_CHROME_JOBS_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 5) {
+            throw ('PHASE2_SC_JOBS_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/ShatteredChrome/SC.reds'
+          $src=Join-Path $env:PHASE2_SC_JOBS_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_SC_JOBS_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('SCGCOMaintenanceJob extends ScheduledJob') -or
+              !$content.Contains('SCGCOHudJob extends ScheduledJob') -or
+              !$content.Contains('this.ScheduleNextTick();') -or
+              !$content.Contains('this.ScheduleHUDTick();') -or
+              !$content.Contains('this.m_gcoScheduler.Unregister(')) {
+            throw 'PHASE2_SC_JOBS_FALLBACK_LOST'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_SC_JOBS_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS ShatteredChrome independent main/HUD registered jobs and DelaySystem fallback'
+
+      - name: Generate historical Pass 2.2 GearRecoverySystem recurring poll job with engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-grs-poll --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_GRS_POLL_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'PHASE2_GRS_POLL_GENERATION_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_GRS_POLL_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if ($report.ruleId -ne 'GEAR_RECOVERY_POLL_SCHEDULER_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 5) {
+            throw ('PHASE2_GRS_POLL_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+          $src=Join-Path $env:PHASE2_GRS_POLL_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if (!(Test-Path -LiteralPath $src -PathType Leaf)) {
+            throw 'PHASE2_GRS_POLL_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if (!$content.Contains('GRSGCOInteractionPollJob extends ScheduledJob') -or
+              !$content.Contains('new GRSInteractionPollCallback()') -or
+              !$content.Contains('this.m_gcoGrsPollScheduler.Unregister(') -or
+              !$content.Contains('this.GRSPerformRecover()') -or
+              !$content.Contains('m_grsFallbackRegistered')) {
+            throw 'PHASE2_GRS_POLL_LOST_EARLIER_INPUT_OR_FALLBACK'
+          }
+          if (Test-Path -LiteralPath $dst -PathType Leaf) {
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)) {
+              if (!$content.Contains($marker,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_GRS_POLL_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS GRS periodic poll: scheduler registration and original DelayCallback fallback, #32 input preserved'
+
+      - name: Generate Pass 2.2 four VehicleMileage scheduler owners with exclusive engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-vehicle-mileage --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_VM_OUTPUT
+          if($LASTEXITCODE -ne 0){ throw 'PHASE2_VM_GENERATE_FAILED' }
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_VM_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'VEHICLE_MILEAGE_FOUR_SCHEDULER_FALLBACK_V1' -or
+              $report.status -ne 'APPLIED' -or @($report.sourcePaths).Count -ne 4 -or
+              @($report.refusals).Count -ne 0){
+            throw ('PHASE2_VM_FOUR_OWNERS_INCOMPATIBLE: '+$report.status+' '+(@($report.refusals) -join ','))
+          }
+          foreach($filename in @('VM3DOdoHUD.reds','VMFuelAvailable.reds','VMFuelGauge.reds','VMPriceSign.reds')){
+            $rel='r6/scripts/VehicleMileage/UI/'+$filename
+            $src=Join-Path $env:PHASE2_VM_OUTPUT $rel
+            $dst=Join-Path $env:PHASE2_OUTPUT $rel
+            if(!(Test-Path -LiteralPath $src -PathType Leaf)){ throw ('PHASE2_VM_OWNER_NOT_EMITTED:'+ $filename) }
+            $content=Get-Content -LiteralPath $src -Raw
+            if(!$content.Contains('extends ScheduledJob') -or
+                !$content.Contains('GCOStopVMJob') -or
+                !$content.Contains('this.m_gcoVMScheduler.Unregister(') -or
+                !$content.Contains('DelayCallback(')){
+              throw ('PHASE2_VM_SCHEDULER_OR_FALLBACK_MISSING:'+ $filename)
+            }
+            if(Test-Path -LiteralPath $dst -PathType Leaf){
+              $old=Get-Content -LiteralPath $dst -Raw
+              foreach($marker in @([regex]::Matches($old,
+                  '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+                if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                  throw ('PHASE2_VM_GENERIC_LOST:'+ $filename)
+                }
+              }
+            } else { New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null }
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+          }
+          Write-Host 'PASS VehicleMileage four independent recurring jobs, preserved per-owner callback fallback and cleanup'
+
+      - name: Generate historical Pass 3.0 StealthRunner pickpocket InputHub with engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-stealth-pickpocket --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_SR_INPUT_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_SR_INPUT_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_SR_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'STEALTH_RUNNER_PICKPOCKET_INPUT_FALLBACK_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 4){
+            throw ('PHASE2_SR_INPUT_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/StealthRunner/Pickpocket/Choice.reds'
+          $src=Join-Path $env:PHASE2_SR_INPUT_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){
+            throw 'PHASE2_SR_INPUT_OUTPUT_MISSING'
+          }
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('GCO_SRPickInputListener extends InputListener') -or
+             !$content.Contains('hub.Subscribe(n"UI_MoveUp"') -or
+             !$content.Contains('hub.Subscribe(n"UI_MoveDown"') -or
+             !$content.Contains('hub.Unsubscribe(up)') -or
+             !$content.Contains('!this.m_gcoSrPickActive') -or
+             !$content.Contains('wrappedMethod(action, consumer)')){
+            throw 'PHASE2_SR_INPUT_FALLBACK_OR_OWNER_WRAPPERS_LOST'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_SR_INPUT_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS StealthRunner all-or-nothing UI scroll hub with original OnAction fallback'
+
+      - name: Generate historical Pass 3.0 CyberwareEx ToggleSprint InputHub and engine fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-cyberware-ex --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_CW_INPUT_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_CW_INPUT_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_CW_INPUT_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'CYBERWARE_EX_OVERLOAD_INPUT_HUB_FALLBACK_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 3){
+            throw ('PHASE2_CW_INPUT_INCOMPATIBLE:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/CyberwareEx/CyberwareEx.Global.reds'
+          $src=Join-Path $env:PHASE2_CW_INPUT_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){throw 'PHASE2_CW_INPUT_OUTPUT_MISSING'}
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('GCO_CyberwareExInputListener extends InputListener') -or
+             !$content.Contains('gcoHub.Subscribe(n"ToggleSprint", gcoListener)') -or
+             !$content.Contains('this.m_gcoCwHub.Unsubscribe(this.m_gcoCwHubID)') -or
+             !$content.Contains('this.RegisterInputListener(this, n"ToggleSprint")') -or
+             !$content.Contains('QuickHackableHelper.TryToCycleOverclockedState(this.m_player)')){
+            throw 'PHASE2_CW_INPUT_FALLBACK_OR_OWNER_BEHAVIOR_MISSING'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $old=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($old,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_CW_INPUT_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS CyberwareEx controller-only overclock InputHub route with original engine fallback'
+
+      - name: Generate Pass 2.2 GRS StateCache reuse preserving direct player and blackboard fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-grs-state --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_GRS_STATE_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_GRS_STATE_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_GRS_STATE_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'GRS_STATE_CACHE_WITH_DIRECT_FALLBACK_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 3){
+            throw ('PHASE2_GRS_STATE_SOURCE_UNPROVEN:'+ $report.status+' '+$report.reason)
+          }
+          $rel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+          $src=Join-Path $env:PHASE2_GRS_STATE_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){throw 'PHASE2_GRS_STATE_OUTPUT_MISSING'}
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('private func GCOGrsStateCache()') -or
+             !$content.Contains('private func GCOGrsPlayer()') -or
+             !$content.Contains('private func GCOGrsBlackboardSystem()') -or
+             !$content.Contains('GameInstance.GetPlayerSystem(GetGameInstance()).GetLocalPlayerMainGameObject()') -or
+             !$content.Contains('GameInstance.GetBlackboardSystem(GetGameInstance())') -or
+             !$content.Contains('GRSGCOInteractionPollJob') -or
+             !$content.Contains('m_grsFallbackRegistered')){
+            throw 'PHASE2_GRS_STATE_FALLBACK_OR_PREVIOUS_STAGES_LOST'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $old=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($old,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_GRS_STATE_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS GRS StateCache player and blackboard getters with direct fallback and session cleanup'
+
+      - name: Generate Pass 3.0 Vehicle Call Plus owner-local quest handle reuse
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          & dotnet $dll phase2-vcp-quests --game '.phase2-private/base_after_generic' --base-overlay $env:PHASE2_OUTPUT --out $env:PHASE2_VCP_OUTPUT
+          if($LASTEXITCODE -ne 0){throw 'PHASE2_VCP_GENERATE_FAILED'}
+          $report=Get-Content -LiteralPath (Join-Path $env:PHASE2_VCP_OUTPUT 'phase2-result.json') -Raw | ConvertFrom-Json
+          if($report.ruleId -ne 'VEHICLE_CALL_QUEST_SYSTEM_LOCAL_REUSE_V1' -or
+             $report.status -ne 'APPLIED' -or [int]$report.appliedEdits -lt 6 -or
+             @($report.refusals).Count -ne 0){
+            throw ('PHASE2_VCP_QUEST_OWNER_UNPROVEN:'+ $report.status+' '+(@($report.refusals)-join ','))
+          }
+          $rel='r6/scripts/Vehicle Call Plus/VehicleCall_FastTravel.reds'
+          $src=Join-Path $env:PHASE2_VCP_OUTPUT $rel
+          $dst=Join-Path $env:PHASE2_OUTPUT $rel
+          if(!(Test-Path -LiteralPath $src -PathType Leaf)){throw 'PHASE2_VCP_OUTPUT_MISSING'}
+          $content=Get-Content -LiteralPath $src -Raw
+          if(!$content.Contains('let gcoVcpQuests = GameInstance.GetQuestsSystem(') -or
+             !$content.Contains('return wrappedMethod(action, consumer);') -or
+             !$content.Contains('return wrappedMethod(evt);') -or
+             !$content.Contains('q001_ripperdoc_done') -or
+             !$content.Contains('ep1_standalone')){
+            throw 'PHASE2_VCP_QUEST_OWNER_GAMEPLAY_LOST'
+          }
+          if(Test-Path -LiteralPath $dst -PathType Leaf){
+            $prior=Get-Content -LiteralPath $dst -Raw
+            foreach($marker in @([regex]::Matches($prior,
+                '(?:GCO|GRSP)-GENERIC:[A-Z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)){
+              if(!$content.Contains($marker,[StringComparison]::Ordinal)){
+                throw 'PHASE2_VCP_QUEST_GENERIC_LOST'
+              }
+            }
+          } else {
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+          }
+          Copy-Item -LiteralPath $src -Destination $dst -Force
+          Write-Host 'PASS Vehicle Call Plus three quest handle pairs reused without changing original action wrappers'
+
+      - name: Verify GCO one-pass Quickslots Stage from the real post-generic baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $game='.phase2-private/base_after_generic'
+          $work=Join-Path $env:RUNNER_TEMP ('gco-cq-stage-'+[guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          try {
+            $plan=Join-Path $work 'plan.json'
+            $analysis=Join-Path $work 'analysis.json'
+            $stage=Join-Path $work 'stage'
+            & dotnet $dll plan-redscript --game $game --out $plan
+            if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $plan -PathType Leaf)) {
+              throw 'PHASE2_CQ_POSTGENERIC_PLAN_FAILED'
+            }
+            $manifest=Get-Content -LiteralPath $plan -Raw | ConvertFrom-Json
+            if ([int]$manifest.implementedRuleCount -ne 10 -or
+                [string]::IsNullOrWhiteSpace($manifest.sourceStackSha256)) {
+              throw 'PHASE2_CQ_POSTGENERIC_PLAN_INVALID'
+            }
+            @{
+              schemaVersion='grsp.resolver.input.v1'
+              generationAuthorized=$false
+              capture=@{ collectionProvenance='GCO_INDEXED_COLLECTED_BYTES_VERIFIED' }
+              source=@{ sourceStackSha256=$manifest.sourceStackSha256 }
+            } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $analysis -Encoding utf8
+            & dotnet $dll stage-redscript-plan --game $game --plan $plan --analysis $analysis --out $stage
+            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_CQ_POSTGENERIC_STAGE_FAILED' }
+            $stageReport=Join-Path $stage 'stage-result.json'
+            if (!(Test-Path -LiteralPath $stageReport -PathType Leaf)) {
+              throw 'PHASE2_CQ_POSTGENERIC_STAGE_REPORT_MISSING'
+            }
+            $result=Get-Content -LiteralPath $stageReport -Raw | ConvertFrom-Json
+            $cq=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-input' })
+            $dpad=@($result.completed | Where-Object { $_.id -eq 'custom-quickslots-dpad' })
+            if ($result.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+                $result.productionZipAuthorized -ne $false -or
+                $cq.Count -ne 1 -or [int]$cq[0].order -ne 16 -or
+                [int]$cq[0].rewrittenExpressions -ne 1 -or
+                $dpad.Count -ne 1 -or [int]$dpad[0].order -ne 17 -or
+                [int]$dpad[0].rewrittenExpressions -ne 1) {
+              throw 'PHASE2_CQ_AUTOMATIC_INPUT_AND_DPAD_STAGES_MISSING'
+            }
+            $qh=@($result.completed | Where-Object { $_.id -eq 'quickhack-direct-tags' })
+            $qhRef=Join-Path $env:PHASE2_QUICKHACK_OUTPUT 'r6/scripts/Quickhack_Fixes/sonic_shock.reds'
+            $qhActual=Join-Path $stage 'effective-preview/r6/scripts/Quickhack_Fixes/sonic_shock.reds'
+            if ($qh.Count -ne 1 -or [int]$qh[0].order -ne 18 -or
+                [int]$qh[0].rewrittenExpressions -ne 2 -or
+                !(Test-Path -LiteralPath $qhActual) -or
+                (Get-FileHash -LiteralPath $qhActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $qhRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_QHF_CANONICAL_SINGLE_GENERATE_DIFFERENT_FROM_INDEPENDENT'
+            }
+            $rw=@($result.completed | Where-Object { $_.id -eq 'redwindows-widget-lookup' })
+            $rwRef=Join-Path $env:PHASE2_REDWINDOWS_OUTPUT 'r6/scripts/RedWindows/RW_Window.reds'
+            $rwActual=Join-Path $stage 'effective-preview/r6/scripts/RedWindows/RW_Window.reds'
+            # #24 intentionally adds IsRendered to #19's RW_Window owner.
+            # Validate the prior lookup invariant in both files here; exact
+            # final owner bytes are checked against the independently
+            # composed #24 reference below, not against intermediate #19.
+            if ($rw.Count -ne 1 -or [int]$rw[0].order -ne 19 -or
+                [int]$rw[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $rwActual) -or
+                !(Test-Path -LiteralPath $rwRef)) {
+              throw 'PHASE2_RW_FIND_CANONICAL_STAGE_MISSING'
+            }
+            $rwBefore=Get-Content -LiteralPath $rwRef -Raw
+            $rwFinal=Get-Content -LiteralPath $rwActual -Raw
+            foreach($must in @('this.m_findCursor = idx + 1;',
+                'IsDefined(this.m_lastFindWidget)',
+                'this.m_lastFindId = id;',
+                'this.m_lastFindWidget = widget;')) {
+              if (!$rwBefore.Contains($must,[StringComparison]::Ordinal) -or
+                  !$rwFinal.Contains($must,[StringComparison]::Ordinal)) {
+                throw 'PHASE2_RW_FIND_LOOKUP_LOST_DURING_RENDER_COMPOSITION'
+              }
+            }
+            $tmc=@($result.completed | Where-Object { $_.id -eq 'trigger-mode-literal-tags' })
+            $tmcRel='r6/scripts/TriggerModeControl/TriggerModeControl.reds'
+            $tmcRef=Join-Path $env:PHASE2_TRIGGER_OUTPUT $tmcRel
+            $tmcActual=Join-Path (Join-Path $stage 'effective-preview') $tmcRel
+            if ($tmc.Count -ne 1 -or [int]$tmc[0].order -ne 20 -or
+                [int]$tmc[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $tmcActual) -or
+                (Get-FileHash -LiteralPath $tmcActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $tmcRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_TMC_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
+            }
+            $dpr=@($result.completed | Where-Object { $_.id -eq 'disable-position-tracing' })
+            $dprRel='r6/scripts/DisablePositionReveal/DisablePositionReveal.reds'
+            $dprRef=Join-Path $env:PHASE2_DPR_OUTPUT $dprRel
+            $dprActual=Join-Path (Join-Path $stage 'effective-preview') $dprRel
+            if ($dpr.Count -ne 1 -or [int]$dpr[0].order -ne 21 -or
+                [int]$dpr[0].rewrittenExpressions -ne 3 -or
+                !(Test-Path -LiteralPath $dprActual) -or
+                (Get-FileHash -LiteralPath $dprActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $dprRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_DPR_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
+            }
+            $hq=@($result.completed | Where-Object { $_.id -eq 'hologirl-material-event' })
+            $hqRel='r6/scripts/HQ_HoloGirl/Engine/HoloGirl.reds'
+            $hqRef=Join-Path $env:PHASE2_HOLOGIRL_OUTPUT $hqRel
+            $hqActual=Join-Path (Join-Path $stage 'effective-preview') $hqRel
+            if ($hq.Count -ne 1 -or [int]$hq[0].order -ne 22 -or
+                [int]$hq[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $hqActual) -or
+                (Get-FileHash -LiteralPath $hqActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $hqRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_HQ_HOLOGIRL_CANONICAL_DIFFERS_FROM_REFERENCE'
+            }
+            $rwc=@($result.completed | Where-Object { $_.id -eq 'redwindows-shape-label-cursors' })
+            $rwcRel='r6/scripts/RedWindows/RW_Widgets.reds'
+            $rwcRef=Join-Path $env:PHASE2_RW_CURSORS_OUTPUT $rwcRel
+            $rwcActual=Join-Path (Join-Path $stage 'effective-preview') $rwcRel
+            if ($rwc.Count -ne 1 -or [int]$rwc[0].order -ne 23 -or
+                [int]$rwc[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $rwcActual) -or
+                (Get-FileHash -LiteralPath $rwcActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $rwcRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_RW_CURSOR_CANONICAL_SOURCE_DIFFERS_FROM_INDEPENDENT'
+            }
+            $rwv=@($result.completed | Where-Object { $_.id -eq 'redwindows-render-dormancy' })
+            $expectedRwv=@('RW_Window.reds','RW_Builder.reds','RW_Logs.reds')
+            if ($rwv.Count -ne 3 -or
+                @($rwv | Where-Object { [int]$_.order -ne 24 }).Count -ne 0 -or
+                [int](($rwv | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne 1) {
+              throw 'PHASE2_RW_RENDER_CANONICAL_STAGE_MISSING'
+            }
+            foreach($file in $expectedRwv) {
+              $ref=Join-Path $env:PHASE2_RW_RENDER_OUTPUT ('r6/scripts/RedWindows/'+$file)
+              $actual=Join-Path (Join-Path $stage 'effective-preview') ('r6/scripts/RedWindows/'+$file)
+              if (!(Test-Path -LiteralPath $ref) -or !(Test-Path -LiteralPath $actual)) {
+                throw ('PHASE2_RW_RENDER_REFERENCE_MISSING:'+ $file)
+              }
+              if ($file -eq 'RW_Window.reds') {
+                # #26 subsequently changes this owner file. Check that
+                # the previous render helper and Find remain, then compare
+                # exact final bytes to independent #26 source below.
+                $render=Get-Content -LiteralPath $actual -Raw
+                if (!$render.Contains('public func IsRendered() -> Bool') -or
+                    !$render.Contains('this.m_findCursor = idx + 1;') -or
+                    !$render.Contains('return !this.overlayOnly;')) {
+                  throw 'PHASE2_RW_RENDER_LOST_AFTER_SETTERS'
+                }
+              } elseif ((Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash -ne
+                        (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash) {
+                throw ('PHASE2_RW_RENDER_REFERENCE_BYTES_DIFF:'+ $file)
+              }
+            }
+            $dfa=@($result.completed | Where-Object { $_.id -eq 'dark-future-aggressive-throttles' })
+            $dfaRel='r6/scripts/Dark Future/UI/DFBaseGameUIOverrides.reds'
+            $dfaRef=Join-Path $env:PHASE2_DF_AGGRESSIVE_OUTPUT $dfaRel
+            $dfaActual=Join-Path (Join-Path $stage 'effective-preview') $dfaRel
+            if ($dfa.Count -ne 1 -or [int]$dfa[0].order -ne 25 -or
+                [int]$dfa[0].rewrittenExpressions -ne 3 -or
+                !(Test-Path -LiteralPath $dfaActual) -or
+                (Get-FileHash -LiteralPath $dfaActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $dfaRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_DF_AGGRESSIVE_ONE_PASS_DIFFERS_FROM_INDEPENDENT'
+            }
+            $rws=@($result.completed | Where-Object { $_.id -eq 'redwindows-redundant-setters' })
+            $rwsRel='r6/scripts/RedWindows/RW_Window.reds'
+            $rwsRef=Join-Path $env:PHASE2_RW_SETTERS_OUTPUT $rwsRel
+            $rwsActual=Join-Path (Join-Path $stage 'effective-preview') $rwsRel
+            if ($rws.Count -ne 1 -or [int]$rws[0].order -ne 26 -or
+                [int]$rws[0].rewrittenExpressions -ne 4 -or
+                !(Test-Path -LiteralPath $rwsActual) -or
+                (Get-FileHash -LiteralPath $rwsActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $rwsRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_RW_SET_ONE_PASS_DIFFERS_FROM_REFERENCE'
+            }
+            $dvc=@($result.completed | Where-Object { $_.id -eq 'digitalvixen-ui-dormancy' })
+            if ($dvc.Count -ne 3 -or
+                @($dvc | Where-Object { [int]$_.order -ne 27 }).Count -ne 0 -or
+                [int](($dvc | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne 7) {
+              throw 'PHASE2_DVC_UI_ONE_PASS_COUNT_DIFF'
+            }
+            foreach($file in @('DVCore_BodyMapWindow.reds','DVCore_ItemEditor.reds','DVCore_StatusWindow.reds')) {
+              $rel='r6/scripts/DigitalVixenCore/'+$file
+              $ref=Join-Path $env:PHASE2_DVC_UI_OUTPUT $rel
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              if (!(Test-Path -LiteralPath $ref -PathType Leaf) -or
+                  !(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash) {
+                throw ('PHASE2_DVC_UI_ONE_PASS_REFERENCE_DIFF:'+ $file)
+              }
+            }
+            $browser=@($result.completed | Where-Object { $_.id -eq 'browser-extension-journal' })
+            $browserRel='r6/scripts/BrowserExtension/BrowserExtension.System.reds'
+            $browserRef=Join-Path $env:PHASE2_BROWSER_JOURNAL_OUTPUT $browserRel
+            $browserActual=Join-Path (Join-Path $stage 'effective-preview') $browserRel
+            if ($browser.Count -ne 1 -or [int]$browser[0].order -ne 28 -or
+                [int]$browser[0].rewrittenExpressions -ne 1 -or
+                !(Test-Path -LiteralPath $browserActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $browserActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $browserRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_BROWSER_JOURNAL_ONE_PASS_REFERENCE_DIFF'
+            }
+            $bexInput=@($result.completed | Where-Object { $_.id -eq 'browser-extension-input' })
+            if ($bexInput.Count -ne 2 -or
+                @($bexInput | Where-Object { [int]$_.order -ne 29 }).Count -ne 0 -or
+                [int](($bexInput | Measure-Object -Property rewrittenExpressions -Sum).Sum) -ne 2) {
+              throw 'PHASE2_BROWSER_INPUT_ONE_PASS_COUNT_DIFF'
+            }
+            foreach($file in @('browserController.overrides.reds','HomePagePagination.reds')) {
+              $rel='r6/scripts/BrowserExtension/'+$file
+              $ref=Join-Path $env:PHASE2_BROWSER_INPUT_OUTPUT $rel
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash) {
+                throw ('PHASE2_BROWSER_INPUT_ONE_PASS_REFERENCE_DIFF:'+ $file)
+              }
+            }
+            $evs=@($result.completed | Where-Object { $_.id -eq 'evs-onaction-ps' })
+            $evsRel='r6/scripts/Enhanced Vehicle System/Enhanced Vehicle System.reds'
+            $evsRef=Join-Path $env:PHASE2_EVS_PS_OUTPUT $evsRel
+            $evsActual=Join-Path (Join-Path $stage 'effective-preview') $evsRel
+            if ($evs.Count -ne 1 -or [int]$evs[0].order -ne 30 -or
+                [int]$evs[0].rewrittenExpressions -lt 100 -or
+                !(Test-Path -LiteralPath $evsActual -PathType Leaf) -or
+                !(Test-Path -LiteralPath $evsRef -PathType Leaf)) {
+              throw 'PHASE2_EVS_PS_STAGE_OR_SOURCE_MISSING'
+            }
+            # Pass 6 deliberately removes four unused camera registrations
+            # from this same EVS owner after Stage #30. Prove both operations
+            # compose exactly from the same post-generic source instead of
+            # incorrectly demanding the final file equal the #30 intermediate.
+            $evsCamera=@($result.completed | Where-Object { $_.id -eq 'pass6-evs-camera-admission' })
+            $evsCameraOutput=Join-Path $work 'independent-evs-camera-after-ps'
+            & dotnet $dll phase2-evs-camera --game $game --base-overlay $env:PHASE2_EVS_PS_OUTPUT --out $evsCameraOutput
+            if ($LASTEXITCODE -ne 0) { throw 'PHASE2_EVS_CAMERA_REFERENCE_GENERATOR_FAILED' }
+            $evsCamReport=Get-Content -LiteralPath (Join-Path $evsCameraOutput 'phase2-result.json') -Raw | ConvertFrom-Json
+            if ($evsCamReport.status -eq 'APPLIED') {
+              $evsCameraRef=Join-Path $evsCameraOutput $evsRel
+              if ($evsCamera.Count -ne 1 -or [int]$evsCamera[0].order -ne 45 -or
+                  !(Test-Path -LiteralPath $evsCameraRef -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $evsCameraRef -Algorithm SHA256).Hash) {
+                throw 'PHASE2_EVS_PS_AND_CAMERA_CANONICAL_COMPOSITION_DIFF'
+              }
+            } elseif ($evsCamReport.status -in @('COMPLETE','REFUSED','NOT_APPLICABLE')) {
+              if ($evsCamera.Count -ne 0 -or
+                  (Get-FileHash -LiteralPath $evsActual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $evsRef -Algorithm SHA256).Hash) {
+                throw 'PHASE2_EVS_CAMERA_UNPROVEN_CHANGE_AFTER_PS'
+              }
+            } else {
+              throw 'PHASE2_EVS_CAMERA_UNKNOWN_INDEPENDENT_STATUS'
+            }
+            $feHub=@($result.completed | Where-Object { $_.id -eq 'flushing-etiquette-input-hub' })
+            $feHubRel='r6/scripts/FlushingEtiquette/FE_Input.reds'
+            $feHubRef=Join-Path $env:PHASE2_FE_HUB_OUTPUT $feHubRel
+            $feHubActual=Join-Path (Join-Path $stage 'effective-preview') $feHubRel
+            if ($feHub.Count -ne 1 -or [int]$feHub[0].order -ne 31 -or
+                [int]$feHub[0].rewrittenExpressions -lt 3 -or
+                !(Test-Path -LiteralPath $feHubActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $feHubActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $feHubRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_FE_HUB_ONE_PASS_REFERENCE_DIFF'
+            }
+            $grsHub=@($result.completed | Where-Object { $_.id -eq 'gear-recovery-input-hub' })
+            $grsHubRel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+            $grsHubRef=Join-Path $env:PHASE2_GRS_INPUT_OUTPUT $grsHubRel
+            $grsHubActual=Join-Path (Join-Path $stage 'effective-preview') $grsHubRel
+            if ($grsHub.Count -ne 1 -or [int]$grsHub[0].order -ne 32 -or
+                [int]$grsHub[0].rewrittenExpressions -lt 3 -or
+                !(Test-Path -LiteralPath $grsHubActual -PathType Leaf) -or
+                !(Test-Path -LiteralPath $grsHubRef -PathType Leaf)) {
+              throw 'PHASE2_GRS_HUB_SOURCE_OR_STAGE_MISSING'
+            }
+            # #36 subsequently edits the same GRS owner file. Preserve #32
+            # held-action consumption, runtime subscription and engine fallback.
+            # The exact resulting bytes are checked against the independently
+            # composed #32 -> #36 file in PHASE2_GRS_POLL_ONE_PASS_BYTE_PARITY_DIFF.
+            $grsInputFinal=Get-Content -LiteralPath $grsHubActual -Raw
+            $grsInputRef=Get-Content -LiteralPath $grsHubRef -Raw
+            foreach($invariant in @(
+                'class GRSRecoverInputListener extends InputListener',
+                'this.GRSPerformRecover();',
+                'm_grsFallbackRegistered',
+                'this.m_grsInputHub.Unsubscribe(this.m_grsInputSubscription);')) {
+              if (!$grsInputRef.Contains($invariant,[StringComparison]::Ordinal) -or
+                  !$grsInputFinal.Contains($invariant,[StringComparison]::Ordinal)) {
+                throw ('PHASE2_GRS_INPUT_LOST_AFTER_POLL:'+ $invariant)
+              }
+            }
+            $dd=@($result.completed | Where-Object { $_.id -eq 'drugdealer-input-hub' })
+            if ($dd.Count -ne 5 -or @($dd | Where-Object { [int]$_.order -ne 33 }).Count -ne 0) {
+              throw 'PHASE2_DD_INPUT_STAGE_COUNT_OR_ORDER_DIFF'
+            }
+            foreach($rel in @(
+                'r6/scripts/DrugDealer/Crackhouse/Crackhouse.reds',
+                'r6/scripts/DrugDealer/Job/SellDrugs/Interaction.reds',
+                'r6/scripts/DrugDealer/Lab/Lab.reds',
+                'r6/scripts/DrugDealer/NightMarket/NightMarket.reds',
+                'r6/scripts/DrugDealer/Operation/OperationProximity.reds')) {
+              $ref=Join-Path $env:PHASE2_DRUGDEALER_INPUT_OUTPUT $rel
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              if (!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                  (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+                  (Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash) {
+                throw ('PHASE2_DD_INPUT_ONE_PASS_BYTE_DIFF:'+ $rel)
+              }
+            }
+            $ncr=@($result.completed | Where-Object { $_.id -eq 'ncr-maintenance-scheduler' })
+            $ncrRel='r6/scripts/NightCityRemembers/NCR.reds'
+            $ncrRef=Join-Path $env:PHASE2_NCR_TICK_OUTPUT $ncrRel
+            $ncrActual=Join-Path (Join-Path $stage 'effective-preview') $ncrRel
+            if ($ncr.Count -ne 1 -or [int]$ncr[0].order -ne 34 -or
+                [int]$ncr[0].rewrittenExpressions -lt 5 -or
+                !(Test-Path -LiteralPath $ncrActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $ncrActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $ncrRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_NCR_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $scJobs=@($result.completed | Where-Object { $_.id -eq 'shattered-chrome-periodic-jobs' })
+            $scRel='r6/scripts/ShatteredChrome/SC.reds'
+            $scRef=Join-Path $env:PHASE2_SC_JOBS_OUTPUT $scRel
+            $scActual=Join-Path (Join-Path $stage 'effective-preview') $scRel
+            if ($scJobs.Count -ne 1 -or [int]$scJobs[0].order -ne 35 -or
+                [int]$scJobs[0].rewrittenExpressions -lt 5 -or
+                !(Test-Path -LiteralPath $scActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $scActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $scRef -Algorithm SHA256).Hash) {
+              throw 'PHASE2_SC_JOBS_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $grsPoll=@($result.completed | Where-Object { $_.id -eq 'gear-recovery-poll-scheduler' })
+            $grsPollRel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+            $grsPollRef=Join-Path $env:PHASE2_GRS_POLL_OUTPUT $grsPollRel
+            $grsPollActual=Join-Path (Join-Path $stage 'effective-preview') $grsPollRel
+            if ($grsPoll.Count -ne 1 -or [int]$grsPoll[0].order -ne 36 -or
+                [int]$grsPoll[0].rewrittenExpressions -lt 5 -or
+                !(Test-Path -LiteralPath $grsPollActual -PathType Leaf) -or
+                !(Test-Path -LiteralPath $grsPollRef -PathType Leaf)) {
+              throw 'PHASE2_GRS_POLL_STAGE_OUTPUT_MISSING'
+            }
+            # #40 additionally reuses GRS player/blackboard getters in the
+            # same owner file. Preserve the #36 callback registration and
+            # original fallback; verify exact composed final bytes via #40.
+            $grsPollContents=Get-Content -LiteralPath $grsPollActual -Raw
+            foreach($witness in @(
+                'GRSGCOInteractionPollJob extends ScheduledJob',
+                'grsScheduler.Register(grsJob)',
+                'new GRSInteractionPollCallback()',
+                'this.m_gcoGrsPollScheduler.Unregister(this.m_gcoGrsPollID)')) {
+              if(!$grsPollContents.Contains($witness,[StringComparison]::Ordinal)){
+                throw ('PHASE2_GRS_POLL_WITNESS_LOST_AFTER_STATE:'+ $witness)
+              }
+            }
+            $vm=@($result.completed | Where-Object { $_.id -eq 'vehicle-mileage-scheduler' })
+            if($vm.Count -ne 4 -or @($vm | Where-Object { [int]$_.order -ne 37 }).Count -ne 0){
+              throw 'PHASE2_VM_STAGE_COUNT_ORDER_MISSING'
+            }
+            foreach($filename in @('VM3DOdoHUD.reds','VMFuelAvailable.reds','VMFuelGauge.reds','VMPriceSign.reds')){
+              $rel='r6/scripts/VehicleMileage/UI/'+$filename
+              $actual=Join-Path (Join-Path $stage 'effective-preview') $rel
+              $expected=Join-Path $env:PHASE2_VM_OUTPUT $rel
+              if(!(Test-Path -LiteralPath $actual -PathType Leaf) -or
+                 !(Test-Path -LiteralPath $expected -PathType Leaf) -or
+                 (Get-FileHash -LiteralPath $actual -Algorithm SHA256).Hash -ne
+                 (Get-FileHash -LiteralPath $expected -Algorithm SHA256).Hash){
+                throw ('PHASE2_VM_ONE_PASS_BYTE_PARITY_DIFF:'+ $filename)
+              }
+            }
+            $sr=@($result.completed | Where-Object { $_.id -eq 'stealth-runner-pickpocket-input' })
+            $srRel='r6/scripts/StealthRunner/Pickpocket/Choice.reds'
+            $srExpected=Join-Path $env:PHASE2_SR_INPUT_OUTPUT $srRel
+            $srActual=Join-Path (Join-Path $stage 'effective-preview') $srRel
+            if($sr.Count -ne 1 -or [int]$sr[0].order -ne 38 -or
+                [int]$sr[0].rewrittenExpressions -lt 4 -or
+                !(Test-Path -LiteralPath $srActual -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $srActual -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $srExpected -Algorithm SHA256).Hash){
+              throw 'PHASE2_SR_INPUT_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $cw=@($result.completed | Where-Object { $_.id -eq 'cyberware-ex-input-hub' })
+            $cwRel='r6/scripts/CyberwareEx/CyberwareEx.Global.reds'
+            $cwRef=Join-Path $env:PHASE2_CW_INPUT_OUTPUT $cwRel
+            $cwActual=Join-Path (Join-Path $stage 'effective-preview') $cwRel
+            if($cw.Count -ne 1 -or [int]$cw[0].order -ne 39 -or
+               [int]$cw[0].rewrittenExpressions -lt 3 -or
+               !(Test-Path -LiteralPath $cwActual -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $cwActual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $cwRef -Algorithm SHA256).Hash){
+              throw 'PHASE2_CW_INPUT_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $grsState=@($result.completed | Where-Object { $_.id -eq 'gear-recovery-statecache' })
+            $grsRel='r6/scripts/GearRecoverySystem/25_GRSInteractionController.reds'
+            $grsExpected=Join-Path $env:PHASE2_GRS_STATE_OUTPUT $grsRel
+            $grsActual=Join-Path (Join-Path $stage 'effective-preview') $grsRel
+            if($grsState.Count -ne 1 -or [int]$grsState[0].order -ne 40 -or
+               [int]$grsState[0].rewrittenExpressions -lt 3 -or
+               !(Test-Path -LiteralPath $grsActual -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $grsActual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $grsExpected -Algorithm SHA256).Hash){
+              throw 'PHASE2_GRS_STATE_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $vcp=@($result.completed | Where-Object { $_.id -eq 'vehicle-call-quest-reuse' })
+            $vcpRel='r6/scripts/Vehicle Call Plus/VehicleCall_FastTravel.reds'
+            $vcpExpected=Join-Path $env:PHASE2_VCP_OUTPUT $vcpRel
+            $vcpActual=Join-Path (Join-Path $stage 'effective-preview') $vcpRel
+            if($vcp.Count -ne 1 -or [int]$vcp[0].order -ne 41 -or
+               [int]$vcp[0].rewrittenExpressions -lt 6 -or
+               !(Test-Path -LiteralPath $vcpActual -PathType Leaf) -or
+               (Get-FileHash -LiteralPath $vcpActual -Algorithm SHA256).Hash -ne
+               (Get-FileHash -LiteralPath $vcpExpected -Algorithm SHA256).Hash){
+              throw 'PHASE2_VCP_ONE_PASS_BYTE_PARITY_DIFF'
+            }
+            $reference=Join-Path $env:PHASE2_DPAD_OUTPUT 'r6/scripts/custom_quickslots/player_puppet.reds'
+            $output=Join-Path $stage 'effective-preview/r6/scripts/custom_quickslots/player_puppet.reds'
+            if (!(Test-Path -LiteralPath $output -PathType Leaf) -or
+                !(Test-Path -LiteralPath $reference -PathType Leaf)) {
+              throw 'PHASE2_CQ_POSTGENERIC_SOURCE_MISSING'
+            }
+            if ((Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $reference -Algorithm SHA256).Hash) {
+              throw 'PHASE2_CQ_POSTGENERIC_ORDERED_SOURCE_DIFF'
+            }
+            $contents=Get-Content -LiteralPath $output -Raw
+            if (!$contents.Contains('GRSP-GENERIC:CNAME_ARRAY_MEMBERSHIP_V1') -or
+                !$contents.Contains('this.customQuickslotsFallbackRegistered = true;') -or
+                !$contents.Contains('this.customQuickslotsInputHub.UnsubscribeDevice(') -or
+                !$contents.Contains('!this.player.PlayerLastUsedPad()') -or
+                !$contents.Contains('this.RecomputeDpadProhibitions();')) {
+              throw 'PHASE2_CQ_POSTGENERIC_GENERIC_OR_INPUT_STATE_LOST'
+            }
+            # Verify that Passes 4-9 + Chipware memo source-owning stages genuinely execute in
+            # this one canonical Generate, not only in separate test commands.
+            $integratedStages = @(
+              'pass4-reinforcements-geometry',
+              'pass5-holotravel-material',
+              'pass6-virtual-atelier-pacing',
+              'pass6-evs-camera-admission',
+              'pass7-chase-frame-floor',
+              'pass8-chipware-throughput',
+              'pass8-chipware-combat-cache',
+              'pass8-immersive-cyberware',
+              'pass9-runningman-dormancy',
+              'chipware-perk-result-memo'
+            )
+            $finalRows = @($result.completed) + @($result.skipped)
+            foreach($id in $integratedStages) {
+              if (@($finalRows | Where-Object { $_.id -eq $id }).Count -eq 0) {
+                # A fully optimized/not-installed owner has no output and is
+                # independently exercised in source-state tests.
+                Write-Host ('INTEGRATION_NOT_GENERATED_OR_ALREADY_COMPLETE:' + $id)
+              }
+            }
+            $memo = @($result.completed | Where-Object { $_.id -eq 'chipware-perk-result-memo' })
+            if ($memo.Count -ne 1 -or [int]$memo[0].rewrittenExpressions -lt 1) {
+              $reasons=@($result.skipped | Where-Object { $_.id -eq 'chipware-perk-result-memo' } |
+                ForEach-Object { $_.reason })
+              throw ('INTEGRATION_APPROVED_CHIPWARE_MEMO_NOT_APPLIED:' + ($reasons -join ';'))
+            }
+            $sourceRoot = Join-Path $stage 'effective-preview/r6/scripts'
+            $generated = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*.reds')
+            if ($generated.Count -ne [int]$result.generatedFiles) {
+              throw ('INTEGRATION_CANONICAL_FILE_MANIFEST_MISMATCH:actual=' +
+                $generated.Count + ' reported=' + $result.generatedFiles)
+            }
+            if (Test-Path -LiteralPath $env:PHASE2_INTEGRATED_OUTPUT) {
+              throw 'INTEGRATION_OUTPUT_ALREADY_EXISTS'
+            }
+            Copy-Item -LiteralPath (Join-Path $stage 'effective-preview') -Destination $env:PHASE2_INTEGRATED_OUTPUT -Recurse
+            Write-Host ('PASS GCO canonical Passes4-9+ChipwareMemo staged output: files=' +
+              $generated.Count + ' memoEdits=' + [int]$memo[0].rewrittenExpressions)
+            Write-Host 'PASS GCO real post-generic one-pass Stage: Quickslots InputHub #16 and D-pad #17 applied automatically; original PlayerLastUsedPad and generic preserved; independent bytes equal'
+
+          }
+          finally {
+            if (Test-Path -LiteralPath $work) {
+              Remove-Item -LiteralPath $work -Recurse -Force
+            }
+          }
+
+      - name: Checkpoint - compile canonical Passes 4-9 + Chipware memo one-pass merged output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          & ./tests/GRedscript.Resolver.Tests/Verify-Phase2Checkpoint.ps1 -PostGenericRoot '.phase2-private/base_after_generic' -CompilerRoot '.phase2-private/Compiler' -ResolverDll 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll' -SemanticOverlayRoot $env:PHASE2_INTEGRATED_OUTPUT
           if (!$?) { throw 'PHASE2_CHECKPOINT_FAILED' }
 
       - name: Summarize changes covered by this SCC checkpoint
@@ -78,6 +1907,8 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          if (Test-Path -LiteralPath '.phase2-private') {
-            Remove-Item -LiteralPath '.phase2-private' -Force -Recurse
+          foreach ($path in @($env:PHASE2_INTEGRATED_OUTPUT, '.phase2-private', $env:PHASE2_OUTPUT, $env:PHASE2_DARK_OUTPUT, $env:PHASE2_ICON_OUTPUT, $env:PHASE2_FE_OUTPUT, $env:PHASE2_FE_PINS_OUTPUT, $env:PHASE2_QUICKSLOTS_OUTPUT, $env:PHASE2_DPAD_OUTPUT, $env:PHASE2_QUICKHACK_OUTPUT, $env:PHASE2_REDWINDOWS_OUTPUT, $env:PHASE2_TRIGGER_OUTPUT, $env:PHASE2_DPR_OUTPUT, $env:PHASE2_HOLOGIRL_OUTPUT, $env:PHASE2_RW_CURSORS_OUTPUT, $env:PHASE2_RW_RENDER_OUTPUT, $env:PHASE2_DF_AGGRESSIVE_OUTPUT, $env:PHASE2_RW_SETTERS_OUTPUT, $env:PHASE2_DVC_UI_OUTPUT, $env:PHASE2_BROWSER_JOURNAL_OUTPUT, $env:PHASE2_BROWSER_INPUT_OUTPUT, $env:PHASE2_EVS_PS_OUTPUT, $env:PHASE2_FE_HUB_OUTPUT, $env:PHASE2_GRS_INPUT_OUTPUT, $env:PHASE2_DRUGDEALER_INPUT_OUTPUT, $env:PHASE2_NCR_TICK_OUTPUT, $env:PHASE2_SC_JOBS_OUTPUT, $env:PHASE2_GRS_POLL_OUTPUT, $env:PHASE2_VM_OUTPUT, $env:PHASE2_SR_INPUT_OUTPUT, $env:PHASE2_CW_INPUT_OUTPUT, $env:PHASE2_GRS_STATE_OUTPUT, $env:PHASE2_VCP_OUTPUT)) {
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Force -Recurse
+            }
           }

@@ -6,7 +6,11 @@ param(
   [Parameter(Mandatory=$true)][string]$CleanBaselineArchive,
   [Parameter(Mandatory=$true)][string]$EffectiveCacheArchive,
   [Parameter(Mandatory=$true)][string]$PluginsArchive,
-  [Parameter(Mandatory=$true)][string]$ResolverDll
+  [Parameter(Mandatory=$true)][string]$ResolverDll,
+  [string]$CallbackPreviewRoot = '',
+  [string]$FrameworkPreviewRoot = '',
+  [string]$FrameworkRoot = '',
+  [string]$ApprovedAdditiveStageRoot = ''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -277,8 +281,182 @@ try {
   Write-Host ('R6 native plugin script providers admitted: names='+(@($providers.Keys | Sort-Object) -join ','))
   Write-Host ('R6 native plugin script providers admitted: providers='+$providers.Count+
     ' files='+$totalProviderFiles+' identicalInBothStacks=true viaOfficialSccAdditionalScriptPath=true')
+  # Reuse this exact isolated SCC implementation for the new generic callback
+  # preview too; the original CName-membership preview contract is unchanged.
+  $callbackOverlay=@()
+  $callbackOverlayRoot=''
+  if (![string]::IsNullOrWhiteSpace($CallbackPreviewRoot)) {
+    $callbackBase=(Resolve-Path -LiteralPath $CallbackPreviewRoot -ErrorAction Stop).Path
+    $callbackOverlayRoot=Join-Path $callbackBase 'r6/scripts'
+    if (!(Test-Path -LiteralPath $callbackOverlayRoot -PathType Container)) {
+      throw 'R6_CALLBACK_PREVIEW_MISSING'
+    }
+    $callbackOverlay=@(Get-ChildItem -LiteralPath $callbackOverlayRoot -File -Recurse)
+    if ($callbackOverlay.Count -lt 1) { throw 'R6_CALLBACK_PREVIEW_EMPTY' }
+    foreach($file in $callbackOverlay) {
+      if ($file.Extension -ne '.reds' -or
+          ($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_CALLBACK_PREVIEW_UNSAFE_SOURCE'
+      }
+    }
+  }
+  # A distinct *framework-dependent* overlay contains the source-generated
+  # shared-player consumers and the exact single GCO native bridge. Do not
+  # reclassify these as legacy callback-only rewrites or weaken their gate.
+  $frameworkOverlay=@()
+  $frameworkOverlayRoot=''
+  if (![string]::IsNullOrWhiteSpace($FrameworkPreviewRoot)) {
+    if ([string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+      throw 'R6_FRAMEWORK_PREVIEW_REQUIRES_OWNER_FRAMEWORK'
+    }
+    $frameworkBase=(Resolve-Path -LiteralPath $FrameworkPreviewRoot -ErrorAction Stop).Path
+    if ($frameworkBase.Equals($game,[StringComparison]::OrdinalIgnoreCase) -or
+        $frameworkBase.StartsWith($game+[IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'R6_FRAMEWORK_PREVIEW_MUST_BE_EXTERNAL'
+    }
+    $frameworkOverlayRoot=Join-Path $frameworkBase 'r6/scripts'
+    if (!(Test-Path -LiteralPath $frameworkOverlayRoot -PathType Container)) {
+      throw 'R6_FRAMEWORK_PREVIEW_SCRIPTS_MISSING'
+    }
+    $frameworkOverlay=@(Get-ChildItem -LiteralPath $frameworkOverlayRoot -File -Recurse)
+    if ($frameworkOverlay.Count -lt 1) { throw 'R6_FRAMEWORK_PREVIEW_EMPTY' }
+    foreach($file in $frameworkOverlay) {
+      if ($file.Extension -ne '.reds' -or
+          ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_FRAMEWORK_PREVIEW_UNSAFE_SOURCE'
+      }
+    }
+  }
+  # This optional CI-only proof is sourced from the independently verified
+  # canonical one-pass Stage. Additive helper files must come from exactly the
+  # two source-owned Pass 8 helper-producing stages; no arbitrary new .reds,
+  # historical ZIP, location adapter or player-side compiler exception.
+  $approvedAdditions=@{}
+  if (![string]::IsNullOrWhiteSpace($ApprovedAdditiveStageRoot)) {
+    if ([string]::IsNullOrWhiteSpace($FrameworkPreviewRoot)) {
+      throw 'R6_ADDITIVE_PROOF_REQUIRES_COMBINED_PREVIEW'
+    }
+    $stageHome=(Resolve-Path -LiteralPath $ApprovedAdditiveStageRoot -ErrorAction Stop).Path
+    $stageReportFile=Join-Path $stageHome 'stage-result.json'
+    $effectiveStage=Join-Path $stageHome 'effective-preview/r6/scripts'
+    if (!(Test-Path -LiteralPath $stageReportFile -PathType Leaf) -or
+        !(Test-Path -LiteralPath $effectiveStage -PathType Container)) {
+      throw 'R6_ADDITIVE_CANONICAL_STAGE_MISSING'
+    }
+    $stageReport=Get-Content -LiteralPath $stageReportFile -Raw | ConvertFrom-Json
+    if ($stageReport.schemaVersion -ne 'gco.redscript.staged-plan.v1' -or
+        $stageReport.sourceStackSha256 -ne [string]$plan.sourceStackSha256) {
+      throw 'R6_ADDITIVE_STAGE_SOURCE_NOT_ATTESTED'
+    }
+    $additiveContracts=@(
+      @{ Id='pass8-chipware-combat-cache'; Order=48;
+         Relative='zzy_bChipwareExpansion/chipsScripts/GRedHotpathCache.reds';
+         Owner='zzy_bChipwareExpansion'; Type='GRedChipwareHotpathCache' },
+      @{ Id='pass8-immersive-cyberware'; Order=49;
+         Relative='ImmersiveCyberware/GRedHotpathCache.reds';
+         Owner='ImmersiveCyberware'; Type='GRedICHotpathCache' }
+    )
+    foreach($contract in $additiveContracts) {
+      $entry=@($stageReport.completed | Where-Object { $_.id -eq $contract.Id })
+      if ($entry.Count -ne 1 -or [int]$entry[0].order -ne $contract.Order -or
+          [int]$entry[0].newFiles -lt 1 -or [int]$entry[0].rewrittenExpressions -lt 2) {
+        throw ('R6_ADDITIVE_STAGE_RULE_NOT_PROVEN:'+$contract.Id)
+      }
+      $owner=Join-Path $liveSources $contract.Owner
+      if (!(Test-Path -LiteralPath $owner -PathType Container) -or
+          @(Get-ChildItem -LiteralPath $owner -Filter '*.reds' -File -Recurse).Count -lt 1) {
+        throw ('R6_ADDITIVE_OWNER_ABSENT:'+$contract.Owner)
+      }
+      $relative=$contract.Relative.Replace('/',[IO.Path]::DirectorySeparatorChar)
+      $canonicalFile=Join-Path $effectiveStage $relative
+      if (!(Test-Path -LiteralPath $canonicalFile -PathType Leaf) -or
+          (Test-Path -LiteralPath (Join-Path $liveSources $relative) -PathType Leaf)) {
+        throw ('R6_ADDITIVE_SOURCE_NOT_NEW:'+$contract.Id)
+      }
+      # Verify this exact new source came from its declared owner stage,
+      # not merely that it appeared in the final composed preview. Stage
+      # NewFiles also counts newly staged ORIGINAL owner files, so it is
+      # intentionally not assumed to equal one additive helper.
+      # The approved Chipware memo extends the helper with the historical 100ms
+      # perk-result memo. Accept the FINAL bytes only if both source-owner
+      # stages participated and the final helper equals the final Chipware memo output.
+      # ImmersiveCyberware remains exactly the Pass 8 producer's bytes.
+      $producerId=$contract.Id
+      $producerOrder=$contract.Order
+      if ($contract.Id -eq 'pass8-chipware-combat-cache') {
+        $memo=@($stageReport.completed | Where-Object { $_.id -eq 'chipware-perk-result-memo' })
+        if ($memo.Count -ne 1 -or [int]$memo[0].order -ne 51 -or
+            [int]$memo[0].rewrittenExpressions -lt 1) {
+          throw 'R6_ADDITIVE_HISTORICAL_CHIPWARE_MEMO_NOT_PROVEN'
+        }
+        $firstRoot=Join-Path $stageHome ('_stages/'+$contract.Order+'-'+$contract.Id)
+        $firstHelper=Join-Path (Join-Path $firstRoot 'r6/scripts') $relative
+        if (!(Test-Path -LiteralPath $firstHelper -PathType Leaf)) {
+          throw 'R6_ADDITIVE_CHIPWARE_FIRST_PRODUCER_MISSING'
+        }
+        $producerId='chipware-perk-result-memo'
+        $producerOrder=51
+      }
+      $producerRoot=Join-Path $stageHome ('_stages/'+$producerOrder+'-'+$producerId)
+      $producer=Join-Path (Join-Path $producerRoot 'r6/scripts') $relative
+      if (!(Test-Path -LiteralPath $producer -PathType Leaf) -or
+          (Get-FileHash -LiteralPath $producer -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $canonicalFile -Algorithm SHA256).Hash) {
+        throw ('R6_ADDITIVE_HELPER_FINAL_PROVENANCE_MISMATCH:'+$contract.Id)
+      }
+      $helper=Get-Content -LiteralPath $canonicalFile -Raw
+      if (!$helper.Contains('class '+$contract.Type,[StringComparison]::Ordinal) -or
+          !$helper.Contains('@addMethod(PlayerPuppet)',[StringComparison]::Ordinal) -or
+          !$helper.Contains('@addField(PlayerPuppet)',[StringComparison]::Ordinal) -or
+          ([IO.File]::GetAttributes($canonicalFile) -band [IO.FileAttributes]::ReparsePoint)) {
+        throw ('R6_ADDITIVE_HELPER_ABI_UNPROVEN:'+$contract.Id)
+      }
+      if ($contract.Id -eq 'pass8-chipware-combat-cache' -and
+          (!$helper.Contains('TryGetPerkResult(',[StringComparison]::Ordinal) -or
+           !$helper.Contains('StorePerkResult(',[StringComparison]::Ordinal) -or
+           !$helper.Contains('m_perkResultUntil',[StringComparison]::Ordinal) -or
+           !$helper.Contains('+ 0.10',[StringComparison]::Ordinal))) {
+        throw 'R6_APPROVED_CHIPWARE_MEMO_HELPER_ABI_MISSING'
+      }
+      $approvedAdditions[$relative]=
+        (Get-FileHash -LiteralPath $canonicalFile -Algorithm SHA256).Hash
+    }
+  }
+  # Owner-owned G-REDruntime files are compiled in a separate isolated
+  # workspace, never inserted into original private source or previews.
+  $frameworkFiles=@()
+  $frameworkScripts=''
+  if (![string]::IsNullOrWhiteSpace($FrameworkRoot)) {
+    $frameworkGame=(Resolve-Path -LiteralPath $FrameworkRoot -ErrorAction Stop).Path
+    if ($frameworkGame.Equals($game,[StringComparison]::OrdinalIgnoreCase) -or
+        $frameworkGame.StartsWith($game+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) {
+      throw 'R6_FRAMEWORK_SOURCE_MUST_BE_EXTERNAL_TO_GAME'
+    }
+    $frameworkScripts=Join-Path $frameworkGame 'r6/scripts/G-RedRuntime'
+    if (!(Test-Path -LiteralPath $frameworkScripts -PathType Container)) {
+      throw 'R6_OWNER_FRAMEWORK_SOURCE_MISSING'
+    }
+    $frameworkFiles=@(Get-ChildItem -LiteralPath $frameworkScripts -Recurse -File -Filter '*.reds')
+    if ($frameworkFiles.Count -lt 1) { throw 'R6_OWNER_FRAMEWORK_REDS_MISSING' }
+    foreach ($file in $frameworkFiles) {
+      $relative=[IO.Path]::GetRelativePath($frameworkScripts,$file.FullName)
+      if ([IO.Path]::IsPathRooted($relative) -or $relative.StartsWith('..') -or
+          $relative.Contains(':') -or
+          ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'R6_OWNER_FRAMEWORK_SOURCE_UNSAFE'
+      }
+    }
+    Write-Host ('R6 authoritative framework compiler input: files='+$frameworkFiles.Count)
+  }
   $outputs=@()
-  foreach($scenario in @('untouched','optimized-preview')) {
+  $scenarios=@('untouched','optimized-preview')
+  if ($callbackOverlay.Count -gt 0) { $scenarios+=@('optimized-callback-preview') }
+  if ($frameworkFiles.Count -gt 0) { $scenarios+=@('framework-untouched') }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
+    $scenarios+=@('framework-all-generics-preview')
+  }
+  foreach($scenario in $scenarios) {
     $root=Join-Path $work $scenario
     $scripts=Join-Path $root 'r6/scripts'
     $cache=Join-Path $root 'r6/cache/final.redscripts'
@@ -305,7 +483,7 @@ try {
     if ((Get-FileHash -LiteralPath $cache -Algorithm SHA256).Hash -ne $effectiveSha) {
       throw 'R6 source compilation input cache differs from user supplied effective cache.'
     }
-    if ($scenario -eq 'optimized-preview') {
+    if ($scenario -eq 'optimized-preview' -or $scenario -eq 'framework-all-generics-preview') {
       foreach($file in $overlay) {
         $relative=[System.IO.Path]::GetRelativePath($overlayRoot,$file.FullName)
         if ([System.IO.Path]::IsPathRooted($relative) -or
@@ -319,8 +497,73 @@ try {
         Copy-Item -LiteralPath $file.FullName -Destination $target -Force
       }
     }
+    # Only already-installed author source files may be rewritten by the
+    # nine default generic rules. No generated location subscriber or optional
+    # native bridge is accepted as a new source file.
+    $addedSemanticHelpers=0
+    if ($scenario -eq 'optimized-callback-preview' -or $scenario -eq 'framework-all-generics-preview') {
+      $selected=if ($scenario -eq 'framework-all-generics-preview' -and
+                     $frameworkOverlay.Count -gt 0) { $frameworkOverlay } else { $callbackOverlay }
+      $selectedRoot=if ($scenario -eq 'framework-all-generics-preview' -and
+                         $frameworkOverlay.Count -gt 0) { $frameworkOverlayRoot } else { $callbackOverlayRoot }
+      foreach($file in $selected) {
+        $relative=[System.IO.Path]::GetRelativePath($selectedRoot,$file.FullName)
+        if ([System.IO.Path]::IsPathRooted($relative) -or
+            $relative.StartsWith('..') -or $relative.Contains(':')) {
+          throw 'R6_CALLBACK_PREVIEW_PATH_ESCAPE'
+        }
+        $target=Join-Path $scripts $relative
+        if (!(Test-Path -LiteralPath $target -PathType Leaf)) {
+          # Existing owner files are rewritten in place. Missing paths are
+          # accepted only when an independently generated canonical Stage
+          # proves the exact owned additive helper bytes and original owner.
+          if ($scenario -ne 'framework-all-generics-preview' -or
+              !$approvedAdditions.ContainsKey($relative) -or
+              (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne
+                $approvedAdditions[$relative]) {
+            throw 'R6_CALLBACK_PREVIEW_UNOWNED_SOURCE'
+          }
+          $addedSemanticHelpers++
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        }
+        $text=Get-Content -LiteralPath $file.FullName -Raw
+        if ($file.Name -match '^GCO_NativeLocation_[0-9]{9,10}\.reds$' -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_PREDICATE_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:NATIVE_PLAYER_LOCATION_SUBSCRIBER_V1',[StringComparison]::Ordinal) -or
+            $text.Contains('GCO-GENERIC:LOCATION_DEPENDENCY_FAR_V1:',[StringComparison]::Ordinal)) {
+          throw 'R6_RETIRED_NATIVE_LOCATION_OUTPUT_REFUSED'
+        }
+        Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+      }
+    }
+    $addedFrameworkFiles=0
+    if ($scenario -eq 'framework-untouched' -or $scenario -eq 'framework-all-generics-preview') {
+      foreach($file in $frameworkFiles) {
+        $relative=[IO.Path]::GetRelativePath($frameworkScripts,$file.FullName)
+        $target=Join-Path (Join-Path $scripts 'G-RedRuntime') $relative
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+          if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne
+              (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+            throw 'R6_FRAMEWORK_SOURCE_COLLIDES_WITH_INSTALLED_GAME'
+          }
+          continue
+        }
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+          throw 'R6_FRAMEWORK_SOURCE_COPY_CORRUPTED'
+        }
+        $addedFrameworkFiles++
+      }
+    }
     $actualCount=@(Get-ChildItem -LiteralPath $scripts -Recurse -File -Filter '*.reds').Count
-    if ($actualCount -ne $liveCount) {
+    if ($scenario -eq 'framework-all-generics-preview' -and
+        $approvedAdditions.Count -gt 0 -and
+        $addedSemanticHelpers -ne $approvedAdditions.Count) {
+      throw 'R6_ADDITIVE_HELPER_INVENTORY_INCOMPLETE'
+    }
+    if ($actualCount -ne ($liveCount+$addedFrameworkFiles+$addedSemanticHelpers)) {
       throw 'R6 isolated base script source count changed.'
     }
     if (@(Get-ChildItem -LiteralPath $pluginStage -Recurse -File -Filter '*.reds').Count -ne $totalProviderFiles) {
@@ -341,8 +584,36 @@ try {
     }
     $outputs+=@([pscustomobject]@{ Scenario=$scenario; Bytes=$result.Length; Sha256=$sha })
   }
-  if ($outputs.Count -ne 2 -or $outputs[0].Sha256 -eq $outputs[1].Sha256) {
+  $expectedScenarios=if($callbackOverlay.Count -gt 0){3}else{2}
+  if ($frameworkFiles.Count -gt 0) { $expectedScenarios++ }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) { $expectedScenarios++ }
+  if ($outputs.Count -ne $expectedScenarios -or
+      $outputs[0].Sha256 -eq $outputs[1].Sha256) {
     throw 'R6 compiled baseline and optimized-preview caches are indistinguishable.'
+  }
+  if ($callbackOverlay.Count -gt 0 -and
+      $outputs[0].Sha256 -eq $outputs[2].Sha256) {
+    throw 'R6 compiled baseline and callback-preview caches are indistinguishable.'
+  }
+  if ($frameworkFiles.Count -gt 0) {
+    $frameworkOnly=@($outputs | Where-Object { $_.Scenario -eq 'framework-untouched' })
+    if ($frameworkOnly.Count -ne 1 -or
+        $outputs[0].Sha256 -eq $frameworkOnly[0].Sha256) {
+      throw 'R6_FRAMEWORK_COMPILE_OUTPUT_INDISTINGUISHABLE_FROM_BASE'
+    }
+  }
+  if ($frameworkFiles.Count -gt 0 -and $callbackOverlay.Count -gt 0) {
+    # The fifth scenario combines ALL currently staged generic passes with
+    # authoritative framework source. Refuse empty/no-op integration output.
+    if ($outputs[$outputs.Count-1].Scenario -ne 'framework-all-generics-preview') {
+      throw 'R6_FRAMEWORK_COMBINED_SCENARIO_MISSING'
+    }
+    $combinedHash=$outputs[$outputs.Count-1].Sha256
+    foreach($earlier in $outputs[0..($outputs.Count-2)]) {
+      if ($combinedHash -eq $earlier.Sha256) {
+        throw 'R6_FRAMEWORK_COMBINED_GENERIC_OUTPUT_INDISTINGUISHABLE'
+      }
+    }
   }
   $audit=Join-Path $work 'verify-source.json'
   $auditLog=Join-Path $work 'verify-source.log'
@@ -355,6 +626,10 @@ try {
       $liveCount + ' optimizedFiles=' + $overlay.Count +
       ' untouchedCacheBytes=' + $outputs[0].Bytes +
       ' optimizedCacheBytes=' + $outputs[1].Bytes +
+      ' callbackPreviewFiles=' + $callbackOverlay.Count +
+       ' frameworkPreviewFiles=' + $frameworkOverlay.Count +
+      ' ownerFrameworkSourceFiles=' + $frameworkFiles.Count +
+      ' frameworkCompilationOnly=true' +
       ' compiledOutputsDistinct=true originalSourcesUntouched=true ' +
       'inputCache=USER_EFFECTIVE_CANDIDATE_NOT_VANILLA ' +
       'gameplayValidated=false deployable=false')

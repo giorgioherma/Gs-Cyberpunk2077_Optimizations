@@ -66,8 +66,96 @@ try {
     if([int]$json.presentMonFrameCount -ne [int]$index.PresentMonAlignedFrames -or
         $json.frameEvidence.provider -ne 'PRESENTMON_2_6' -or
         $json.frameEvidence.source -ne [string]$index.FrameTimeEvidence.Path -or
+        $json.frameEvidence.chronologyFile -ne 'GCO-PresentMon-Frames.v1.json' -or
         @($json.timeline | Where-Object {$null -ne $_.presentIntervalMaxMs}).Count -lt 2) {
         throw 'Consolidated profiler report does not preserve authentic indexed PresentMon evidence.'
+    }
+    # New readable digest must be sourced from both native summaries, and
+    # its two graph modes must coexist without changing the chronology.
+    if($null -eq $json.digest -or
+       $json.digest.relativeWorkloadDomainsNotAdditive -ne $true -or
+       $json.digest.timeCoincidenceDoesNotProveCausation -ne $true -or
+       [double]$json.digest.cetMeasuredExclusiveMsPerSecond -le 0 -or
+       [double]$json.digest.redscriptExclusiveInstrumentedMsPerSecond -le 0 -or
+       @($json.digest.cetTopOwners).Count -lt 1 -or
+       @($json.digest.redscriptTopOwners).Count -lt 1 -or
+       @($json.digest.cetCallbackFamilies).Count -lt 1 -or
+       @($json.digest.redscriptTopFunctions).Count -lt 1 -or
+       @($json.digest.worstPresentWindows).Count -lt 1 -or
+       @($json.spikeMarkers).Count -lt 1) {
+       throw 'GCO side-by-side native profiler digest or spike evidence missing.'
+    }
+    $htmlReport=Get-Content -LiteralPath (Join-Path $reportFolder 'GCO_Profiler_Report.html') -Raw
+    foreach($phrase in @(
+        'Which mods are doing the work?',
+        'What is keeping them busy?',
+        'Runtime pressure and health',
+        'Notable moments on the shared timeline',
+        'Combined timeline',
+        'Three synchronized tracks',
+        'role="tablist" aria-label="Timeline graph selection"',
+        'id="combined" role="tab" aria-controls="panel-combined" aria-selected="true"',
+        'id="tracks" role="tab" aria-controls="panel-tracks" aria-selected="false"',
+        'id="panel-combined" role="tabpanel" aria-labelledby="combined"',
+        'id="panel-tracks" role="tabpanel" aria-labelledby="tracks" tabindex="0" hidden',
+        'currentPanel.appendChild(canvas)',
+        'panel.hidden=!active',
+        'setMode(next,true)',
+        'RELATIVE TO EACH VISIBLE SERIES PEAK',
+        'const data=',
+        'spikes=',
+        'source-owned profiler reports'
+    )) {
+        if(!$htmlReport.Contains($phrase)){
+            throw ('GCO digest visualization is missing a required section: '+$phrase)
+        }
+    }
+    if($htmlReport.Contains('__DIGEST__') -or
+       $htmlReport.Contains('__TIMELINE__') -or
+       $htmlReport.Contains('__SPIKES__')) {
+       throw 'GCO report has unexpanded template variables.'
+    }
+    # Only current report JSON receives new derived digest fields.
+    # The preserved original native CET and GRSP summaries stay unchanged.
+    # Native frame-start attribution is sparse. Never present an unobserved
+    # GRSP 50ms window as an instrumented 0ms execution measurement.
+    if(@($json.timeline | Where-Object {
+        [int]$_.redscriptNativeFrames -eq 0 -and
+        $null -ne $_.redscriptExclusiveInstrumentedMs
+    }).Count -ne 0 -or
+       @($json.timeline | Where-Object {
+           [int]$_.redscriptNativeFrames -gt 0 -and
+           $null -ne $_.redscriptExclusiveInstrumentedMs
+       }).Count -lt 2) {
+       throw 'GCO REDscript timeline confused unobserved frames with measured work.'
+    }
+    # The identical GCO-owned verified per-present QPC chronology must be
+    # available to the GRSP Resolver, not only the staged CET reporter.
+    # This is derived report evidence, never a modified capture or release ZIP.
+    $framePath=Join-Path $reportFolder 'GCO-PresentMon-Frames.v1.json'
+    $cetFramePath=Join-Path $reportFolder 'CET/PresentMon/GCO-PresentMon-Frames.v1.json'
+    if(!(Test-Path -LiteralPath $framePath -PathType Leaf) -or
+       !(Test-Path -LiteralPath $cetFramePath -PathType Leaf)) {
+        throw 'Missing genuine shared PresentMon chronology for GRSP Resolver.'
+    }
+    if((Get-FileHash -LiteralPath $framePath -Algorithm SHA256).Hash -ne
+       (Get-FileHash -LiteralPath $cetFramePath -Algorithm SHA256).Hash) {
+        throw 'GCO reported GRSP frame chronology differs from CET owner input.'
+    }
+    $chronology=Get-Content -LiteralPath $framePath -Raw |
+        ConvertFrom-Json -Depth 80
+    $originalMon=Join-Path $sessionCopy (([string]$index.FrameTimeEvidence.Path).Replace('/','\\'))
+    $frames=@($chronology.frames)
+    if($chronology.schemaVersion -ne 'gco.presentmon.chronology.v1' -or
+       $chronology.producer -ne 'GCO_PRESENTMON_2_6' -or
+       $chronology.correlation -ne 'CET_GRSP_F11_INTERSECTION_VERIFIED' -or
+       $chronology.sourceFile -ne [string]$index.FrameTimeEvidence.Path -or
+       $chronology.sourceSha256 -ne (Get-FileHash -LiteralPath $originalMon -Algorithm SHA256).Hash -or
+       $frames.Count -ne [int]$index.PresentMonAlignedFrames -or
+       $frames.Count -lt 2 -or
+       [long]$frames[0].presentQpc -ge [long]$frames[-1].presentQpc -or
+       [double]$frames[0].intervalMs -le 0) {
+        throw 'GRSP frame evidence is not identical to sealed genuine PresentMon chronology.'
     }
     foreach($file in @(
         'GCO_Profiler_Report.html',

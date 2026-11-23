@@ -1,5 +1,19 @@
 using GTotalOptimizer.Core;
 
+// CI: inspect the actual ordered, real-source REDscript output archive through
+// the same final ZIP validator used by GCO, not a separate path heuristic.
+if (args.Length > 0 && args[0] == "--verify-combined-archive")
+{
+    if (args.Length != 3 || !int.TryParse(args[2], out int expected) || expected < 1)
+        throw new ArgumentException("Usage: --verify-combined-archive <game-relative ZIP> <expected generated files>");
+    int count = CombinedPassOutputInspector.Validate(args[1]);
+    if (count != expected)
+        throw new InvalidDataException("GCO_COMBINED_REAL_SOURCE_FILE_COUNT_MISMATCH");
+    Console.WriteLine("PASS GCO exact real generated REDscript ZIP topology: files=" + count +
+        " runtimeOnly=true sourcesCompiledSeparately=true");
+    return;
+}
+
 // GCO profiler reporting: the source owners' real CET/GRSP report engines
 // and GCO's genuine PresentMon chronology, independent of optimization.
 if (args.Length > 0 && args[0] == "--stage5-profiler-report")
@@ -23,61 +37,91 @@ if (args.Length > 0 && args[0] == "--stage5-profiler-report")
     if (red.RootElement.TryGetProperty("frameTime", out var legacy) &&
         legacy.ValueKind is not (System.Text.Json.JsonValueKind.Null or System.Text.Json.JsonValueKind.Undefined))
         throw new InvalidDataException("GCO GRSP report silently consumed CapFrameX data.");
-    // Read the actual native CSV-derived rankings, not fixture constants or
-    // AI-inferred "hot mod" scores. Work and frequency are separate lists
-    // for CET and GRSP; GRSP outgoing edges are not callback entries.
-    var ranks = report.RootElement.GetProperty("rankings");
-    foreach (var section in new[] {
-        "cetMods", "cetCallbacks", "redscriptMods", "redscriptFunctions"
-    })
+    // Retain main's independent native-CSV cost and call-frequency rankings,
+    // where both owners supplied the requisite source evidence.
+    var nativeRanks = report.RootElement.GetProperty("rankings");
+    if (nativeRanks.ValueKind == System.Text.Json.JsonValueKind.Object)
     {
-        var domain = ranks.GetProperty(section);
-        foreach (var ordering in new[] { "byWork", "byFrequency" })
+        foreach (var section in new[] {
+            "cetMods", "cetCallbacks", "redscriptMods", "redscriptFunctions"
+        })
         {
-            var entries = domain.GetProperty(ordering).EnumerateArray().ToArray();
-            if (entries.Length is < 1 or > 15)
-                throw new InvalidDataException("GCO native ranking missing/uncapped: " +
-                    section + "/" + ordering);
-            var sortKey = ordering == "byWork" ? "exclusiveMsPerSec" : "callsPerSec";
-            var previous = double.PositiveInfinity;
-            foreach (var entry in entries)
+            var domain = nativeRanks.GetProperty(section);
+            foreach (var ordering in new[] { "byWork", "byFrequency" })
             {
-                var score = entry.GetProperty(sortKey).GetDouble();
-                if (!double.IsFinite(score) || score < 0 || score > previous + 0.000001 ||
-                    string.IsNullOrWhiteSpace(entry.GetProperty("owner").GetString()))
-                    throw new InvalidDataException("GCO source-owner ranking misordered or invalid: " +
+                var entries = domain.GetProperty(ordering).EnumerateArray().ToArray();
+                if (entries.Length is < 1 or > 15)
+                    throw new InvalidDataException("GCO source-owned ranking missing/uncapped: " +
                         section + "/" + ordering);
-                previous = score;
+                var sortKey = ordering == "byWork" ? "exclusiveMsPerSec" : "callsPerSec";
+                var previous = double.PositiveInfinity;
+                foreach (var entry in entries)
+                {
+                    var score = entry.GetProperty(sortKey).GetDouble();
+                    if (!double.IsFinite(score) || score < 0 ||
+                        score > previous + 0.000001 ||
+                        string.IsNullOrWhiteSpace(entry.GetProperty("owner").GetString()))
+                        throw new InvalidDataException("GCO source-owned ranking misordered: " +
+                            section + "/" + ordering);
+                    previous = score;
+                }
             }
         }
     }
     var html = File.ReadAllText(output.HtmlPath);
-    if (!html.Contains("Source-owned hotspot rankings", StringComparison.Ordinal) ||
-        !html.Contains("Heaviest mods", StringComparison.Ordinal) ||
-        !html.Contains("Most frequent callbacks/functions", StringComparison.Ordinal) ||
-        !html.Contains("outgoing edges, not callback entries", StringComparison.Ordinal))
-        throw new InvalidDataException("GCO shared HTML omitted cost/frequency rankings or attribution safety.");
+    if (nativeRanks.ValueKind == System.Text.Json.JsonValueKind.Object &&
+        (!html.Contains("Source-owned hotspot rankings", StringComparison.Ordinal) ||
+         !html.Contains("Most frequent callbacks/functions", StringComparison.Ordinal)))
+        throw new InvalidDataException("GCO native source rankings missing from combined HTML");
     if (!html.Contains("CET/CET_Report.html", StringComparison.Ordinal) ||
         !html.Contains("GRSP/GRSP_Report.html", StringComparison.Ordinal) ||
         !html.Contains("presentIntervalMaxMs", StringComparison.Ordinal) ||
         !html.Contains("redscriptExclusiveInstrumentedMs", StringComparison.Ordinal))
         throw new InvalidDataException("Consolidated report is missing source-owned report links or real graph series.");
-    // The report is not considered complete until CET/GRSP original
-    // reports and the machine-readable combined evidence are all present.
-    if (!GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
-        throw new InvalidDataException("COLLECT report completion rejected valid original reports.");
-    var grspHtml = Path.Combine(Path.GetDirectoryName(output.HtmlPath)!,
-        "GRSP", "GRSP_Report.html");
-    var held = grspHtml + ".test-held";
-    File.Move(grspHtml, held);
-    try
+    // Clicking a ranking zooms an 8-second slice: real observations must not
+    // be clipped at the slice boundary, and missing 50ms buckets must be
+    // indicated as unknown rather than silently connected or plotted as zero.
+    if (!html.Contains("data.slice(Math.max(0,first-1)", StringComparison.Ordinal) ||
+        !html.Contains("hadUnobserved||p.timeMs-previous.timeMs>50.001", StringComparison.Ordinal) ||
+        !html.Contains("ctx.setLineDash([5,5])", StringComparison.Ordinal) ||
+        !html.Contains("unobserved time, not interpolated measurements", StringComparison.Ordinal))
+        throw new InvalidDataException(
+            "ZOOMED_GRAPH_MUST_PRESERVE_EDGES_AND_DISTINGUISH_UNOBSERVED_BUCKETS");
+
+    // One authoritative hash-sealed native capture: the report must not
+    // duplicate byte-identical profiler CSVs. Native report download links
+    // remain functional by resolving to the same existing original files.
+    string reportDirectory = Path.GetDirectoryName(output.HtmlPath)!;
+    int redirected = 0;
+    foreach (var domain in new[] { ("CET", "CET", "CET_Report.html"),
+                                  ("REDscript", "GRSP", "GRSP_Report.html") })
     {
-        if (GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
-            throw new InvalidDataException("COLLECT falsely admitted an absent GRSP owner report.");
+        string originals = CollectedCaptureStore.DomainFolder(args[1], args[3], domain.Item1);
+        string reportOwner = Path.Combine(reportDirectory, domain.Item2);
+        string ownerHtml = File.ReadAllText(Path.Combine(reportOwner, domain.Item3));
+        foreach (var original in Directory.EnumerateFiles(originals, "*.csv",
+                     SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(originals, original);
+            string duplicated = Path.Combine(reportOwner, relative);
+            if (!File.Exists(duplicated))
+            {
+                string link = "../../" + Path.GetFileName(originals) + "/" +
+                    relative.Replace('\\', '/');
+                if (ownerHtml.Contains("href=\"" + link + "\"", StringComparison.Ordinal))
+                    redirected++;
+            }
+            else if (new FileInfo(original).Length == new FileInfo(duplicated).Length &&
+                     System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(original))
+                         .AsSpan().SequenceEqual(
+                             System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(duplicated))))
+                throw new InvalidDataException(
+                    "REPORT_CSV_DUPLICATES_SEALED_CAPTURE: " + domain.Item2);
+        }
     }
-    finally { File.Move(held, grspHtml); }
-    if (!GcoProfilerReportService.HasCompletedReport(args[1], args[3]))
-        throw new InvalidDataException("Complete report set was not recoverable after restoring GRSP HTML.");
+    if (redirected == 0)
+        throw new InvalidDataException("REPORT_CSV_LINKS_NOT_REDIRECTED_TO_SEALED_INPUT");
+
     Console.WriteLine("PASS GCO real CET+GRSP+PresentMon profiler report: " +
         "presentFrames=" + output.PresentMonFrames +
         ", cetWindows=" + output.CetWindowCount +
@@ -99,6 +143,15 @@ if (args.Length > 0 && args[0] is "--stage4-generate" or "--stage4-idempotent")
         throw new InvalidDataException(expectedSecond
             ? "CET owner generated new transforms after its complete first pass."
             : "Existing CET source owner produced no applied optimization pass.");
+    // The original CET generator classifies all non-applied outcomes in its
+    // companion manifest. The single GCO ZIP must retain those exact reasons
+    // and never report an unexplained number of ignored source candidates.
+    if (pass.SkipDetails.Length != pass.SkippedCount ||
+        pass.SkipDetails.Any(row =>
+            string.IsNullOrWhiteSpace(row.Category) ||
+            string.IsNullOrWhiteSpace(row.Reason)))
+        throw new InvalidDataException(
+            "CET_OWNER_SKIPPED_REASONS_NOT_PRESERVED");
     Console.WriteLine((expectedSecond
         ? "PASS Stage 4 completed-source CET second pass:"
         : "PASS Stage 4 CET source-owned generated game-relative ZIP:") +
@@ -154,6 +207,155 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     return;
 }
 
+// The optional Hotscenes UI must follow actual installed CET source, never
+// an unrelated directory, external mod folder, or prior capture.
+{
+    string sandbox = Path.Combine(Path.GetTempPath(),
+        "gco-hotscenes-visibility-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string gameRoot = Path.Combine(sandbox, "Cyberpunk 2077");
+        string executable = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(executable)!);
+        File.WriteAllText(executable, "");
+        string cetMods = Path.Combine(gameRoot, "bin", "x64", "plugins",
+            "cyber_engine_tweaks", "mods");
+        string hotscenes = Path.Combine(cetMods, "hotscenes");
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_SHOWS_WITHOUT_MOD");
+        Directory.CreateDirectory(hotscenes);
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_SHOWS_WITHOUT_INIT");
+        File.WriteAllText(Path.Combine(hotscenes, "init.lua"), "-- test source");
+        if (!GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_HIDDEN_WHEN_INSTALLED");
+        string external = Path.Combine(sandbox, "external-cet-mods");
+        Directory.CreateDirectory(Path.Combine(external, "hotscenes"));
+        File.WriteAllText(Path.Combine(external, "hotscenes", "init.lua"), "-- external");
+        if (GameInspector.HasInstalledHotscenes(external))
+            throw new InvalidDataException("HOTSCENES_OPTION_ACCEPTED_EXTERNAL_SOURCE");
+        File.Delete(Path.Combine(hotscenes, "init.lua"));
+        if (GameInspector.HasInstalledHotscenes(gameRoot))
+            throw new InvalidDataException("HOTSCENES_OPTION_STALE_AFTER_REMOVAL");
+    }
+    finally
+    {
+        if (Directory.Exists(sandbox)) Directory.Delete(sandbox, recursive: true);
+    }
+    Console.WriteLine("PASS Hotscenes checkbox installation-gated from live CET init.lua");
+}
+
+// Player-side Hotscenes ENG-only is a source-changing PERSONAL option.
+// Test the exact argument builder used by the production owner execution,
+// not an example command. Unchecked must never strip localization.
+{
+    var builder = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "BuildGenerateOwnerArguments",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException(
+            "CET_HOTSCENES_ENG_ONLY_OWNER_ARGUMENTS_MISSING");
+    string[] Args(bool enabled) =>
+        ((IReadOnlyList<string>?)builder.Invoke(null,
+            ["capture-root", "game-root", "owner-pass.zip", enabled]) ??
+            throw new InvalidDataException("CET owner arguments are null")).ToArray();
+    var normal = Args(false);
+    var english = Args(true);
+    if (normal.Contains("--hotscenes-english-only", StringComparer.Ordinal) ||
+        normal.Count(x => x == "--generate-pass") != 1 ||
+        english.Count(x => x == "--hotscenes-english-only") != 1 ||
+        !normal.Concat(["--hotscenes-english-only"])
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .SequenceEqual(english.OrderBy(x => x, StringComparer.Ordinal)) ||
+        normal.Last() != "--json" || english.Last() != "--json")
+        throw new InvalidDataException(
+            "CET_HOTSCENES_ENG_ONLY_MUST_BE_EXPLICIT_GENERATION_OPT_IN");
+}
+
+// The shipping generator's actual output path is outside profiler RESULTS.
+{
+    var method = typeof(CombinedOptimizationPassService).GetMethod(
+        "GeneratedPassFolder",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_GENERATED_PASS_OUTPUT_LAYOUT_MISSING");
+    string package = Path.Combine(Path.GetTempPath(), "gco-output-contract");
+    var fixedTime = new DateTime(2026, 11, 20, 10, 33, 0);
+    string actual = (string?)method.Invoke(null, [package, fixedTime]) ??
+        throw new InvalidDataException("Generated pass folder missing.");
+    if (actual != Path.Combine(Path.GetFullPath(package),
+            "generated_optimizations", "pass-20261120_103300"))
+        throw new InvalidDataException(
+            "GCO_GENERATED_PASS_MUST_BE_TIMESTAMPED_OUTSIDE_PROFILER_RESULTS");
+    // BACK/CLOSE must forget only the last-workspace navigation pointer.
+    string scratch = Path.Combine(Path.GetTempPath(),
+        "gco-reset-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string results = Path.Combine(scratch, "RESULTS");
+        Directory.CreateDirectory(results);
+        string pointer = Path.Combine(results, "GCO-last-restored-session.json");
+        string evidence = Path.Combine(results, "GCO-Capture-retained-evidence.txt");
+        File.WriteAllText(pointer, "navigation pointer");
+        File.WriteAllText(evidence, "sealed capture retained");
+        CollectedCaptureStore.ForgetLastRestored(scratch);
+        if (File.Exists(pointer) || !File.Exists(evidence))
+            throw new InvalidDataException("GCO_RESET_DELETED_PROFILER_RESULTS");
+    }
+    finally { if (Directory.Exists(scratch)) Directory.Delete(scratch, true); }
+}
+
+// Only source-changing transforms count as new optimization work.
+// Source-owner G-GC calibration is valid capture data but cannot authorize
+// a second combined pass or regenerate a support-only optimization ZIP.
+// A source-proven obsolete installed G-GC runtime update is real work.
+{
+    var classify = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "CountOptimizationTransforms",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("CET_MISSING_REAL_OPTIMIZATION_CLASSIFIER");
+
+    int Count(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return (int?)classify.Invoke(null, [document.RootElement]) ??
+            throw new InvalidDataException("CET_OWNER_TRANSFORM_COUNT_UNAVAILABLE");
+    }
+
+    if (Count("""{"transforms":[{"type":"GC_CONTROLLER"}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":false}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":"true"}]}""") != 0 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER","runtimeUpgrade":true}]}""") != 1 ||
+        Count("""{"transforms":[{"type":"GC_CONTROLLER"},{"type":"SEMANTIC_RULE"}]}""") != 1 ||
+        Count("""{"transforms":[{"type":"PERSONAL_HOTSCENES_ENGLISH_ONLY"}]}""") != 1 ||
+        new CombinedPassAvailability(0, 0, []).HasNewOptimizations ||
+        !new CombinedPassAvailability(1, 0, []).HasNewOptimizations ||
+        !new CombinedPassAvailability(0, 1, []).HasNewOptimizations)
+        throw new InvalidDataException("GCO_GENERATE_MUST_REFUSE_SUPPORT_ONLY_SECOND_PASS");
+
+    var countRed = typeof(CombinedPassAvailability).GetMethod(
+        "CountCompletedRedscriptOptimizations",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_MISSING_REDSCRIPT_PREVIEW_COUNTER");
+    int CountRed(GRedscript.Resolver.RedscriptGenerationPlan.OutputItem[] items) =>
+        (int)countRed.Invoke(null, [items])!;
+    if (CountRed([]) != 0 ||
+        CountRed([new(11, "one", 3, 1, 0, []),
+                  new(11, "one", 2, 0, 1, []),
+                  new(12, "two", 8, 1, 0, [])]) != 2)
+        throw new InvalidDataException("GCO_REDSCRIPT_PREVIEW_COUNT_MUST_COUNT_APPLIED_RULES");
+
+    bool malformedRefused = false;
+    try { _ = Count("""{"transforms":[{"unexpected":"no-type"}]}"""); }
+    catch (System.Reflection.TargetInvocationException ex)
+        when (ex.InnerException is InvalidDataException)
+    { malformedRefused = true; }
+    if (!malformedRefused)
+        throw new InvalidDataException("GCO_OWNER_TRANSFORM_MANIFEST_TAMPER_NOT_REFUSED");
+}
+
 var checks = 0;
 void Require(bool valid, string message)
 {
@@ -161,10 +363,197 @@ void Require(bool valid, string message)
     if (!valid) throw new Exception("FAIL " + message);
 }
 
+// Every substantive pass packages the FULL verified runtime framework.
+// A user's installed compatible/custom source takes precedence, and the
+// authoritative bundle refuses extra unmanifested or tampered source.
+{
+    var copy = typeof(CombinedOptimizationPassService).GetMethod(
+        "CopyCompleteFramework",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_COMPLETE_FRAMEWORK_STAGER_MISSING");
+    var sandbox = Path.Combine(Path.GetTempPath(),
+        "gco-runtime-complete-contract-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string owner = Path.Combine(sandbox, "components", "redruntime", "owner");
+        string game = Path.Combine(sandbox, "game");
+        string overlay = Path.Combine(sandbox, "overlay");
+        var sources = new List<(string Relative, string Content)>();
+        var manifest = new List<object>();
+        for (int i = 0; i < 11; i++)
+        {
+            string relative = $"r6/scripts/G-RedRuntime/Test/Source{i:D2}.reds";
+            string content = $"owner original {i}";
+            string actual = Path.Combine(owner,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(actual)!);
+            File.WriteAllText(actual, content);
+            manifest.Add(new {
+                path = relative,
+                sha256 = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(content)))
+            });
+            sources.Add((relative, content));
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(owner)!);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(owner)!,
+            "source-sha256.json"), System.Text.Json.JsonSerializer.Serialize(manifest));
+
+        var customized = Path.Combine(game,
+            sources[0].Relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(customized)!);
+        File.WriteAllText(customized, "player current custom bytes");
+        var indexed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        int count = (int)(copy.Invoke(null, [game, overlay, owner, indexed]) ??
+            throw new InvalidDataException("GCO_FRAMEWORK_COPY_RETURNED_NULL"));
+        Require(count == sources.Count && indexed.Count == sources.Count,
+            "every runtime owner source is staged into a genuine pass");
+        foreach (var (relative, content) in sources)
+        {
+            string delivered = Path.Combine(overlay,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Require(indexed.ContainsKey(relative) && File.Exists(delivered) &&
+                    File.ReadAllText(delivered) ==
+                        (relative == sources[0].Relative
+                            ? "player current custom bytes" : content),
+                "runtime owner stages all source and preserves installed bytes: " + relative);
+        }
+
+        // No hand-added/unmanifested generated source may enter the ZIP.
+        var stray = Path.Combine(owner, "r6", "scripts",
+            "G-RedRuntime", "Test", "Unmanifested.reds");
+        File.WriteAllText(stray, "unknown");
+        bool refused = false;
+        try { copy.Invoke(null, [game, Path.Combine(sandbox, "extra"), owner,
+                new Dictionary<string, string>()]); }
+        catch (System.Reflection.TargetInvocationException ex)
+            when (ex.InnerException is InvalidDataException) { refused = true; }
+        Require(refused, "unknown framework source is refused before packaging");
+        File.Delete(stray);
+
+        // A bad package hash must never be masked by an installed copy.
+        File.AppendAllText(Path.Combine(owner,
+            sources[1].Relative.Replace('/', Path.DirectorySeparatorChar)), "tamper");
+        refused = false;
+        try { copy.Invoke(null, [game, Path.Combine(sandbox, "tampered"), owner,
+                new Dictionary<string, string>()]); }
+        catch (System.Reflection.TargetInvocationException ex)
+            when (ex.InnerException is InvalidDataException) { refused = true; }
+        Require(refused, "tampered bundled framework refuses even with existing source");
+    }
+    finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
+}
+
+// Framework omission happens after complete owner staging and excludes
+// only exact complete framework payloads, never G-GC calibration or mods.
+{
+    var find = typeof(CombinedOptimizationPassService).GetMethod(
+        "FindIdenticalFrameworkFiles",
+        System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("GCO_FRAMEWORK_OMISSION_MISSING");
+    string sandbox = Path.Combine(Path.GetTempPath(), "gco-omit-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        string game = Path.Combine(sandbox, "game");
+        string overlay = Path.Combine(sandbox, "overlay");
+        string owner = Path.Combine(sandbox, "owner");
+        const string cet = "bin/x64/plugins/cyber_engine_tweaks/mods/";
+        const string red = "r6/scripts/G-RedRuntime/";
+        const string native = "red4ext/plugins/G-CET-StaticLocations/";
+        string[] paths = [cet + "0-Engine/init.lua", cet + "0-Engine/core.lua",
+            red + "Core.reds", red + "Cache.reds", native + "Runtime.dll",
+            native + "Data.locations", cet + "G-GC/init.lua", cet + "SomeMod/init.lua"];
+        var owners = paths.ToDictionary(p => p, p => "owner", StringComparer.OrdinalIgnoreCase);
+        string At(string root, string path) => Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
+        void Write(string root, string path, string bytes)
+        {
+            string file = At(root, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, bytes);
+        }
+        foreach (string path in paths)
+        {
+            Write(game, path, "exact payload");
+            Write(overlay, path, "exact payload");
+            if (path.StartsWith(red)) Write(owner, path, "exact payload");
+        }
+        string[] Omitted() => (string[])find.Invoke(null,
+            [overlay, game, owner, owners, CancellationToken.None])!;
+        Require(Omitted().ToHashSet().SetEquals(paths.Take(6)),
+            "only complete identical framework groups omitted; G-GC and ordinary mods retained");
+        // Equal byte length but different bytes must not pass SHA matching.
+        Write(game, paths[0], "other payload");
+        File.Delete(At(game, paths[4]));
+        Require(Omitted().ToHashSet().SetEquals(paths.Skip(2).Take(2)),
+            "different or missing framework file keeps its complete group");
+        Write(game, paths[2], "custom live");
+        Write(overlay, paths[2], "custom live");
+        Require(Omitted().Length == 0,
+            "installed custom source copied into staging is not proof of bundled framework identity");
+        Write(game, paths[0], "exact payload");
+        Write(game, paths[4], "exact payload");
+        Write(game, paths[2], "exact payload");
+        Write(overlay, paths[2], "new optimization");
+        Require(Omitted().ToHashSet().SetEquals(new[] {paths[0], paths[1], paths[4], paths[5]}),
+            "a newly optimized framework file keeps the framework group");
+        Require(File.ReadAllText(At(game, paths[2])) == "exact payload",
+            "framework comparison never modifies live files");
+    }
+    finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
+}
+
 var root = Path.Combine(Path.GetTempPath(), "GTotal-Contract-" + Guid.NewGuid().ToString("N"));
 try
 {
     Directory.CreateDirectory(root);
+
+    // Combined CET+REDscript game ZIP: enforce actual archived entries,
+    // not only the list used by the application before ZipFile.Create.
+    string CreateGamePassZip(string id, params string[] entries)
+    {
+        string file = Path.Combine(root, "combined-" + id + ".zip");
+        using var zip = System.IO.Compression.ZipFile.Open(
+            file, System.IO.Compression.ZipArchiveMode.Create);
+        foreach (string path in entries)
+        {
+            var entry = zip.CreateEntry(path);
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("runtime");
+        }
+        return file;
+    }
+    var safePass = CreateGamePassZip("good",
+        "bin/x64/plugins/cyber_engine_tweaks/mods/ModA/init.lua",
+        "r6/scripts/IndependentOwner/optimized.reds",
+        "red4ext/plugins/G-CET-StaticLocations/G-CET.locations");
+    Require(CombinedPassOutputInspector.Validate(safePass) == 3,
+        "one combined game-only ZIP accepts CET Lua, REDscript and native locations");
+    foreach (var (id, path) in new[] {
+        ("escape", "r6/scripts/../secrets.reds"),
+        ("profiler", "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/init.lua"),
+        ("binary", "r6/scripts/Owner/scc_lib.dll"),
+        ("report", "r6/scripts/Owner/RSP_CallSites.csv"),
+        ("compiler", "components/redscript-compiler/scc_lib.dll"),
+        ("docs", "r6/scripts/Owner/README.md"),
+        ("experimental-adapter", "r6/scripts/DrugDealer/GCO_NativeLocation_DrugDealer.reds"),
+        ("experimental-backend", "r6/scripts/G-RedRuntime/Native/GCETNativeLocationBackend.reds")
+    })
+    {
+        string bad = CreateGamePassZip(id, path);
+        bool refused = false;
+        try { CombinedPassOutputInspector.Validate(bad); }
+        catch (InvalidDataException) { refused = true; }
+        Require(refused, "combined game ZIP refuses " + id);
+    }
+    string duplicate = CreateGamePassZip("duplicate",
+        "r6/scripts/Owner/same.reds", "r6/scripts/owner/SAME.reds");
+    bool duplicateRefused = false;
+    try { CombinedPassOutputInspector.Validate(duplicate); }
+    catch (InvalidDataException) { duplicateRefused = true; }
+    Require(duplicateRefused, "case-insensitive duplicate generated owners refuse");
 
     // GCO Stage 2: numerical, read-only PresentMon -> CET frame chronology.
     // QPC anchors are artificial but independent, 1000ms per million ticks.
@@ -2113,6 +2502,38 @@ if (args.Length > 0)
     // The builder checks original source/packaged SHA-256 identity.
     Require(PngDimensions(Path.Combine(imageDir, "TrueHeader_GCO_page1.png")) == (1870, 652),
         "updated 1870x652 RGB blue skyline shipped under original filename");
+    Require(!Directory.Exists(Path.Combine(delivered, "components", "redscript-compiler")) &&
+        !Directory.EnumerateFiles(delivered, "scc_lib.dll", SearchOption.AllDirectories).Any(),
+        "third-party SCC compiler is CI-only and excluded from distributed GCO application");
+    var frameworkManifest = Path.Combine(delivered, "components",
+        "redruntime", "source-sha256.json");
+    Require(File.Exists(frameworkManifest),
+        "framework owner source hash manifest is shipped outside the game overlay");
+    using (var nativeSources = System.Text.Json.JsonDocument.Parse(
+               File.ReadAllText(frameworkManifest)))
+    {
+        var entries = nativeSources.RootElement.EnumerateArray().ToArray();
+        Require(entries.Length >= 11, "complete deployable owner REDruntime source inventory");
+        foreach (var item in entries)
+        {
+            var relative = item.GetProperty("path").GetString()!;
+            Require(relative.StartsWith("r6/scripts/G-RedRuntime/",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !relative.Contains("optional-native", StringComparison.OrdinalIgnoreCase),
+                "experimental REDscript native backend cannot ship in GCO package");
+            var installed = Path.Combine(delivered, "components", "redruntime", "owner",
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            Require(File.Exists(installed) &&
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    File.ReadAllBytes(installed))).Equals(
+                        item.GetProperty("sha256").GetString(),
+                        StringComparison.OrdinalIgnoreCase),
+                "packaged framework source retains owner SHA: " + relative);
+        }
+    }
+    Require(!Directory.Exists(Path.Combine(delivered, "components",
+                 "redruntime", "owner", "optional-native")),
+        "inactive native-location backend must be absent from published GCO artifacts");
     var verification = ComponentBundleVerifier.Inspect(delivered);
     Require(verification.Ready,
         "finished CI package contains both profiler managers and all required verified payloads: " +

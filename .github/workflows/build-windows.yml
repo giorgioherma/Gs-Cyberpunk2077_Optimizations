@@ -10,10 +10,15 @@ on:
         type: boolean
         required: false
         default: false
-  # Consolidated CI: ordinary source commits do NOT create full Windows runs.
-  # Only an explicit milestone marker commit launches the full validation.
+      research_diagnostics:
+        description: 'Manual-only retired REDscript native/location and read-only R5 research contracts'
+        type: boolean
+        required: false
+        default: false
+  # Milestone only: source/test/packaging commits do not launch full CI.
+  # workflow_dispatch above remains available when a user starts a run.
   push:
-    branches: [ main, feature/presentmon-resolver-integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration ]
     paths:
       - '.ci/checkpoints/full-gco.txt'
 
@@ -36,12 +41,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44
+          ref: 976c1662077f67e5e69b978d19cd2332f35ce2e9
           path: unified/vendor-cet
           persist-credentials: false
-      # The native DLL is compiled ONLY by GRSP's independent owner CI.
-      # Select the newest successful owner-native artifact, lock its exact
-      # source SHA, and fail rather than reverting to old instrumentation.
       - name: Resolve latest verified GRSP owner-native build
         id: grsp_native_source
         shell: pwsh
@@ -66,8 +68,8 @@ jobs:
               $_.name -eq $required -and $_.expired -eq $false
             })
             if ($match.Count -eq 1) {
-              # A run from the new native branch may predate the F11 quiescence
-              # and re-entrancy fixes. Reject those older crash-risk DLLs.
+              # Never import older owner-native DLLs predating the F11
+              # quiescence and re-entrancy safety fix from main.
               $safetyBase='78dd87635bc7cba77c427c3928f10e0be18d7eea'
               $comparison=(& gh api "repos/$repo/compare/$safetyBase...$($run.head_sha)") | ConvertFrom-Json
               if ($LASTEXITCODE -ne 0 -or $comparison.status -notin @('identical','ahead')) {
@@ -93,6 +95,14 @@ jobs:
           repository: giorgioherma/GRSP-G-REDscript-Profiler
           ref: ${{ steps.grsp_native_source.outputs.sha }}
           path: unified/vendor-grsp
+          persist-credentials: false
+      # Bundle only authoritative, deployable G-REDruntime source assets.
+      # The game ZIP never contains this checkout, documentation or build files.
+      - uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/G-REDruntime_Framework
+          ref: main
+          path: unified/vendor-redruntime
           persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
       # portable product or the generated optimization ZIP.
@@ -128,19 +138,445 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # R4 validation: private live REDscript source is checked out ONLY on
+      # this REDscript development branch, from GCO's existing scoped token.
+      # Source stays outside publish/release and is removed even on failure.
+      - name: Verify existing GCO private-source token for REDscript
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        env:
+          REDSCRIPT_PRIVATE_SOURCE_TOKEN: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:REDSCRIPT_PRIVATE_SOURCE_TOKEN)) {
+            throw 'GCO existing private source token is missing; source audit must fail closed.'
+          }
+      # REDscript managed Resolver is source-owned by this GCO branch.
+      # GRSP's separate native profiler checkout above is unchanged.
       - uses: actions/setup-python@v5
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         with:
           python-version: '3.12'
-      - name: Validate bundled GCO-local REDscript Resolver source and safety contracts
+      - name: Build GCO-local REDscript Resolver and verify approved source generator contracts
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        env:
+          GCO_REDSCRIPT_RESEARCH_TESTS: ${{ inputs.research_diagnostics && '1' || '0' }}
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_BUILD_FAILED' }
+          # The Python source-state tests invoke the isolated owner-host DLLs.
+          # Build those prerequisites when present rather than skipping tests
+          # or expecting an unrelated earlier Actions workflow to supply them.
+          foreach ($project in @(
+              'src/GRedscript.Pass4/GRedscript.Pass4.csproj',
+              'tests/GRedscript.Pass8.Checkpoint/GRedscript.Pass8.Checkpoint.csproj')) {
+            if (Test-Path -LiteralPath $project -PathType Leaf) {
+              dotnet build $project -c Release --nologo
+              if ($LASTEXITCODE -ne 0) { throw ('GCO_OWNER_TEST_HOST_BUILD_FAILED:' + $project) }
+            }
+          }
+          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_LOCAL_REDSCRIPT_SAFETY_TESTS_FAILED' }
+          $runtime = Get-Content src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.runtimeconfig.json -Raw
+          if (!$runtime.Contains('"net10.0"') -or
+              (Test-Path src/GRedscript.Resolver/bin/Release/net10.0/G-REDscript-Profiler.dll)) {
+            throw 'GCO_LOCAL_REDSCRIPT_SHARED_RUNTIME_OR_NATIVE_BOUNDARY_FAILED'
+          }
+          Write-Host 'PASS GCO-local REDscript Resolver .NET10 build, safety tests and native boundary'
+      - name: Checkout private live REDscript source for GCO-local admission audit
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: unified/.gco-ci-private-redscript
+          sparse-checkout: |
+            GCO-Capture-15112026_021913/r6/scripts
+            r6/scripts
+            Compiler
+          sparse-checkout-cone-mode: true
+      - name: Checkout authoritative G-REDruntime source for isolated SCC compilation
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/G-REDruntime_Framework
+          ref: main
+          persist-credentials: false
+          path: unified/.gco-ci-framework
+          sparse-checkout: |
+            r6/scripts/G-RedRuntime
+            optional-native/r6/scripts/G-RedRuntime/Native
+          sparse-checkout-cone-mode: true
+      - name: Audit private REDscript stack with GCO-local REDscript CLI
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $privateRoot = Join-Path (Get-Location) '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $scripts = Join-Path $privateRoot 'r6/scripts'
+          if (!(Test-Path -LiteralPath $scripts -PathType Container)) {
+            throw 'PRIVATE_REDSCRIPT_SOURCE_MISSING: expected r6/scripts tree'
+          }
+          $original = @(Get-ChildItem -LiteralPath $scripts -Filter '*.reds' -Recurse -File)
+          if ($original.Count -lt 100) {
+            throw 'PRIVATE_REDSCRIPT_SOURCE_INCOMPLETE: no meaningful live source inventory'
+          }
+          $before = @{}
+          foreach ($file in $original) {
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]92)
+            if ($before.ContainsKey($key)) { throw 'Duplicate normalized source path' }
+            $before[$key] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $report = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
+          $auditLog = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.log'
+          & dotnet $dll source-audit --game $privateRoot --out $report *> $auditLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report)) {
+            throw 'GRSP_PRIVATE_SOURCE_AUDIT_FAILED: private diagnostic log retained only on runner'
+          }
+          $audit = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          $admittedSourceSha = [string]$audit.sourceStackSha256
+          if ($admittedSourceSha -notmatch '^[A-Fa-f0-9]{64}$') {
+            throw 'GRSP_PRIVATE_SOURCE_FINGERPRINT_MISSING'
+          }
+          # Verify that the same current source tree admits a second pass.
+          # No fixed mod hash/version, source text or private paths in logs.
+          $repeatReport = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit-repeat.json'
+          $repeatLog = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit-repeat.log'
+          & dotnet $dll source-audit --game $privateRoot --out $repeatReport --expected-source-sha256 $admittedSourceSha *> $repeatLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $repeatReport)) {
+            throw 'GRSP_PRIVATE_SOURCE_FINGERPRINT_REPLAY_FAILED'
+          }
+          $repeatAudit = Get-Content -LiteralPath $repeatReport -Raw | ConvertFrom-Json
+          if ($repeatAudit.sourceStackSha256 -ne $admittedSourceSha -or
+              $repeatAudit.sourceFiles -ne $audit.sourceFiles -or
+              $repeatAudit.codeRewritten -ne $false) {
+            throw 'GRSP_PRIVATE_SOURCE_IDEMPOTENT_ADMISSION_FAILED'
+          }
+          if ($audit.schemaVersion -ne 'grsp.source.audit.v1' -or
+              $audit.sourceFiles -ne $original.Count -or
+              ($audit.lexicallyIndexedFiles + $audit.structurallyUnprovenFiles) -ne $original.Count -or
+              $audit.lexicallyIndexedFiles -lt 1 -or
+              $audit.recognizedFunctionSpans -lt 1 -or
+              $audit.nativeExternalDeclarations -lt 1 -or
+              $audit.declarationOnlySignatures -lt 1 -or
+              $audit.expressionBodiedFunctions -lt 1 -or
+              $audit.sourceState -ne 'UNSAFE_OR_UNPROVEN' -or
+              $audit.generatedFiles -ne 0 -or
+              $audit.codeRewritten -ne $false -or
+              $audit.compilerValidated -ne $false -or
+              $audit.privateSourcePathsIncluded -ne $false) {
+            throw 'GRSP_PRIVATE_SOURCE_ADMISSION_CONTRACT_FAILED: nonread-only or unproven evidence'
+          }
+          $after = @(Get-ChildItem -LiteralPath $scripts -Filter '*.reds' -Recurse -File)
+          if ($after.Count -ne $original.Count) {
+            throw 'GRSP_PRIVATE_SOURCE_MUTATION: file inventory changed'
+          }
+          foreach ($file in $after) {
+            $key = $file.FullName.Substring($scripts.Length).TrimStart([char]92)
+            if (!$before.ContainsKey($key) -or
+                $before[$key] -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+              throw 'GRSP_PRIVATE_SOURCE_MUTATION: source bytes changed'
+            }
+          }
+          Write-Host ("PASS GRSP real private source read-only audit: files=" +
+                      $audit.sourceFiles + " indexed=" + $audit.lexicallyIndexedFiles +
+                      " unproven=" + $audit.structurallyUnprovenFiles +
+                      " functionSpans=" + $audit.recognizedFunctionSpans +
+                      " native=" + $audit.nativeExternalDeclarations +
+                      " declarationOnly=" + $audit.declarationOnlySignatures +
+                      " expression=" + $audit.expressionBodiedFunctions)
+      # This is the current repository snapshot, NOT the historical source
+      # that generated the sealed GRSP fixture. Replay/SCC below deliberately
+      # retains the archived game-root source and its capture-matched SHA.
+      - name: Audit newer REDscript source independently of sealed capture replay
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = Join-Path (Get-Location) '.gco-ci-private-redscript'
+          $scripts = Join-Path $game 'r6/scripts'
+          $historical = Join-Path $game 'GCO-Capture-15112026_021913/r6/scripts'
+          if (!(Test-Path -LiteralPath $scripts -PathType Container) -or
+              !(Test-Path -LiteralPath $historical -PathType Container)) {
+            throw 'GCO_FRESH_AND_HISTORICAL_SOURCE_ROOTS_REQUIRED'
+          }
+          $files = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
+          if ($files.Count -lt 100) { throw 'GCO_FRESH_SOURCE_INVENTORY_INCOMPLETE' }
+          $before = @{}
+          foreach ($file in $files) {
+            if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'GCO_FRESH_SOURCE_REPARSE_POINT_REFUSED'
+            }
+            $relative = [IO.Path]::GetRelativePath($scripts, $file.FullName)
+            if ($before.ContainsKey($relative)) { throw 'GCO_FRESH_SOURCE_DUPLICATE_PATH' }
+            $before[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $auditPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-redscript-audit.json'
+          $auditLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-redscript-audit.log'
+          & dotnet $dll source-audit --game $game --out $auditPath *> $auditLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $auditPath -PathType Leaf)) {
+            throw 'GCO_FRESH_SOURCE_AUDIT_FAILED'
+          }
+          $audit = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
+          if ($audit.schemaVersion -ne 'grsp.source.audit.v1' -or
+              $audit.sourceFiles -ne $files.Count -or
+              $audit.sourceStackSha256 -notmatch '^[A-Fa-f0-9]{64}' -or
+              $audit.sourceState -ne 'UNSAFE_OR_UNPROVEN' -or
+              $audit.codeRewritten -ne $false -or $audit.generatedFiles -ne 0 -or
+              $audit.compilerValidated -ne $false) {
+            throw 'GCO_FRESH_SOURCE_ADMISSION_UNPROVEN'
+          }
+          # The read-only callback classification is retained for explicit manual
+          # research only. Production GCO generation is governed by the ten
+          # canonical source generators and their independent SCC contracts.
+          $anglePath = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.json'
+          $angleLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-angle-sort.log'
+          & dotnet $dll scan-angle-sort --game $game --out $anglePath *> $angleLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $anglePath -PathType Leaf)) {
+            throw 'GCO_FRESH_ANGLE_SORT_SCAN_FAILED'
+          }
+          $angle = Get-Content -LiteralPath $anglePath -Raw | ConvertFrom-Json
+          if ($angle.schemaVersion -ne 'gco.redscript.angle-sort.scan.v1' -or
+              $angle.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $angle.sourceFiles -ne $audit.sourceFiles -or
+              $angle.generationAuthorized -ne $false -or
+              $angle.sourceWrites -ne $false -or
+              $angle.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_ANGLE_SORT_SCAN_CONTRACT_FAILED'
+          }
+          $lateScanPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-late-system-read.json'
+          $lateScanLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-late-system-read.log'
+          & dotnet $dll scan-late-system-read --game $game --out $lateScanPath *> $lateScanLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $lateScanPath -PathType Leaf)) {
+            throw 'GCO_FRESH_LATE_SYSTEM_READ_SCAN_FAILED'
+          }
+          $late = Get-Content -LiteralPath $lateScanPath -Raw | ConvertFrom-Json
+          if ($late.schemaVersion -ne 'gco.redscript.late-system-read.scan.v1' -or
+              $late.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $late.sourceFiles -ne $audit.sourceFiles -or
+              $late.generationAuthorized -ne $false -or
+              $late.sourceWrites -ne $false -or
+              $late.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_LATE_SYSTEM_READ_SCAN_CONTRACT_FAILED'
+          }
+          $bbScanPath = Join-Path $env:RUNNER_TEMP 'gco-fresh-blackboard-definitions.json'
+          $bbScanLog = Join-Path $env:RUNNER_TEMP 'gco-fresh-blackboard-definitions.log'
+          & dotnet $dll scan-blackboard-defs --game $game --out $bbScanPath *> $bbScanLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $bbScanPath -PathType Leaf)) {
+            throw 'GCO_FRESH_BLACKBOARD_DEFINITIONS_SCAN_FAILED'
+          }
+          $bbReport = Get-Content -LiteralPath $bbScanPath -Raw | ConvertFrom-Json
+          if ($bbReport.schemaVersion -ne 'gco.redscript.bbdefs.scan.v1' -or
+              $bbReport.sourceFiles -ne $audit.sourceFiles -or
+              $bbReport.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $bbReport.generationAuthorized -ne $false -or
+              $bbReport.sourceWrites -ne $false -or
+              $bbReport.measuredSavingsClaimed -ne $false) {
+            throw 'GCO_FRESH_BLACKBOARD_DEFINITIONS_CONTRACT_FAILED'
+          }
+          Write-Host ('PASS current REDscript immutable-definition candidate scan: eligible=' +
+              [int]$bbReport.eligible + ' already=' + [int]$bbReport.alreadyComplete +
+              ' sourcesUntouched=true previewOnly=true')
+          $after = @(Get-ChildItem -LiteralPath $scripts -File -Recurse -Filter '*.reds')
+          if ($after.Count -ne $files.Count) { throw 'GCO_FRESH_SOURCE_INVENTORY_MUTATED' }
+          foreach ($file in $after) {
+            $relative = [IO.Path]::GetRelativePath($scripts, $file.FullName)
+            if (!$before.ContainsKey($relative) -or
+                $before[$relative] -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash) {
+              throw 'GCO_FRESH_SOURCE_BYTES_MUTATED'
+            }
+          }
+          # The old sealed capture is validated only against the old source.
+          # Report drift counts, not private filenames or source text.
+          $historicalHashes = @{}
+          foreach ($file in @(Get-ChildItem -LiteralPath $historical -File -Recurse -Filter '*.reds')) {
+            $relative = [IO.Path]::GetRelativePath($historical, $file.FullName)
+            $historicalHashes[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+          }
+          $modified = 0; $added = 0; $removed = 0
+          foreach ($relative in $before.Keys) {
+            if (!$historicalHashes.ContainsKey($relative)) { $added++ }
+            elseif ($historicalHashes[$relative] -ne $before[$relative]) { $modified++ }
+          }
+          foreach ($relative in $historicalHashes.Keys) {
+            if (!$before.ContainsKey($relative)) { $removed++ }
+          }
+          Write-Host ('PASS newer REDscript source read-only audit: files=' + $audit.sourceFiles +
+            ' olderFixtureModified=' + $modified + ' added=' + $added + ' removed=' + $removed +
+            ' generationAuthorized=false captureIdentityNotAssumed=true')
+      - name: Discover generic callback shapes in private effective REDscript stack
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
         shell: pwsh
         working-directory: unified
         run: |
           $ErrorActionPreference='Stop'
-          dotnet build src/GRedscript.Resolver/GRSP.Resolver.csproj -c Release --nologo
-          if ($LASTEXITCODE -ne 0) { throw 'GCO-owned REDscript Resolver build failed' }
-          python -m unittest discover -s tests/GRedscript.Resolver.Tests -p 'test_*.py' -v
-          if ($LASTEXITCODE -ne 0) { throw 'GCO-owned REDscript Resolver safety/CLI contracts failed' }
-          Write-Host 'PASS GCO-local REDscript Resolver contract tests; this does not authorize source mutations'
+          $game='.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll='src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit=Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.json'
+          $privateLog=Join-Path $env:RUNNER_TEMP 'gco-private-callback-scan.log'
+          & dotnet $dll scan-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_PRIVATE_CALLBACK_SCAN_FAILED'
+          }
+          $scan=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.callback.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.callbackMethods -lt 1 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceWrites -ne $false) {
+            throw 'GCO_CALLBACK_SCAN_CONTRACT_FAILED'
+          }
+          # No private paths, source lines or raw scan JSON leave the runner.
+          Write-Host ('PASS GCO generic callback inventory: files=' + $scan.sourceFiles +
+            ' callbacks=' + $scan.callbackMethods +
+            ' sourceProvenIndexCandidates=' + $scan.fixedCnameIndexEligible +
+            ' already=' + $scan.fixedCnameIndexAlreadyComplete +
+            ' generated=0 originalSourcesUntouched=true')
+      - name: Classify full-stack REDscript callbacks and PlayerPuppet wrappers (manual research only)
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') && github.event_name == 'workflow_dispatch' && inputs.research_diagnostics }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $report = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-private-callback-semantics.log'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          & dotnet $dll resolve-callbacks --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+              throw 'GCO_CALLBACK_SEMANTICS_SOURCE_CLASSIFICATION_FAILED'
+          }
+          $analysis = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json -Depth 70
+          if ($analysis.schemaVersion -ne 'gco.redscript.callback.semantics.v1' -or
+              $analysis.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $analysis.sourceFiles -ne $audit.sourceFiles -or
+              [int]$analysis.classifiedCallbacks -le 45 -or
+              [int]$analysis.onActionMethods -lt 45 -or
+              [int]$analysis.playerPuppetOnActionWrappers -lt 1 -or
+              [int]$analysis.callbacksWithForwardedHelpers -lt 1 -or
+              [int]$analysis.recipeCandidateCounts.G_INPUT_ROUTE -lt 45 -or
+              $analysis.generationAuthorized -ne $false -or
+              $analysis.actionSelectorCompletenessProven -ne $false -or
+              $analysis.callbackEntryCountsKnown -ne $false -or
+              $analysis.sourceWrites -ne $false) {
+              throw 'GCO_CALLBACK_SEMANTICS_WHOLE_STACK_CONTRACT_FAILED'
+          }
+          Write-Host ('PASS full-stack CET-style REDscript callback classification:' +
+              ' callbacks=' + $analysis.classifiedCallbacks +
+              ' OnAction=' + $analysis.onActionMethods +
+              ' PlayerPuppetWraps=' + $analysis.playerPuppetOnActionWrappers +
+              ' helperForwarders=' + $analysis.callbacksWithForwardedHelpers +
+              ' recipeFamilies=' + $analysis.recipeCandidateCounts.Count +
+              ' rewritten=0')
+          # The private catalog contains third-party source paths and must
+          # never become a GCO public artifact or be printed in detail.
+      - name: Scan private REDscript OnAction literal membership candidates
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $dll = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $audit = Get-Content (Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json') -Raw | ConvertFrom-Json
+          $report = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.json'
+          $privateLog = Join-Path $env:RUNNER_TEMP 'gco-action-filter-scan.log'
+          & dotnet $dll scan-action-filter --game $game --out $report *> $privateLog
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_FAILED'
+          }
+          $scan = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($scan.schemaVersion -ne 'gco.redscript.action-filter.scan.v1' -or
+              $scan.sourceStackSha256 -ne $audit.sourceStackSha256 -or
+              $scan.sourceFiles -ne $audit.sourceFiles -or
+              $scan.onActionMethods -le 0 -or
+              $scan.generationAuthorized -ne $false -or
+              $scan.compilerValidated -ne $false -or
+              $scan.sourceModified -ne $false) {
+            throw 'GCO_ACTION_FILTER_PRIVATE_SCAN_CONTRACT_FAILED'
+          }
+          # No private file paths, names or candidate JSON leave the runner.
+          Write-Host ('PASS GCO generic fixed-action filter scanner: callbacks=' +
+            $scan.onActionMethods + ' sourceProven=' + $scan.eligible +
+            ' already=' + $scan.alreadyComplete + ' unproven=' + $scan.refused +
+            ' sourceWrites=0 deployable=false')
+      # Real R3 milestone: capture lives on a separate GCO commit. Check out
+      # ONLY that immutable fixture; never merge unrelated branch changes.
+      - name: Checkout exact real GRSP 15:51 capture fixture
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
+          ref: a8d355462dcc1ac5bc42ee7f41f549368676638a
+          path: unified/.gco-ci-real-grsp-capture
+          persist-credentials: false
+          sparse-checkout: |
+            tests/fixtures/real-captures
+          sparse-checkout-cone-mode: true
+      # Source test binary lives on stable main, not the REDscript dev branch.
+      # A sparse checkout imports only the exact immutable native test asset.
+      - name: Checkout native CET player/location test fixture
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/Gs-Cyberpunk2077_Optimizations
+          ref: main
+          path: unified/.gco-ci-native-fixture
+          persist-credentials: false
+          sparse-checkout: |
+            tests/G-CETtoNATIVEplayer_state_machine
+          sparse-checkout-cone-mode: true
+      - name: Replay real sealed GRSP capture with private REDscript source
+        if: ${{ (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        timeout-minutes: 12
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = '.gco-ci-real-grsp-capture/tests/fixtures/real-captures/GCO-Capture-15112026_155121.zip'
+          $game = '.gco-ci-private-redscript/GCO-Capture-15112026_021913'
+          $resolver = 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll'
+          $sourceAudit = Join-Path $env:RUNNER_TEMP 'grsp-private-source-audit.json'
+          $ownerCompiler = 'src/GRedscript.Resolver/Verify-RealStackCompile.ps1'
+          $compilerArchive = '.gco-ci-private-redscript/Compiler/ssc.zip'
+          $cleanBaseline = '.gco-ci-private-redscript/Compiler/finalCLEANbaseline.zip'
+          $effectiveCache = '.gco-ci-private-redscript/Compiler/modded/final.zip'
+          $pluginsArchive = '.gco-ci-private-redscript/Compiler/plugins.zip'
+          & ./tests/GTotalOptimizer.Core.Tests/Verify-RealGrspResolverReplay.ps1 -FixtureZip $fixture -PrivateSourceRoot $game -ResolverDll $resolver -SourceAuditJson $sourceAudit -OwnerCompilerScript $ownerCompiler -CompilerArchive $compilerArchive -CleanBaselineArchive $cleanBaseline -EffectiveCacheArchive $effectiveCache -PluginsArchive $pluginsArchive -FrameworkRoot '.gco-ci-framework' -IncludeResearchDiagnostics:('${{ inputs.research_diagnostics }}' -eq 'true')
+          if ($LASTEXITCODE -ne 0) { throw 'GCO-local REDscript real capture/compile replay failed' }
+      - name: Remove exact real GRSP fixture checkout
+        if: ${{ always() && (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          if (Test-Path -LiteralPath '.gco-ci-real-grsp-capture') {
+            Remove-Item -LiteralPath '.gco-ci-real-grsp-capture' -Recurse -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath '.gco-ci-native-fixture') {
+            Remove-Item -LiteralPath '.gco-ci-native-fixture' -Recurse -Force -ErrorAction Stop
+          }
+      - name: Remove private REDscript source checkout
+        if: ${{ always() && (github.ref == 'refs/heads/dev/redscript/resolver_handoff' || github.ref == 'refs/heads/dev/redscript/integration') }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          foreach ($directory in @('.gco-ci-private-redscript', '.gco-ci-framework')) {
+            if (Test-Path -LiteralPath $directory) {
+              Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction Stop
+            }
+          }
       # High-value physical compiler contract: validate the exact supported
       # upstream release archive, then exercise GCO's real path/hash detector.
       - name: Verify official redscript 0.5.31 reference binaries
@@ -177,10 +613,10 @@ jobs:
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
-          # Same exact CET source/run as the profiler. This reference is NOT
-          # copied wholesale into GCO (it is .NET8 self-contained); only its
-          # source-owned native service is imported, and the old binary is
-          # exercised as a behavior oracle for the rebuilt .NET10 CLI.
+          # Previously verified .NET8 owner reference/native assets remain
+          # pinned independently of the newer managed CET source checkout.
+          # Import only the owner native service; exercise the reference CLI
+          # as a behavior oracle for the rebuilt .NET10 Resolver.
           gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
@@ -244,54 +680,6 @@ jobs:
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
-      - name: Verify single GCO application ZIP contains both Resolvers and owner-native profiler
-        shell: pwsh
-        working-directory: unified
-        run: |
-          $ErrorActionPreference='Stop'
-          $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
-          $manifest=Get-Content (Join-Path $root 'components/manifest.json') -Raw | ConvertFrom-Json
-          $tools=@($manifest.analysisTools)
-          if ($tools.Count -ne 2 -or
-              @($tools | Where-Object id -eq 'cet-resolver').Count -ne 1 -or
-              @($tools | Where-Object id -eq 'redscript-resolver').Count -ne 1) {
-            throw 'Single GCO application does not contain both independent Resolver components'
-          }
-          $red=@($tools | Where-Object id -eq 'redscript-resolver')[0]
-          if ($red.framework -ne 'net10.0' -or
-              $red.generationAuthorized -ne $false -or
-              @($red.files).Count -lt 4) {
-            throw 'GCO managed REDscript component provenance or safety state invalid'
-          }
-          foreach($file in $red.files) {
-            $full=Join-Path $root ([string]$file.path)
-            if (!(Test-Path -LiteralPath $full -PathType Leaf)) {
-              throw "Bundled REDscript file is missing: $($file.path)"
-            }
-            $sha=(Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($sha -ne $file.sha256) { throw "Bundled REDscript file hash mismatch: $($file.path)" }
-          }
-          $resolverDll=Join-Path $root 'components/redscript-resolver/app/GRedscript.Resolver.dll'
-          $provenance=Get-Content (Join-Path $root 'components/COMPONENT-PROVENANCE.json') -Raw | ConvertFrom-Json
-          $dllHash=(Get-FileHash $resolverDll -Algorithm SHA256).Hash.ToLowerInvariant()
-          $exeHash=(Get-FileHash (Join-Path $root $red.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($dllHash -ne $red.assemblySha256 -or
-              $exeHash -ne $red.sha256 -or
-              $dllHash -ne $provenance.redscriptResolver.sha256 -or
-              $provenance.redscriptResolver.generationAuthorized -ne $false) {
-            throw 'Bundled REDscript executable/provenance mismatch'
-          }
-          $native=Join-Path $root 'components/grsp/payload/G-REDscript-Profiler.dll'
-          if (!(Test-Path -LiteralPath $native -PathType Leaf)) {
-            throw 'Native GRSP profiler missing from bundled GCO application'
-          }
-          $nativeBytes=[Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($native))
-          foreach($name in @('RSP_ProxyAttribution.csv','RSP_ProxyChildren.csv','RSP_CallbackReuse.csv','GCO-F11-Complete.flag')) {
-            if (!$nativeBytes.Contains($name)) { throw "Bundled native profiler missing $name" }
-          }
-          $coreclr=@(Get-ChildItem -LiteralPath $root -Filter 'coreclr.dll' -Recurse -File)
-          if ($coreclr.Count -ne 1) { throw 'Expected exactly one shared .NET runtime in GCO app' }
-          Write-Host 'PASS one GCO application: CET/REDscript Resolvers, native GRSP, shared runtime and strict evidence gates'
       - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
         shell: pwsh
         working-directory: unified

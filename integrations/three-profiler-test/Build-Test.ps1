@@ -184,29 +184,38 @@ Copy-Item -LiteralPath $nativeResolverDll -Destination (Join-Path $nativeResolve
 VerifyFile (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll') $nativeResolverHash
 Write-Host 'PASS pinned CET Resolver recompiled for one shared .NET10 runtime with unmodified owner assets'
 
-# GCO-local REDscript Resolver/Generator is a private, separately owned
-# .NET 10 application component, never another GRSP-managed executable or
-# an extra .NET runtime. Generation stays evidence-only/nondeployable until
-# all source-state, SCC and gameplay gates are satisfied.
-$redscriptResolverApp=Join-Path $components 'redscript-resolver/app'
-New-Item -ItemType Directory -Force $redscriptResolverApp | Out-Null
-PublishManager 'src/GRedscript.Resolver/GRSP.Resolver.csproj' $redscriptResolverApp
-$redscriptResolverDll=Join-Path $redscriptResolverApp 'GRedscript.Resolver.dll'
-$redscriptResolverConfig=Join-Path $redscriptResolverApp 'GRedscript.Resolver.runtimeconfig.json'
-foreach($file in @($redscriptResolverDll,$redscriptResolverConfig)) {
-  if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
-    throw "Bundled GCO REDscript Resolver missing: $file"
+# Official SCC is checked only in the existing GitHub CI lanes.
+# Do not redistribute the third-party compiler in the GCO application.
+if ($Integrated) {
+  if (Test-Path -LiteralPath (Join-Path $components 'redscript-compiler')) {
+    throw 'GCO_PACKAGE_THIRD_PARTY_SCC_COMPILER_FORBIDDEN'
   }
+  $owner=Join-Path (Get-Location) 'vendor-redruntime'
+  if (!(Test-Path -LiteralPath (Join-Path $owner 'r6/scripts/G-RedRuntime') -PathType Container)) {
+    throw 'Authoritative REDruntime owner source missing'
+  }
+  $frameworkDir=Join-Path $components 'redruntime/owner'
+  $meta=@()
+  # Only the framework owner source tree is required by the approved
+  # generic passes. Experimental optional-native sources stay in GitHub for
+  # manual development; do not ship them in the normal GCO application.
+  $inputRoot=Join-Path $owner 'r6/scripts/G-RedRuntime'
+  foreach ($file in @(Get-ChildItem -LiteralPath $inputRoot -Filter *.reds -File -Recurse)) {
+    $rel=[IO.Path]::GetRelativePath($owner,$file.FullName).Replace('\','/')
+    $dest=Join-Path $frameworkDir $rel
+    New-Item -ItemType Directory -Force (Split-Path $dest -Parent) | Out-Null
+    Copy-Item -LiteralPath $file.FullName -Destination $dest
+    $meta+=@{ path=$rel; sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash }
+  }
+  if (Test-Path -LiteralPath (Join-Path $frameworkDir 'optional-native')) {
+    throw 'GCO_PACKAGE_EXPERIMENTAL_REDSCRIPT_NATIVE_BACKEND'
+  }
+  if ($meta.Count -lt 11) { throw "Framework owner bundle incomplete: $($meta.Count)" }
+  $meta | Sort-Object path | ConvertTo-Json -Depth 4 |
+    Set-Content -LiteralPath (Join-Path $components 'redruntime/source-sha256.json') -Encoding UTF8
+  Write-Host "PASS bundled $($meta.Count) authoritative REDruntime files; official SCC remains CI-only"
 }
-$redscriptRuntime=Get-Content -LiteralPath $redscriptResolverConfig -Raw
-if ($redscriptRuntime -notmatch 'net10\.0' -or $redscriptRuntime -notmatch 'Microsoft.NETCore.App') {
-  throw 'GCO REDscript Resolver does not target the shared .NET 10 runtime'
-}
-if (@(Get-ChildItem -LiteralPath $redscriptResolverApp -Recurse -File |
-      Where-Object { $_.Name -eq 'coreclr.dll' }).Count -ne 0) {
-  throw 'Second .NET runtime found in GCO REDscript Resolver'
-}
-Write-Host 'PASS GCO REDscript Resolver included as framework-dependent component in original app artifact'
+
 
 # Source of truth for both Windows executables and WPF windows.
 # Keep the owner-provided multi-resolution ICO intact (no resampling).
@@ -395,7 +404,7 @@ Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.6
 Write-Host 'PASS official PresentMon CLI 2.6.0'
 
 # One coreclr in entire bundle. CET native payload remains source-owned and pinned.
-# Integrated GRSP native payload is imported unchanged from GRSP native CI.
+# Integrated GRSP native payload comes unmodified from verified GRSP owner CI.
 $core=@(Get-ChildItem $root -Filter 'coreclr.dll' -File -Recurse)
 if ($core.Count -ne 1 -or !$core[0].FullName.StartsWith($runtime, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Expected one shared .NET runtime; found $($core.Count)"
@@ -417,20 +426,18 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
   throw 'Owner-native provenance run ID missing for GCO instrumentation'
 }
 $nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
-$redscriptResolverSha=(Get-FileHash $redscriptResolverDll -Algorithm SHA256).Hash.ToLowerInvariant()
 $provenance=@{
   testOnly=$true
-  cet=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
+  cet=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; runId=41820765951; artifactId=13317131256; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
-  cetResolver=@{ sourceSha='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
-  redscriptResolver=@{ sourceRepository='GCO_MAIN'; sourceCommit=[string]$env:GITHUB_SHA; framework='net10.0'; sha256=$redscriptResolverSha; generationAuthorized=$false }
+  cetResolver=@{ sourceSha='976c1662077f67e5e69b978d19cd2332f35ce2e9'; ownerReferenceSourceSha='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ownerCiRun=41820765951; ownerArtifactId=13317096524; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
   $entries=@(
-    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'; ciRun=41820765951; artifactId=13317131256 },
-    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit=$grSourceCommit; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'; referenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'; ciRun=41820765951; artifactId=13317131256 },
+    @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
   )
   foreach ($entry in $entries) {
     $entry.sha256=(Get-FileHash (Join-Path $root $entry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -453,7 +460,8 @@ if ($Integrated) {
   $resolverEntry=@{
     id='cet-resolver'
     executable='components/cet-resolver/app/G-CET-Resolver.exe'
-    sourceCommit='08f080ce0cfdb7f1df25ac24fa01aa7094ae8f44'
+    sourceCommit='976c1662077f67e5e69b978d19cd2332f35ce2e9'
+    ownerReferenceSourceCommit='7f3489d8fd7e02d595f4a053616044cf2f6b2dab'
     ownerCiRun=41820765951
     ownerArtifactId=13317096524
     framework='net10.0-windows'
@@ -461,32 +469,13 @@ if ($Integrated) {
     files=$resolverAssetEntries
   }
   $resolverEntry.sha256=(Get-FileHash (Join-Path $cetResolverApp 'G-CET-Resolver.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
-  $redscriptResolverFiles=@(Get-ChildItem -LiteralPath $redscriptResolverApp -File -Recurse |
-    Sort-Object FullName | ForEach-Object {
-      @{ path=([IO.Path]::GetRelativePath($root,$_.FullName).Replace('\','/'));
-         sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-    })
-  $redscriptResolverEntry=@{
-    id='redscript-resolver'
-    executable='components/redscript-resolver/app/GRedscript.Resolver.exe'
-    sourceRepository='GCO_MAIN'
-    sourceCommit=[string]$env:GITHUB_SHA
-    framework='net10.0'
-    generationAuthorized=$false
-    files=$redscriptResolverFiles
-  }
-  if (!(Test-Path (Join-Path $root $redscriptResolverEntry.executable) -PathType Leaf)) {
-    throw 'Bundled GCO REDscript Resolver application executable missing'
-  }
-  $redscriptResolverEntry.sha256=(Get-FileHash (Join-Path $root $redscriptResolverEntry.executable) -Algorithm SHA256).Hash.ToLowerInvariant()
-  $redscriptResolverEntry.assemblySha256=$redscriptResolverSha
   $payloads=@($payloadPaths | ForEach-Object {
     @{ path=$_; sha256=(Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLowerInvariant() }
   })
   VerifyFile (Join-Path $root $payloadPaths[0]) $cm.targetCET.profilerSha256
   VerifyFile (Join-Path $root $payloadPaths[1]) $cm.zeroEngine.profilerSchedulerSha256
   VerifyFile (Join-Path $root $payloadPaths[4]) 'b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af'
-  @{ schemaVersion=2; components=$entries; payloads=$payloads; analysisTools=@($resolverEntry,$redscriptResolverEntry) } |
+  @{ schemaVersion=2; components=$entries; payloads=$payloads; analysisTools=@($resolverEntry) } |
     ConvertTo-Json -Depth 8 | Set-Content (Join-Path $components 'manifest.json') -Encoding UTF8
   # The GitHub artifact contains ONE portable app directory plus a short
   # adjacent user guide. Never copy the guide into the game optimization ZIP.
@@ -522,7 +511,9 @@ IMPORTANT
 - If a capture is missing, the app identifies the missing domain before Continue.
 - Do not replace or delete your original mods. Use the app's RESTORE ORIGINALS
   recovery action if interrupted during profiling.
-- The optimization generator/combined ZIP feature is not yet enabled.
+- GENERATE creates a source-checked CET + REDscript test ZIP after ANALYZE.
+- Official REDscript SCC compilation is run in GitHub CI, not on your PC.
+- Generated mods still require in-game validation; install as a reversible Vortex overlay.
 - Your captured data is under the app folder's RESULTS directory.
 
 VERSION $version (portable build). No system .NET installation required.
