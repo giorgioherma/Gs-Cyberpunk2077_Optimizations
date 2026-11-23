@@ -4,6 +4,18 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+## 2026-11-23 — selected-profile isolation + authenticated GCO↔MO2 command protocol GREEN (Stage 2 prototype)
+
+**Native second-profile proof:** [MO2 CI #6 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45274481534), checkpoint `965f1406e166865d2aa479f21da3e5045f4ef1fa`. The official MO2 2.5.2 USVFS `0.5.6.1` executed two **native x64** process launches. Session profile A had GCO's highest-priority CET ASI/REDscript virtual overrides; after USVFS mapping reset, unrelated profile B read its **own REDscript** and original user Overwrite ASI, with no GCO profiler bytes or source mutation. This is a real native VFS isolation test, **not** a live MO2 UI/plugin/gameplay run.
+
+**Authenticated protocol source:** `integrations/mo2/gco_mo2_bridge.py` now publishes a random **bridge epoch** in its companion heartbeat, generates a 256-bit per-process secret in the current user's LocalAppData and consumes one atomic JSON command at a time via a Qt timer. Only `probe` and `launch` operations are recognized. Requests bind schema/epoch/request ID/operation/profile/game/staging/session/timestamp via HMAC-SHA256; malformed/stale/bad-HMAC/replayed/oversized inputs are refused. Successful selected-profile launch calls the one-shot mapper and `startApplication(profile=<selected>)`, returning a Windows process ID and closing MO2's process handle. Responses are HMAC-signed; no arbitrary executable or script path can be supplied. Stage files remain strict CET/GRSP allowlisted, within bounded GCO session storage and hash-checked before mapping.
+
+**GCO .NET10 consumer:** `src/GTotalOptimizer.Core/Mo2CompanionCommandClient.cs` implements the matching authenticated request/response contract with atomic request publication, epoch + status/process validation, bounded wait and response HMAC verification. `Mo2CompanionDiscovery` now records verified epoch + status path. GCO's production `LaunchAsync` **explicitly refuses while `Mo2FeatureGate.Enabled=false`**, so no UI path can install/launch from this prototype.
+
+**Evidence:** [MO2 CI #7 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45275626740), checkpoint `768efd382b51b24eb997ab9ef3bcfb60cf973f7b`. Python tests cover correct/invalid HMAC, replay, wrong epoch, selected profile A while UI B, no mapping for unrelated calls and source drift. .NET tests enforce a **shared fixed Python/C# HMAC test vector** and that production MO2 launch remains gated. Existing C# read-only profile/companion tests and official real-USVFS x64 isolation suite also pass.
+
+**Still unproven:** Actual live MO2 plugin registration/IPC and `GetProcessId` from MO2's runtime handle; complete installer/source-owner overlay preparation, native CET/GRSP forced loading, F11 capture/collection, crash-safe restore, Page 1 controls and Page 2 effective-source adapter. The temporary GCO layer is currently **a virtual mapper overlay**, not an enabled entry in MO2's left-panel modlist. This preserves the owner's one virtual profiler deployment and avoids modifying other profiles. It must be validated on real MO2 before enabling the feature or claiming production support.
+
 ## 2026-11-23 — selected NONCURRENT profile one-shot mapper proof (Stage 0 advanced; Stage 2 prototype)
 
 **Upstream source findings (authoritative, external):**
@@ -56,7 +68,7 @@
 - Extend existing `Mo2InstallLocator`/`Mo2SourceInspector` rather than new scanner; include physical game baseline, exact enabled packages, precedence, Overwrite and source-owner provenance. Never claim VFS-verified from physical scanning.
 - **Exit:** portable/global/custom-drive discovery and dropdown unit tests; Direct UI unchanged; Refresh read-only; MO2 installer buttons still blocked until later stages.
 
-## Stage 2 — MO2 companion and selected-profile control [IN PROGRESS — ONE-SHOT MAPPER PROTOTYPE ONLY]
+## Stage 2 — MO2 companion and selected-profile control [IN PROGRESS — AUTHENTICATED COMMAND PROTOTYPE; LIVE MO2 NOT PROVEN]
 
 - Create a minimal MO2 plugin/adapter and a local GCO request/reply protocol; authorize only narrow operations scoped to the chosen instance, profile, session and owned temp mod. Check plugin installation/restart handshake; no unsafe arbitrary execution or path traversal.
 - Use supported MO2 API to create a uniquely named temporary mod, enable and prioritize it for the **chosen** profile, verify exact winner paths; launch game via `startApplication(..., profile=<selected>)`.
