@@ -1071,8 +1071,8 @@
                                       Foreground="#98A9B1"/>
                              </TextBlock>
                              <!-- Completion guidance is one compact row. The published path belongs in the console. -->
-                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,14,0,0"
-                                        FontSize="12.5" TextWrapping="Wrap" Foreground="#B7CED6">
+                             <TextBlock x:Name="GeneratedPassNotice" Visibility="Collapsed" Margin="3,30,0,0"
+                                        FontSize="13" TextWrapping="Wrap" Foreground="#B7CED6">
                                  <Run Text="PASS READY - " Foreground="#FFF000" FontFamily="{StaticResource Oxanium}" FontWeight="Bold"/>
                                  <Run Text="Set the optimization pass to overwrite / win every conflict. "/>
                                  <Run Text="If installing manually, BACK UP first."
