@@ -68,6 +68,14 @@ jobs:
               $_.name -eq $required -and $_.expired -eq $false
             })
             if ($match.Count -eq 1) {
+              # Never import older owner-native DLLs predating the F11
+              # quiescence and re-entrancy safety fix from main.
+              $safetyBase='78dd87635bc7cba77c427c3928f10e0be18d7eea'
+              $comparison=(& gh api "repos/$repo/compare/$safetyBase...$($run.head_sha)") | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0 -or $comparison.status -notin @('identical','ahead')) {
+                Write-Host 'Skipping native artifact predating required F11 safety correction'
+                continue
+              }
               $selected=$run
               break
             }
