@@ -10,6 +10,16 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
     return;
 }
 
+// Stage 4: running official MO2 application must actually load the Python
+// companion and service a signed read-only request (not a mocked mobase API).
+if (args.Length > 0 && args[0] == "--mo2-real-companion-probe")
+{
+    if (args.Length != 5)
+        throw new ArgumentException("Usage: --mo2-real-companion-probe <MO2 application folder> <MO2 instance> <fake test game> <current profile>");
+    await Mo2RealCompanionProbeTests.RunAsync(args[1], args[2], args[3], args[4]);
+    return;
+}
+
 // Stage 3: real source-owner managers, not simulated output.
 if (args.Length > 0 && args[0] == "--mo2-real-owner-overlay")
 {
