@@ -8,7 +8,7 @@
 
 Add **Direct / MO2** source tabs *inside the existing Page 1 game-source area*, without adding a page or changing the approved three-step workflow or visual design. In MO2 mode, the player chooses **one MO2 application folder** and **one profile from an automatically enumerated dropdown**. Detect the matching instance (portable or global), game directory, configured source/overwrite directories, native framework prerequisites and effective file winners. When there are multiple instances, present an instance choice only if necessary. Advanced recovery selectors are for genuinely unresolved configurations, not default setup.
 
-GCO itself MUST activate the **selected** profile's temporary profiler mod, then launch Cyberpunk through MO2 for that very profile; the user is never required to change MO2's currently selected profile manually. The entire working set, profiler session, native outputs, and Page 2 source view must belong to the selected instance+profile, not to whichever profile MO2's UI happens to display.
+GCO itself MUST attach **one session-owned temporary profiler virtual layer to the selected launch profile**, then launch Cyberpunk through MO2 for that very profile; the user is never required to change MO2's currently selected profile manually. The chosen mechanism is MO2's supported `IPluginFileMapper`, applied after the requested profile's regular mappings, **not an enable/priority edit in another profile's modlist**. The entire working set, profiler session, native outputs, and Page 2 source view must belong to the selected instance+profile, not to whichever profile MO2's UI happens to display.
 
 One GCO build, one game-relative optimization ZIP, one existing two-page WPF workflow. No new optimizer or duplicated semantic rules. **Direct mode remains unchanged.** MO2 mode is disabled until actual runtime proof and explicit acceptance.
 
@@ -24,7 +24,7 @@ Verified from the GCO `main` source:
 
 Externally documented MO2 capabilities (API evidence; **not** user gameplay proof):
 
-- MO2 Python `IOrganizer.createMod` creates a mod; `IModList.setActive` and `setPriority` control enable/priority; `removeMod` can remove a mod. `IOrganizer.startApplication(executable, ..., profile=..., forcedCustomOverwrite=...)` launches with USVFS and accepts an explicit **profile** parameter. These APIs are documented, but selected-profile mutation semantics need verification: `IModList` changes may apply only to the currently selected UI profile. Do **not** conflate explicit-profile launch with profile-specific mod activation. No documented `setCurrentProfile` method was found in the API reference inspected; investigate actual supported APIs/controlled synchronization without direct `modlist.txt` surgery.
+- `IOrganizer.startApplication(executable, ..., profile=..., forcedCustomOverwrite=...)` launches with an explicit profile. `IModList.setActive/setPriority` operate on the **currently loaded MO2 profile** and expose no target-profile parameter; using them while MO2 displays profile B would violate selected profile A isolation. **Authoritative upstream C++ source** establishes `OrganizerCore::beforeRun` calls `fileMapping(profileName, customOverwrite)` and that function composes profile-specific enabled mods, Overwrite, then `IPluginFileMapper::mappings()`. `modorganizer-plugin_python` supports `IPluginFileMapper` and expects **`createPlugins()` alone** for multiple plugins: defining `createPlugin()` as well silently wins loader precedence. A single session-scoped file-mapper layer therefore avoids changing B's enabled mods. This is a confirmed **source contract**; a fully running MO2 Python plugin must still be tested.
 - Contemporary MO2 Cyberpunk plugin documentation describes CET and RED4ext forced-load support without RootBuilder for newer installs, while legacy RootBuilder and mixed physical/virtual stacks exist. Treat support as a capability/runtime probe, not a universal assumption or version lock.
 - Runtime-generated output may land in MO2 Overwrite or a configured custom output; native CET and GRSP F11 captures must be actually located and verified. Never blanket-clear Overwrite.
 
@@ -50,10 +50,10 @@ Always include the **physical game source as baseline**, even when MO2 contains 
 
 ## Proposed deployment boundary
 
-**One temporary GCO profiler mod** per active GCO session, e.g. `GCO Temporary Profilers - <session-id>` in the selected MO2 instance, containing *only necessary winning overrides*:
+**One session-owned temporary profiler virtual layer**, staged under GCO's user-local session storage (and mapped through MO2 for only the authorized launch), containing *only necessary winning overrides*. It behaves like a single high-priority MO2 mod without creating an enabled entry in any other profile. A registered MO2 mod container is optional **only if** its lifecycle has been proven profile-neutral; the current source contract does **not** require it:
 
 ```text
-GCO Temporary Profilers - <session>/
+GCO/MO2Bridge/staging/<session-id>/
   bin/x64/plugins/cyber_engine_tweaks.asi
   bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua            (only if actually changed)
   bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/...        (required scheduler files)
@@ -66,9 +66,9 @@ This mod uses the **real game-relative layout**, not an invented `root/` wrapper
 
 **Reuse the CET owner's authoritative implementation** for safe 0-Engine compatibility classification, adaptive injection and profiler scheduler generation. Preferred feasibility probe: build a disposable physical-layout fixture from the *verified effective selected-profile winners*, run the real CET manager on the fixture, and extract the required verified changed files into the MO2 temporary mod. Ensure the fixture satisfies manager preconditions without fabricating profiler compatibility; it is never the live game. If that is insufficient or bypasses required owner checks, extend the existing CET owner with a small supported `prepare-overlay`/staging contract **in the CET repo**, not a duplicate GCO Lua transformer. GCO owns only staging/deployment/orchestration. GRSP supplies its own verified native payload; no duplicate Rust profiler.
 
-MO2 companion/plugin is a small integration adapter, not a second profiler. It owns actual MO2 mod creation/activation/priority/launch/deactivation/removal through supported APIs, with an authenticated local/request-bound bridge to GCO (exact transport to be chosen after API reconnaissance). Prefer unique session-owned mod names that never trigger MO2's "merge or replace existing mod" dialog. Preserve modified user data even if encountered inside a GCO-named folder; do not delete foreign content.
+MO2 companion/plugin is a small integration adapter, not a second profiler. It owns a one-shot `IPluginFileMapper` that authorizes a **single selected-profile launch** and maps **one verified GCO-owned staging layer** after MO2's chosen profile and Overwrite. The current prototype constructs the exact mapping via `GcoLaunchMappingController` but **does not yet implement a GCO↔MO2 authenticated request channel or production deployment**. Use narrow authenticated commands; do not automatically enable other profiles, overwrite user mods, or silently create persistent modlist entries. Preserve modified user data even if encountered inside a GCO-named folder; do not delete foreign content.
 
-**Critical selected-profile constraint:** MO2's documented `startApplication(..., profile=name)` chooses the launch profile, but `modList().setActive/setPriority` is not proven to target a *noncurrent* profile. Stage 2 must demonstrate automatically enabling the profiler **for the dropdown-selected profile** (even when MO2 UI is showing another one), with no unintended changes to another profile. Find a supported profile-targeted API or safe plugin-managed synchronization before installing. If impossible, block MO2 installation with an exact reported capability blocker rather than asking the user to coordinate or editing `modlist.txt` behind MO2.
+**Critical selected-profile contract:** use `IPluginFileMapper` as a **one-launch** overlay and `startApplication(..., profile=<GCO-selected>)` to generate the actual selected-profile VFS; never call `modList().setActive/setPriority` as a substitute. A native USVFS x64 fixture verifies priority order and profile isolation, while a mocked Python MO2 API test verifies one-shot arm/consume and exact launch profile. Stage 2 must still prove actual plugin registration, noncurrent-profile launch identity, file winner and native loading in a running MO2 instance. Refuse unverified/unsupported setups rather than falling back to manual MO2 profile coordination.
 
 ## Session protocol and trust
 
@@ -76,13 +76,13 @@ MO2 companion/plugin is a small integration adapter, not a second profiler. It o
 Select MO2 instance + profile
   -> verify instance/game/profile + effective source winners
   -> Prepare selected-profile CET/GRSP profiler overlay
-  -> MO2 activates owned temporary mod for selected profile at proven precedence
+  -> MO2 one-shot file mapper adds GCO-owned layer after selected profile and Overwrite
   -> confirm native ASI/DLL, 0-Engine bridge and required modules win
   -> GCO START requests MO2 startApplication(..., profile=<selected>)
   -> native CET/GRSP capture, PresentMon independent
   -> game closed; discover actual capture locations (physical/Overwrite/custom)
   -> hash-seal source-owner result archives and F11 session evidence in GCO RESULTS
-  -> verify collected data; disable/remove only owned temporary overlay/files
+  -> verify collected data; disarm mapper and remove only owned temporary stage/files
   -> verify original effective winner bytes and ownership restored
   -> Page 2 reads current selected-profile effective sources, no profiler overlay
   -> existing CET owner + GCO REDscript generators -> same one combined ZIP
