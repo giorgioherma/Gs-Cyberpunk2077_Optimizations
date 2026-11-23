@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-23 — Chronological names for published optimization ZIPs
+
+- Preserve the established timestamped `generated_optimizations/pass-YYYYMMDD_HHMMSS/` folder and atomic game-relative ZIP + external ownership sidecar publication. The **actual generated ZIP** now uses `G-Cyberpunk2077_Optimization_Pass_0001.zip`, `_0002.zip`, etc., instead of repeating the same filename in every pass folder. The ownership JSON follows its selected ZIP filename as `*.zip.ownership.json`; Page 2 OPEN FOLDER and success-console paths already consume the exact returned path automatically.
+- Next number is computed from complete existing pass directories (including historical unnumbered `G-Cyberpunk2077_Optimization_Pass.zip` files) and the highest surviving numeric pass, so legacy history is included without renaming, overwriting, or requiring a destructive migration. Incomplete/staged folders do not consume a number. Refuse linked pass-output folders/files. If the user deletes all generated history, the sequence naturally starts again at 0001 because there is no separate hidden counter.
+- Core regression covers first pass, historical unnumbered pass, later numbered pass, missing ownership sidecar, pending folder exclusion, preserved older ZIP, and noncontiguous numeric history. No optimizer behavior, payload contents, installer, or product version change. **Windows CI not triggered** pending owner's UI batch review.
+
 ## 2026-11-23 — Page 2 REFRESH is presentation-only
 
 - The top-right REFRESH button on Page 2 now only invalidates existing WPF layout/visuals. It does **not** clear pinned console status, create a console activity, read capture/game files, re-run owner inspection or ANALYZE, recalculate eligibility, start generation, reset/progress the workflow, alter button states, or advance V's portrait stage. An in-flight Analyze/Generate remains untouched.
