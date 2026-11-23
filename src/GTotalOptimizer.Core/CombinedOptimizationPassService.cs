@@ -67,6 +67,50 @@ public sealed class CombinedOptimizationPassService
         Path.Combine(Path.GetFullPath(packageRoot), "generated_optimizations",
             "pass-" + when.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
 
+    // Name the actual ZIP chronologically, not just its timestamped folder.
+    // Recognize previously published unnumbered passes as part of the sequence.
+    // Only complete ZIP + external ownership sidecar pairs count; temporary
+    // pending folders, incomplete work, and unrelated files do not.
+    internal static string NextGeneratedPassZipName(string outputRoot)
+    {
+        const string stem = "G-Cyberpunk2077_Optimization_Pass";
+        int completePasses = 0;
+        int highestNumber = 0;
+        foreach (string directory in Directory.EnumerateDirectories(outputRoot,
+                     "pass-*", SearchOption.TopDirectoryOnly))
+        {
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("GCO_LINKED_PUBLISHED_PASS_DIRECTORY");
+            bool complete = false;
+            foreach (string zip in Directory.EnumerateFiles(directory, "*.zip",
+                         SearchOption.TopDirectoryOnly))
+            {
+                string name = Path.GetFileName(zip);
+                int number = 0;
+                if (!name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!name.StartsWith(stem + "_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string suffix = name[(stem.Length + 1)..^4];
+                    if (!int.TryParse(suffix, NumberStyles.None,
+                            CultureInfo.InvariantCulture, out number) || number < 1)
+                        continue;
+                }
+                if (!File.Exists(zip + ".ownership.json"))
+                    continue;
+                if ((File.GetAttributes(zip) & FileAttributes.ReparsePoint) != 0 ||
+                    (File.GetAttributes(zip + ".ownership.json") &
+                        FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException("GCO_LINKED_PUBLISHED_PASS_FILE");
+                complete = true;
+                highestNumber = Math.Max(highestNumber, number);
+            }
+            if (complete) completePasses++;
+        }
+        int next = checked(Math.Max(completePasses, highestNumber) + 1);
+        return stem + "_" + next.ToString("D4", CultureInfo.InvariantCulture) + ".zip";
+    }
+
     // Read-only, source-proven admission for the Page 2 Generate button.
     // Uses the SAME CET owner and REDscript one-pass source generator as
     // Generate, but stages only to an exclusive disposable directory. This
@@ -290,7 +334,7 @@ public sealed class CombinedOptimizationPassService
             string stagedFolder = Path.Combine(outputRoot,
                 ".pass-pending-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(stagedFolder);
-            const string zipName = "G-Cyberpunk2077_Optimization_Pass.zip";
+            string zipName = NextGeneratedPassZipName(outputRoot);
             string pending = Path.Combine(stagedFolder, zipName);
             string final = Path.Combine(finalFolder, zipName);
             try
