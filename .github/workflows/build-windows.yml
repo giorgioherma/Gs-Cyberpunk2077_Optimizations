@@ -18,7 +18,7 @@ on:
   # Milestone only: source/test/packaging commits do not launch full CI.
   # workflow_dispatch above remains available when a user starts a run.
   push:
-    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration, MO2_integration ]
     paths:
       - '.ci/checkpoints/full-gco.txt'
 
