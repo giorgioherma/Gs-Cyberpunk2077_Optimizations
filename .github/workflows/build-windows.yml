@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 976c1662077f67e5e69b978d19cd2332f35ce2e9
+          ref: 08a8b5790372fd9ec5893500489d2b5e24eb1f4b
           path: unified/vendor-cet
           persist-credentials: false
       - name: Resolve latest verified GRSP owner-native build
@@ -603,21 +603,20 @@ jobs:
             Write-Host "PASS official redscript 0.5.31 $file fingerprint: $hash"
           }
           "GCO_REDSCRIPT_REFERENCE_GAME_ROOT=$folder" >> $env:GITHUB_ENV
-      - name: Download exact latest successful CET developer profiler artifact
+      - name: Download pinned CI-green CET V12 developer profiler and Resolver artifacts
         shell: pwsh
         working-directory: unified
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
-          # Previously verified .NET8 owner reference/native assets remain
-          # pinned independently of the newer managed CET source checkout.
-          # Import only the owner native service; exercise the reference CLI
-          # as a behavior oracle for the rebuilt .NET10 Resolver.
-          gh run download 41820765951 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          # Both owner artifacts and GCO's disposable source checkout are from
+          # the same verified CET #2616 commit. Keep original native owner
+          # assets and compare the owner CLI with the rebuilt .NET10 Resolver.
+          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
       - name: Import independently verified GRSP native instrumentation
