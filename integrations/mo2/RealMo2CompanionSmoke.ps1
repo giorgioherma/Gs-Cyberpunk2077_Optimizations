@@ -43,7 +43,7 @@ if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $nativeExe)) {
     throw 'MO2_NATIVE_PROBE_CXX_COMPILATION_FAILED'
 }
 New-Item -ItemType Directory -Path (Join-Path $game 'archive/pc/content') -Force | Out-Null
-foreach ($dir in @('profiles/Other','profiles/Heavy','mods','overwrite',
+foreach ($dir in @('profiles/Other','profiles/Heavy','mods','overwrite','downloads',
                     'mods/ProfileHeavy/r6/scripts','mods/ProfileOther/r6/scripts')) {
     New-Item -ItemType Directory -Path (Join-Path $appDir $dir) -Force | Out-Null
 }
@@ -99,10 +99,11 @@ $iniLines = @(
     "gamePath=@ByteArray($gamePath)",
     'selected_profile=Other',
     '[Settings]',
-    'base_directory=.',
-    'mod_directory=mods',
-    'profiles_directory=profiles',
-    'overwrite_directory=overwrite',
+    ('base_directory=' + $appDir.Replace('\', '/')),
+    'mod_directory=%BASE_DIR%/mods',
+    'profiles_directory=%BASE_DIR%/profiles',
+    'overwrite_directory=%BASE_DIR%/overwrite',
+    'download_directory=%BASE_DIR%/downloads',
     'selected_profile=Other'
 )
 Set-Content -LiteralPath $ini -Value $iniLines -Encoding UTF8
