@@ -151,13 +151,13 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                 self.assertEqual(organizer.last_launch[3], "Heavy")
                 self.assertEqual(len(organizer.mapped), 2)
                 self.assertEqual(
-                    {Path(m.destination).relative_to(game).as_posix() for m in organizer.mapped},
+                    {Path(m.destination).resolve().relative_to(game.resolve()).as_posix() for m in organizer.mapped},
                     {"bin/x64/plugins", "red4ext/plugins"})
                 for mapping in organizer.mapped:
                     self.assertTrue(mapping.isDirectory)
                     self.assertFalse(mapping.createTarget)
                     self.assertTrue(Path(mapping.source).is_dir())
-                    self.assertTrue(Path(mapping.destination).is_relative_to(game))
+                    self.assertTrue(Path(mapping.destination).resolve().is_relative_to(game.resolve()))
                 self.assertEqual(mapper.mappings(), [])
                 with self.assertRaises(module.GcoOverlayContractError):
                     tool._launch_controller.launch(organizer, "Heavy")
