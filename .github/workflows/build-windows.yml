@@ -138,6 +138,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # Read-only MO2 companion API contract on its isolated branch.
+      # This runs only at a full-gco TXT checkpoint, not every Python change.
+      - uses: actions/setup-python@v5
+        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        with:
+          python-version: '3.12'
+      - name: Verify MO2 bridge against strict mocked MO2 API
+        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          python -m unittest discover -s tests/mo2 -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_COMPANION_API_TESTS_FAILED' }
       # R4 validation: private live REDscript source is checked out ONLY on
       # this REDscript development branch, from GCO's existing scoped token.
       # Source stays outside publish/release and is removed even on failure.
