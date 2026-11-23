@@ -55,6 +55,7 @@ public static class Mo2CompanionDiscovery
                 if (stream.Length == 0 || stream.Length > 16 * 1024) continue;
                 using var json = JsonDocument.Parse(stream);
                 var root = json.RootElement;
+                if (root.ValueKind != JsonValueKind.Object) continue;
                 if (ReadInt(root, "schemaVersion") != 1 ||
                     Read(root, "kind") != "gco.mo2.readonly.status" ||
                     ReadBool(root, "installationEnabled")) continue;
