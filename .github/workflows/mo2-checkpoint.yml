@@ -197,6 +197,9 @@ jobs:
             Write-Host 'Running existing/namespaced 0-Engine REAL source-owner replay (private source never uploaded)'
             dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$privateZero"
             if ($LASTEXITCODE -ne 0) { throw 'MO2_HISTORICAL_0ENGINE_REAL_SOURCE_OWNER_REPLAY_FAILED' }
+            Write-Host 'Running PARTIAL 0-Engine real-owner replay: missing canonical namespaced scheduler'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$privateZero" missing-namespaced-worker
+            if ($LASTEXITCODE -ne 0) { throw 'MO2_PARTIAL_0ENGINE_MISSING_WORKER_REAL_OWNER_REPLAY_FAILED' }
           } else {
             Write-Host 'NOT TESTED: private historical 0-Engine fixture not available on this runner.'
           }
