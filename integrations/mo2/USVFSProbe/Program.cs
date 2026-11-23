@@ -78,14 +78,18 @@ internal static class Program
                 Probe(Path.GetFullPath(args[1]));
                 return 0;
             }
-            if (args.Length == 2 && args[0] == "--child")
+            if (args.Length == 3 && args[0] == "--child")
             {
                 string game = Path.GetFullPath(args[1]);
+                string diagnostic = Path.GetFullPath(args[2]);
                 string asi = File.ReadAllText(Path.Combine(game, "bin", "x64", "plugins",
                     "cyber_engine_tweaks.asi"));
                 string reds = File.ReadAllText(Path.Combine(game, "r6", "scripts", "TestMod", "test.reds"));
+                File.WriteAllText(diagnostic, "Observed ASI: " + asi +
+                    "\\nObserved REDscript: " + reds + "\\n");
                 if (asi != "MO2_PROFILER_OVERRIDE" || reds != "MO2_VIRTUAL_REDSCRIPT")
-                    throw new InvalidDataException("USVFS did not expose exact higher-priority profiler/source bytes");
+                    throw new InvalidDataException(
+                        "USVFS did not expose exact higher-priority profiler/source bytes");
                 string capture = Path.Combine(game, "red4ext", "plugins", "G-REDscript-Profiler",
                     "RESULTS", "GCO-CI-capture.csv");
                 Directory.CreateDirectory(Path.GetDirectoryName(capture)!);
@@ -155,8 +159,9 @@ internal static class Program
             if (!link(overwrite, game, Recursive | CreateTarget))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount MO2 Overwrite");
 
+            string diagnostic = Path.Combine(folder, "hooked-child-observations.txt");
             var command = new StringBuilder('"' + Environment.ProcessPath! +
-                "\" --child \"" + game + "\"");
+                "\" --child \"" + game + "\" \"" + diagnostic + "\"");
             var startup = new StartupInfo { cb = (uint)Marshal.SizeOf<StartupInfo>() };
             var hooked = Export<CreateHooked>(library, "usvfsCreateProcessHooked");
             if (!hooked(null, command, IntPtr.Zero, IntPtr.Zero, false,
@@ -167,9 +172,15 @@ internal static class Program
             try
             {
                 uint wait = WaitForSingleObject(info.process, 30_000);
-                if (wait != 0 || !GetExitCodeProcess(info.process, out uint code) || code != 0)
+                bool gotExit = GetExitCodeProcess(info.process, out uint code);
+                string observations = File.Exists(diagnostic)
+                    ? File.ReadAllText(diagnostic) : "(child produced no diagnostic file)";
+                Console.WriteLine("USVFS hooked child observations: " + observations);
+                if (wait != 0 || !gotExit || code != 0)
                     throw new InvalidOperationException(
-                        "Hooked x64 process failed or timed out; wait=" + wait);
+                        "Hooked x64 process failed: wait=" + wait +
+                        " exit=0x" + code.ToString("X8") +
+                        " readExitCode=" + gotExit);
             }
             finally
             {
