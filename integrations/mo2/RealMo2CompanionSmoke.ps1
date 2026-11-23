@@ -74,6 +74,22 @@ Set-Content -LiteralPath $stagedGrsp -Value 'GCO_GRSP_OVERRIDE' -NoNewline
 $nativeObservation = Join-Path $env:RUNNER_TEMP ('gco-mo2-selected-profile-' + $sessionId + '.txt')
 $env:GCO_MO2_NATIVE_PROBE_OUTPUT = $nativeObservation
 
+# Distinguish failure to execute a freshly compiled runner binary from a
+# failure inside MO2/USVFS. A direct run must read the *physical* ASI and
+# cannot see either profile's virtual REDscript or the temporary GCO layer.
+& $nativeExe
+if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $nativeObservation)) {
+    throw 'MO2_TEST_NATIVE_CHILD_NOT_EXECUTABLE_OUTSIDE_MO2'
+}
+$plain = Get-Content -LiteralPath $nativeObservation -Raw
+if (!($plain -split '[\r\n]+' -ccontains 'CET_ASI=PHYSICAL_CET_ASI') -or
+    !($plain -split '[\r\n]+' -ccontains 'RED=<missing>') -or
+    !($plain -split '[\r\n]+' -ccontains 'GRSP=<missing>')) {
+    throw 'MO2_TEST_NATIVE_CHILD_DIRECT_BASELINE_MISMATCH'
+}
+Write-Host 'PASS native x64 test exe directly executes and sees only physical source'
+Remove-Item -LiteralPath $nativeObservation -ErrorAction Stop
+
 
 # GameSettings::directory expects QSettings QByteArray under General.
 $gamePath = $game.Replace('\', '/')
