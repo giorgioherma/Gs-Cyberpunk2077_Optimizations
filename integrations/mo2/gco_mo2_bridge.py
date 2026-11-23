@@ -1,8 +1,9 @@
-"""GCO MO2 read-only discovery companion (Stage 0/1).
+"""GCO MO2 companion: read-only inventory and gated selected-profile launcher.
 
-Install in MO2's plugins directory as gco_mo2_bridge.py after explicit user setup.
-It never installs mods, changes a profile, launches the game, or changes user files.
-This is intentionally not the full profiler deployment companion.
+Install in MO2's plugins directory as gco_mo2_bridge.py after explicit setup.
+Registered plugin APIs publish profile facts and provide a one-shot virtual
+profiler mapping for a signed GCO launch request. No modlist changes and no
+standalone profiler implementation. The GCO production feature remains gated.
 """
 import hashlib
 import hmac
@@ -524,7 +525,7 @@ class GcoMo2Bridge(mobase.IPluginTool):
         return "G-CET"
 
     def description(self):
-        return "Read-only MO2 instance and profile discovery for GCO."
+        return "Profile discovery and authorized one-shot GCO virtual profiler launch."
 
     def version(self):
         return mobase.VersionInfo(0, 1, 0)
@@ -546,7 +547,7 @@ class GcoMo2Bridge(mobase.IPluginTool):
 
     def display(self):
         QMessageBox.information(
-            self._parentWidget(),
+            None,  # IPluginTool has no _parentWidget() API; tool may show modal status.
             "GCO MO2 connection",
             str(self._status or "Status not available. No game/mod files were changed."),
         )
