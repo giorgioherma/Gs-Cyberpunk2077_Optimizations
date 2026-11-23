@@ -1,1 +1,1 @@
-checkpoint=mo2-stage4-real-pluginbase-init-interface-proven-20261124
+checkpoint=mo2-stage4-real-noncurrent-profile-native-probe-20261124
