@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — V signal tuning after owner visual inspection
+
+- Owner found initial Installed and Start flashes much too frequent and their long colored holds distracting. Reworked early signal to very short 28–110 ms irregular pulses only, with long black intervals after Installed (roughly 23–47 s between bursts), less rare Start (13–28 s), and more frequent Collect (4–9 s) without full-image holds. First activation is delayed after each button; in-flight bursts still complete naturally. These measured-in-simulation intervals supersede previous 12/20/38% color-presence estimates for early stages.
+- Page 2 continues color-dominant (~75%) but adds occasional 1.5–3.5 s black interruptions; Analyze remains near 90% color. Avoid inheriting a long early black interval on CONTINUE.
+- Successful no-new-optimizations Analyze now transitions from Analyze to the same stable 100%-color terminal V as Generate when verified DONE becomes visible. DONE becoming unavailable again (e.g. an opt-in change) restores Analyze's effect. Generating ZIP and successful DONE also share the stable terminal state; backend authorization remains source-owned.
+- Source: `0b77e04`, `627f4ba`. Deterministic JS replay (illustrative, not WPF measured) after sustained stages: Installed ~0.7% color, Start ~1.0%, Collect ~3.9%, Results ~77%, Analyze ~91%; all early flashes remain short, and terminal stage stable. Source wiring/guards and unchanged owner artwork checked. No new CI workflow contract, full Windows compilation or gameplay test claimed.
+
 ## 2026-11-22 — Shared V portrait progressive signal
 
 - Owner-approved staged portrait behavior on both pages: cold black; Install target 12% color; Start 20%; Collect and waiting for Continue 38%; verified Page 2 75%; Analyze and analyzed 90%; Generate and published ZIP stable full color. Existing aligned black/color PNGs and shared portrait geometry retained.
