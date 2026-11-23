@@ -202,6 +202,20 @@ public static class Mo2SourceInspector
         // CET's native ASI may be game-installed or in an enabled MO2 package.
         // RootBuilder-specific mappings remain unproven and never get inferred.
         var nativeRoot = Path.Combine(root, "bin", "x64", "plugins");
+        // CET keybinding is a profile-scoped input. Its effective winner must
+        // be included in the source map before the owner installer is allowed
+        // to seed F11; otherwise a temporary overlay could overwrite a user's
+        // existing bindings with defaults.
+        var binding = Path.Combine(nativeRoot, "cyber_engine_tweaks", "bindings.json");
+        if (File.Exists(binding))
+        {
+            token.ThrowIfCancellationRequested();
+            if (++scanned > MaximumScannedFiles)
+                throw new InvalidDataException("Too many files for bounded MO2 source inventory.");
+            const string relativeBinding = "bin/x64/plugins/cyber_engine_tweaks/bindings.json";
+            if (winners.ContainsKey(relativeBinding)) shadows++;
+            winners[relativeBinding] = new(relativeBinding, binding, owner, priority, fromMo2);
+        }
         foreach (var asiName in new[] { "cyber_engine_tweaks.asi", "cet.asi" })
         {
             token.ThrowIfCancellationRequested();
