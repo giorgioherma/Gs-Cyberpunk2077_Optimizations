@@ -53,9 +53,13 @@ Set-Content -LiteralPath $portable -Value '' -NoNewline
 Copy-Item -LiteralPath $SourcePlugin -Destination $plugin -ErrorAction Stop
 
 $process = $null
+$standardOut = Join-Path $env:RUNNER_TEMP 'gco-mo2-actual-process.stdout.log'
+$standardErr = Join-Path $env:RUNNER_TEMP 'gco-mo2-actual-process.stderr.log'
 try {
     Write-Host 'Launching official MO2 in disposable portable Windows CI fixture'
-    $process = Start-Process -FilePath $exe -ArgumentList @('--multiple','--instance=','--logs') -WorkingDirectory $appDir -PassThru -ErrorAction Stop
+    # The root INI + portable.txt select this instance, so avoid an optional
+    # --instance= override whose empty-string parsing may reject startup.
+    $process = Start-Process -FilePath $exe -ArgumentList @('--multiple','--logs') -WorkingDirectory $appDir -PassThru -RedirectStandardOutput $standardOut -RedirectStandardError $standardErr -ErrorAction Stop
     Write-Host ("MO2 process launched PID=" + $process.Id)
     $statusFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'GCO/MO2Bridge'
     $status = $null
@@ -87,6 +91,12 @@ try {
 }
 catch {
     Write-Host ("MO2 app smoke blocked: " + $_.Exception.Message)
+    foreach ($captured in @($standardOut, $standardErr)) {
+        if (Test-Path -LiteralPath $captured) {
+            Write-Host ("Official MO2 process diagnostic from " + (Split-Path $captured -Leaf))
+            Get-Content -LiteralPath $captured -Tail 90 | ForEach-Object { Write-Host $_ }
+        }
+    }
     $logDir = Join-Path $appDir 'logs'
     if (Test-Path -LiteralPath $logDir) {
         Get-ChildItem -LiteralPath $logDir -Filter '*.log' -File |
