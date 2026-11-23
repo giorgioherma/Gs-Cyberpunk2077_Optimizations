@@ -196,8 +196,26 @@ class GcoLaunchMappingController:
             raise GcoOverlayContractError("An MO2 GCO launch is already prepared")
         if not isinstance(session_id, str) or not self._HEX_ID.fullmatch(session_id):
             raise GcoOverlayContractError("GCO session ID must be an unpredictable 32-digit hex token")
-        profiles = tuple(str(name) for name in organizer.profileNames())
-        valid = [name for name in profiles if name.casefold() == str(selected_profile).casefold()]
+        # Official IOrganizer exposes current profileName() and profilePath(),
+        # NOT profileNames(). Derive the real configured profile directory from
+        # MO2's current-profile path, not an assumed portable AppData layout.
+        active_name = str(organizer.profileName())
+        active_path = Path(_canonical(organizer.profilePath()))
+        if active_path.is_symlink() or not active_path.is_dir():
+            raise GcoOverlayContractError("MO2 current profile directory unavailable or linked")
+        active_path = active_path.resolve(strict=True)
+        if active_path.name.casefold() != active_name.casefold():
+            raise GcoOverlayContractError("MO2 current profile identity/path mismatch")
+        profiles_root = active_path.parent
+        valid = []
+        for candidate in profiles_root.iterdir():
+            if candidate.is_symlink():
+                raise GcoOverlayContractError("Linked MO2 profile directory refused")
+            if (candidate.is_dir() and
+                candidate.name.casefold() == str(selected_profile).casefold()):
+                if not (candidate / "modlist.txt").is_file():
+                    raise GcoOverlayContractError("Selected MO2 profile modlist is missing")
+                valid.append(candidate.name)
         if len(valid) != 1:
             raise GcoOverlayContractError("Chosen MO2 profile is not uniquely present in this instance")
         selected_profile = valid[0]
@@ -472,7 +490,7 @@ class GcoAuthenticatedMailbox:
             result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
                       "requestId": request["requestId"], "ok": True,
                       "processId": int(pid), "detail": detail}
-        except (OSError, ValueError, TypeError, GcoOverlayContractError,
+        except (OSError, ValueError, TypeError, AttributeError, GcoOverlayContractError,
                 json.JSONDecodeError) as exc:
             result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
                       "requestId": request.get("requestId", "") if isinstance(request, dict) else "",
