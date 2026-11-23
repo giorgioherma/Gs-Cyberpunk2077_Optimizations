@@ -4,6 +4,19 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+## 2026-11-23 — selected NONCURRENT profile one-shot mapper proof (Stage 0 advanced; Stage 2 prototype)
+
+**Upstream source findings (authoritative, external):**
+- [MO2 `OrganizerProxy::startApplication`](https://github.com/ModOrganizer2/modorganizer/blob/master/src/organizerproxy.cpp) forwards the explicit `profile` argument to the process runner.
+- [MO2 `OrganizerCore::beforeRun / fileMapping`](https://github.com/ModOrganizer2/modorganizer/blob/master/src/organizercore.cpp) composes active mods **for the requested profileName**, appends Overwrite, then the `IPluginFileMapper` mappings. `IModList.setActive/setPriority` instead target the *currently loaded* profile and should not be used for noncurrent profile activation.
+- [Python plugin runner `createPlugin()` precedence](https://github.com/ModOrganizer2/modorganizer-plugin_python/blob/master/src/runner/pythonrunner.cpp): if both factories are defined, `createPlugin()` wins and silently omits a second file-mapper plugin. Corrected GCO's prototype to export **`createPlugins()` only**, returning `GcoMo2Bridge` + `GcoMo2ProfilerFileMapper`. [Upstream filemapper test](https://github.com/ModOrganizer2/modorganizer-plugin_python/blob/master/tests/runner/plugins/dummy-filemapper.py) confirms `mobase.IPluginFileMapper` and `mobase.Mapping` usage.
+
+**Source implementation:** `integrations/mo2/gco_mo2_bridge.py` now has a `GcoLaunchMappingController` for a single selected-profile game launch: validates MO2 `profileNames()`, current instance's real game root, session-owned staging folder, a strict CET/GRSP support-path allowlist, bounded file counts/sizes, no symlinks and SHA-256 byte seals. It maps only `bin/x64/plugins` and `red4ext/plugins` for the staged session; mappings are empty outside the single requested `startApplication(..., profile=<chosen>)`, including failure/duplicate-map cases. No modlist edits and no user profile coordination. A directory/file can be mapped without its parent existing in the physical game only where USVFS VFS accepts it; actual game layout/loader still requires validation.
+
+**CI evidence:** [MO2 checkpoint #5 SUCCESS, run 45273499199](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45273499199), commit `f043953a48c3ba40de51e2ac3ff6e452e2036a84`, 2026-11-23: eight Python API tests plus real .NET10 selected-profile/companion tests green. Official MO2 v2.5.2 USVFS 0.5.6.1 native x64 child saw `MO2_PROFILER_OVERRIDE` and `MO2_VIRTUAL_REDSCRIPT` from **GCO last-priority mapper** over both selected profile and pre-existing Overwrite entries; the original source ASI, profile files and user Overwrite file stayed byte-identical; capture-style output landed in Overwrite. A previous Python test was corrected for Windows 8.3 short-vs-long temporary-path equivalence; no safety guards weakened.
+
+**Unverified:** running MO2 Python runner actually accepting both plugins and executing the requested `startApplication` with noncurrent profile, real CET/GRSP native loading, GCO↔MO2 authenticated IPC, source-owner staging, collection, complete game capture and Page 2. A further native fixture was committed after checkpoint #5 to prove unrelated profile B does not inherit the GCO overlay; it needs the next TXT checkpoint. **`Mo2FeatureGate` stays disabled.**
+
 ## 2026-11-23 — dedicated real-MO2 Windows/USVFS TXT checkpoint VERIFIED
 
 **Workflow:** [`.github/workflows/mo2-checkpoint.yml`](../../.github/workflows/mo2-checkpoint.yml), exclusively `MO2_integration`; triggers only on [`.ci/checkpoints/mo2.txt`](../../.ci/checkpoints/mo2.txt) changes or manual dispatch. Ordinary source/doc/test commits do **not** trigger the MO2 or full-GCO pipelines. Existing full-GCO and REDscript TXT checkpoints remain independent.
@@ -29,7 +42,7 @@
 
 **Still required before any deployment:** test a supported API mechanism to activate a single session-owned profiler overlay for selected profile A while MO2 UI displays B, with B unchanged and no original source writes; prove CET ASI + GRSP loading and result locations in real MO2. Failure is a hard blocker, not a reason to enable `Mo2FeatureGate`.
 
-## Stage 0 — API and source-contract proof [IN PROGRESS — NATIVE USVFS VERIFIED; PROFILE CONTROL NOT PROVEN]
+## Stage 0 — API and source-contract proof [IN PROGRESS — SOURCE + NATIVE MAPPER PROVED; REAL MO2 PLUGIN REGISTRATION NOT PROVED]
 
 - Review `AGENTS.md`, `docs/HANDOFF/CORE.md`, WPF Page 1 and the current GCO/CET/GRSP owner source. Record current versioned MO2 Python API/Cyberpunk plugin capabilities, supported native loaders and RootBuilder exceptions.
 - Verify exact API semantics for `IOrganizer.startApplication(..., profile=...)`, `createMod`, `IModList.setActive/setPriority`, `removeMod`, virtual source winner resolution, game root/profile enumeration, and output routing.
@@ -43,7 +56,7 @@
 - Extend existing `Mo2InstallLocator`/`Mo2SourceInspector` rather than new scanner; include physical game baseline, exact enabled packages, precedence, Overwrite and source-owner provenance. Never claim VFS-verified from physical scanning.
 - **Exit:** portable/global/custom-drive discovery and dropdown unit tests; Direct UI unchanged; Refresh read-only; MO2 installer buttons still blocked until later stages.
 
-## Stage 2 — MO2 companion and selected-profile control [NOT STARTED]
+## Stage 2 — MO2 companion and selected-profile control [IN PROGRESS — ONE-SHOT MAPPER PROTOTYPE ONLY]
 
 - Create a minimal MO2 plugin/adapter and a local GCO request/reply protocol; authorize only narrow operations scoped to the chosen instance, profile, session and owned temp mod. Check plugin installation/restart handshake; no unsafe arbitrary execution or path traversal.
 - Use supported MO2 API to create a uniquely named temporary mod, enable and prioritize it for the **chosen** profile, verify exact winner paths; launch game via `startApplication(..., profile=<selected>)`.
