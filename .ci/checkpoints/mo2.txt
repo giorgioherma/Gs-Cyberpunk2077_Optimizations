@@ -1,1 +1,1 @@
-checkpoint=mo2-session-mapper-profile-override-20261123
+checkpoint=mo2-one-shot-factory-path-and-native-precedence-20261123
