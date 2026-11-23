@@ -1,0 +1,122 @@
+name: MO2 | Native integration checkpoint
+run-name: MO2 native/bridge checkpoint | ${{ github.ref_name }}
+
+# Isolated, checkpoint-driven MO2 validation. Ordinary commits NEVER trigger.
+# This does not replace full GCO/REDscript checkpoints.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - MO2_integration
+    paths:
+      - '.ci/checkpoints/mo2.txt'
+
+concurrency:
+  group: gco-mo2-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mo2-real-components:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Validate companion API and selected-profile source contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s tests/mo2 -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_MO2_PYTHON_BRIDGE_CONTRACT_FAILED' }
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_MO2_CSHARP_PROFILE_CONTRACT_FAILED' }
+
+      - name: Download official MO2 Windows release (no installer execution)
+        id: official
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Reproducible upstream binary fixture. Never substitute other binaries
+          # or a build synthesized from a mocked API for this native checkpoint.
+          $upstream = 'ModOrganizer2/modorganizer'
+          $tag = 'v2.5.2'
+          $archive = 'Mod.Organizer-2.5.2.7z'
+          $release = (& gh api "repos/$upstream/releases/tags/$tag") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.tag_name -ne $tag -or $release.draft) {
+            throw 'OFFICIAL_MO2_RELEASE_IDENTITY_NOT_VERIFIED'
+          }
+          $assets = @($release.assets | Where-Object {
+            $_.name -ceq $archive -and $_.size -gt 100MB -and
+            $_.browser_download_url -eq "https://github.com/$upstream/releases/download/$tag/$archive"
+          })
+          if ($assets.Count -ne 1) { throw 'OFFICIAL_MO2_ARCHIVE_IDENTITY_NOT_VERIFIED' }
+          $root = Join-Path $env:RUNNER_TEMP 'gco-official-mo2'
+          $download = Join-Path $root 'download'
+          $unpacked = Join-Path $root 'unpacked'
+          New-Item -ItemType Directory -Path $download, $unpacked -Force | Out-Null
+          & gh release download $tag --repo $upstream --pattern $archive --dir $download --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'OFFICIAL_MO2_ARCHIVE_DOWNLOAD_FAILED' }
+          $file = Join-Path $download $archive
+          if ((Get-Item -LiteralPath $file).Length -ne [long]$assets[0].size) {
+            throw 'OFFICIAL_MO2_ARCHIVE_SIZE_MISMATCH'
+          }
+          $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+          Write-Host "Verified upstream tag $tag; archive SHA256 $hash"
+          & 7z x $file "-o$unpacked" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'OFFICIAL_MO2_ARCHIVE_EXTRACT_FAILED' }
+          $exe = @(Get-ChildItem -LiteralPath $unpacked -Filter 'ModOrganizer.exe' -File -Recurse)
+          $native = @(Get-ChildItem -LiteralPath $unpacked -Filter 'usvfs_x64.dll' -File -Recurse)
+          if ($exe.Count -ne 1 -or $native.Count -ne 1) {
+            throw "OFFICIAL_MO2_APP_OR_NATIVE_USVFS_MISSING: EXEs=$($exe.Count) USVFS=$($native.Count)"
+          }
+          Write-Host "Verified official MO2 executable: $($exe[0].FullName)"
+          Write-Host "Verified real USVFS x64 binary: $($native[0].FullName)"
+          "usvfs_dll=$($native[0].FullName)" >> $env:GITHUB_OUTPUT
+          "mo2_version=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Execute native USVFS x64 file-override and output-routing probe
+        shell: pwsh
+        env:
+          NATIVE_USVFS_DLL: ${{ steps.official.outputs.usvfs_dll }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # This is a real USVFS controller and hooked x64 process.
+          # The fake Cyberpunk tree stays inside RUNNER_TEMP.
+          dotnet run --project integrations/mo2/USVFSProbe/USVFSProbe.csproj -c Release -- --probe "$env:NATIVE_USVFS_DLL"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'REAL_USVFS_X64_OVERLAY_OR_OUTPUT_ISOLATION_FAILED'
+          }
+
+      - name: Preserve truthful MO2 validation boundary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Never grant game or profiler installation based on native fixture success.
+          $gate = Get-Content src/GTotalOptimizer.Core/Mo2FeatureGate.cs -Raw
+          if ($gate -notmatch 'Enabled\s*=\s*false') {
+            throw 'MO2_INSTALLATION_GATE_ENABLED_BEFORE_PROFILE_API_AND_GAMEPLAY_PROOF'
+          }
+          Write-Host 'PASS: Real USVFS native fixture validated.'
+          Write-Host 'NOT PROVEN: noncurrent-profile mod activation in a running MO2 UI.'
+          Write-Host 'NOT PROVEN: Cyberpunk CET ASI/RED4ext DLL load, F11, game capture.'
+          Write-Host 'GCO MO2 install/generate remains feature-gated.'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mo2-checkpoint-evidence-${{ github.run_id }}
+          path: |
+            .ci/checkpoints/mo2.txt
+          if-no-files-found: error
+          retention-days: 14
