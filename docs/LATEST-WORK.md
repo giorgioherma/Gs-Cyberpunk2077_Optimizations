@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-23 — GCO MO2 selected-profile virtual layer and authenticated protocol validated in isolated CI
+
+- On `MO2_integration` only: authoritative upstream MO2 C++ source confirms explicit launch profile VFS composition, then `IPluginFileMapper` applied **after** selected profile/Overwrite. Replaced the unsafe idea of noncurrent profile `setActive/setPriority` with one GCO session-owned virtual profiler layer mapped for precisely one chosen-profile launch. Corrected actual Python plugin loader factory precedence (`createPlugins()` only).
+- [MO2 native CI #5 GREEN](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45273499199): profile+Overwrite+GCO late priority, original bytes preserved. [MO2 native CI #6 GREEN](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45274481534): second independent native x64 profile cannot see profiler override.
+- Added Python MO2 companion authenticated mailbox with random epoch and per-process HMAC key, one-request atomic launch/probe and replay rejection; matching `.NET 10` GCO authenticated client and shared cross-language signing test vector. [MO2 CI #7 GREEN](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45275626740) confirms Python/C# mock-API command contracts plus real native USVFS isolation.
+- **No actual MO2 GUI plugin registration/gameplay/ASI+GRSP load, Page 1 integration, owner overlay staging, native capture or recovery verified yet. `Mo2FeatureGate.Enabled=false`; Direct unchanged.** Read [MO2 design](integration/MO2-INTEGRATION-DESIGN.md) and [detailed evidence ledger](integration/MO2-INTEGRATION-PROGRESS.md). Next: source-owner staging and real running MO2 plugin launch/collection.
+
+
 ## 2026-11-23 — dedicated MO2 real-USVFS native CI GREEN (Stage 0 partial)
 
 - Only `MO2_integration`. New `.github/workflows/mo2-checkpoint.yml` is isolated to **`.ci/checkpoints/mo2.txt` changes** or manual dispatch. Ordinary commits launch no CI; existing full-GCO and REDscript checkpoints stay independent. Fixture `integrations/mo2/USVFSProbe` uses a real native x64 process, not the mocked Python API.
