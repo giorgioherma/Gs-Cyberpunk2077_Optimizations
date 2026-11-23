@@ -102,7 +102,8 @@ internal static class Program
         try
         {
             string game = Path.Combine(folder, "game");
-            string mod = Path.Combine(folder, "mo2-profiler-mod");
+            string mod = Path.Combine(folder, "gco-profiler-filemapper-overlay");
+            string profile = Path.Combine(folder, "active-profile-mod");
             string overwrite = Path.Combine(folder, "overwrite");
             string relativeAsi = Path.Combine("bin", "x64", "plugins", "cyber_engine_tweaks.asi");
             string relativeReds = Path.Combine("r6", "scripts", "TestMod", "test.reds");
@@ -112,9 +113,11 @@ internal static class Program
             string capture = Path.Combine("red4ext", "plugins", "G-REDscript-Profiler",
                 "RESULTS", "GCO-CI-capture.csv");
             Put(originalAsi, "ORIGINAL_CET_BINARY_UNCHANGED");
+            Put(Path.Combine(profile, relativeAsi), "PROFILE_SELECTED_CET_ASI");
+            Put(Path.Combine(profile, relativeReds), "PROFILE_SELECTED_REDSCRIPT");
+            Put(Path.Combine(overwrite, relativeAsi), "USER_OVERWRITE_ASI_UNCHANGED");
             Put(virtualAsi, "MO2_PROFILER_OVERRIDE");
             Put(virtualReds, "MO2_VIRTUAL_REDSCRIPT");
-            Directory.CreateDirectory(overwrite);
             Directory.CreateDirectory(Path.Combine(game, "red4ext", "plugins",
                 "G-REDscript-Profiler", "RESULTS"));
 
@@ -138,11 +141,15 @@ internal static class Program
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to create real USVFS");
             connected = true;
             var link = Export<LinkDirectory>(library, "usvfsVirtualLinkDirectoryStatic");
-            if (!link(mod, game, Recursive))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount temporary profiler mod");
-            // Routes new writes without deleting unrelated Overwrite contents.
+            // Reproduce OrganizerCore::fileMapping(profileName, customOverwrite):
+            // selected-profile mods, configured Overwrite, then the plugin's
+            // one-shot IPluginFileMapper entries. Other profiles are untouched.
+            if (!link(profile, game, Recursive))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount selected-profile mod");
             if (!link(overwrite, game, Recursive | CreateTarget))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount MO2 Overwrite");
+            if (!link(mod, game, Recursive))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount GCO last-priority file mapper");
 
             // A native Windows x64 child is a better stand-in for the game
             // loader than the managed .NET apphost (which faulted during hook
@@ -199,8 +206,10 @@ internal static class Program
                 throw new InvalidDataException(
                     "Hooked native process did not observe the selected-profile file overrides");
             if (File.ReadAllText(originalAsi) != "ORIGINAL_CET_BINARY_UNCHANGED" ||
-                File.ReadAllText(virtualAsi) != "MO2_PROFILER_OVERRIDE")
-                throw new InvalidDataException("Original physical game files were modified");
+                File.ReadAllText(virtualAsi) != "MO2_PROFILER_OVERRIDE" ||
+                File.ReadAllText(Path.Combine(profile, relativeAsi)) != "PROFILE_SELECTED_CET_ASI" ||
+                File.ReadAllText(Path.Combine(overwrite, relativeAsi)) != "USER_OVERWRITE_ASI_UNCHANGED")
+                throw new InvalidDataException("Original physical game/profile/Overwrite inputs were modified");
 
             string redirected = Path.Combine(overwrite, capture);
             string direct = Path.Combine(game, capture);
@@ -211,8 +220,8 @@ internal static class Program
             if (File.Exists(direct) ||
                 !File.ReadAllText(redirected).Contains("GRSP,real_usvfs_child", StringComparison.Ordinal))
                 throw new InvalidDataException("USVFS captured output location/content not isolated");
-            Console.WriteLine("PASS real USVFS x64: shadowed CET ASI and REDscript, " +
-                "originals intact, generated data isolated to Overwrite");
+            Console.WriteLine("PASS real USVFS x64: profile -> Overwrite -> GCO mapper precedence, " +
+                "CET ASI and REDscript overrides, user bytes intact, outputs to Overwrite");
         }
         finally
         {
