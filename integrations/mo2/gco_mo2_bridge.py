@@ -5,6 +5,10 @@ It never installs mods, changes a profile, launches the game, or changes user fi
 This is intentionally not the full profiler deployment companion.
 """
 import hashlib
+import hmac
+import secrets
+import time
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -314,6 +318,159 @@ class GcoMo2ProfilerFileMapper(mobase.IPluginFileMapper):
         return self._controller.mappings()
 
 
+
+class GcoAuthenticatedMailbox:
+    """Single-user, per-MO2-process command mailbox.
+
+    Requests are signed with a random 256-bit session secret in the user's
+    LocalAppData, scoped to the exact reported instance and bridge epoch.
+    This is a narrow local app adapter, not an arbitrary script runner.
+    """
+
+    _REQUIRED = (
+        "schemaVersion", "bridgeEpoch", "requestId", "operation",
+        "profile", "gameRoot", "stagingRoot", "sessionId", "createdUtcMs"
+    )
+
+    def __init__(self, organizer, controller):
+        self._organizer = organizer
+        self._controller = controller
+        self.epoch = secrets.token_hex(16)
+        self._status = _status_path(organizer.basePath())
+        self._key_path = self._status.with_suffix(".key")
+        self._request_path = self._status.with_suffix(".request.json")
+        self._response_path = self._status.with_suffix(".response.json")
+        self._secret = secrets.token_bytes(32)
+        self._seen = set()
+        self._key_path.parent.mkdir(parents=True, exist_ok=True)
+        if self._key_path.is_symlink():
+            raise RuntimeError("MO2 GCO authentication key is a symlink")
+        fd, temporary = tempfile.mkstemp(
+            dir=str(self._key_path.parent), prefix=".gco-key-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as output:
+                output.write(self._secret)
+                output.flush()
+                os.fsync(output.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, self._key_path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+    @classmethod
+    def signature_payload(cls, request):
+        fields = []
+        for key in cls._REQUIRED:
+            value = request[key]
+            if key in ("schemaVersion", "createdUtcMs"):
+                if type(value) is not int:
+                    raise GcoOverlayContractError("Invalid numeric MO2 command field")
+            elif type(value) is not str or "\n" in value or "\r" in value or "\0" in value:
+                raise GcoOverlayContractError("Invalid MO2 command field: " + key)
+            fields.append(str(value))
+        return "\n".join(fields).encode("utf-8")
+
+    def _check(self, request):
+        if not isinstance(request, dict):
+            raise GcoOverlayContractError("MO2 request is not an object")
+        if set(request) != set(self._REQUIRED) | {"hmac"}:
+            raise GcoOverlayContractError("MO2 request field set is invalid")
+        if request.get("schemaVersion") != 1 or request.get("bridgeEpoch") != self.epoch:
+            raise GcoOverlayContractError("Wrong or stale MO2 bridge epoch")
+        if not isinstance(request.get("requestId"), str) or not self._controller._HEX_ID.fullmatch(
+                request["requestId"]):
+            raise GcoOverlayContractError("Invalid MO2 request ID")
+        if request["requestId"] in self._seen:
+            raise GcoOverlayContractError("MO2 request replay")
+        timestamp = request.get("createdUtcMs")
+        if type(timestamp) is not int or abs(int(time.time() * 1000) - timestamp) > 15000:
+            raise GcoOverlayContractError("Expired MO2 command")
+        if request.get("operation") not in ("probe", "launch"):
+            raise GcoOverlayContractError("Unsupported MO2 command")
+        provided = request.get("hmac")
+        if not isinstance(provided, str) or len(provided) != 64:
+            raise GcoOverlayContractError("Missing MO2 command authorization")
+        expected = hmac.new(
+            self._secret, self.signature_payload(request), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, provided):
+            raise GcoOverlayContractError("MO2 command authentication failed")
+        self._seen.add(request["requestId"])
+        if len(self._seen) > 256:
+            # Epoch and key are renewed on plugin restart. Existing command
+            # files are one-shot and cannot use a previous epoch.
+            self._seen = {request["requestId"]}
+
+    @staticmethod
+    def _process_id(handle):
+        if os.name != "nt":
+            raise GcoOverlayContractError("MO2 launch PID requires Windows")
+        library = ctypes.windll.kernel32
+        library.GetProcessId.argtypes = [ctypes.c_void_p]
+        library.GetProcessId.restype = ctypes.c_uint32
+        library.CloseHandle.argtypes = [ctypes.c_void_p]
+        library.CloseHandle.restype = ctypes.c_int
+        try:
+            pid = library.GetProcessId(ctypes.c_void_p(handle))
+            if not pid:
+                raise GcoOverlayContractError("MO2 returned a handle without a process ID")
+            return int(pid)
+        finally:
+            library.CloseHandle(ctypes.c_void_p(handle))
+
+    def process_one(self, process_id_for_testing=None):
+        if not self._request_path.is_file():
+            return False
+        if self._request_path.is_symlink():
+            raise GcoOverlayContractError("MO2 command cannot be a symlink")
+        in_progress = self._status.with_suffix(".processing.json")
+        if in_progress.exists():
+            raise GcoOverlayContractError("Unrecovered MO2 command still in progress")
+        os.replace(self._request_path, in_progress)
+        request = None
+        try:
+            if in_progress.stat().st_size > 16 * 1024:
+                raise GcoOverlayContractError("MO2 command is oversized")
+            request = json.loads(in_progress.read_text(encoding="utf-8"))
+            self._check(request)
+            operation = request["operation"]
+            if operation == "probe":
+                pid, detail = 0, "Connected MO2 instance; selected-profile launch is available for approved source"
+            else:
+                if not self._controller._HEX_ID.fullmatch(request["sessionId"]):
+                    raise GcoOverlayContractError("Invalid GCO profiler session ID")
+                self._controller.prepare(
+                    self._organizer, request["profile"], request["gameRoot"],
+                    request["stagingRoot"], request["sessionId"])
+                try:
+                    handle = self._controller.launch(self._organizer, request["profile"])
+                    pid = (process_id_for_testing or self._process_id)(handle)
+                finally:
+                    self._controller.cancel()
+                detail = "Started selected-profile application under MO2"
+            result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
+                      "requestId": request["requestId"], "ok": True,
+                      "processId": int(pid), "detail": detail}
+        except (OSError, ValueError, TypeError, GcoOverlayContractError,
+                json.JSONDecodeError) as exc:
+            result = {"schemaVersion": 1, "bridgeEpoch": self.epoch,
+                      "requestId": request.get("requestId", "") if isinstance(request, dict) else "",
+                      "ok": False, "processId": 0,
+                      "detail": str(exc)[:300]}
+            self._controller.cancel()
+        finally:
+            in_progress.unlink(missing_ok=True)
+        reply = "\n".join((
+            str(result["schemaVersion"]), result["bridgeEpoch"],
+            result["requestId"], "1" if result["ok"] else "0",
+            str(result["processId"]), result["detail"]
+        )).encode("utf-8")
+        result["hmac"] = hmac.new(self._secret, reply, hashlib.sha256).hexdigest()
+        _write_json_atomic(self._response_path, result)
+        return True
+
+
+
 class GcoMo2Bridge(mobase.IPluginTool):
     def __init__(self):
         super().__init__()
@@ -323,16 +480,28 @@ class GcoMo2Bridge(mobase.IPluginTool):
 
     def init(self, organizer):
         self._organizer = organizer
+        self._mailbox = GcoAuthenticatedMailbox(organizer, self._launch_controller)
         self._publish()
         organizer.onProfileChanged(lambda _old, _new: self._publish())
         self._timer = QTimer()
         self._timer.timeout.connect(self._publish)
         self._timer.start(5000)
+        self._commands_timer = QTimer()
+        self._commands_timer.timeout.connect(self._poll_commands)
+        self._commands_timer.start(1000)
         return True
+
+    def _poll_commands(self):
+        try:
+            self._mailbox.process_one()
+        except (OSError, RuntimeError, ValueError) as error:
+            # Reject malformed or stale commands without blocking MO2.
+            self._status = "MO2 command refused: " + str(error)[:200]
 
     def _publish(self):
         try:
             snapshot = _snapshot(self._organizer)
+            snapshot["bridgeEpoch"] = self._mailbox.epoch
             path = _status_path(snapshot["instanceRoot"])
             _write_json_atomic(path, snapshot)
             self._status = str(path)
