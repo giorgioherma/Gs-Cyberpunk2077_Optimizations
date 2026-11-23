@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-page2-source-mod-summary-20261123
+checkpoint=mo2-stage0-1-profile-companion-20261123
