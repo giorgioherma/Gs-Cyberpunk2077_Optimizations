@@ -547,7 +547,7 @@ class GcoMo2Bridge(mobase.IPluginTool):
 
     def display(self):
         QMessageBox.information(
-            None,  # IPluginTool has no _parentWidget() API; tool may show modal status.
+            self._parentWidget(),  # MO2 Python IPluginTool binds this Qt parent helper.
             "GCO MO2 connection",
             str(self._status or "Status not available. No game/mod files were changed."),
         )
