@@ -229,6 +229,50 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                     controller.launch(organizer, "Heavy")
                 self.assertEqual(mapper.mappings(), [])
 
+    def test_full_owner_generated_overlay_paths_are_supported(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            additional = [
+                "bin/x64/plugins/cyber_engine_tweaks/bindings.json",
+                "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/Scheduler.lua",
+                "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/CETProfilerScheduler.lua",
+                "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/G-CET/Scheduler.lua",
+                "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/init.lua",
+                "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/CaptureTitle.txt",
+                "red4ext/plugins/G-REDscript-Profiler/CaptureTitle.txt",
+            ]
+            for rel in additional:
+                file = stage / Path(rel)
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("owner-generated", encoding="utf-8")
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                tool, mapper = module.createPlugins()
+                organizer = Organizer(root)
+                organizer.mapper = mapper
+                self.assertEqual(
+                    tool._launch_controller.prepare(
+                        organizer, "Heavy", game, stage, self.SESSION), "Heavy")
+                self.assertEqual(tool._launch_controller.launch(organizer, "Heavy"), 123456)
+                self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(mapper.mappings(), [])
+
+    def test_reject_unknown_namespaced_scheduler(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            rogue = stage / "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/Other/Scheduler.lua"
+            rogue.parent.mkdir(parents=True, exist_ok=True)
+            rogue.write_text("unknown")
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                tool, mapper = module.createPlugins()
+                with self.assertRaises(module.GcoOverlayContractError):
+                    tool._launch_controller.prepare(
+                        Organizer(root), "Heavy", game, stage, self.SESSION)
+                self.assertEqual(mapper.mappings(), [])
+
     def test_staged_bytes_must_not_change_after_approval(self):
         module = _load_plugin()
         with tempfile.TemporaryDirectory() as td:
