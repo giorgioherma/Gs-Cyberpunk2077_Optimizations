@@ -18,7 +18,7 @@ namespace GTotalOptimizer.App;
 // in the authoritative CET and GRSP owner managers via UnifiedProfilerWorkflow.
 public partial class MainWindow : Window
 {
-    private enum PortraitStage { Black, Installed, Capturing, Collecting, Results, Analyzing, Generating }
+    private enum PortraitStage { Black, Installed, Capturing, Collecting, Results, Analyzing, Generating, Completed }
     private static readonly Brush AnalyzeYellow = new SolidColorBrush(Color.FromRgb(255, 240, 0));
     private static readonly Brush AnalyzeOkGreen = new SolidColorBrush(Color.FromRgb(101, 220, 162));
     private readonly string packageRoot = PortablePackagePaths.CurrentPackageRoot();
@@ -213,10 +213,21 @@ public partial class MainWindow : Window
         bool verifiedAnalysis = captureAndRestoreVerified &&
             analyzedSessionId is not null && analyzedSessionId == completedSessionId &&
             redscriptPlanReady && analyzedAvailability is not null;
-        CloseAfterGenerationButton.Visibility = ShouldShowDone(
-            HasPublishedOptimizationZip(), verifiedAnalysis,
-            HasNewOptimizationAvailable(), analysisRunning || generationRunning)
-            ? Visibility.Visible : Visibility.Collapsed;
+        bool published = HasPublishedOptimizationZip();
+        bool hasNewWork = HasNewOptimizationAvailable();
+        bool done = ShouldShowDone(published, verifiedAnalysis, hasNewWork,
+            analysisRunning || generationRunning);
+        CloseAfterGenerationButton.Visibility =
+            done ? Visibility.Visible : Visibility.Collapsed;
+        // The terminal V state is also reached by a verified no-op Analyze,
+        // where DONE is available without ever running Generate.
+        if (ResultsPage.Visibility == Visibility.Visible &&
+            verifiedAnalysis && !analysisRunning && !generationRunning)
+        {
+            if (done) SetPortraitStage(PortraitStage.Completed);
+            else if (portraitStage == PortraitStage.Completed)
+                SetPortraitStage(PortraitStage.Analyzing);
+        }
     }
 
     private void RefreshPlannedWork()
@@ -446,12 +457,12 @@ public partial class MainWindow : Window
         {
             double next = stage switch
             {
-                PortraitStage.Installed => .12,
-                PortraitStage.Capturing => .20,
-                PortraitStage.Collecting => .38,
+                PortraitStage.Installed => .025,
+                PortraitStage.Capturing => .055,
+                PortraitStage.Collecting => .16,
                 PortraitStage.Results => .75,
                 PortraitStage.Analyzing => .90,
-                PortraitStage.Generating => 1,
+                PortraitStage.Generating or PortraitStage.Completed => 1,
                 _ => 0
             };
             if (next == target) return;
@@ -477,8 +488,17 @@ public partial class MainWindow : Window
             // Keep an ongoing cluster intact, but do not wait through the
             // previous profile's entire quiet hold before the new one emerges.
             if (!inBurst)
-                remaining = remaining <= 0 ? Range(.65, 1.25) :
-                    Math.Min(remaining, Range(.65, 1.25));
+            {
+                double firstWait = stage switch
+                {
+                    PortraitStage.Installed => Range(12, 25),
+                    PortraitStage.Capturing => Range(7, 15),
+                    PortraitStage.Collecting => Range(3, 7),
+                    _ => Range(.4, 1.2)
+                };
+                remaining = remaining <= 0 ? firstWait :
+                    Math.Min(remaining, firstWait);
+            }
         }
 
         public double Advance(double seconds)
@@ -527,41 +547,81 @@ public partial class MainWindow : Window
 
         private void BeginBurst()
         {
-            double p = Math.Clamp(presence, .025, .975);
+            double p = Math.Clamp(presence, .005, .975);
             burstPresence = p;
             burstMajority = p >= .5 ? 1 : 0;
-            double minority = burstMajority == 0 ? p : 1 - p;
+            if (burstMajority == 0)
+            {
+                // Install/Start/Collect must remain black-dominant. Quick
+                // irregular flicker clusters only: never hold the full image
+                // for seconds during any of the first three stages.
+                BeginEarlyFlickers(p);
+                return;
+            }
+
+            // On Page 2 the full color image remains dominant, interrupted
+            // by uneven black glitches. Analyze remains almost stable.
+            double minority = 1 - p;
             int count = random.Next(1, 6);
-            // Active windows expand through Capture and Collect. In the
-            // color-dominant states, interruptions stay much shorter.
-            bool hold = burstMajority == 0 &&
-                random.NextDouble() < Math.Clamp((p - .10) * 2, 0, .62);
             double minoritySeconds = 0;
             double gapSeconds = 0;
-            int holdIndex = hold ? random.Next(count) : -1;
+            int longBlackIndex = target == .75 && p >= .62 &&
+                random.NextDouble() < .16 ? random.Next(count) : -1;
             for (int i = 0; i < count; ++i)
             {
-                // A longer pulse, a weak hit, or a tiny cut can appear at
-                // any position. Short pulses deliberately vary in strength.
-                double duration = i == holdIndex
-                    ? Range(.55, .8 + 7 * p)
-                    : random.NextDouble() < .23 ? Range(.18, .36) : Range(.045, .14);
-                double strength = duration < .14 && random.NextDouble() < .55
-                    ? Range(.25, .65) : 1;
-                pulses.Enqueue((burstMajority == 0 ? strength : 1 - strength, duration));
+                // An occasional 1.5–3.5 second blackout only on Continue,
+                // never while analyzing or in the first three stages.
+                double duration = i == longBlackIndex
+                    ? Range(1.5, 3.5)
+                    : random.NextDouble() < .23
+                        ? Range(.18, .36) : Range(.045, .14);
+                double strength = i == longBlackIndex ? 1 :
+                    duration < .14 && random.NextDouble() < .55
+                        ? Range(.25, .65) : 1;
+                pulses.Enqueue((1 - strength, duration));
                 minoritySeconds += duration;
                 if (i + 1 < count)
                 {
-                    double gap = random.NextDouble() < .30 ? Range(.16, .40) : Range(.04, .13);
-                    pulses.Enqueue((burstMajority, gap));
+                    double gap = random.NextDouble() < .30 ?
+                        Range(.16, .40) : Range(.04, .13);
+                    pulses.Enqueue((1, gap));
                     gapSeconds += gap;
                 }
             }
-            // Budget the quiet hold by the actual cluster duration, so the
-            // long-run color duty follows the current workflow profile.
             restAfterBurst = Math.Clamp(
                 (minoritySeconds * (1 - minority) / minority - gapSeconds) *
                     Range(.72, 1.28), .18, 18);
+            inBurst = true;
+            (color, remaining) = pulses.Dequeue();
+        }
+
+        private void BeginEarlyFlickers(double p)
+        {
+            // Gradually reduce the quiet intervals from rare Install flashes
+            // to more frequent Collect glitches, without introducing slow
+            // full-image holds. All individual flashes stay under 110 ms.
+            double captureMix = Math.Clamp((p - .025) / .030, 0, 1);
+            double collectMix = Math.Clamp((p - .055) / .105, 0, 1);
+            double minQuiet = 23 - 10 * captureMix - 9 * collectMix;
+            double maxQuiet = 47 - 19 * captureMix - 19 * collectMix;
+            double minFlash = .028 + .009 * captureMix + .006 * collectMix;
+            double maxFlash = .065 + .020 * captureMix + .025 * collectMix;
+            int count = random.Next(2, 6);
+            for (int i = 0; i < count; ++i)
+            {
+                // Rapid pair/triplet, an occasionally weak flicker, uneven
+                // gaps, then a long black rest. Not a repeated blink loop.
+                double strength = random.NextDouble() < .30
+                    ? Range(.20, .55) : 1;
+                pulses.Enqueue((strength, Range(minFlash, maxFlash)));
+                if (i + 1 < count)
+                {
+                    double gap = random.NextDouble() < .25
+                        ? Range(.10, .22) : Range(.025, .09);
+                    pulses.Enqueue((0, gap));
+                }
+            }
+            restAfterBurst = Range(minQuiet, maxQuiet);
             inBurst = true;
             (color, remaining) = pulses.Dequeue();
         }
