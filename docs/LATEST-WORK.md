@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — CET G-GC V12 handed into GCO (owner-verified)
+
+- GCO's bundled .NET10 CET Resolver/Profiler manager is rebuilt from CET owner source `08a8b5790372fd9ec5893500489d2b5e24eb1f4b`, verified in CET [CI #2616, 6/6 GREEN](https://github.com/giorgioherma/G-CET_Runtime_Profiler/actions/runs/45103360468). Both CET standalone reference packages are now from that same verified run: Profiler artifact `14786511383`, Resolver artifact `14787010559`. The original native source/hash admission, managed CLR adaptation and unified orchestration are unchanged. The GCO package provenance and source contract pins match the actual owner source.
+- Owner G-GC V12 UI offers **0 / 1 / 10 / 50 / 200 KiB** steps at **OFF / 10s / 5s / 3s / 2s / 1s / 500 / 300 / 200 / 100 / 50 ms**, default **50 KiB / 3s**. Optional workload inhibition and built-in A/B removed in CET owner; 0-KiB requests an actual GC step, while OFF disables calls. Updated diagnostics distinguish helper-completed cycles from unmeasured automatic cycles and requested work from reclaimed bytes. Legacy preferences/source upgrade remain CET-owned.
+- Scope: **source-owner pin/provenance update only** in GCO. No copied Lua generator, gameplay tuning, app UI redesign, version bump or REDscript generator edits. GCO integration/package CI must verify this new source pin independently of CET owner CI; user gameplay A/B remains unverified.
+
+
 ## 2026-11-23 — Integration → main reconciliation
 
 - Official progression: main → REDscript handoff → dev/redscript/integration; do not replace latest integrated generators with historical main code. Merge base `3caccafb`; main has 74 commits after divergence, primarily earlier prototype reporting/build contracts. Integration had 1,240 subsequent commits at comparison.
