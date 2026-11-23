@@ -1,5 +1,13 @@
 # Latest work / evidence status
 
+## 2026-11-23 — Stage 3: REAL CET + GRSP owner-generated MO2 overlay GREEN
+
+- [MO2 CI #10 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45279090018) verified the new `Mo2ProfilerOverlayBuilder` using the **real packaged CET and GRSP managers** from GCO's verified owner bundle. Official CET original ASI was chosen by the CET **owner's own manifest** and hash-checked, not hardcoded to a newer game version. Six generated overlay files were independently verified, with physical CET ASI and active MO2 source mod bytes unchanged.
+- Production builder projects the selected MO2 profile's CET Lua/ASI/**bindings.json** into an isolated fixture, calls the two existing manager installers, extracts only approved CET/GRSP changes to one session-owned virtual layer, rejects unsafe modifications/deletions/drift and journals before any mutation. `Mo2SourceInspector` now tracks the effective bindings owner; Python mapper allows actual F11 controls, namespaced scheduler and bindings but refuses unrelated modules.
+- [MO2 CI #8 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45277986528) covered simulated owner deltas and source-state refusal. [CI #9 FAILURE](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45278828159) rejected an incorrectly sized test session token before real installation; fixture corrected for green #10.
+- **Stage 3 partial:** real-manager untouched CET **without 0-Engine** proven; real 0-Engine partial/namespaced/integrated variants and actual live MO2 plugin/Cyberpunk native capture still unverified. `Mo2FeatureGate.Enabled=false`; UI/Direct baseline unchanged. [Evidence and next gates](integration/MO2-INTEGRATION-PROGRESS.md).
+
+
 ## 2026-11-23 — GCO MO2 selected-profile virtual layer and authenticated protocol validated in isolated CI
 
 - On `MO2_integration` only: authoritative upstream MO2 C++ source confirms explicit launch profile VFS composition, then `IPluginFileMapper` applied **after** selected profile/Overwrite. Replaced the unsafe idea of noncurrent profile `setActive/setPriority` with one GCO session-owned virtual profiler layer mapped for precisely one chosen-profile launch. Corrected actual Python plugin loader factory precedence (`createPlugins()` only).
