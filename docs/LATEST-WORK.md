@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-23 — MO2 Stage 3 historical namespaced preservation and partial regeneration green
+
+- [MO2 CI #12 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45280176807): existing private historical 0-Engine source checked out read-only via authorized CI secret; real CET/GRSP owners preserved its completed namespaced worker; 6 verified overlay files, originals unchanged.
+- [MO2 CI #13 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45280631519): full existing namespaced historical stack again generated 6 files; a partial variant with its canonical `modules/G-CET/Scheduler.lua` intentionally absent generated 7 files, specifically the missing namespaced worker, **without rewriting 0-Engine init or adding a second scheduler**. Real owner validation and full native USVFS A/B profile isolation remained green. Private fixtures are never uploaded.
+- [MO2 CI #11 FAILURE](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45279863773) was test-only: the historical source adds a legitimate second CET owner; test was corrected. No production admission gate weakened.
+- Stage 3 still requires broader untouched/integrated/adaptive 0-Engine variant replay and real MO2 runtime loader proof. GCO MO2 deployment remains **OFF**; Direct and `main` unchanged. [Authoritative evidence ledger](integration/MO2-INTEGRATION-PROGRESS.md).
+
 ## 2026-11-23 — Stage 3: REAL CET + GRSP owner-generated MO2 overlay GREEN
 
 - [MO2 CI #10 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45279090018) verified the new `Mo2ProfilerOverlayBuilder` using the **real packaged CET and GRSP managers** from GCO's verified owner bundle. Official CET original ASI was chosen by the CET **owner's own manifest** and hash-checked, not hardcoded to a newer game version. Six generated overlay files were independently verified, with physical CET ASI and active MO2 source mod bytes unchanged.
