@@ -6,7 +6,8 @@ internal static class Mo2CompanionDiscoveryTests
 {
     public static void Run()
     {
-        if (Mo2ProcessIdentity.Image(-1) is not null || Mo2ProcessIdentity.IsElevated(-1))
+        if (Mo2ProcessIdentity.Image(-1) is not null || Mo2ProcessIdentity.IsElevated(-1) ||
+            Mo2ProcessIdentity.InspectElevation(-1).Elevated is not null)
             throw new InvalidDataException("MO2_INVALID_PID_ACCEPTED");
         if (OperatingSystem.IsWindows())
         {
@@ -28,7 +29,7 @@ internal static class Mo2CompanionDiscoveryTests
             string profiles = Path.Combine(root, "profiles");
             string overwrite = Path.Combine(root, "overwrite");
             string statusDir = Path.Combine(root, "GCO", "MO2Bridge");
-            string statusPath = Path.Combine(statusDir, "instance-test.json");
+            string statusPath = Path.Combine(statusDir, "instance-" + new string('a', 24) + ".json");
             Directory.CreateDirectory(app);
             Directory.CreateDirectory(Path.Combine(game, "bin", "x64"));
             Directory.CreateDirectory(Path.Combine(profiles, "Other"));
@@ -58,6 +59,9 @@ internal static class Mo2CompanionDiscoveryTests
             };
             void Publish() => File.WriteAllText(statusPath, JsonSerializer.Serialize(source));
             Publish();
+            // A request/response can be temporarily unreadable or malformed;
+            // it must never be interpreted as an instance heartbeat.
+            File.WriteAllText(Path.ChangeExtension(statusPath, ".response.json"), "{");
             var live = Mo2CompanionDiscovery.Inspect(app, instance, root,
                 processImageForTesting: _ => Path.Combine(app, "ModOrganizer.exe"));
             if (!live.Connected || live.CurrentProfile != "Other" ||
