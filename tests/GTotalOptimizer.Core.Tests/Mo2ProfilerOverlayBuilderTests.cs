@@ -111,6 +111,27 @@ internal static class Mo2ProfilerOverlayBuilderTests
             Directory.Delete(Path.Combine(mod, "bin/x64/plugins/cyber_engine_tweaks/mods/NewMod"), true);
             Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
 
+            if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
+                throw new InvalidDataException("MO2_PREPARED_SESSION_NOT_RECOVERABLE");
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "prepared", "test-launch-pending");
+            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
+            if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
+                throw new InvalidDataException("MO2_UNCERTAIN_LAUNCH_NOT_BLOCKED");
+            try
+            {
+                Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "prepared", "retired-unlaunched");
+                throw new InvalidDataException("MO2_UNCERTAIN_LAUNCH_RETIRED_AS_UNLAUNCHED");
+            }
+            catch (InvalidOperationException) { }
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "test-launch-pending", "test-launched", 123);
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "test-launched", "retired-test-capture", 123);
+            if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
+                throw new InvalidDataException("MO2_UNCOLLECTED_CAPTURE_REUSE_ALLOWED");
+            using (var journal = JsonDocument.Parse(File.ReadAllText(result.JournalFile)))
+                if (journal.RootElement.GetProperty("generatedFiles").GetArrayLength() != expected.Length ||
+                    journal.RootElement.GetProperty("originalSources").GetRawText().Length <= 2)
+                    throw new InvalidDataException("MO2_TEST_RETIREMENT_LOST_RECOVERY_MANIFEST");
+
             async Task ShouldReject(string name, Action<string> change)
             {
                 string id = Convert.ToHexString(
