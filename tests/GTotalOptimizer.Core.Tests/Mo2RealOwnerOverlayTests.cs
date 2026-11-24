@@ -190,6 +190,13 @@ internal static class Mo2RealOwnerOverlayTests
                 !File.Exists(Path.Combine(instance, "mods", "SimpleCETMod", "bin", "x64",
                     "plugins", "cyber_engine_tweaks", "mods", "0-Engine", "init.lua"))))
                 throw new InvalidDataException("MO2_REAL_0ENGINE_HISTORICAL_SOURCE_CHANGED");
+            if (realZeroEngineDirectory is null)
+            {
+                // Only this disposable test created the foreign refusal file.
+                File.Delete(Path.Combine(instance, "overwrite", "red4ext", "plugins",
+                    "G-REDscript-Profiler", "foreign-config.json"));
+                await Mo2RealCollectionTests.RunAsync(verifiedPackageRoot, game, instance, local, output);
+            }
             Console.WriteLine("PASS Stage 3 REAL CET + GRSP owner install on disposable " +
                 (realZeroEngineDirectory is null ? "original no-0-Engine" :
                     "historical 0-Engine " + scenario) +
