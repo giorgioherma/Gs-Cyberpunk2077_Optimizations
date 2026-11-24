@@ -1,1 +1,1 @@
-checkpoint=mo2-shared-action-handlers-direct-parity-20261124
+checkpoint=mo2-shared-capture-identity-and-recovery-20261124
