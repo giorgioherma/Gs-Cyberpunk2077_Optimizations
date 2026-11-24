@@ -112,7 +112,7 @@ internal static class PresentMonCaptureController
     }
 
     public static async Task RunAsync(string packageRoot, string csv, bool restart,
-        string? captureSessionId = null)
+        string? captureSessionId = null, Func<Task>? authorizedRestart = null)
     {
         if (!restart)
             throw new InvalidOperationException(
@@ -130,35 +130,50 @@ internal static class PresentMonCaptureController
         var resultPath = Path.Combine(Path.GetDirectoryName(safeCsv)!, ResultName);
         if (File.Exists(resultPath)) File.Delete(resultPath);
 
-        // Use the native GUI launcher, which prepares the private .NET 10
-        // runtime even after Windows switches to the elevated token.
-        var host = Path.Combine(packageRoot, PortablePackagePaths.RootLauncherName);
-        var psi = new ProcessStartInfo(host)
+        if (authorizedRestart is not null)
         {
-            UseShellExecute = true,
-            Verb = "runas",
-            WorkingDirectory = packageRoot,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
-        psi.ArgumentList.Add(CliSwitch);
-        psi.ArgumentList.Add(restart ? "restart" : "stop");
-        psi.ArgumentList.Add(safeCsv);
-        psi.ArgumentList.Add(captureSessionId);
+            // MO2 already holds the VERIFY token. Stop the previous tracked
+            // writer before binding this attempt. Persist its pointer before
+            // dispatch so an ambiguous reply cannot orphan a frame writer.
+            var prior = await StopTrackedAsync(packageRoot);
+            if (!prior.Stopped)
+                throw new InvalidOperationException(prior.Error);
+            Directory.CreateDirectory(Path.Combine(packageRoot, "RESULTS"));
+            File.WriteAllText(TrackingFile(packageRoot), safeCsv);
+            await authorizedRestart();
+        }
+        else
+        {
+            // Use the native GUI launcher, which prepares the private .NET 10
+            // runtime even after Windows switches to the elevated token.
+            var host = Path.Combine(packageRoot, PortablePackagePaths.RootLauncherName);
+            var psi = new ProcessStartInfo(host)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WorkingDirectory = packageRoot,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            psi.ArgumentList.Add(CliSwitch);
+            psi.ArgumentList.Add(restart ? "restart" : "stop");
+            psi.ArgumentList.Add(safeCsv);
+            psi.ArgumentList.Add(captureSessionId);
 
-        using var controller = Process.Start(psi)
-            ?? throw new InvalidOperationException("Windows could not start the elevated PresentMon controller.");
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        try
-        {
-            await controller.WaitForExitAsync(timeout.Token);
+            using var controller = Process.Start(psi)
+                ?? throw new InvalidOperationException("Windows could not start the elevated PresentMon controller.");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            try
+            {
+                await controller.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("PresentMon controller did not finish; no new game launch was authorized.");
+            }
+            if (controller.ExitCode != 0)
+                throw new InvalidOperationException(
+                    "Elevated GCO launcher failed (exit " + controller.ExitCode + "). No new game was started.");
         }
-        catch (OperationCanceledException)
-        {
-            throw new TimeoutException("PresentMon controller did not finish; no new game launch was authorized.");
-        }
-        if (controller.ExitCode != 0)
-            throw new InvalidOperationException(
-                "Elevated GCO launcher failed (exit " + controller.ExitCode + "). No new game was started.");
 
         // The native launcher returns once the private-runtime GUI host starts.
         // Wait for the elevated CHILD's atomic result, not the launcher's exit.
