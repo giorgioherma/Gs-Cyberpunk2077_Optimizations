@@ -16,6 +16,7 @@
     <RootNamespace>GTotalOptimizer.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="../../integrations/mo2/gco_mo2_bridge.py" Link="mo2/gco_mo2_bridge.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Win32 EXE icon covers Explorer; WPF pack resource covers the
          titlebar, taskbar, and owned dialogs without runtime file paths. -->
     <Resource Include="../../assets/icons/GOT_LAG_final/GOT_LAG_Hybrid_16-24_brush_32plus_V.ico" Link="Icons/GOT_LAG.ico" />
