@@ -255,6 +255,21 @@ public static class Mo2SourceInspector
             if (winners.ContainsKey(nativeRel)) shadows++;
             winners[nativeRel] = new(nativeRel, asiFile, owner, priority, fromMo2);
         }
+        // Same profile precedence as Lua/REDscript sources, including
+        // physical baseline and Overwrite. These are preflight inputs only.
+        foreach (var relative in new[] {
+            "red4ext/RED4ext.dll", "engine/tools/scc.exe",
+            "engine/tools/scc_lib.dll", "engine/tools/scc.dll",
+            "engine/config/base/scripts.ini" })
+        {
+            token.ThrowIfCancellationRequested();
+            var file = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(file)) continue;
+            if (++scanned > MaximumScannedFiles)
+                throw new InvalidDataException("Too many files for bounded MO2 source inventory.");
+            if (winners.ContainsKey(relative)) shadows++;
+            winners[relative] = new(relative, file, owner, priority, fromMo2);
+        }
         foreach (var path in paths)
         {
             var directory = Path.Combine(root, path);
