@@ -121,6 +121,20 @@ public static class Mo2SourceInspector
                 "modlist.txt absent: no MO2 packages or Overwrite; only physical game files.", profile, token);
         try
         {
+            // Native capture cleanup must never target an enabled package,
+            // the profiles directory, or a nested/aliased game root.
+            static bool Overlaps(string first, string second)
+            {
+                var a = Path.TrimEndingDirectorySeparator(Path.GetFullPath(first));
+                var b = Path.TrimEndingDirectorySeparator(Path.GetFullPath(second));
+                return string.Equals(a, b, StringComparison.OrdinalIgnoreCase) ||
+                    IsChildPath(a, b) || IsChildPath(b, a);
+            }
+            if (Overlaps(instance.OverwriteDirectory, instance.ModsDirectory) ||
+                Overlaps(instance.OverwriteDirectory, instance.ProfilesDirectory) ||
+                Overlaps(instance.OverwriteDirectory, gameRoot!))
+                return ResolveGameOnly(gameRoot,
+                    "MO2 Overwrite overlaps game, mods or profiles; output routing is unsafe.", profile, token);
             var entries = ReadEnabledMods(modlist);
             if (entries.Count > 0 && !Directory.Exists(instance.ModsDirectory))
                 return ResolveGameOnly(gameRoot, "Configured MO2 Mods directory missing; enabled MO2 files excluded.", profile, token);
