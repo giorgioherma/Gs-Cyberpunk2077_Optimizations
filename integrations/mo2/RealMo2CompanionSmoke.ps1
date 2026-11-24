@@ -91,6 +91,82 @@ Write-Host 'PASS native x64 test exe directly executes and sees only physical so
 Remove-Item -LiteralPath $nativeObservation -ErrorAction Stop
 
 
+# MO2 v2.5.2 spawn.cpp uses CREATE_BREAKAWAY_FROM_JOB (0x01000000).
+# Ordinary Start-Process success does not prove the runner allows that flag.
+# Reproduce the actual Win32 call without USVFS, using the same inert executable,
+# current directory and inherited environment. This is diagnosis, not a fallback.
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class GcoMo2SpawnDiagnostic {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct StartupInfo {
+        public int cb;
+        public string reserved, desktop, title;
+        public int x, y, xSize, ySize, xChars, yChars, fill, flags;
+        public short show, reserved2;
+        public IntPtr reservedPtr, stdIn, stdOut, stdErr;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInfo {
+        public IntPtr process, thread;
+        public uint processId, threadId;
+    }
+    [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    private static extern bool CreateProcessW(string application, StringBuilder command,
+        IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint flags,
+        IntPtr environment, string cwd, ref StartupInfo startup, out ProcessInfo process);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    private static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll")] private static extern uint WaitForSingleObject(IntPtr handle, uint ms);
+    [DllImport("kernel32.dll")] private static extern bool TerminateProcess(IntPtr handle, uint code);
+    [DllImport("kernel32.dll")] private static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
+    public static bool InJob(IntPtr process) {
+        bool result;
+        if (!IsProcessInJob(process, IntPtr.Zero, out result))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        return result;
+    }
+    public static bool CurrentInJob() { return InJob(GetCurrentProcess()); }
+    public static int Probe(string exe, string cwd, uint flags) {
+        StartupInfo si = new StartupInfo();
+        si.cb = Marshal.SizeOf(typeof(StartupInfo));
+        ProcessInfo pi;
+        if (!CreateProcessW(null, new StringBuilder("\"" + exe + "\""),
+            IntPtr.Zero, IntPtr.Zero, false, flags, IntPtr.Zero, cwd, ref si, out pi))
+            return Marshal.GetLastWin32Error();
+        try {
+            if (WaitForSingleObject(pi.process, 10000) != 0) {
+                TerminateProcess(pi.process, 1);
+                throw new InvalidOperationException("Native spawn diagnostic child timed out");
+            }
+            uint exit;
+            if (!GetExitCodeProcess(pi.process, out exit) || exit != 0)
+                throw new InvalidOperationException("Native spawn diagnostic child failed");
+            return 0;
+        } finally { CloseHandle(pi.thread); CloseHandle(pi.process); }
+    }
+}
+'@
+$runnerInJob = [GcoMo2SpawnDiagnostic]::CurrentInJob()
+$normalSpawn = [GcoMo2SpawnDiagnostic]::Probe($nativeExe, $gameExeDir, 0)
+if ($normalSpawn -ne 0 -or !(Test-Path -LiteralPath $nativeObservation)) {
+    throw "MO2_NATIVE_WIN32_CONTROL_FAILED error=$normalSpawn"
+}
+Remove-Item -LiteralPath $nativeObservation -ErrorAction Stop
+$breakawaySpawn = [GcoMo2SpawnDiagnostic]::Probe($nativeExe, $gameExeDir, 0x01000000)
+Write-Host "MO2 spawn diagnostic: runnerInJob=$runnerInJob normalCreateProcess=$normalSpawn breakawayCreateProcess=$breakawaySpawn"
+if ($breakawaySpawn -eq 0) {
+    if (!(Test-Path -LiteralPath $nativeObservation)) { throw 'MO2_NATIVE_BREAKAWAY_CHILD_OBSERVATION_MISSING' }
+    Remove-Item -LiteralPath $nativeObservation -ErrorAction Stop
+}
+# Continue the real MO2 bootstrap and strict selected-profile test even when
+# the direct probe reports a restriction. Never mark that launch as passed.
+
 # GameSettings::directory expects QSettings QByteArray under General.
 $gamePath = $game.Replace('\', '/')
 $iniLines = @(
@@ -119,6 +195,8 @@ try {
     # --instance= override whose empty-string parsing may reject startup.
     $process = Start-Process -FilePath $exe -ArgumentList @('--multiple','--logs') -WorkingDirectory $appDir -PassThru -RedirectStandardOutput $standardOut -RedirectStandardError $standardErr -ErrorAction Stop
     Write-Host ("MO2 process launched PID=" + $process.Id)
+    $mo2InJob = [GcoMo2SpawnDiagnostic]::InJob($process.Handle)
+    Write-Host "MO2 spawn diagnostic: realMo2InJob=$mo2InJob runnerInJob=$runnerInJob breakawayCreateProcess=$breakawaySpawn"
     $statusFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'GCO/MO2Bridge'
     $status = $null
     $statusPath = $null
@@ -151,7 +229,12 @@ try {
 
     Write-Host 'Testing real MO2 startApplication(profile=Heavy) while UI profile is Other'
     $signedLaunch = & python integrations/mo2/SignRealMo2Launch.py "$statusPath" Heavy "$game" "$stage" "$sessionId"
-    if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_NONCURRENT_PROFILE_SIGNED_LAUNCH_FAILED' }
+    if ($LASTEXITCODE -ne 0) {
+        if ($runnerInJob -and $mo2InJob -and $breakawaySpawn -eq 5) {
+            throw 'MO2_REAL_NONCURRENT_PROFILE_LAUNCH_BLOCKED_WITH_DIRECT_WIN32_BREAKAWAY_ACCESS_DENIED'
+        }
+        throw 'MO2_REAL_NONCURRENT_PROFILE_SIGNED_LAUNCH_FAILED'
+    }
     Write-Host ("Real MO2 HMAC launch response: " + ($signedLaunch -join ' '))
     $observed = $null
     for ($i = 0; $i -lt 40; $i++) {
