@@ -3241,6 +3241,9 @@ public partial class MainWindow : Window
             var saved = CollectedCaptureStore.ReadRestored(
                 packageRoot, completedGameRoot, completedSessionId);
             UpdateResultTexts(saved);
+            OptimizationInstallGuidance.Text = saved.Mo2Source is null
+                ? "  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
+                : "  CET + REDscript - one clean ZIP with optimization files.   Install as a separate MO2 mod.";
             RefreshHotscenesOption();
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
                 SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
