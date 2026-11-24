@@ -32,12 +32,18 @@ internal static class Mo2ProfileSelectionTests
             Put(Path.Combine(mods, "Beta", "r6", "scripts", "Beta", "mod.reds"), "beta");
             Put(Path.Combine(mods, "Beta", "r6", "scripts", "Beta", "nested", "second.reds"), "second");
             Put(Path.Combine(mods, "Beta", "r6", "scripts", "AnotherFolder", "third.reds"), "third");
+            Put(Path.Combine(mods, "Alpha", "red4ext", "RED4ext.dll"), "not a verified PE");
+            Put(Path.Combine(mods, "Alpha", "engine", "tools", "scc.exe"), "not an official compiler");
+            Put(Path.Combine(mods, "Alpha", "engine", "tools", "scc_lib.dll"), "unverified library");
+            Put(Path.Combine(mods, "Alpha", "engine", "config", "base", "scripts.ini"), "config");
+            Put(Path.Combine(mods, "Alpha", "bin", "x64", "plugins", "cyber_engine_tweaks",
+                "mods", "0-Engine", "init.lua"), "engine");
             Put(Path.Combine(profiles, "Heavy", "modlist.txt"), "+Alpha\n+Beta\n");
             Put(Path.Combine(profiles, "Minimal", "modlist.txt"), "+Beta\n-Alpha\n");
 
             var heavy = Mo2ProfileSelectionService.Inspect(mo2, null, "Heavy", game);
             if (!heavy.Recognized || heavy.CandidateSource is null ||
-                heavy.CandidateSource.CetOwners != 2 ||
+                heavy.CandidateSource.CetOwners != 3 ||
                 heavy.CandidateSource.RedscriptFiles != 3 ||
                 heavy.CandidateSource.CetModCount != 2 ||
                 heavy.CandidateSource.RedscriptModCount != 1 ||
@@ -51,6 +57,18 @@ internal static class Mo2ProfileSelectionTests
                 minimal.CandidateSource.CetModCount != 1 ||
                 minimal.CandidateSource.RedscriptModCount != 1)
                 throw new InvalidDataException("MO2_SELECTED_PROFILE_NOT_ISOLATED");
+
+            var heavyFramework = FrameworkPreflight.InspectMo2(game, heavy.CandidateSource!);
+            var minimalFramework = FrameworkPreflight.InspectMo2(game, minimal.CandidateSource!);
+            FrameworkGateStatus Gate(FrameworkPreflightResult result, string name) =>
+                result.Gates.Single(g => g.Name == name);
+            if (!Gate(heavyFramework, "0-Engine").Ready ||
+                !Gate(heavyFramework, "RED4ext").Present || Gate(heavyFramework, "RED4ext").Ready ||
+                !Gate(heavyFramework, "redscript").Present || Gate(heavyFramework, "redscript").Ready ||
+                Gate(minimalFramework, "0-Engine").Present ||
+                Gate(minimalFramework, "RED4ext").Present ||
+                Gate(minimalFramework, "redscript").Present)
+                throw new InvalidDataException("MO2_FRAMEWORK_GATES_IGNORED_EFFECTIVE_PROFILE_OR_ACCEPTED_UNVERIFIED_BYTES");
 
             var invalid = Mo2ProfileSelectionService.Inspect(mo2, null, "OtherInstanceProfile", game);
             if (invalid.Recognized || invalid.CandidateSource != null)
