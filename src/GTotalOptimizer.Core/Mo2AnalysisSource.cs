@@ -32,7 +32,8 @@ public sealed class Mo2AnalysisSource : IDisposable
             throw new InvalidDataException("Original MO2 profile is unavailable: " + stack.Detail);
         if (stack.EffectiveFiles.Keys.Any(path =>
             path.Equals("red4ext/plugins/G-REDscript-Profiler.dll", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/", StringComparison.OrdinalIgnoreCase) ||
+            (path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/", StringComparison.OrdinalIgnoreCase) &&
+             !Mo2ProfilerOverlayBuilder.IsControlsRuntimeResidue(path)) ||
             path.StartsWith("bin/x64/plugins/.cet_runtime_profiler/", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("red4ext/plugins/G-REDscript-Profiler/.manager_state.json", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Original MO2 profile still contains profiler files.");
@@ -124,6 +125,7 @@ public sealed class Mo2AnalysisSource : IDisposable
     private static bool IsSource(string relative) =>
         !relative.StartsWith("red4ext/plugins/G-REDscript-Profiler/RESULTS/", StringComparison.OrdinalIgnoreCase) &&
         !relative.StartsWith("bin/x64/plugins/cyber_engine_tweaks/CET_Runtime_Profile_", StringComparison.OrdinalIgnoreCase) &&
+        !Mo2ProfilerOverlayBuilder.IsControlsRuntimeResidue(relative) &&
         !relative.EndsWith(".log", StringComparison.OrdinalIgnoreCase);
 
     private string Target(string relative)
