@@ -837,6 +837,13 @@ jobs:
           if ('${{ github.ref }}' -eq 'refs/heads/MO2_integration') {
             dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
             if ($LASTEXITCODE -ne 0) { throw 'MO2 selected-profile and companion identity contract failed' }
+            $bridge = Join-Path $root 'app/mo2/gco_mo2_bridge.py'
+            if (!(Test-Path -LiteralPath $bridge -PathType Leaf)) { throw 'MO2 packaged companion missing' }
+            if ((Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath 'integrations/mo2/gco_mo2_bridge.py' -Algorithm SHA256).Hash) {
+              throw 'MO2 packaged companion differs from tested source'
+            }
+            Write-Host 'PASS actual MO2 companion bytes included in the GCO package'
           }
           # Stage 1: execute both the exact CET owner-built Resolver and our
           # source-retargeted .NET10 Resolver against the same disposable
