@@ -11,6 +11,12 @@
 
 
 
+
+## 2026-11-24 — Physical 0-Engine dependency failure reproduced with official USVFS
+
+- MO2 CI #25 (run 45458392275, head `a4d537d`) failed at the new physical-only native probe: root-level mapping succeeded and hooked child read STAGED_PROFILER_ASI and STAGED_ADAPTIVE_INIT, then exit 34 on original modules/EventEmitter.lua. This reproduces the missing physical sibling observed in local 0-Engine. Existing profile/Overwrite and profile-isolation probes still passed. Native DLL loading itself remains unproven.
+- Candidate `fa77b71`: retain root-level sparse stage mapping for parent admission, establish required dependency parent nodes, then explicitly map unchanged physical dependency files to their original paths using USVFS file links, without copying or modifying those files. Extend the native regression to cover a second unchanged physical subdirectory and an unrelated nativeSettings entry point; retain original-byte checks. Checkpoint `eb2829a` requested. This is candidate validation, not an implemented production bridge fix. If the identity mapping fails, use native evidence to select a minimal complete effective dependency projection; never silently replace the entire mod tree or lose writes.
+
 ## 2026-11-24 — Real USVFS sparse nested mapping failure
 
 - MO2 CI #24 (run 45455462021, head `5d9d009`) failed in the new physical-only sparse mapping regression: Win32 error 3 before child launch. Earlier profile/Overwrite precedence and unrelated-profile native probes, Python and C# contracts passed. This is a real native mapping admission failure; the exact in-game CET API failure is still not reproduced. Full GCO CI #1131 (run 45449113966, head `c9af7a2`) passed the RESTORE/VERIFY changes.
