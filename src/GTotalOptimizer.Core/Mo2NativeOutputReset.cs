@@ -46,7 +46,7 @@ internal static class Mo2NativeOutputReset
             FileSystemName.MatchesSimpleExpression(p, leaf, ignoreCase: true));
     }
 
-    internal static void Discard(JsonObject journal)
+    private static void RequireClosed()
     {
         var processes = System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077");
         try
@@ -55,6 +55,10 @@ internal static class Mo2NativeOutputReset
                 throw new InvalidOperationException("Close Cyberpunk before discarding uncollected results.");
         }
         finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    private static (string[] Roots, string[] Patterns) ReadScope(JsonObject journal)
+    {
         var game = Path.GetFullPath(journal["gameRoot"]?.GetValue<string>() ??
             throw new InvalidDataException("Missing session game root."));
         if (!File.Exists(Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe")))
@@ -65,12 +69,15 @@ internal static class Mo2NativeOutputReset
             throw new InvalidDataException("Missing CET owner result inventory.");
         ValidatePatterns(patterns);
 
+        return (new[] { game, overwrite, stage }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), patterns);
+    }
+
+    private static (HashSet<string> Files, HashSet<string> Directories) InspectScope(
+        IEnumerable<string> roots, string[] patterns)
+    {
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // The session-owned stage is also a possible output destination.
-        var stage = Path.GetFullPath(journal["stageRoot"]?.GetValue<string>() ??
-            throw new InvalidDataException("Missing session stage root."));
-        foreach (var root in new[] { game, overwrite, stage }.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var root in roots)
         {
             var cet = Path.Combine(root, CetRoot);
             CheckParents(cet);
@@ -86,21 +93,7 @@ internal static class Mo2NativeOutputReset
             if (Directory.Exists(red)) InspectTree(red);
         }
 
-        // Validate the entire deletion scope before touching any file. A
-        // locked or linked result keeps recovery actionable; no archive is made.
-        foreach (var file in files)
-        {
-            CheckParents(Path.GetDirectoryName(file)!);
-            CheckRegular(file);
-            File.Delete(file);
-            if (File.Exists(file)) throw new IOException("Native result could not be discarded: " + file);
-        }
-        foreach (var directory in directories.OrderByDescending(p => p.Length))
-        {
-            CheckParents(directory);
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: false);
-        }
+        return (files, directories);
 
         void InspectTree(string folder)
         {
@@ -121,6 +114,98 @@ internal static class Mo2NativeOutputReset
                     files.Add(entry);
                 }
             }
+        }
+    }
+
+    internal static void Discard(JsonObject journal)
+    {
+        RequireClosed();
+        var (roots, patterns) = ReadScope(journal);
+        var (files, directories) = InspectScope(roots, patterns);
+        // Validate the entire deletion scope before touching any file. A
+        // locked or linked result keeps recovery actionable; no archive is made.
+        foreach (var file in files)
+        {
+            CheckParents(Path.GetDirectoryName(file)!);
+            CheckRegular(file);
+            File.Delete(file);
+            if (File.Exists(file)) throw new IOException("Native result could not be discarded: " + file);
+        }
+        foreach (var directory in directories.OrderByDescending(p => p.Length))
+        {
+            CheckParents(directory);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: false);
+        }
+
+    }
+
+    // The existing owner-installed fixture is a projection, not an archive.
+    // Its managers retain all validation and collection decisions. Never
+    // write live game/Overwrite/stage files while inspecting readiness.
+    internal static void ProjectForCollection(JsonObject journal, string fixture)
+    {
+        RequireClosed();
+        var (roots, patterns) = ReadScope(journal);
+        CheckParents(fixture);
+        if (!Directory.Exists(fixture) || roots.Any(root =>
+                Overlaps(root, fixture)))
+            throw new InvalidDataException("MO2 capture fixture is unavailable or overlaps live output.");
+        var winners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in roots)
+        {
+            var (files, _) = InspectScope(new[] { root }, patterns);
+            foreach (var file in files)
+            {
+                var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+                if (!IsNativeResult(relative, patterns) ||
+                    (winners.TryGetValue(relative, out var other) &&
+                     !string.Equals(other, file, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("Ambiguous MO2 native result: " + relative);
+                winners[relative] = file;
+            }
+        }
+
+        // All sources have been inventoried before writing to the fixture.
+        // Remove only previously projected owner-result paths absent now;
+        // this prevents stale data qualifying a later readiness check.
+        var (prior, _) = InspectScope(new[] { fixture }, patterns);
+        foreach (var old in prior)
+            if (!winners.ContainsKey(Path.GetRelativePath(fixture, old).Replace('\\', '/')))
+                File.Delete(old);
+        foreach (var (relative, source) in winners)
+        {
+            RequireClosed();
+            CheckParents(Path.GetDirectoryName(source)!);
+            CheckRegular(source);
+            var target = Path.Combine(fixture, relative.Replace('/', Path.DirectorySeparatorChar));
+            CheckParents(Path.GetDirectoryName(target)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            var original = Hash(source);
+            if (File.Exists(target))
+            {
+                CheckRegular(target);
+                if (Hash(target) == original) continue;
+            }
+            File.Copy(source, target, overwrite: true);
+            if (Hash(target) != original || Hash(source) != original)
+                throw new InvalidDataException("MO2 native output changed during projection: " + relative);
+        }
+        RequireClosed();
+
+        static bool Overlaps(string first, string second)
+        {
+            string Prefix(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            var a = Prefix(first);
+            var b = Prefix(second);
+            return a.StartsWith(b, StringComparison.OrdinalIgnoreCase) ||
+                   b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
+        }
+        static string Hash(string path)
+        {
+            using var stream = File.OpenRead(path);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
         }
     }
 
