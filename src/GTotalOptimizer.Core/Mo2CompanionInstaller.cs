@@ -12,9 +12,24 @@ public static class Mo2CompanionInstaller
         if (bytes.Length == 0 || bytes.Length > 256 * 1024) return false;
         var normalized = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n"));
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(normalized))
-            .Equals("9d51d033f02d3c5462171bab08a2e7d63b2ae746eb3dc8677a713e7e925ecca7",
-                StringComparison.OrdinalIgnoreCase);
+        var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(normalized));
+        return sha.Equals("9d51d033f02d3c5462171bab08a2e7d63b2ae746eb3dc8677a713e7e925ecca7",
+                   StringComparison.OrdinalIgnoreCase) ||
+               sha.Equals("3005b331056bdd269621d9cc85ee021c1f785acab9eac3be374a2be920d01b71",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsCurrent(string applicationFolder, string packagedBridge)
+    {
+        try
+        {
+            var target = Path.Combine(applicationFolder, "plugins", "gco_mo2_bridge.py");
+            return File.Exists(target) && File.Exists(packagedBridge) &&
+                (File.GetAttributes(target) & FileAttributes.ReparsePoint) == 0 &&
+                File.ReadAllBytes(target).AsSpan().SequenceEqual(File.ReadAllBytes(packagedBridge));
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     public static void Install(string applicationFolder, string packagedBridge)
