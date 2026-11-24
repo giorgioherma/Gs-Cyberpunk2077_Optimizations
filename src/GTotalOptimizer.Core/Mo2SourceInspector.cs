@@ -132,7 +132,8 @@ public static class Mo2SourceInspector
             }
             if (Overlaps(instance.OverwriteDirectory, instance.ModsDirectory) ||
                 Overlaps(instance.OverwriteDirectory, instance.ProfilesDirectory) ||
-                Overlaps(instance.OverwriteDirectory, gameRoot!))
+                Overlaps(instance.OverwriteDirectory, Path.Combine(gameRoot!, "bin", "x64", "plugins")) ||
+                Overlaps(instance.OverwriteDirectory, Path.Combine(gameRoot!, "red4ext", "plugins")))
                 return ResolveGameOnly(gameRoot,
                     "MO2 Overwrite overlaps game, mods or profiles; output routing is unsafe.", profile, token);
             var entries = ReadEnabledMods(modlist);
