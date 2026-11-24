@@ -226,6 +226,19 @@ public static class Mo2ProfilerOverlayBuilder
         WriteJournal(prepared.JournalFile, journal);
     }
 
+    public static bool IsStillPrepared(Mo2OverlayPreparation prepared)
+    {
+        try
+        {
+            EnsureNoReparseParents(prepared.JournalFile);
+            RequireRegularUnlinkedFile(prepared.JournalFile);
+            using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
+            return doc.RootElement.GetProperty("sessionId").GetString() == prepared.SessionId &&
+                doc.RootElement.GetProperty("phase").GetString() == "prepared";
+        }
+        catch { return false; } // An unreadable journal is never proof of no launch.
+    }
+
     public static void RetireCompletedTest(Mo2OverlayPreparation prepared)
     {
         if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
