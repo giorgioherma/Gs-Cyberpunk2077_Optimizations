@@ -20,6 +20,13 @@
 
 
 
+
+## 2026-11-24 — Owner correction: Direct capture lifecycle parity
+
+- Explicit owner decision: MO2 is not a new application. Use current Direct `BeginFreshCaptureAsync`, `ResetNativeOutputAsync`, `RestoreOwnedAsync` and collection behavior as the workflow authority. New START/RESTORE discard uncollected output; COLLECT alone saves completed capture. #1133's automatic archive was an unapproved deviation and is superseded.
+- `bcb6708`, `c859336`, `cdc94ac`, `68d5183`, `becf0e2`, `a45b4b5`: separate existing native output from installer inputs and passthrough mappings, use CET owner's manifest and GRSP owner's RESULTS scope to reset only live uncollected output in the configured physical/Overwrite/session roots, revalidate source after discard. No new archive. Repeat START after verified process exit retires old capture and regenerates a fresh one-shot overlay automatically; no extra INSTALL/RESTORE. Pending dispatch still requires VERIFY before reset. Previously collected package RESULTS are outside deletion scope. Legacy journals without output-root proof remain non-destructive; next verified START can reset the live scope.
+- `f26cc5d`, `fba9ee0`, `c339202`: cover install without discard/archive, actual owner refusal for foreign files, START/RESTORE/repeated START discard, unrelated file and sealed capture retention. Actual game behavior remains unverified. No changes to Direct, owner repos, version or feature gate; collection/PresentMon/Page 2 integration still pending.
+
 ## 2026-11-24 — Repeat-install package CI #1133 GREEN
 
 - Full GCO CI #1133 (run 45465983229, head `c1b3344`) SUCCESS, [test package v1.2.7](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45465983229/artifacts/14955287852), SHA-256 `e91c7350d4d7b5da7e7325b04f48c35f32daa186487de4526677d845aec9148c`. MO2 CI #27 (45465972387) native USVFS and six actual owner scenarios passed with historical results; foreign non-result data still refused. Overall #27 red only due to previously documented hosted Windows breakaway error 5 in live MO2 smoke. Actual repeat-install and native CET/GRSP gameplay remain local validation gates. RESTORE failed session, open new build, VERIFY, INSTALL, START. Old results preserved; no manual Overwrite cleanup.
