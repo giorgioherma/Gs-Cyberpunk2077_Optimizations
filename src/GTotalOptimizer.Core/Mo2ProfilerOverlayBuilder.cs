@@ -101,6 +101,9 @@ public static class Mo2ProfilerOverlayBuilder
             // original ASI, and the existing/legacy GRSP footprints for refusal.
             int count = 0;
             long bytes = 0;
+            if (selected.EffectiveFiles.Keys.Any(IsControlsRuntimeResidue))
+                System.Diagnostics.Trace.TraceInformation(
+                    "Previous CET controls runtime files found; preserving them and continuing installation.");
             foreach (var (key, winning) in selected.EffectiveFiles
                 .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
