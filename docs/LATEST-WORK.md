@@ -5,6 +5,13 @@
 
 
 
+
+## 2026-11-24 — Confirmed false-negative elevated MO2 verification
+
+- Local Task Manager shows Elevated=Yes for ModOrganizer.exe PID 23208, matching the uploaded fresh heartbeat. #1129 RESTORE and actual elevated startup are proven locally; the permission/connection rejection is a false negative. Exact failed Win32 call or discovery rejection was not captured by #1129.
+- `682995c`, `13f951c`, `3fef4bd`, `1263fbf`, `72c1d20`, `e70ccf7`: authenticated probe now reports the companion's own Windows token result bound to its PID. Direct verified non-elevation still refuses; when direct cross-integrity query is unavailable, require a fresh authenticated elevated self-token for the verified process identity. VERIFY, INSTALL and START use the same gate. Known exact previous GCO bridge payload can be upgraded after MO2 closes; unknown/custom plugins refused. Existing process image, profile, epoch/HMAC, launch journal and stage verification remain mandatory. No new privileged command or change to Direct mode.
+- Next checkpoint includes earlier discovery diagnostics and these permission changes. Actual launch, F11, single-UAC reuse and cross-integrity local verification remain to be tested. Do not claim native game loading until proven.
+
 ## 2026-11-24 — Elevated VERIFY local follow-up
 
 - Full GCO CI #1129 (head `7bcc952`, run 45439439615) passed. User's journal confirms previous pending launch retired-recovered; new MO2 PID and fresh heartbeat prove restart/bridge initialization, not the process token elevation. GCO reported generic elevation failure because it conflated disconnected discovery, unavailable Windows token query and a confirmed non-elevated token. Actual cause of refusal is not yet proven; check Task Manager Elevated column on the live MO2 process.
