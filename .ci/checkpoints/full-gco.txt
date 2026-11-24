@@ -1,1 +1,1 @@
-checkpoint=mo2-shared-collection-20261124
+checkpoint=mo2-continue-pinned-page2-source-20261124
