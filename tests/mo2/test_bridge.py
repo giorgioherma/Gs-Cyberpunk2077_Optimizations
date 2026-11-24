@@ -170,10 +170,9 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                 self.assertEqual(handle, 123456)
                 self.assertEqual(before, organizer.profileName())
                 self.assertEqual(organizer.last_launch[3], "Heavy")
-                self.assertEqual(len(organizer.mapped), 2)
-                self.assertEqual(
-                    {Path(m.destination).resolve().relative_to(game.resolve()).as_posix() for m in organizer.mapped},
-                    {"bin/x64/plugins", "red4ext/plugins"})
+                self.assertEqual(len(organizer.mapped), 1)
+                self.assertEqual(Path(organizer.mapped[0].destination).resolve(), game.resolve())
+                self.assertEqual(Path(organizer.mapped[0].source).resolve(), stage.resolve())
                 for mapping in organizer.mapped:
                     self.assertTrue(mapping.isDirectory)
                     self.assertFalse(mapping.createTarget)
@@ -182,6 +181,36 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                 self.assertEqual(mapper.mappings(), [])
                 with self.assertRaises(module.GcoOverlayContractError):
                     tool._launch_controller.launch(organizer, "Heavy")
+
+    def test_physical_dependency_identity_links_do_not_override_staged_files(self):
+        module = _load_plugin()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            local, game, stage = self.create(root, module)
+            dependency = "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/EventEmitter.lua"
+            physical = game / dependency
+            physical.parent.mkdir(parents=True)
+            physical.write_text("original module")
+            (stage / dependency).parent.mkdir(parents=True)
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local)}):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                controller = tool._launch_controller
+                for bad in ("../outside", "bin/x64/plugins/cyber_engine_tweaks.asi", dependency + ".missing"):
+                    with self.assertRaises(module.GcoOverlayContractError):
+                        controller.prepare(organizer, "Heavy", game, stage, self.SESSION, [bad])
+                controller.prepare(organizer, "Heavy", game, stage, self.SESSION, [dependency])
+                controller.launch(organizer, "Heavy")
+                self.assertEqual(len(organizer.mapped), 2)
+                mapping = organizer.mapped[1]
+                self.assertFalse(mapping.isDirectory)
+                self.assertFalse(mapping.createTarget)
+                self.assertEqual(Path(mapping.source).resolve(), physical.resolve())
+                self.assertEqual(Path(mapping.destination).resolve(), physical.resolve())
+                self.assertFalse((stage / dependency).exists())
+                self.assertEqual(physical.read_text(), "original module")
+                self.assertEqual(mapper.mappings(), [])
 
     def test_refuse_different_profile_and_no_leak(self):
         module = _load_plugin()
@@ -273,7 +302,7 @@ class TestSelectedProfileOneShotMapper(unittest.TestCase):
                     tool._launch_controller.prepare(
                         organizer, "Heavy", game, stage, self.SESSION), "Heavy")
                 self.assertEqual(tool._launch_controller.launch(organizer, "Heavy"), 123456)
-                self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(len(organizer.mapped), 1)
                 self.assertEqual(mapper.mappings(), [])
 
     def test_refuse_profile_directory_mismatch_and_missing_modlist(self):
@@ -402,6 +431,13 @@ class TestAuthenticatedMo2Bridge(unittest.TestCase):
         root = Path(temp.name)
         module = _load_plugin()
         local, game, stage = TestSelectedProfileOneShotMapper().create(root, module)
+        session = TestSelectedProfileOneShotMapper.SESSION
+        journal = local / "GCO" / "MO2Bridge" / "journals" / (session + ".json")
+        journal.parent.mkdir(parents=True)
+        journal.write_text(json.dumps({
+            "phase": "test-launch-pending", "sessionId": session, "profile": "Heavy",
+            "gameRoot": str(game), "stageRoot": str(stage), "physicalPassthrough": []
+        }), encoding="utf-8")
         return temp, root, module, local, game, stage
 
     @staticmethod
@@ -485,7 +521,7 @@ class TestAuthenticatedMo2Bridge(unittest.TestCase):
                 self.assertEqual(reply["processId"], 4567)
                 self.assertEqual(organizer.profileName(), "Other")
                 self.assertEqual(organizer.last_launch[3], "Heavy")
-                self.assertEqual(len(organizer.mapped), 2)
+                self.assertEqual(len(organizer.mapped), 1)
                 self.assertEqual(mapper.mappings(), [])
         finally:
             temp.cleanup()
