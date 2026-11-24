@@ -1615,7 +1615,7 @@ public partial class MainWindow : Window
                 var reply = await Mo2CompanionCommandClient.ProbeAsync(connected);
                 if (!reply.Ok) throw new InvalidOperationException(reply.Detail);
                 mo2Connected = connected;
-                if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+                if (!Mo2CompanionCommandClient.ElevationVerified(connected, reply))
                 {
                     Mo2StatusText.Text = "Click VERIFY to prepare MO2";
                     SetStatus("Click VERIFY to start MO2 with the required permissions.");
@@ -1699,10 +1699,10 @@ public partial class MainWindow : Window
         var instance = Mo2SourceInspector.Discover(instancePath);
         var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
         if (!connected.Connected) throw new InvalidOperationException(connected.Detail);
-        if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
-            throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         var probe = await Mo2CompanionCommandClient.ProbeAsync(connected);
         if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
+        if (!Mo2CompanionCommandClient.ElevationVerified(connected, probe))
+            throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         var selection = await Task.Run(() => Mo2ProfileSelectionService.Inspect(
             folder, instancePath, profile, connected.GameDirectory));
         if (!selection.Recognized || selection.CandidateSource is null)
@@ -1800,7 +1800,7 @@ public partial class MainWindow : Window
             var existing = Mo2CompanionDiscovery.Inspect(folder, instance);
             // Reuse the correctly elevated live instance for the rest of
             // this session. Never trigger another UAC prompt just to probe.
-            if (existing.Connected && Mo2ProcessIdentity.IsElevated(existing.ProcessId))
+            if (existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing))
             {
                 await RefreshMo2SourceAsync();
                 return;
@@ -1815,16 +1815,17 @@ public partial class MainWindow : Window
             while (deadline.Elapsed < TimeSpan.FromSeconds(30))
             {
                 var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
-                if (connected.Connected && Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+                if (connected.Connected)
                     break;
                 await Task.Delay(500);
             }
             var verified = Mo2CompanionDiscovery.Inspect(folder, instance);
             if (!verified.Connected)
                 throw new InvalidOperationException(verified.Detail);
-            var elevation = Mo2ProcessIdentity.InspectElevation(verified.ProcessId);
-            if (elevation.Elevated != true)
-                throw new InvalidOperationException(elevation.Detail);
+            var probe = await Mo2CompanionCommandClient.ProbeAsync(verified);
+            if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
+            if (!Mo2CompanionCommandClient.ElevationVerified(verified, probe))
+                throw new InvalidOperationException(Mo2ProcessIdentity.InspectElevation(verified.ProcessId).Detail);
             startupSucceeded = true;
         }
         catch (Exception ex)
