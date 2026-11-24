@@ -1050,10 +1050,12 @@ public partial class MainWindow : Window
         }
         // Direct recovery remains authoritative when present. Otherwise resume
         // interrupted MO2 recovery even if its companion is no longer running.
-        if (!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text))
+        if (Workflow.HasMo2CaptureAttempt ||
+            (!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text)))
         {
             bool needsMo2Restore;
-            try { needsMo2Restore = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
+            try { needsMo2Restore = Workflow.HasMo2CaptureAttempt ||
+                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
                 Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore(); }
             catch { needsMo2Restore = true; }
             if (needsMo2Restore)
@@ -1473,8 +1475,9 @@ public partial class MainWindow : Window
     }
 
     private bool CanSwitchSource() =>
-        !busy && !mo2StartupRunning && mo2Prepared is null && !mo2RecoveryBlocked && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
-        !Workflow.RestoreActionAvailable(GamePathBox.Text) && !GameRunning();
+        !busy && !mo2StartupRunning && mo2Prepared is null && !mo2RecoveryBlocked && !gameStateRefreshInFlight &&
+        ((!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text)) ||
+            (mo2Mode && mo2VerifyRequired && Workflow.HasMo2CaptureAttempt)) && !GameRunning();
 
     private async void DirectSource_Click(object sender, RoutedEventArgs e)
     {
@@ -1679,8 +1682,9 @@ public partial class MainWindow : Window
         bool running = GameRunning();
         try
         {
-            mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession();
             mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+            mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
+                (Workflow.HasMo2CaptureAttempt && !mo2VerifyRequired);
         }
         catch (Exception ex)
         {
@@ -1756,7 +1760,11 @@ public partial class MainWindow : Window
         {
             // The MO2 mapper is one-shot. Recreate only its deployment for
             // another START, with the existing owner-scoped discard policy.
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+            if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
             Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+            if (Workflow.HasMo2CaptureAttempt)
+                Workflow.RetireMo2CaptureAttempt(selection.GameDirectory, prepared.SessionId);
             mo2Prepared = null;
             mo2LaunchAttempted = false;
             selection = await InspectMo2SelectionAsync();
@@ -1764,6 +1772,23 @@ public partial class MainWindow : Window
             prepared = mo2Prepared!;
         }
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
+        // A failure before dispatch can leave a provisioned, unlaunched
+        // attempt. Retire only its own index; uncertain dispatch still blocks.
+        if (Workflow.HasMo2CaptureAttempt)
+        {
+            if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared))
+                throw new InvalidOperationException("Previous capture requires recovery.");
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+            if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
+            // Reuse the prepared layer but give the next attempt a fresh
+            // one-shot deployment identity, just as on repeated START.
+            Mo2ProfilerOverlayBuilder.RetireUnlaunched(prepared);
+            Workflow.RetireMo2CaptureAttempt(selection.GameDirectory, prepared.SessionId);
+            mo2Prepared = null;
+            await PrepareMo2DeploymentAsync(selection);
+            prepared = mo2Prepared!;
+        }
+        Workflow.BeginMo2CaptureAttempt(selection, prepared);
         return selection;
     }
 
@@ -1788,11 +1813,15 @@ public partial class MainWindow : Window
 
     private async Task<ProfilerWorkflowResult> RestoreMo2DeploymentAsync()
     {
+        var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+        if (!stop.Stopped)
+            return new ProfilerWorkflowResult(false, stop.Error ?? "PresentMon stop pending.");
         await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
         mo2Prepared = null;
         mo2LaunchAttempted = false;
         mo2RecoveryBlocked = false;
         mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+        if (!mo2VerifyRequired) RetireMo2CaptureJournal();
         if (mo2VerifyRequired)
         {
             mo2Connected = null;
@@ -1804,6 +1833,16 @@ public partial class MainWindow : Window
             mo2VerifyRequired ? "Profilers reset. Click VERIFY." :
                 "Profilers restored. Original files unchanged.",
             RestoreVerified: !mo2VerifyRequired);
+    }
+
+    private void RetireMo2CaptureJournal()
+    {
+        if (!Workflow.HasMo2CaptureAttempt) return;
+        var game = Workflow.ReadRecoveryGameRoot() ??
+            throw new InvalidDataException("MO2 capture game identity unavailable.");
+        var id = Workflow.ReadRecoverySessionId(game) ??
+            throw new InvalidDataException("MO2 capture session identity unavailable.");
+        Workflow.RetireMo2CaptureAttempt(game, id);
     }
 
     private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
@@ -1850,6 +1889,14 @@ public partial class MainWindow : Window
             if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
             if (!Mo2CompanionCommandClient.ElevationVerified(verified, probe))
                 throw new InvalidOperationException(Mo2ProcessIdentity.InspectElevation(verified.ProcessId).Detail);
+            if (Workflow.HasMo2CaptureAttempt &&
+                !Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() &&
+                !Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+            {
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
+                RetireMo2CaptureJournal();
+            }
             startupSucceeded = true;
         }
         catch (Exception ex)
@@ -2603,11 +2650,10 @@ public partial class MainWindow : Window
                 // A failed game launch is not a meaningful capture. Flush ETW,
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
-                if (!mo2Mode)
-                {
-                    var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-                    if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
-                }
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                if (!mo2Mode && stop.Stopped) Workflow.AbandonCurrentUncollected(game);
+                // MO2 retains its bound attempt until the deployment journal
+                // proves it is safe to retire or VERIFY resolves dispatch.
                 throw;
             }
             SetPortraitStage(PortraitStage.Capturing);
