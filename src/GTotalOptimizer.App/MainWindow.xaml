@@ -772,7 +772,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="112"/>
                                         </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="Mo2InstanceBox" DisplayMemberPath="." ToolTip="MO2 instance"
+                                        <ComboBox x:Name="Mo2InstanceBox" ToolTip="MO2 instance"
                                                   SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
                                         <ComboBox x:Name="Mo2ProfileBox" Grid.Column="1" ToolTip="Selected launch profile"
                                                   SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
