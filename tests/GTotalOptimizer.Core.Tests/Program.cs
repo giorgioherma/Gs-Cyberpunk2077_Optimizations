@@ -4,6 +4,7 @@ using GTotalOptimizer.Core;
 if (args.Length > 0 && args[0] == "--mo2-profile-contract")
 {
     Mo2ProfileSelectionTests.Run();
+    Mo2CompanionInstallerTests.Run();
     Mo2CompanionDiscoveryTests.Run();
     Mo2CommandClientTests.Run();
     await Mo2ProfilerOverlayBuilderTests.RunAsync();
