@@ -1,1 +1,1 @@
-checkpoint=mo2-root-sparse-mapping-candidate-20261124
+checkpoint=mo2-native-original-file-passthrough-20261124
