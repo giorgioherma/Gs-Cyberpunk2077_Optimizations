@@ -12,6 +12,10 @@ GCO itself MUST attach **one session-owned temporary profiler virtual layer to t
 
 One GCO build, one game-relative optimization ZIP, one existing two-page WPF workflow. No new optimizer or duplicated semantic rules. **Direct mode remains unchanged.** MO2 mode is disabled until actual runtime proof and explicit acceptance.
 
+## Direct-mode workflow parity — owner clarification 2026-11-24
+
+MO2 changes the deployment and effective-file access layer only. The current Direct implementation on `main` is authoritative for user-visible workflow, including fresh START and RESTORE discarding uncollected live native outputs, and COLLECT alone saving completed captures. A normal subsequent START must not require another INSTALL or RESTORE. Never archive uncollected results automatically; preserve already collected results, unrelated MO2 data and necessary recovery journals. The separate uncertainty gate for a pending MO2 launch remains necessary for process safety. No additional UI or behavioral differences are authorized.
+
 ## Source/research distinctions
 
 Verified from the GCO `main` source:
