@@ -124,6 +124,21 @@ internal static class Mo2NativeOutputReset
     {
         RequireClosed();
         var (roots, patterns) = ReadScope(journal);
+        // Retiring an attempted launch must also discard any temporary
+        // projection left by a failed COLLECT. Its root must be the exact
+        // sibling fixture owned by this deployment, never a mod directory.
+        if (journal["phase"]?.GetValue<string>() is "test-launched" or "retired-awaiting-verify" or "test-launch-pending")
+        {
+            var id = journal["sessionId"]?.GetValue<string>() ?? "";
+            var stage = journal["stageRoot"]!.GetValue<string>();
+            var bridge = Path.GetDirectoryName(Path.GetDirectoryName(stage)!)!;
+            var fixture = Path.Combine(bridge, "fixtures", id);
+            if (id.Length != 32 || !id.All(Uri.IsHexDigit) ||
+                !string.Equals(stage, Path.Combine(bridge, "staging", id), StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(journal["fixtureRoot"]?.GetValue<string>(), fixture, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 capture fixture identity changed.");
+            roots = roots.Append(fixture).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
         var (files, directories) = InspectScope(roots, patterns);
         // Validate the entire deletion scope before touching any file. A
         // locked or linked result keeps recovery actionable; no archive is made.
