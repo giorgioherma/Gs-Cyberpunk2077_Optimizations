@@ -1,1 +1,1 @@
-checkpoint=mo2-direct-discard-parity-20261124
+checkpoint=mo2-direct-discard-parity-output-root-narrowing-20261124
