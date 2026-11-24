@@ -17,6 +17,12 @@
 
 
 
+
+## 2026-11-24 — Full GCO CI #1132 GREEN; updated MO2 local test package ready
+
+- Full GCO CI #1132 (run 45463133753, head `4ebba873c862fa2b2ed460806ba93dba394622e3`) completed SUCCESS. Artifact [Gs-Cyberpunk2077_Optimizer-v1.2.7-run1132-a1](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45463133753/artifacts/14954496697), SHA-256 `6d64a14592e3ad9213a1bbb6b5bb6a37ee0c89a9eaa9758257f8868adf184676`. All 18 Python bridge tests, selected-profile C# contracts, physical dependency manifest and source-owner fixture, packaged bridge byte identity, Direct return, owner install/restore and integrated package checks passed. Version unchanged; production feature gate remains disabled.
+- Native USVFS regression and actual owner generation in MO2 CI #26 passed; the separate live MO2 noncurrent-profile launch smoke remains blocked by hosted Windows job restrictions (normal CreateProcess=0, CREATE_BREAKAWAY_FROM_JOB=5, runner and MO2 both in job). No test disabled or weakened to claim success. Actual game CET native API, 0-Engine runtime, GRSP nonzero attribution and cross-profile launch still need local validation. Local test: restore previous session after game exit, open #1132, VERIFY (auto-upgrade known old bridge), INSTALL, START, confirm 0-Engine and both F11 profilers. Preserve capture and logs.
+
 ## 2026-11-24 — Native dependency preservation integrated into packaged bridge
 
 - MO2 CI #26 (45462099544, head `eb2829a`): real USVFS step PASS, including STAGED_PROFILER_ASI, STAGED_ADAPTIVE_INIT, PHYSICAL_EVENT_EMITTER, STAGED_SCHEDULER, PHYSICAL_EXTERNAL_CRON and PHYSICAL_NATIVE_SETTINGS. Real source-owner generation PASS. Full MO2 workflow remained red at genuine noncurrent-profile launch: hosted runner denied process spawn/breakaway (see job 138687164523). Do not mark genuine app launch as passed.
