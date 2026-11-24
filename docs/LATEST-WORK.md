@@ -19,6 +19,14 @@
 
 
 
+## 2026-11-24 — MO2 uses the original native tray and resumes the pinned capture
+
+- Previous full GCO CI [#1138](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45482330763), commit `0c16437`: independently verified SUCCESS.
+- `9d94f4d`, `cd6f8ca`, `0b978d6`: START now follows the original `ArmNativeGameReopen` / `HibernateAfterLaunch` path for both Direct and MO2. No native launcher or tray changes. The existing package capture journal pins the MO2 application, instance, profile and game, including after GUI unload/reopen; earlier development journals remain readable. Rehydrate only an acknowledged launch with matching deployment/session identity, verified selected-profile source and output root, and an intact capture index. Pending dispatch, missing or mismatched sources remain recovery-only. A resumed overlay is never reused for launch; the existing next START retires the spent attempt and prepares a fresh owner layer. External MO2 launches do not acquire a Direct capture attempt. Existing game-process reconciliation handles the refresh.
+- `a38c687`, `faf20c2`: additive MO2 fixture tests verify acknowledged resume, pending/prepared refusal, and profile/instance/output-root mismatch refusal. No existing assertions or workflows changed.
+- **Remaining integration:** COLLECT must route only the actual current-session owner result files from the verified game/Overwrite/stage roots into the existing CET and GRSP owner validation/collection transaction, then use the existing `CollectedCaptureStore`, PresentMon alignment and report. The installed disposable owner fixture is the candidate adapter boundary; do not reimplement owner capture admission or archive formats. CONTINUE and Page 2 effective source provider remain gated. Actual Windows elevated process monitoring, native tray return and gameplay remain unverified; no production feature gate, layout, version, owner manager or optimizer change.
+- Validation: source and additive tests committed; new full GCO TXT checkpoint requested separately.
+
 ## 2026-11-24 — MO2 reuses the existing PresentMon controller under VERIFY authorization
 
 - Previous full GCO CI [#1137](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45480031727), commit `58f7d0b`, independently verified SUCCESS. Shared-action CI [#1136](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45473870143) also SUCCESS.
