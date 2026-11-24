@@ -52,6 +52,36 @@ public static class Mo2CompanionCommandClient
         return ElevationVerified(connected, reply);
     }
 
+    public static async Task<bool> VerifyFramePackageAsync(Mo2CompanionStatus connected,
+        string packageRoot, CancellationToken cancellationToken = default)
+    {
+        var reply = await SendAsync(connected, "frame-package", "", "", cancellationToken);
+        return reply.Ok && string.Equals(reply.Detail,
+            "GCO package: " + Path.GetFullPath(packageRoot).TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The same authenticated mailbox can request only the fixed frame
+    // controller bound by VERIFY. Pending dispatch is treated exactly like
+    // a potentially launched game until a signed settled reply arrives.
+    public static async Task StartFrameControllerAsync(Mo2CompanionStatus connected,
+        Mo2ProfileSelection selection, Mo2OverlayPreparation prepared,
+        CancellationToken cancellationToken = default)
+    {
+        if (!connected.Connected || !selection.Recognized || selection.CandidateSource is null ||
+            !string.Equals(selection.GameDirectory, connected.GameDirectory, StringComparison.OrdinalIgnoreCase) ||
+            Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() ||
+            System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
+            throw new InvalidOperationException("MO2 frame capture admission failed.");
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
+        var reply = await SendAsync(connected, "frame-start", prepared.Profile,
+            prepared.StagingDirectory, cancellationToken, prepared.SessionId);
+        if (!reply.Ok || reply.ProcessId != 0)
+            throw new InvalidOperationException("MO2 frame capture failed: " + reply.Detail);
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending", "prepared");
+    }
+
     // DO NOT expose this through Page 1 until source-owner staging, recovery,
     // real MO2 process launch and native gameplay checks pass.
     public static Task<Mo2BridgeReply> LaunchAsync(
@@ -157,7 +187,7 @@ public static class Mo2CompanionCommandClient
         {
             if (File.Exists(temporary)) File.Delete(temporary);
         }
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(20);
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(operation == "frame-start" ? 60 : 20);
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
