@@ -776,7 +776,7 @@
                                                   SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
                                         <ComboBox x:Name="Mo2ProfileBox" Grid.Column="1" ToolTip="Selected launch profile"
                                                   SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
-                                        <Button x:Name="Mo2BridgeButton" Grid.Column="2" Content="ADD BRIDGE"
+                                        <Button x:Name="Mo2BridgeButton" Grid.Column="2" Content="VERIFY"
                                                 Style="{StaticResource MinorButton}" Click="Mo2Bridge_Click"/>
                                     </Grid>
                                     <TextBlock x:Name="Mo2GameText" Height="15" FontSize="12" Foreground="#F1F5F6"
