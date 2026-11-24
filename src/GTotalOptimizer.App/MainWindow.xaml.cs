@@ -1674,6 +1674,7 @@ public partial class MainWindow : Window
             mo2RecoveryBlocked = true;
             SetStatus("MO2 session journal requires recovery: " + ex.Message);
         }
+        UpdatePathLock();
         var restore = mo2Prepared is not null || mo2RecoveryBlocked;
         InstallButton.Content = restore ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         InstallButton.Style = (Style)FindResource(restore ? "RestoreStageButton" : "StageActionButton");
