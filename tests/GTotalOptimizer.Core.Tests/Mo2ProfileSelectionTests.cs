@@ -30,20 +30,26 @@ internal static class Mo2ProfileSelectionTests
             Put(Path.Combine(mods, "Alpha", "bin", "x64", "plugins", "cyber_engine_tweaks",
                 "mods", "Alpha", "init.lua"), "alpha");
             Put(Path.Combine(mods, "Beta", "r6", "scripts", "Beta", "mod.reds"), "beta");
+            Put(Path.Combine(mods, "Beta", "r6", "scripts", "Beta", "nested", "second.reds"), "second");
+            Put(Path.Combine(mods, "Beta", "r6", "scripts", "AnotherFolder", "third.reds"), "third");
             Put(Path.Combine(profiles, "Heavy", "modlist.txt"), "+Alpha\n+Beta\n");
             Put(Path.Combine(profiles, "Minimal", "modlist.txt"), "+Beta\n-Alpha\n");
 
             var heavy = Mo2ProfileSelectionService.Inspect(mo2, null, "Heavy", game);
             if (!heavy.Recognized || heavy.CandidateSource is null ||
                 heavy.CandidateSource.CetOwners != 2 ||
-                heavy.CandidateSource.RedscriptFiles != 1 ||
+                heavy.CandidateSource.RedscriptFiles != 3 ||
+                heavy.CandidateSource.CetModCount != 2 ||
+                heavy.CandidateSource.RedscriptModCount != 1 ||
                 heavy.AvailableProfiles.Count != 2 ||
                 heavy.AllowsProfilerInstallation || heavy.AllowsGeneration)
                 throw new InvalidDataException("MO2_HEAVY_PROFILE_SELECTION_OR_READONLY_GUARD_FAILED");
 
             var minimal = Mo2ProfileSelectionService.Inspect(mo2, null, "Minimal", game);
             if (!minimal.Recognized || minimal.CandidateSource?.CetOwners != 1 ||
-                minimal.CandidateSource.RedscriptFiles != 1)
+                minimal.CandidateSource.RedscriptFiles != 3 ||
+                minimal.CandidateSource.CetModCount != 1 ||
+                minimal.CandidateSource.RedscriptModCount != 1)
                 throw new InvalidDataException("MO2_SELECTED_PROFILE_NOT_ISOLATED");
 
             var invalid = Mo2ProfileSelectionService.Inspect(mo2, null, "OtherInstanceProfile", game);
