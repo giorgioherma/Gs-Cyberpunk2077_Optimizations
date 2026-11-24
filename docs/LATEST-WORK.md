@@ -19,6 +19,15 @@
 
 
 
+## 2026-11-24 — MO2 reuses the existing PresentMon controller under VERIFY authorization
+
+- Previous full GCO CI [#1137](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45480031727), commit `58f7d0b`, independently verified SUCCESS. Shared-action CI [#1136](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45473870143) also SUCCESS.
+- `d27e874`, `569a5c8`, `50c8942`, `d42c1f4`, `3e9a80e`, `d6555d0`: VERIFY binds the existing elevated MO2 instance to the exact GCO package and fixed launcher/app identities. The signed mailbox only invokes the existing launcher with its original PresentMon restart operation, a matching selected-profile deployment journal and the existing fresh capture index's fixed CSV destination. No arbitrary executable, caller-selected arguments, additional UAC, new service or new recorder. Only the exact previously shipped bridge can be upgraded.
+- `9336671`, `5316636`, `8db8439`, `50571d0`: both source modes use the existing fresh capture startup, PresentMon proof, tracking and observer. MO2 uses its already bound attempt identity and delegated transport; Direct retains its existing native owner reset and elevation path. A settled recorder failure can follow the existing optional-frame fallback; an uncertain dispatch blocks game START, preserves recovery and cannot delete pending controller output. RESTORE/VERIFY reuse existing recovery behavior. A controller crash that never settles its proof must remain a recovery blocker, not be silently discarded.
+- `68905ad`, `4aff69e`: added MO2-specific signed command/identity/replay and uncertain frame retirement coverage; existing assertions and workflow definitions untouched.
+- **Still gated:** automatic WPF hibernation/native tray reopen for MO2 requires durable prepared-deployment rehydration and matching runtime identity on resume. Until then the same window stays open; no extra window/tray. COLLECT/CONTINUE and Page 2 effective source integration remain pending. Actual MO2/Windows single-UAC launch, PresentMon recording/F11 alignment, frame observer game-exit behavior and gameplay have not yet been verified locally. No production feature gate, version, owner manager, generator or ZIP changes.
+- Validation: new source and focused tests committed; existing full GCO TXT checkpoint requested separately. Do not claim CI success until the new run completes.
+
 ## 2026-11-24 — MO2 shared capture identity and recovery boundary
 
 - Previous shared-action checkpoint `887396a`: user confirmed green; exact run ID not independently retrieved.
