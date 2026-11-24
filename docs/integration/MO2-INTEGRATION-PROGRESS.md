@@ -4,6 +4,13 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+
+## 2026-11-24 — Experimental Page 1 profiling test lifecycle wired
+
+- Commits `7072bd9`, `4e61543`, `bcddbba`, `3787437`, `2114d61`: INSTALL prepares the owner-generated selected-profile virtual layer; START re-inspects and verifies the winners and sealed overlay, requires explicit test confirmation and sends the authenticated selected-profile launch; RESTORE retires only unlaunched or positively acknowledged closed test sessions without deleting evidence.
+- Durable launch-pending state blocks duplicate and uncertain launches. Uncollected/retired captures block another MO2 test, including after restart; collection/recovery and Page 2 remain disabled. Keep the GCO window open during this first test. Production `Mo2FeatureGate.Enabled=false`; no Direct or owner generator changes.
+- Full GCO TXT checkpoint is required for package/compile validation. Real Cyberpunk native loading and F11 require the local Windows test due to hosted MO2 spawn restriction. No gameplay or capture collection success is claimed.
+
 ## 2026-11-24 — Experimental MO2 Page 1 and companion installer wired; packaged Windows validation pending
 
 - [MO2 #23](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45403801859) FAILED at native launch, with independent evidence `runnerInJob=True normalCreateProcess=0 breakawayCreateProcess=5` and `realMo2InJob=True`. This establishes a hosted Windows Job Object restriction for MO2's required spawn flag; it does not establish successful selected-profile launch on user Windows. The strict runtime test stays intact; do not rerun it unchanged hoping for a green result.
