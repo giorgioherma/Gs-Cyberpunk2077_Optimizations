@@ -503,6 +503,92 @@ class TestAuthenticatedMo2Bridge(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_frame_controller_only_for_bound_package_and_selected_attempt(self):
+        temp, root, module, local, game, stage = self.fixture()
+        try:
+            session = TestSelectedProfileOneShotMapper.SESSION
+            package = root / "GCO"
+            launcher = package / "Gs-Cyberpunk2077_Optimizer.exe"
+            app = package / "app" / "G-Total-Optimizer.App.exe"
+            app.parent.mkdir(parents=True)
+            launcher.write_bytes(b"fixture launcher")
+            app.write_bytes(b"fixture managed app")
+            results = package / "RESULTS"
+            capture = results / "GCO-Capture-24112026_200000"
+            capture.mkdir(parents=True)
+            active = results / "GCO-active-profile-session.json"
+            attempt = {
+                "stage": "mo2-capture-attempt", "sessionId": session,
+                "mo2Profile": "Heavy", "mo2Instance": str(root / "instance"),
+                "gameRoot": str(game)
+            }
+            active.write_text(json.dumps(attempt), encoding="utf-8")
+            (capture / "collection.json").write_text(json.dumps({
+                "SessionId": session, "GameRoot": str(game),
+                "CollectionAttempted": False, "Restored": False, "CollectInvoked": False
+            }), encoding="utf-8")
+            env = {
+                "LOCALAPPDATA": str(local),
+                "GCO_VERIFIED_PACKAGE_ROOT": str(package),
+                "GCO_VERIFIED_MO2_INSTANCE": str(root / "instance"),
+                "GCO_VERIFIED_LAUNCHER_SHA256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
+                "GCO_VERIFIED_APP_SHA256": hashlib.sha256(app.read_bytes()).hexdigest()
+            }
+            with patch.dict(os.environ, env):
+                organizer = Organizer(root)
+                tool, mapper = module.createPlugins()
+                organizer.mapper = mapper
+                tool.init(organizer)
+                mailbox = tool._mailbox
+                self.request(mailbox, "frame-package")
+                self.assertTrue(mailbox.process_one())
+                self.assertEqual(self.read_response(mailbox)["detail"],
+                                 "GCO package: " + module._canonical(package))
+                proof = capture / "PresentMon" / "PresentMon-controller.json"
+                def run_fixed(args, **kwargs):
+                    self.assertEqual(args, [str(launcher), "--presentmon-control",
+                        "restart", str(capture / "PresentMon" / "PresentMon.csv"), session])
+                    self.assertEqual(kwargs["cwd"], str(package))
+                    self.assertFalse(kwargs["shell"])
+                    self.assertTrue(json.loads(proof.read_text())["pending"])
+                    module._write_json_atomic(proof, {"ok": True, "sessionId": session})
+                    return types.SimpleNamespace(returncode=0)
+                with patch.object(mailbox, "_own_elevation", return_value="elevated"), \
+                        patch.object(module.subprocess, "run", side_effect=run_fixed) as execute:
+                    # Wrong selected profile must never start a controller.
+                    self.request(mailbox, "frame-start", "Other", game, stage, session,
+                                 request_id="2" * 32)
+                    self.assertTrue(mailbox.process_one())
+                    self.assertFalse(self.read_response(mailbox)["ok"])
+                    execute.assert_not_called()
+                    # Wrong package journal identity must never start one.
+                    active.write_text(json.dumps(dict(attempt, mo2Profile="Other")))
+                    self.request(mailbox, "frame-start", "Heavy", game, stage, session,
+                                 request_id="3" * 32)
+                    self.assertTrue(mailbox.process_one())
+                    self.assertFalse(self.read_response(mailbox)["ok"])
+                    execute.assert_not_called()
+                    active.write_text(json.dumps(attempt))
+                    self.request(mailbox, "frame-start", "Heavy", game, stage, session,
+                                 request_id="4" * 32)
+                    self.assertTrue(mailbox.process_one())
+                    self.assertTrue(self.read_response(mailbox)["ok"])
+                    execute.assert_called_once()
+                    self.assertEqual(mapper.mappings(), [])
+                    self.assertFalse(hasattr(organizer, "last_launch"))
+                    # Never reuse a previously dispatched frame destination.
+                    self.request(mailbox, "frame-start", "Heavy", game, stage, session,
+                                 request_id="5" * 32)
+                    self.assertTrue(mailbox.process_one())
+                    self.assertFalse(self.read_response(mailbox)["ok"])
+                    execute.assert_called_once()
+                launcher.write_bytes(b"changed")
+                self.request(mailbox, "frame-package", request_id="6" * 32)
+                self.assertTrue(mailbox.process_one())
+                self.assertFalse(self.read_response(mailbox)["ok"])
+        finally:
+            temp.cleanup()
+
     def test_signed_selected_profile_launch_while_ui_shows_other(self):
         temp, root, module, local, game, stage = self.fixture()
         try:
