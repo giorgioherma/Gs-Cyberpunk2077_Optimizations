@@ -420,6 +420,56 @@ public static class Mo2ProfilerOverlayBuilder
         catch { return false; } // An unreadable journal is never proof of no launch.
     }
 
+    // Restore the acknowledged launch handle from the existing deployment
+    // journal. This is retirement/inspection authority only: it never
+    // makes a used or changed overlay eligible for another dispatch.
+    internal static Mo2OverlayPreparation? ReadLaunchedPreparation(
+        Mo2CaptureIdentity identity, Mo2Stack selected, string? localAppData = null)
+    {
+        if (!SessionIdPattern.IsMatch(identity.SessionId) ||
+            !selected.Ready || !selected.ProfileVerified || selected.GameOnlyFallback ||
+            !string.Equals(identity.Profile, selected.Profile, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 resumed profile is not verified.");
+        var bridge = Path.Combine(Path.GetFullPath(localAppData ??
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), "GCO", "MO2Bridge");
+        var journal = Path.Combine(bridge, "journals", identity.SessionId + ".json");
+        var stage = Path.Combine(bridge, "staging", identity.SessionId);
+        var fixture = Path.Combine(bridge, "fixtures", identity.SessionId);
+        EnsureNoReparseParents(journal);
+        RequireRegularUnlinkedFile(journal);
+        using var doc = JsonDocument.Parse(File.ReadAllText(journal));
+        var j = doc.RootElement;
+        if (j.GetProperty("schemaVersion").GetInt32() != 1 ||
+            j.GetProperty("sessionId").GetString() != identity.SessionId ||
+            !string.Equals(j.GetProperty("profile").GetString(), identity.Profile, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(j.GetProperty("gameRoot").GetString(), identity.GameRoot, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(j.GetProperty("stageRoot").GetString(), stage, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(j.GetProperty("fixtureRoot").GetString(), fixture, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 resumed deployment identity changed.");
+        if (j.GetProperty("phase").GetString() != "test-launched") return null;
+        if (j.GetProperty("processId").GetInt32() <= 0 ||
+            string.IsNullOrWhiteSpace(selected.OverwriteDirectory) ||
+            !string.Equals(j.GetProperty("overwriteRoot").GetString(),
+                selected.OverwriteDirectory, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 resumed output or process identity changed.");
+        EnsureNoReparseParents(stage);
+        EnsureNoReparseParents(fixture);
+        if (!Directory.Exists(stage) || !Directory.Exists(fixture))
+            throw new InvalidDataException("MO2 deployment storage is unavailable.");
+        var files = j.GetProperty("generatedFiles").Deserialize<Mo2OverlayFile[]>() ??
+            throw new InvalidDataException("MO2 deployment manifest is missing.");
+        if (files.Length == 0 || files.Any(f => NormalizeRelative(f.GameRelativePath) != f.GameRelativePath ||
+                !IsAllowedOutput(f.GameRelativePath) || f.Size < 0 ||
+                f.Sha256.Length != 64 || !f.Sha256.All(Uri.IsHexDigit)) ||
+            files.Select(f => f.GameRelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != files.Length)
+            throw new InvalidDataException("MO2 deployment manifest is invalid.");
+        // Runtime result/config files may legitimately have changed. Do
+        // not revalidate the launched stage as if it were still pristine.
+        // Every subsequent START builds and verifies a fresh owner layer.
+        return new(identity.Profile, identity.SessionId, stage, journal, files,
+            j.GetProperty("originalSources").EnumerateObject().Count(), "Resumed acknowledged launch.");
+    }
+
     public static bool CanRestartCompletedTest(Mo2OverlayPreparation prepared)
     {
         try
