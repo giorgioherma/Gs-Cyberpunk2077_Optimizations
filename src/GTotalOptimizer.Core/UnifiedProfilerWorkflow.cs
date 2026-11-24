@@ -387,6 +387,78 @@ public sealed class UnifiedProfilerWorkflow
         File.Move(temp, Journal, overwrite: true);
     }
 
+    // MO2 uses the same package-level attempt journal and capture store.
+    // Its separate deployment journal proves the virtual layer, NOT a
+    // physical owner install. Do not admit it through Direct owner gates.
+    public bool HasMo2CaptureAttempt
+    {
+        get
+        {
+            if (!HasRecoveryJournal) return false;
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+                return doc.RootElement.TryGetProperty("stage", out var stage) &&
+                    stage.ValueKind == JsonValueKind.String &&
+                    stage.GetString() == "mo2-capture-attempt";
+            }
+            catch (IOException) { return false; }
+            catch (JsonException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+    }
+
+    public void BeginMo2CaptureAttempt(Mo2ProfileSelection selection,
+        Mo2OverlayPreparation prepared)
+    {
+        if (GameRunning()) throw new InvalidOperationException("Cyberpunk is running.");
+        if (!selection.Recognized || selection.CandidateSource is null ||
+            !Path.IsPathFullyQualified(selection.InstanceDirectory) ||
+            !Path.IsPathFullyQualified(selection.GameDirectory) ||
+            !string.Equals(selection.Profile, prepared.Profile, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 capture source identity is unverified.");
+        if (HasRecoveryJournal)
+            throw new InvalidOperationException("A previous GCO capture requires recovery.");
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
+        using (var deployment = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile)))
+        {
+            if (!string.Equals(Normalize(deployment.RootElement.GetProperty("gameRoot").GetString()!),
+                    Normalize(selection.GameDirectory), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 deployment belongs to a different game.");
+        }
+        // No capture is marked complete here. The timestamped folder is
+        // temporary until the original collection path seals owner evidence.
+        var id = prepared.SessionId;
+        var game = Normalize(selection.GameDirectory);
+        // Write the durable package identity before allocating its folder;
+        // an interrupted allocation is still recoverable through RESTORE.
+        Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
+        var temp = Journal + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(new
+        {
+            gameRoot = game, stage = "mo2-capture-attempt", sessionId = id,
+            mo2Instance = Normalize(selection.InstanceDirectory), mo2Profile = selection.Profile,
+            updatedUtc = DateTimeOffset.UtcNow
+        }));
+        File.Move(temp, Journal, overwrite: false);
+        CollectedCaptureStore.CreateDatedSessionFolder(packageRoot, id, DateTimeOffset.Now, game);
+    }
+
+    // Only after the caller has retired the matching virtual deployment
+    // and verified the frame writer stopped. Reuse the original uncollected
+    // output policy; a collected/restored index is never removed.
+    public void RetireMo2CaptureAttempt(string game, string expectedId)
+    {
+        if (!HasMo2CaptureAttempt || !HasSessionForGame(game) ||
+            ReadRecoverySessionId(game) != expectedId)
+            throw new InvalidOperationException("MO2 capture identity changed; preserve recovery evidence.");
+        if (GameRunning())
+            throw new InvalidOperationException("Close Cyberpunk before retiring captures.");
+        DiscardPendingStaging(expectedId);
+        CollectedCaptureStore.DiscardUncollected(packageRoot, game, expectedId);
+        File.Delete(Journal);
+    }
+
     private bool OwnsSession(string game) =>
         string.Equals(JournalGame(), Normalize(game), StringComparison.OrdinalIgnoreCase);
 
