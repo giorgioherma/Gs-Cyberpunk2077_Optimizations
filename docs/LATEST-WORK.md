@@ -19,6 +19,11 @@
 
 
 
+## 2026-11-25 — Correct native developer evidence replay topology
+
+- [MO2 #31](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45505690745), `dd9da48`: FAILED at `MO2_PAGE2_OWNER_ARCHIVE_MISSING: Data/Developer/RSP_CallSites.csv`. Full raw file presence checks passed. Read the actual GRSP owner `manager/ManagerServices.cs` (NormalizeArchiveLayout) and `manager/ResultReportService.cs` (GetArchiveRelativePath): native Developer/ is preserved as Data/Developer; arbitrary root files are correctly archived under Data/Metadata. The new replay had flattened that native directory, so the failure is the fixture's incorrect input layout, not evidence of an owner-manager defect.
+- `c39a9aa`: preserve the native Developer/ tree when replaying the recorded Page 2 fixture. Existing collection-only test, required archive path checks, production code, Resolver and original contracts remain unchanged. [MO2 #32](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45508022429), `d517e3f`, triggered; result pending. The independent hosted Windows launch smoke restriction remains unresolved.
+
 ## 2026-11-24 — Diagnose MO2 Page 2 replay admission failure
 
 - [MO2 #30](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45503746821), `094b5e9`: FAILED during the new Page 2 integration replay. Native USVFS, selected-profile tests, real no-0-Engine owner install and original collection replay passed. CET analysis and source plan reached combined availability, where GRSP refused: `GCO collection index omits required GRSP evidence`. The old diagnostic did not identify the exact missing file; official MO2 launch smoke was not reached.
