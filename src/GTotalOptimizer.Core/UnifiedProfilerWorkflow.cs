@@ -458,6 +458,17 @@ public sealed class UnifiedProfilerWorkflow
         if (Directory.Exists(folder))
         {
             var index = CollectedCaptureStore.Read(packageRoot, game, expectedId, verifyHashes: true);
+            // A frame request may have reached the elevated controller even
+            // if its acknowledgement was lost. Its original result file is
+            // replaced only after the controller has finished starting/stopping.
+            var frameProof = Path.Combine(folder, "PresentMon", "PresentMon-controller.json");
+            if (File.Exists(frameProof))
+            {
+                using var proof = JsonDocument.Parse(File.ReadAllText(frameProof));
+                if (proof.RootElement.TryGetProperty("pending", out var pending) &&
+                    pending.ValueKind == JsonValueKind.True)
+                    throw new InvalidOperationException("PresentMon startup is still unverified. Preserve this capture for recovery.");
+            }
             if (!index.CollectionAttempted && !index.Restored)
             {
                 DiscardPendingStaging(expectedId);
