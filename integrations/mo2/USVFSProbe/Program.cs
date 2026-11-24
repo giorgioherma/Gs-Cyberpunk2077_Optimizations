@@ -273,6 +273,74 @@ internal static class Program
                     "ASI=" + fromBAsi + " RED=" + fromBReds);
             Console.WriteLine("PASS real USVFS x64: unrelated profile B sees its own REDscript + " +
                 "user Overwrite, NOT the temporary GCO profiler overlay");
+
+            // Reproduce the local failure: physical CET and 0-Engine, no
+            // enabled packages, a sparse owner-generated delta. The former
+            // fixture mounted the whole stage at game root and already had
+            // a profile/Overwrite ASI, so it did not exercise this case.
+            string physicalGame = Path.Combine(folder, "physical-only-game");
+            string sparse = Path.Combine(folder, "sparse-profiler");
+            string physicalOverwrite = Path.Combine(folder, "physical-only-overwrite");
+            string host = Path.Combine("bin", "x64", "plugins", "cyber_engine_tweaks", "mods", "0-Engine");
+            string init = Path.Combine(host, "init.lua");
+            string emitter = Path.Combine(host, "modules", "EventEmitter.lua");
+            string scheduler = Path.Combine(host, "modules", "CETProfilerScheduler.lua");
+            Put(Path.Combine(physicalGame, relativeAsi), "PHYSICAL_STOCK_ASI");
+            Put(Path.Combine(physicalGame, init), "PHYSICAL_ORIGINAL_INIT");
+            Put(Path.Combine(physicalGame, emitter), "PHYSICAL_EVENT_EMITTER");
+            Put(Path.Combine(sparse, relativeAsi), "STAGED_PROFILER_ASI");
+            Put(Path.Combine(sparse, init), "STAGED_ADAPTIVE_INIT");
+            Put(Path.Combine(sparse, scheduler), "STAGED_SCHEDULER");
+            Put(Path.Combine(physicalOverwrite, "r6", "cache", "existing.txt"), "USER_CACHE");
+            Export<ClearMappings>(library, "usvfsClearVirtualMappings")();
+            if (!link(physicalOverwrite, physicalGame, Recursive | CreateTarget) ||
+                !link(Path.Combine(sparse, "bin", "x64", "plugins"),
+                      Path.Combine(physicalGame, "bin", "x64", "plugins"), Recursive))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to reproduce physical-only sparse mapper");
+
+            string observed = Path.Combine(folder, "physical-sparse-observations.txt");
+            string physicalBatch = Path.Combine(folder, "physical-sparse-child.cmd");
+            var scriptPhysical = new StringBuilder();
+            scriptPhysical.AppendLine("@echo off");
+            scriptPhysical.AppendLine("type \"" + Path.Combine(physicalGame, relativeAsi) + "\" > \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 31");
+            scriptPhysical.AppendLine("cd /d \"" + Path.Combine(physicalGame, host) + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 32");
+            scriptPhysical.AppendLine("type init.lua >> \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 33");
+            scriptPhysical.AppendLine("type modules\\EventEmitter.lua >> \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 34");
+            scriptPhysical.AppendLine("type modules\\CETProfilerScheduler.lua >> \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 35");
+            File.WriteAllText(physicalBatch, scriptPhysical.ToString(), Encoding.ASCII);
+            var physicalCommand = new StringBuilder("\"" + commandInterpreter + "\" /D /C \"" + physicalBatch + "\"");
+            if (!hooked(commandInterpreter, physicalCommand, IntPtr.Zero, IntPtr.Zero, false,
+                    0, IntPtr.Zero, folder, ref startup, out var physicalInfo))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to launch sparse mapping regression");
+            try
+            {
+                uint waitPhysical = WaitForSingleObject(physicalInfo.process, 30_000);
+                bool gotExitPhysical = GetExitCodeProcess(physicalInfo.process, out uint codePhysical);
+                string values = File.Exists(observed) ? File.ReadAllText(observed) : "(missing)";
+                Console.WriteLine("Physical-only sparse VFS observations: " + values);
+                if (waitPhysical != 0 || !gotExitPhysical || codePhysical != 0 ||
+                    !values.Contains("STAGED_PROFILER_ASI", StringComparison.Ordinal) ||
+                    !values.Contains("STAGED_ADAPTIVE_INIT", StringComparison.Ordinal) ||
+                    !values.Contains("PHYSICAL_EVENT_EMITTER", StringComparison.Ordinal) ||
+                    !values.Contains("STAGED_SCHEDULER", StringComparison.Ordinal))
+                    throw new InvalidDataException("MO2_PHYSICAL_SPARSE_DEPENDENCY_OR_OVERRIDE_FAILED: exit=" +
+                        codePhysical + " wait=" + waitPhysical + " observed=" + values);
+            }
+            finally
+            {
+                CloseHandle(physicalInfo.process);
+                CloseHandle(physicalInfo.thread);
+            }
+            if (File.ReadAllText(Path.Combine(physicalGame, relativeAsi)) != "PHYSICAL_STOCK_ASI" ||
+                File.ReadAllText(Path.Combine(physicalGame, init)) != "PHYSICAL_ORIGINAL_INIT" ||
+                File.ReadAllText(Path.Combine(physicalGame, emitter)) != "PHYSICAL_EVENT_EMITTER")
+                throw new InvalidDataException("MO2_PHYSICAL_SPARSE_ORIGINAL_MUTATED");
+            Console.WriteLine("PASS physical-only sparse profiler mapping preserves original relative Lua dependencies");
         }
         finally
         {
