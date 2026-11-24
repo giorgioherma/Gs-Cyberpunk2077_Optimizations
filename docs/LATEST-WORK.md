@@ -17,6 +17,12 @@
 
 
 
+
+## 2026-11-24 — Direct parity checkpoint results and narrow safety correction
+
+- MO2 CI #28 (45471388419, head `8046bfa`): Python/C# source contracts, real USVFS, all six actual owner scenarios and foreign GRSP refusal passed. Overall failed only at documented hosted Windows CREATE_BREAKAWAY_FROM_JOB error 5 in real MO2 launch. Full CI #1134 (45471398999, head `315a63b`) built integrated package and passed native owner smoke; full source contracts rejected a new overbroad Overwrite/game overlap guard. Existing fixture intentionally stores MO2 inside game root without touching plugin roots, which must remain supported.
+- `fe28ca4`: narrow overlap guard to actual game plugin trees, enabled-mod storage and profiles, rather than any folder inside game root. Retain all existing source tests. Retry full checkpoint `cb3d54b`, CI #1135 (45472130910). No package handoff until successful.
+
 ## 2026-11-24 — Owner correction: Direct capture lifecycle parity
 
 - Explicit owner decision: MO2 is not a new application. Use current Direct `BeginFreshCaptureAsync`, `ResetNativeOutputAsync`, `RestoreOwnedAsync` and collection behavior as the workflow authority. New START/RESTORE discard uncollected output; COLLECT alone saves completed capture. #1133's automatic archive was an unapproved deviation and is superseded.
