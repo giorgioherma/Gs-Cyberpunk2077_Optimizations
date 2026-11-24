@@ -1738,9 +1738,9 @@ public partial class MainWindow : Window
 
     // Deployment-specific work only. The existing INSTALL/START/RESTORE
     // handlers own activity, busy state, portrait, errors and UI progression.
-    private async Task PrepareMo2DeploymentAsync()
+    private async Task PrepareMo2DeploymentAsync(Mo2ProfileSelection? selection = null)
     {
-        var selection = await InspectMo2SelectionAsync();
+        selection ??= await InspectMo2SelectionAsync();
         mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
             packageRoot, selection.GameDirectory, selection.CandidateSource!,
             Guid.NewGuid().ToString("N"));
@@ -1759,8 +1759,8 @@ public partial class MainWindow : Window
             Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
             mo2Prepared = null;
             mo2LaunchAttempted = false;
-            await PrepareMo2DeploymentAsync();
             selection = await InspectMo2SelectionAsync();
+            await PrepareMo2DeploymentAsync(selection);
             prepared = mo2Prepared!;
         }
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
@@ -2337,8 +2337,18 @@ public partial class MainWindow : Window
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
         // Only RESTORE and CONTINUE trigger owner-managed restoration.
-        if (mo2Mode
-            ? mo2Prepared is not null || mo2RecoveryBlocked || Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession()
+        // A damaged MO2 journal must enter recovery, not throw out of a
+        // WPF event handler or permit a new deployment.
+        if (mo2Mode)
+        {
+            try { mo2RecoveryBlocked |= Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+            catch (Exception ex)
+            {
+                mo2RecoveryBlocked = true;
+                Trace.TraceWarning("MO2 recovery journal: " + ex);
+            }
+        }
+        if (mo2Mode ? mo2Prepared is not null || mo2RecoveryBlocked
             : Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
         else
