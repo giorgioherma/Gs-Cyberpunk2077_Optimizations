@@ -5,6 +5,14 @@
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
 
+
+## 2026-11-24 — First local-test feedback: source counts and framework indicators
+
+- Full GCO [CI #1127 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45431619768), source `e62611f`, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.7-run1127-a1` (ID 14939860989). User reports MO2 discovery and INSTALL reached. Native launch/F11 not yet reported.
+- `25ace6f`, `a4aefd4`, `579528c`: report distinct effective CET/REDscript source mod counts consistently (enabled MO2 package identity; loose-source root fallback), keep file counts separately.
+- `0aa05b5`, `901413d`, `fb6c85a`, `56a470e`, `783ba6c`: selected-profile framework loader/compiler winner indexing, reuse existing Direct framework evaluation and shared UI indicators, fresh preflight before experimental INSTALL/START; missing/unknown files from disabled mods do not pass. This is candidate loose-file evidence, not runtime native loader proof. No owner modifications or production gate activation.
+- These feedback changes are committed but not included in #1127. Batch the next full checkpoint after the current local test feedback; no new compile or runtime validation claimed.
+
 ## 2026-11-24 — Experimental Page 1 profiling test lifecycle wired
 
 - Commits `7072bd9`, `4e61543`, `bcddbba`, `3787437`, `2114d61`: INSTALL prepares the owner-generated selected-profile virtual layer; START re-inspects and verifies the winners and sealed overlay, requires explicit test confirmation and sends the authenticated selected-profile launch; RESTORE retires only unlaunched or positively acknowledged closed test sessions without deleting evidence.
