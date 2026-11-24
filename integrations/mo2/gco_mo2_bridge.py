@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 from datetime import datetime, timezone
 
 import mobase
@@ -441,7 +442,7 @@ class GcoAuthenticatedMailbox:
         timestamp = request.get("createdUtcMs")
         if type(timestamp) is not int or abs(int(time.time() * 1000) - timestamp) > 15000:
             raise GcoOverlayContractError("Expired MO2 command")
-        if request.get("operation") not in ("probe", "launch"):
+        if request.get("operation") not in ("probe", "launch", "frame-package", "frame-start"):
             raise GcoOverlayContractError("Unsupported MO2 command")
         provided = request.get("hmac")
         if not isinstance(provided, str) or len(provided) != 64:
@@ -485,6 +486,108 @@ class GcoAuthenticatedMailbox:
             kernel.CloseHandle(token)
 
     @staticmethod
+    def _frame_package():
+        # The elevated VERIFY helper binds the package, not the request.
+        # No caller-controlled executable, arguments, or output path.
+        value = os.environ.get("GCO_VERIFIED_PACKAGE_ROOT", "")
+        if not value or not os.path.isabs(value):
+            raise GcoOverlayContractError("Click VERIFY to authorize frame capture")
+        root = Path(value)
+        for relative, variable in (
+            ("Gs-Cyberpunk2077_Optimizer.exe", "GCO_VERIFIED_LAUNCHER_SHA256"),
+            ("app/G-Total-Optimizer.App.exe", "GCO_VERIFIED_APP_SHA256"),
+        ):
+            target = root / relative
+            expected = os.environ.get(variable, "").lower()
+            if (len(expected) != 64 or not target.is_file() or target.is_symlink()
+                    or hashlib.sha256(target.read_bytes()).hexdigest() != expected):
+                raise GcoOverlayContractError("GCO package changed; click VERIFY")
+        return root
+
+    def _start_frame_controller(self, request):
+        if self._own_elevation() != "elevated":
+            raise GcoOverlayContractError("Click VERIFY to authorize frame capture")
+        root = self._frame_package()
+        session = request["sessionId"]
+        if not self._controller._HEX_ID.fullmatch(session):
+            raise GcoOverlayContractError("Invalid frame capture identity")
+        stage = _bridge_root() / "staging" / session
+        if _canonical(request["stagingRoot"]) != _canonical(stage):
+            raise GcoOverlayContractError("Frame capture staging identity mismatch")
+        journal_path = _bridge_root() / "journals" / (session + ".json")
+        if journal_path.is_symlink() or not journal_path.is_file():
+            raise GcoOverlayContractError("Frame capture deployment journal missing")
+        deployment = json.loads(journal_path.read_text(encoding="utf-8"))
+        if (deployment.get("phase") != "test-launch-pending"
+                or deployment.get("sessionId") != session
+                or deployment.get("profile") != request["profile"]
+                or _canonical(deployment.get("gameRoot", "")) != _canonical(request["gameRoot"])
+                or _canonical(deployment.get("stageRoot", "")) != _canonical(stage)
+                or _canonical(self._organizer.managedGame().gameDirectory()) != _canonical(request["gameRoot"])
+                or request["profile"] not in list(self._organizer.profileNames())):
+            raise GcoOverlayContractError("Frame capture deployment identity mismatch")
+        results = root / "RESULTS"
+        active = results / "GCO-active-profile-session.json"
+        if active.is_symlink() or not active.is_file():
+            raise GcoOverlayContractError("Frame capture journal missing")
+        attempt = json.loads(active.read_text(encoding="utf-8-sig"))
+        instance = os.environ.get("GCO_VERIFIED_MO2_INSTANCE", "")
+        if (not instance or attempt.get("stage") != "mo2-capture-attempt"
+                or attempt.get("sessionId") != session
+                or attempt.get("mo2Profile") != request["profile"]
+                or _canonical(attempt.get("mo2Instance", "")) != _canonical(instance)
+                or _canonical(attempt.get("gameRoot", "")) != _canonical(request["gameRoot"])):
+            raise GcoOverlayContractError("Frame capture package identity mismatch")
+        # Resolve the existing dated capture folder by its immutable index,
+        # never accept a destination supplied by the mailbox.
+        matches = []
+        for folder in results.glob("GCO-Capture-*"):
+            index_path = folder / "collection.json"
+            if folder.is_symlink() or index_path.is_symlink() or not index_path.is_file():
+                continue
+            try:
+                index = json.loads(index_path.read_text(encoding="utf-8-sig"))
+            except (OSError, ValueError):
+                continue
+            if index.get("SessionId") == session:
+                if (_canonical(index.get("GameRoot", "")) != _canonical(request["gameRoot"])
+                        or index.get("CollectionAttempted") or index.get("Restored")
+                        or index.get("CollectInvoked") or index.get("Cet") is not None
+                        or index.get("Redscript") is not None or index.get("FrameTimeCsv") is not None):
+                    raise GcoOverlayContractError("Frame capture index is not a fresh attempt")
+                matches.append(folder)
+        if len(matches) != 1:
+            raise GcoOverlayContractError("Frame capture folder identity is ambiguous")
+        frame = matches[0] / "PresentMon"
+        if frame.is_symlink() or (frame.exists() and not frame.is_dir()):
+            raise GcoOverlayContractError("Frame capture destination is redirected")
+        csv = frame / "PresentMon.csv"
+        result = frame / "PresentMon-controller.json"
+        if csv.exists() or result.exists() or csv.is_symlink() or result.is_symlink():
+            raise GcoOverlayContractError("Frame capture destination already used")
+        # Before spawning, persist uncertainty in the SAME result file the
+        # original controller atomically replaces. A crash cannot be
+        # mistaken for a settled controller or authorize scratch disposal.
+        _write_json_atomic(result, {"ok": False, "pending": True, "sessionId": session})
+        launcher = root / "Gs-Cyberpunk2077_Optimizer.exe"
+        try:
+            ended = subprocess.run(
+                [str(launcher), "--presentmon-control", "restart", str(csv), session],
+                cwd=str(root), shell=False, check=False)
+        except OSError as exc:
+            _write_json_atomic(result, {"ok": False, "detail": str(exc)})
+            return "PresentMon controller did not start"
+        # Native launcher exit 4 means the managed child may still be alive.
+        # Preserve the pending result until the existing controller settles.
+        if ended.returncode == 4:
+            raise GcoOverlayContractError("PresentMon controller still pending")
+        proof = json.loads(result.read_text(encoding="utf-8-sig"))
+        if proof.get("pending"):
+            _write_json_atomic(result, {"ok": False,
+                "detail": "PresentMon controller exited without startup proof"})
+        return "PresentMon controller exited: " + str(ended.returncode)
+
+    @staticmethod
     def _process_id(handle):
         if os.name != "nt":
             raise GcoOverlayContractError("MO2 launch PID requires Windows")
@@ -519,6 +622,10 @@ class GcoAuthenticatedMailbox:
             operation = request["operation"]
             if operation == "probe":
                 pid, detail = 0, "MO2 token=" + self._own_elevation() + "; pid=" + str(os.getpid())
+            elif operation == "frame-package":
+                pid, detail = 0, "GCO package: " + _canonical(self._frame_package())
+            elif operation == "frame-start":
+                pid, detail = 0, self._start_frame_controller(request)
             else:
                 if not self._controller._HEX_ID.fullmatch(request["sessionId"]):
                     raise GcoOverlayContractError("Invalid GCO profiler session ID")
