@@ -1776,7 +1776,8 @@ public partial class MainWindow : Window
         // attempt. Retire only its own index; uncertain dispatch still blocks.
         if (Workflow.HasMo2CaptureAttempt)
         {
-            if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared))
+            if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared) ||
+                Workflow.ReadRecoverySessionId(selection.GameDirectory) != prepared.SessionId)
                 throw new InvalidOperationException("Previous capture requires recovery.");
             var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
             if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
@@ -1814,14 +1815,12 @@ public partial class MainWindow : Window
     private async Task<ProfilerWorkflowResult> RestoreMo2DeploymentAsync()
     {
         var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-        if (!stop.Stopped)
-            return new ProfilerWorkflowResult(false, stop.Error ?? "PresentMon stop pending.");
         await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
         mo2Prepared = null;
         mo2LaunchAttempted = false;
         mo2RecoveryBlocked = false;
         mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
-        if (!mo2VerifyRequired) RetireMo2CaptureJournal();
+        if (!mo2VerifyRequired && stop.Stopped) RetireMo2CaptureJournal();
         if (mo2VerifyRequired)
         {
             mo2Connected = null;
@@ -1829,6 +1828,8 @@ public partial class MainWindow : Window
             mo2Framework = null;
             SetFrameworkStatuses(null);
         }
+        if (!stop.Stopped)
+            return new ProfilerWorkflowResult(false, stop.Error ?? "PresentMon stop pending.");
         return new ProfilerWorkflowResult(true,
             mo2VerifyRequired ? "Profilers reset. Click VERIFY." :
                 "Profilers restored. Original files unchanged.",
