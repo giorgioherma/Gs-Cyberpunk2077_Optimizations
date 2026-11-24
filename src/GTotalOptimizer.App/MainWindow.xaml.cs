@@ -94,6 +94,10 @@ public partial class MainWindow : Window
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
+    private bool mo2Mode;
+    private bool mo2SelectionUpdating;
+    private bool mo2RefreshRunning;
+    private Mo2CompanionStatus? mo2Connected;
     // The normal XAML tree is permanent. Maximize only overrides values on
     // existing sections and restores the exact saved local values afterward.
     private StackPanel? maximizedGameRootSection;
@@ -348,6 +352,7 @@ public partial class MainWindow : Window
         GamePathBox.Text = Workflow.ReadRecoveryGameRoot() ??
                            UserSettings.ReadGameRoot();
         pathUpdate = false;
+        Mo2PathBox.Text = UserSettings.ReadMo2Setup().InstallationFolder;
         UpdatePathLock();
         SetPortraitStage(PortraitStage.Black);
     }
@@ -1232,7 +1237,7 @@ public partial class MainWindow : Window
 
     private async Task ReconcileGameProcessChangesAsync()
     {
-        if (!initialized || !IsLoaded || closingInProgress ||
+        if (!initialized || !IsLoaded || closingInProgress || mo2Mode ||
             closureCleanupVerified || busy || gameStateRefreshInFlight ||
             !inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
@@ -1356,7 +1361,7 @@ public partial class MainWindow : Window
 
     private async void GamePath_Changed(object sender, TextChangedEventArgs e)
     {
-        if (!initialized || pathUpdate || busy) return;
+        if (!initialized || pathUpdate || busy || mo2Mode) return;
         var recoveryRoot = Workflow.ReadRecoveryGameRoot();
         if (recoveryRoot is not null &&
             !string.Equals(GamePathBox.Text, recoveryRoot,
@@ -1427,6 +1432,192 @@ public partial class MainWindow : Window
         else await RefreshSourceAsync();
     }
 
+    private bool CanSwitchSource() =>
+        !busy && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
+        !Workflow.RestoreActionAvailable(GamePathBox.Text) && !GameRunning();
+
+    private async void DirectSource_Click(object sender, RoutedEventArgs e)
+    {
+        if (!initialized || !mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        mo2Mode = false;
+        mo2Connected = null;
+        GameRootContents.Visibility = Visibility.Visible;
+        Mo2SourceContents.Visibility = Visibility.Collapsed;
+        GameSourceHeading.Text = "GAME ROOT / CYBERPUNK 2077";
+        UpdatePathLock();
+        ClearStatusPin();
+        await RefreshSourceAsync();
+    }
+
+    private async void Mo2Source_Click(object sender, RoutedEventArgs e)
+    {
+        if (!initialized || mo2Mode || !CanSwitchSource()) return;
+        // Revoke an in-flight Direct refresh before showing MO2 controls.
+        refreshCancellation?.Cancel();
+        mo2Mode = true;
+        inspection = GameInspector.Inspect(null);
+        liveState = null;
+        savedCapture = null;
+        pendingExternalGameStart = pendingGameExitRefresh = false;
+        pendingExternalGamePid = null;
+        InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
+            ContinueButton.IsEnabled = false;
+        SetPortraitStage(PortraitStage.Black);
+        GameRootContents.Visibility = Visibility.Collapsed;
+        Mo2SourceContents.Visibility = Visibility.Visible;
+        GameSourceHeading.Text = "MOD ORGANIZER 2";
+        UpdatePathLock();
+        ClearStatusPin();
+        await RefreshMo2SourceAsync();
+    }
+
+    private async void Mo2Browse_Click(object sender, RoutedEventArgs e)
+    {
+        if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        using var browse = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Select the MO2 folder containing ModOrganizer.exe",
+            ShowNewFolderButton = false,
+            SelectedPath = Directory.Exists(Mo2PathBox.Text) ? Mo2PathBox.Text : ""
+        };
+        if (browse.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        mo2SelectionUpdating = true;
+        try
+        {
+            Mo2PathBox.Text = browse.SelectedPath;
+            Mo2InstanceBox.ItemsSource = null;
+            Mo2ProfileBox.ItemsSource = null;
+            UserSettings.WriteMo2Setup(browse.SelectedPath, "", "");
+        }
+        finally { mo2SelectionUpdating = false; }
+        await RefreshMo2SourceAsync();
+    }
+
+    private async void Mo2Selection_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!initialized || !mo2Mode || mo2SelectionUpdating || mo2RefreshRunning) return;
+        if (ReferenceEquals(sender, Mo2InstanceBox))
+        {
+            mo2SelectionUpdating = true;
+            try { Mo2ProfileBox.ItemsSource = null; }
+            finally { mo2SelectionUpdating = false; }
+        }
+        UserSettings.WriteMo2Setup(Mo2PathBox.Text,
+            Mo2InstanceBox.SelectedItem as string ?? "",
+            Mo2ProfileBox.SelectedItem as string ?? "");
+        await RefreshMo2SourceAsync();
+    }
+
+    private async Task RefreshMo2SourceAsync()
+    {
+        if (!initialized || !mo2Mode || mo2RefreshRunning) return;
+        mo2RefreshRunning = true;
+        mo2Connected = null;
+        UpdatePathLock();
+        InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
+            ContinueButton.IsEnabled = false;
+        try
+        {
+            var saved = UserSettings.ReadMo2Setup();
+            var folder = Mo2PathBox.Text;
+            var location = Mo2InstallLocator.Inspect(folder,
+                Mo2InstanceBox.SelectedItem as string ?? saved.InstanceFolder);
+            mo2SelectionUpdating = true;
+            try
+            {
+                Mo2InstanceBox.ItemsSource = location.InstanceChoices;
+                Mo2InstanceBox.SelectedItem = location.InstanceFolder;
+                if (!location.HasConfiguration || location.InstanceFolder is null)
+                {
+                    Mo2ProfileBox.ItemsSource = null;
+                    Mo2GameText.Text = "Game: not confirmed";
+                    Mo2StatusText.Text = location.Detail;
+                    SetStatus(location.Detail);
+                    return;
+                }
+                var instance = Mo2SourceInspector.Discover(location.InstanceFolder);
+                var profile = Mo2ProfileBox.SelectedItem as string ?? saved.Profile;
+                Mo2ProfileBox.ItemsSource = instance.Profiles;
+                Mo2ProfileBox.SelectedItem = instance.Profiles.FirstOrDefault(
+                    p => p.Equals(profile, StringComparison.OrdinalIgnoreCase))
+                    ?? instance.Profiles.FirstOrDefault(p => p.Equals(instance.PreferredProfile,
+                        StringComparison.OrdinalIgnoreCase));
+                UserSettings.WriteMo2Setup(folder, location.InstanceFolder,
+                    Mo2ProfileBox.SelectedItem as string ?? "");
+                if (!instance.Recognized)
+                {
+                    Mo2GameText.Text = "Game: not confirmed";
+                    Mo2StatusText.Text = instance.Detail;
+                    SetStatus(instance.Detail);
+                    return;
+                }
+                var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+                if (!connected.Connected)
+                {
+                    Mo2GameText.Text = "Game: awaiting MO2 companion";
+                    Mo2StatusText.Text = connected.Detail;
+                    SetStatus("Add the GCO bridge with MO2 closed, then open the selected MO2 instance and click REFRESH.");
+                    return;
+                }
+                Mo2GameText.Text = "Game: " + connected.GameDirectory;
+                var reply = await Mo2CompanionCommandClient.ProbeAsync(connected);
+                if (!reply.Ok) throw new InvalidOperationException(reply.Detail);
+                mo2Connected = connected;
+                var selected = Mo2ProfileBox.SelectedItem as string;
+                if (string.IsNullOrWhiteSpace(selected))
+                {
+                    Mo2StatusText.Text = "Bridge authenticated. Select a profile.";
+                    SetStatus("MO2 bridge authenticated. Select a profile from the dropdown.");
+                    return;
+                }
+                var result = await Task.Run(() => Mo2ProfileSelectionService.Inspect(folder,
+                    location.InstanceFolder, selected, connected.GameDirectory));
+                var stack = result.CandidateSource;
+                Mo2StatusText.Text = result.Recognized && stack is not null
+                    ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetOwners} CET | {stack.RedscriptFiles} REDscript files"
+                    : result.Detail;
+                SetStatus($"MO2 bridge authenticated. UI profile: {connected.CurrentProfile}; selected: {selected}. " +
+                    (result.Recognized ? "Candidate sources resolved. Profiling not enabled." : result.Detail));
+            }
+            finally { mo2SelectionUpdating = false; }
+        }
+        catch (Exception ex)
+        {
+            mo2Connected = null;
+            Mo2StatusText.Text = "MO2 verification failed";
+            SetStatus("MO2 verification failed: " + ex.Message);
+        }
+        finally
+        {
+            mo2RefreshRunning = false;
+            UpdatePathLock();
+        }
+    }
+
+    private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
+    {
+        if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        try
+        {
+            if (mo2Connected is not null)
+            {
+                await RefreshMo2SourceAsync();
+                return;
+            }
+            var folder = Mo2PathBox.Text;
+            if (!File.Exists(Path.Combine(folder, "ModOrganizer.exe")))
+                throw new InvalidOperationException("Select the MO2 application folder first.");
+            if (System.Windows.MessageBox.Show(this,
+                "Add the GCO test companion to this MO2 installation? Close MO2 first. Existing plugins will not be overwritten.",
+                "MO2 companion", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            Mo2CompanionInstaller.Install(folder,
+                Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py"));
+            SetStatus("GCO companion installed. Open MO2 and click REFRESH.");
+            await RefreshMo2SourceAsync();
+        }
+        catch (Exception ex) { Warn(ex.Message, "MO2 companion"); }
+    }
+
     private void UpdatePathLock()
     {
         // A valid journal pins its game; a corrupt journal must not lock out
@@ -1435,7 +1626,13 @@ public partial class MainWindow : Window
         GamePathBox.IsReadOnly = locked;
         GamePathBox.IsEnabled = !busy;
         BrowseButton.IsEnabled = !busy && !locked;
-        RefreshButton.IsEnabled = !busy;
+        RefreshButton.IsEnabled = !busy && !mo2RefreshRunning;
+        DirectSourceButton.IsEnabled = mo2Mode && CanSwitchSource() && !mo2RefreshRunning;
+        Mo2SourceButton.IsEnabled = !mo2Mode && CanSwitchSource();
+        Mo2BrowseButton.IsEnabled = mo2Mode && CanSwitchSource() && !mo2RefreshRunning;
+        Mo2InstanceBox.IsEnabled = Mo2ProfileBox.IsEnabled = Mo2BrowseButton.IsEnabled;
+        Mo2BridgeButton.IsEnabled = Mo2BrowseButton.IsEnabled;
+        Mo2BridgeButton.Content = mo2Connected is null ? "ADD BRIDGE" : "VERIFY";
     }
 
     private void SetBusy(bool isBusy)
@@ -1666,6 +1863,7 @@ public partial class MainWindow : Window
             RefreshResultsPresentationOnly();
             return;
         }
+        if (mo2Mode) { await RefreshMo2SourceAsync(); return; }
         long refreshActivity = BeginConsoleActivity("Checking game and profiler status");
         try
         {
@@ -1751,7 +1949,7 @@ public partial class MainWindow : Window
         try
         {
             var state = await Workflow.InspectAsync(current.GameRoot!, cancel.Token);
-            if (cancel.IsCancellationRequested || !IsLoaded || busy ||
+            if (cancel.IsCancellationRequested || !IsLoaded || busy || mo2Mode ||
                 (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)) return;
             liveState = state;
             var running = GameRunning();
@@ -1855,7 +2053,7 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            if (!cancel.IsCancellationRequested && IsLoaded)
+            if (!cancel.IsCancellationRequested && IsLoaded && !mo2Mode)
             {
                 // A failed inspection cannot leave stale actions enabled.
                 // Keep the owner's emergency Restore action available.
@@ -1876,6 +2074,7 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
+        if (mo2Mode) return;
         // Only RESTORE and CONTINUE trigger owner-managed restoration.
         if (Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
@@ -1884,7 +2083,7 @@ public partial class MainWindow : Window
     }
     private async Task InstallProfilersAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         ClearStatusPin();
         var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
         if (!frameworks.Ready)
@@ -1991,7 +2190,7 @@ public partial class MainWindow : Window
 
     private async Task HandleExternalGameLaunchAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null ||
             !Workflow.HasSessionForGame(inspection.GameRoot)) return;
         var game = inspection.GameRoot;
         SetBusy(true);
@@ -2023,7 +2222,7 @@ public partial class MainWindow : Window
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
     private async Task LaunchCaptureAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
         if (DateTime.UtcNow < launchProcessGuardUntilUtc)
         {
@@ -2114,7 +2313,7 @@ public partial class MainWindow : Window
     private async void Collect_Click(object sender, RoutedEventArgs e) => await CollectResultsAsync();
     private async Task CollectResultsAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         var game = inspection.GameRoot;
         if (GameRunning())
         {
@@ -2374,7 +2573,7 @@ public partial class MainWindow : Window
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
     private async Task ContinueToAnalyticsAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
