@@ -23,6 +23,15 @@
 
 
 
+## 2026-11-24 — MO2 COLLECT reuses the original native owner transaction
+
+- Previous full GCO CI [#1139](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45484848987), commit `cd1b72c`: independently verified SUCCESS.
+- `2bed243`, `123740f`, `5ab496b`, `2e6267b`, `7e1cef1`: MO2 resolves the pinned profile and verified game/Overwrite/session stage at owner operation time. Reuses the existing native result inventory to project only recognized live files into the existing disposable owner-installed fixture, without editing original game/mod sources. Rejects conflicting relative output paths and removes stale projected files before owner status. Real CET/GRSP status, collect, indexed archive copy/hash and discard-live operations remain authoritative; no fabricated ready flag or second archive format. Successful native collection resets only owner-defined outputs. START/RESTORE discards any remaining temporary projection.
+- `6c47998`, `8a4b03a`: existing COLLECT handler, durable one-shot latch, PresentMon stop/alignment, combined report and progress path used for MO2. Refresh uses actual owner readiness; both F11 captures still required. Direct calls retain their original behavior. A failed MO2 collection retains its temporary latched index until the next START/RESTORE, to preserve tray recovery; it is not sealed as a saved capture.
+- `874a8c4`, `b4c3c9a`, `51e82d5`, `4902848`: additional focused projection test checks split destinations, conflicting copies, stale completion proof and preservation of foreign Overwrite. Existing real-owner test checkpoint additionally replays recorded CSV bytes through the actual bundled managers and shared collection transaction, with an explicitly synthetic F11 completion flag to exercise the current owner admission gate; not a gameplay recording claim. Existing assertions and workflows untouched.
+- **Next:** CONTINUE must retire the virtual deployment, preserve the sealed capture, prove original effective files and use the pinned selected-profile provider for Page 2. Continue remains disabled for MO2 until that source handoff is wired. Actual game-generated MO2 capture, custom output routing outside the verified roots, and full gameplay/ZIP validation remain unproven. No production feature-gate, version, UI layout or optimizer change.
+- Validation: source and tests committed; existing full GCO and MO2 checkpoints requested separately. New results pending.
+
 ## 2026-11-24 — MO2 uses the original native tray and resumes the pinned capture
 
 - Previous full GCO CI [#1138](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45482330763), commit `0c16437`: independently verified SUCCESS.
