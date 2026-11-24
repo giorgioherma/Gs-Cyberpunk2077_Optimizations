@@ -98,6 +98,12 @@ public partial class MainWindow : Window
     private bool mo2SelectionUpdating;
     private bool mo2RefreshRunning;
     private Mo2CompanionStatus? mo2Connected;
+    private Mo2ProfileSelection? mo2SelectedSource;
+    private Mo2OverlayPreparation? mo2Prepared;
+    private bool mo2LaunchAttempted;
+    private bool mo2LaunchConfirmed;
+    private bool mo2RetiredCapture;
+    private bool mo2RecoveryBlocked;
     // The normal XAML tree is permanent. Maximize only overrides values on
     // existing sections and restores the exact saved local values afterward.
     private StackPanel? maximizedGameRootSection;
@@ -1245,6 +1251,7 @@ public partial class MainWindow : Window
             pendingExternalGameStart = pendingGameExitRefresh = false;
             pendingExternalGamePid = null;
             UpdatePathLock();
+            UpdateMo2TestButtons();
             return;
         }
         if (!inspection.IsValidGame) return;
@@ -1441,7 +1448,7 @@ public partial class MainWindow : Window
     }
 
     private bool CanSwitchSource() =>
-        !busy && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
+        !busy && mo2Prepared is null && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
         !Workflow.RestoreActionAvailable(GamePathBox.Text) && !GameRunning();
 
     private async void DirectSource_Click(object sender, RoutedEventArgs e)
@@ -1523,6 +1530,7 @@ public partial class MainWindow : Window
         if (!initialized || !mo2Mode || mo2RefreshRunning) return;
         mo2RefreshRunning = true;
         mo2Connected = null;
+        mo2SelectedSource = null;
         UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
@@ -1583,11 +1591,12 @@ public partial class MainWindow : Window
                 var result = await Task.Run(() => Mo2ProfileSelectionService.Inspect(folder,
                     location.InstanceFolder, selected, connected.GameDirectory));
                 var stack = result.CandidateSource;
+                if (result.Recognized && stack is not null) mo2SelectedSource = result;
                 Mo2StatusText.Text = result.Recognized && stack is not null
                     ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetOwners} CET | {stack.RedscriptFiles} REDscript files"
                     : result.Detail;
                 SetStatus($"MO2 bridge authenticated. UI profile: {connected.CurrentProfile}; selected: {selected}. " +
-                    (result.Recognized ? "Candidate sources resolved. Profiling not enabled." : result.Detail));
+                    (result.Recognized ? "Candidate sources resolved. Experimental profiling test only." : result.Detail));
             }
             finally { mo2SelectionUpdating = false; }
         }
@@ -1601,7 +1610,128 @@ public partial class MainWindow : Window
         {
             mo2RefreshRunning = false;
             UpdatePathLock();
+            UpdateMo2TestButtons();
         }
+    }
+
+    private void UpdateMo2TestButtons()
+    {
+        if (!mo2Mode) return;
+        bool running = GameRunning();
+        try { mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+        catch (Exception ex)
+        {
+            mo2RecoveryBlocked = true;
+            SetStatus("MO2 session journal requires recovery: " + ex.Message);
+        }
+        var restore = mo2Prepared is not null;
+        InstallButton.Content = restore ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
+        InstallButton.Style = (Style)FindResource(restore ? "RestoreStageButton" : "StageActionButton");
+        InstallButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
+            (restore ? !mo2LaunchAttempted || mo2LaunchConfirmed
+                     : !mo2RecoveryBlocked && !mo2RetiredCapture && mo2SelectedSource is not null &&
+                       mo2Connected is not null);
+        LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
+            restore && !mo2LaunchAttempted && mo2Connected is not null;
+        CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
+        if (mo2RecoveryBlocked && mo2Prepared is null)
+            SetStatus("Prior MO2 test session retained. Recovery/collection is not yet available; do not start another test.");
+    }
+
+    private async Task<Mo2ProfileSelection> InspectMo2TestSelectionAsync()
+    {
+        var instancePath = Mo2InstanceBox.SelectedItem as string ??
+            throw new InvalidOperationException("Select an MO2 instance.");
+        var profile = Mo2ProfileBox.SelectedItem as string ??
+            throw new InvalidOperationException("Select an MO2 profile.");
+        var folder = Mo2PathBox.Text;
+        var instance = Mo2SourceInspector.Discover(instancePath);
+        var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+        if (!connected.Connected) throw new InvalidOperationException(connected.Detail);
+        var probe = await Mo2CompanionCommandClient.ProbeAsync(connected);
+        if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
+        var selection = await Task.Run(() => Mo2ProfileSelectionService.Inspect(
+            folder, instancePath, profile, connected.GameDirectory));
+        if (!selection.Recognized || selection.CandidateSource is null)
+            throw new InvalidOperationException(selection.Detail);
+        mo2Connected = connected;
+        return selection;
+    }
+
+    private async Task Mo2InstallOrRestoreTestAsync()
+    {
+        if (busy || mo2RefreshRunning || GameRunning()) return;
+        if (mo2Prepared is null && System.Windows.MessageBox.Show(this,
+            "Prepare a temporary MO2 profiling test overlay? Actual native loading is not yet verified. " +
+            "Collection and Page 2 are disabled. Keep this GCO window open and close Cyberpunk before Restore.",
+            "Experimental MO2 profiling", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+            MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        SetBusy(true);
+        try
+        {
+            if (mo2Prepared is { } prepared)
+            {
+                if (mo2LaunchConfirmed)
+                {
+                    Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+                    mo2RetiredCapture = true;
+                    SetStatus("MO2 test retired. All staged and capture evidence retained; collection is not yet implemented.");
+                }
+                else if (!mo2LaunchAttempted)
+                {
+                    Mo2ProfilerOverlayBuilder.RetireUnlaunched(prepared);
+                    SetStatus("Unlaunched MO2 test retired; original files and recovery bytes retained.");
+                }
+                else throw new InvalidOperationException("Launch outcome uncertain. Preserve the session for recovery.");
+                mo2Prepared = null;
+                SetPortraitStage(PortraitStage.Black);
+            }
+            else
+            {
+                if (mo2RetiredCapture || Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession())
+                    throw new InvalidOperationException("An earlier MO2 test needs recovery/collection.");
+                var selection = await InspectMo2TestSelectionAsync();
+                mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+                    packageRoot, selection.GameDirectory, selection.CandidateSource!,
+                    Guid.NewGuid().ToString("N"));
+                mo2LaunchAttempted = mo2LaunchConfirmed = false;
+                SetPortraitStage(PortraitStage.Installed);
+                SetStatus("MO2 test overlay prepared. START launches the selected profile; no original mods changed.");
+            }
+        }
+        catch (Exception ex) { Warn(ex.Message, "MO2 test session"); }
+        finally { SetBusy(false); UpdateMo2TestButtons(); }
+    }
+
+    private async Task Mo2LaunchTestAsync()
+    {
+        if (busy || mo2RefreshRunning || GameRunning() || mo2Prepared is not { } prepared ||
+            mo2LaunchAttempted) return;
+        if (System.Windows.MessageBox.Show(this,
+            "Launch Cyberpunk using MO2 profile " + prepared.Profile +
+            "? This is a native profiler loading test only; F11 results will not be collected by GCO yet.",
+            "Experimental MO2 launch", MessageBoxButton.YesNo, MessageBoxImage.Warning,
+            MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        SetBusy(true);
+        try
+        {
+            var selection = await InspectMo2TestSelectionAsync();
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
+            mo2LaunchAttempted = true;
+            var reply = await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
+                mo2Connected!, selection, prepared, true);
+            mo2LaunchConfirmed = true;
+            SetPortraitStage(PortraitStage.Capturing);
+            SetStatus("MO2 launch acknowledged (PID " + reply.ProcessId +
+                "). Verify CET and REDscript in game, then test F11. Close Cyberpunk before Restore.");
+        }
+        catch (Exception ex)
+        {
+            Warn(ex.Message, "MO2 test launch");
+            if (mo2LaunchAttempted)
+                SetStatus("MO2 launch outcome uncertain. Recovery evidence retained; do not retry.");
+        }
+        finally { SetBusy(false); UpdateMo2TestButtons(); }
     }
 
     private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
@@ -2086,7 +2216,7 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        if (mo2Mode) return;
+        if (mo2Mode) { await Mo2InstallOrRestoreTestAsync(); return; }
         // Only RESTORE and CONTINUE trigger owner-managed restoration.
         if (Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
@@ -2231,7 +2361,11 @@ public partial class MainWindow : Window
         finally { EndConsoleActivity(externalStartActivity); SetBusy(false); }
     }
 
-    private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
+    private async void Launch_Click(object sender, RoutedEventArgs e)
+    {
+        if (mo2Mode) await Mo2LaunchTestAsync();
+        else await LaunchCaptureAsync();
+    }
     private async Task LaunchCaptureAsync()
     {
         if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
