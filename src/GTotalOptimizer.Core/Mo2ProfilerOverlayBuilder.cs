@@ -190,6 +190,49 @@ public static class Mo2ProfilerOverlayBuilder
         }
     }
 
+    // Experimental sessions retain all stage/fixture/output bytes. A pending
+    // or ambiguous launch cannot be reused, even after a GCO restart.
+    public static bool HasUnresolvedTestSession()
+    {
+        var folder = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData), "GCO", "MO2Bridge", "journals");
+        if (!Directory.Exists(folder)) return false;
+        EnsureNoReparseParents(folder);
+        foreach (var file in Directory.EnumerateFiles(folder, "*.json"))
+        {
+            RequireRegularUnlinkedFile(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            var phase = doc.RootElement.GetProperty("phase").GetString();
+            if (phase != "retired-unlaunched" && phase != "retired-test-capture") return true;
+        }
+        return false;
+    }
+
+    internal static void RecordTestLaunchPhase(Mo2OverlayPreparation prepared,
+        string expected, string phase, int processId = 0)
+    {
+        EnsureNoReparseParents(prepared.JournalFile);
+        RequireRegularUnlinkedFile(prepared.JournalFile);
+        var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(prepared.JournalFile))!
+            .AsObject();
+        if (journal["sessionId"]?.GetValue<string>() != prepared.SessionId ||
+            journal["phase"]?.GetValue<string>() != expected)
+            throw new InvalidOperationException("Unexpected MO2 session phase; retain recovery evidence.");
+        journal["phase"] = phase;
+        journal["processId"] = processId;
+        journal["utc"] = DateTimeOffset.UtcNow.ToString("O");
+        WriteJournal(prepared.JournalFile, journal);
+    }
+
+    public static void RetireCompletedTest(Mo2OverlayPreparation prepared)
+    {
+        if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
+            throw new InvalidOperationException("Close Cyberpunk before retiring this test.");
+        // A positive signed launch is required; a timeout stays unresolved.
+        // No files are deleted and no collection/restore success is asserted.
+        RecordTestLaunchPhase(prepared, "test-launched", "retired-test-capture");
+    }
+
     // Only an unlaunched prepared session may be retired here. Launched or
     // uncertain sessions must retain their evidence for capture recovery.
     public static void RetireUnlaunched(Mo2OverlayPreparation prepared)
