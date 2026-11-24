@@ -86,6 +86,11 @@ public static class Mo2CompanionCommandClient
         if (!await VerifyElevatedAsync(connected, cancellationToken))
             throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
+        // Direct-mode parity: never start over a previous uncollected capture.
+        Mo2ProfilerOverlayBuilder.DiscardBeforeStart(prepared);
+        var fresh = Mo2SourceInspector.Resolve(selection.GameDirectory,
+            Mo2SourceInspector.Discover(selection.InstanceDirectory), selection.Profile, cancellationToken);
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, fresh);
         // Once the launch is attempted, even a signed failure can follow a
         // created process. Never classify a failed/timeout request as unlaunched.
         Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
