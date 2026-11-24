@@ -92,6 +92,25 @@ internal static class Mo2ProfilerOverlayBuilderTests
             }
             catch (InvalidOperationException) { }
 
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
+            static void RejectVerification(Action verify)
+            {
+                try { verify(); }
+                catch (InvalidDataException) { return; }
+                throw new Exception("MO2_STALE_PREPARED_OVERLAY_ACCEPTED");
+            }
+            Put(mod, owner, "changed after preparation");
+            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
+            Put(mod, owner, "original_mod_callback()");
+            Put(result.StagingDirectory, controls, "changed staged controls");
+            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
+            Put(result.StagingDirectory, controls, "CET_F11_CONTROL");
+            Put(mod, "bin/x64/plugins/cyber_engine_tweaks/mods/NewMod/init.lua", "new callback");
+            var changedStack = Mo2SourceInspector.Resolve(game, instance, "Heavy");
+            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, changedStack));
+            Directory.Delete(Path.Combine(mod, "bin/x64/plugins/cyber_engine_tweaks/mods/NewMod"), true);
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
+
             async Task ShouldReject(string name, Action<string> change)
             {
                 string id = Convert.ToHexString(
