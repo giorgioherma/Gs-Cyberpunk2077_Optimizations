@@ -12,6 +12,13 @@
 
 
 
+
+## 2026-11-24 — First real MO2 game launch and completed GRSP F11 session; CET unresolved
+
+- Owner moved the empty physical game r6/cache/modded directory out of the cache; GCO launch succeeded. Exact upstream cache operation remains unproven; no automatic cache deletion or mutation approved.
+- Uploaded launch journal ee72f613845d4ceaac6bb23cec02af09 reached test-launched with eight sealed generated files and reply PID 24916. CET log records game PID 24180; do not assume returned PID alone identifies the actual game. Visible and selected profile both A. CET controls load but report CETProfilerStart unavailable. Normal MO2 launch at 18:32 initialized 0-Engine v0.18.6; GCO launch at 18:44 fails init.lua:31 EventEmitter nil. Staged ASI/modified init/scheduler are in session storage, not expected in Overwrite. Suspect broad directory redirection hiding original siblings and/or native ASI loading path, not confirmed until runtime VFS/native trace.
+- Uploaded RESULTS archive from Overwrite includes F11_STOP flag, complete GRSP status, 16,975.222 ms, 1,019 frame rows, GOOD quality, successful shard merge and CSV dump, 495 mapped mod functions but **zero observed calls**. This proves native GRSP F11 and result routing, not useful call attribution or complete profiling integration. CET/GRSP owners unchanged. Next: examine actual session stage/USVFS log, validate existing physical+virtual sibling dependencies and native ASI identity under hooked process before choosing correction. No Page 2 or collection activation yet.
+
 ## 2026-11-24 — Cache pre-launch failure isolated to integration path
 
 - Local normal MO2 launch with PROFILE A succeeds. GCO launch fails with signed Errno 13 at game r6/cache/modded both when the visible profile differs and when both select PROFILE A; latest journal shows the eight owner-generated profiler files contain no cache paths. This rules out profile mismatch as a necessary cause. Native loading still unproven.
