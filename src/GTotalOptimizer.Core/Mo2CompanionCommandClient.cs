@@ -42,6 +42,33 @@ public static class Mo2CompanionCommandClient
             cancellationToken, sessionId);
     }
 
+    // Explicitly confirmed local test only. The normal production gate remains
+    // disabled. Never offer a raw arbitrary-stage experimental launch.
+    public static async Task<Mo2BridgeReply> LaunchPreparedTestAsync(
+        Mo2CompanionStatus connected, Mo2ProfileSelection selection,
+        Mo2OverlayPreparation prepared, bool userConfirmed,
+        CancellationToken cancellationToken = default)
+    {
+        if (!userConfirmed || !connected.Connected || !selection.Recognized ||
+            selection.CandidateSource is null ||
+            !string.Equals(selection.GameDirectory, connected.GameDirectory,
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Explicit local MO2 test admission is required.");
+        if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
+            throw new InvalidOperationException("Close Cyberpunk before launching the MO2 test.");
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
+        // Once the launch is attempted, even a signed failure can follow a
+        // created process. Never classify a failed/timeout request as unlaunched.
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
+        var reply = await SendAsync(connected, "launch", prepared.Profile,
+            prepared.StagingDirectory, cancellationToken, prepared.SessionId);
+        if (!reply.Ok || reply.ProcessId <= 0)
+            throw new InvalidOperationException("MO2 test launch unverified; retain recovery evidence. " + reply.Detail);
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending",
+            "test-launched", reply.ProcessId);
+        return reply;
+    }
+
     private static async Task<Mo2BridgeReply> SendAsync(
         Mo2CompanionStatus connected, string operation, string profile,
         string stagingRoot, CancellationToken cancellationToken, string sessionId = "")
