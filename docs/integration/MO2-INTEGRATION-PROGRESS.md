@@ -4,6 +4,14 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+## 2026-11-24 — Real MO2 Python plugin verified; selected-profile spawn blocked, Win32 diagnostic added
+
+- [MO2 checkpoint #18 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45287941980), source `4a732daacd0226080c0c7049ebd3848faf94637d`: official MO2 2.5.2 GUI registered the actual GCO Python plugin, published real process/profile status, and authenticated the C# read-only HMAC probe. The mapper init/QDir ABI fix is proven for bootstrap. No game launch or native profiler execution was tested in #18.
+- [#19](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45288911476), [#20](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45289485788), [#21](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45290072911), and [#22](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45290708015) FAILED at the expanded real MO2 application selected-profile launch test. #22 HEAD `c6173d8787cd17c11279ef8f0f7b13db13b6bdda` proved real plugin registration and signed probe again. The native disposable child executes directly, but MO2 reports Win32 `ERROR_ACCESS_DENIED (5)` starting it hooked, while its UI remains on Other and the signed Heavy request times out. Do not claim selected-profile runtime proof.
+- Upstream MO2 v2.5.2 [spawn.cpp](https://github.com/ModOrganizer2/modorganizer/blob/v2.5.2/src/spawn.cpp) explicitly passes `CREATE_BREAKAWAY_FROM_JOB` to the Win32/USVFS spawn call, and uses a synchronous error TaskDialog on spawn failure. Therefore CI job restrictions are a concrete hypothesis, not yet established; the error dialog also explains why the signed response may not return before the CI timeout. No antivirus changes, runner restriction bypass, or production dialog suppression.
+- Diagnostic commit `f4bd6738da05d415b4140ce091a18ffda89f800c` extends the original disposable smoke to compare normal and breakaway Win32 CreateProcess with the same executable, inspect runner/MO2 job membership, and retain the strict official MO2 launch test and exact VFS assertions. A direct breakaway denial plus real MO2 denial is evidence of a runner restriction; if the control succeeds, investigate the actual USVFS/MO2 path instead. This diagnostic has not yet passed CI at documentation time.
+- Next: verify diagnostic checkpoint; if the hosted runner disallows breakaway, obtain a suitable authorized Windows environment for real MO2 launch, rather than weakening the test or assuming support. Stage 1 UI, actual Cyberpunk CET/GRSP loading, F11, collection/recovery, effective Page 2 and feature activation remain open. `Mo2FeatureGate.Enabled=false`; Direct and main unchanged.
+
 ## 2026-11-24 — Six real 0-Engine source states VERIFIED; official MO2 Python runner startup exposed ABI defect
 
 **Real CET/GRSP owner compatibility:** [MO2 checkpoint #15 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45285922091), commit `4fa2f62beca74846dbfcadd3e1be332b40d787bf`. Official native CET baseline, verified packaged owner installers and three **real, private historical 0-Engine layouts** from `giorgioherma/original_cet_source` were replayed against a disposable selected-profile fixture. Six distinct cases passed: no 0-Engine **6 files**, namespaced complete **6**, namespaced missing scheduler **7**, untouched original/adaptive **8**, legacy integrated already profiler-aware **6**, legacy missing root scheduler **7**. Source owner supplied every Lua integration and worker; source and player game files remained unchanged and the fixture enforced exact route/worker ownership by layout. Earlier [#14 FAILED](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45285523017) because the new test incorrectly expected the existing **already-profiler-aware** legacy root scheduler to be replaced. Corrected its expected preservation and added separate missing-worker replay instead of changing the owner.
@@ -85,7 +93,7 @@
 
 **Still required before any deployment:** test a supported API mechanism to activate a single session-owned profiler overlay for selected profile A while MO2 UI displays B, with B unchanged and no original source writes; prove CET ASI + GRSP loading and result locations in real MO2. Failure is a hard blocker, not a reason to enable `Mo2FeatureGate`.
 
-## Stage 0 — API and source-contract proof [IN PROGRESS — SOURCE + NATIVE MAPPER PROVED; REAL MO2 PLUGIN REGISTRATION NOT PROVED]
+## Stage 0 — API and source-contract proof [IN PROGRESS — SOURCE, NATIVE MAPPER AND REAL PLUGIN REGISTRATION PROVED]
 
 - Review `AGENTS.md`, `docs/HANDOFF/CORE.md`, WPF Page 1 and the current GCO/CET/GRSP owner source. Record current versioned MO2 Python API/Cyberpunk plugin capabilities, supported native loaders and RootBuilder exceptions.
 - Verify exact API semantics for `IOrganizer.startApplication(..., profile=...)`, `createMod`, `IModList.setActive/setPriority`, `removeMod`, virtual source winner resolution, game root/profile enumeration, and output routing.
@@ -99,14 +107,14 @@
 - Extend existing `Mo2InstallLocator`/`Mo2SourceInspector` rather than new scanner; include physical game baseline, exact enabled packages, precedence, Overwrite and source-owner provenance. Never claim VFS-verified from physical scanning.
 - **Exit:** portable/global/custom-drive discovery and dropdown unit tests; Direct UI unchanged; Refresh read-only; MO2 installer buttons still blocked until later stages.
 
-## Stage 2 — MO2 companion and selected-profile control [IN PROGRESS — AUTHENTICATED COMMAND PROTOTYPE; LIVE MO2 NOT PROVEN]
+## Stage 2 — MO2 companion and selected-profile control [IN PROGRESS — REAL SIGNED PROBE GREEN; NONCURRENT PROFILE SPAWN BLOCKED]
 
 - Create a minimal MO2 plugin/adapter and a local GCO request/reply protocol; authorize only narrow operations scoped to the chosen instance, profile, session and owned temp mod. Check plugin installation/restart handshake; no unsafe arbitrary execution or path traversal.
 - Use supported MO2 API to create a uniquely named temporary mod, enable and prioritize it for the **chosen** profile, verify exact winner paths; launch game via `startApplication(..., profile=<selected>)`.
 - Prove selected profile A operates while the MO2 UI is on B; prove B remains untouched before/after, including interruption/restart. If impossible with supported API, record exact blocker and stop; do not silently ask the user to switch or edit MO2 profile files behind its back.
 - **Exit:** real MO2 process/API proof of activation, winner precedence, selected launch and reversible state in multiple profiles. No native profiler needed yet.
 
-## Stage 3 — Reuse source-owner profiler payloads [IN PROGRESS — REAL NO-0 / NAMESPACED COMPLETE / NAMESPACED PARTIAL PROVEN]
+## Stage 3 — Reuse source-owner profiler payloads [IN PROGRESS — SIX REAL SOURCE STATES PROVEN; RUNTIME LOADING NOT PROVEN]
 
 - Read winning CET ASI, 0-Engine `init.lua`, scheduler(s), controls and bindings for the selected profile; create an isolated, game-shaped *disposable fixture*. Run the existing CET manager's authoritative validation/injection against that fixture; inspect exact before/after and assemble only necessary overrides into one MO2 temporary mod. **No actual game/mod originals modified.**
 - GRSP uses its owner-verified DLL + required data paths in the same temporary mod. Preserve both profiler identities, F11 source-owner controls and 0-Engine scheduler ownership; do not introduce a duplicate injection implementation.
@@ -142,7 +150,7 @@
 
 ## Minimal next task
 
-**Execute Stage 0 only.** First establish the noncurrent-profile mod-activation method in the MO2 plugin API; this is the hardest non-negotiable acceptance condition and determines the viable companion protocol. Then establish source/writer routing with tiny real-profile fixtures. Do not build UI assumptions or a copy-based fallback first.
+**Resolve the real selected-profile spawn gate.** Confirm whether MO2's required Win32 breakaway flag is denied by the hosted runner; retain actual selected-profile VFS winner and isolation checks. Then proceed to the native game/collection/source-provider gates. Do not build a copy-based fallback.
 
 ## Status / milestone record (append dated entries here)
 
