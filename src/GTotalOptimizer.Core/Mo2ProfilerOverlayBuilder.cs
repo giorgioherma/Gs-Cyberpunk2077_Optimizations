@@ -171,7 +171,7 @@ public static class Mo2ProfilerOverlayBuilder
             {
                 schemaVersion = 1, sessionId, profile = selected.Profile, gameRoot = game,
                 fixtureRoot = fixture, stageRoot = stage, phase = "prepared",
-                originalSources = baselines, generatedFiles = changes,
+                originalSources = baselines, originalSourcePaths = owners, generatedFiles = changes,
                 utc = DateTimeOffset.UtcNow
             });
             return new(selected.Profile, sessionId, stage, journal, changes, count,
@@ -187,6 +187,56 @@ public static class Mo2ProfilerOverlayBuilder
                 utc = DateTimeOffset.UtcNow
             });
             throw;
+        }
+    }
+
+    // Recheck the selected source winners and sealed overlay immediately before
+    // launch admission. A prepared journal is not evidence of a launched game.
+    public static void VerifyPrepared(Mo2OverlayPreparation prepared, Mo2Stack selected)
+    {
+        if (!selected.Ready || !selected.ProfileVerified || selected.GameOnlyFallback ||
+            !string.Equals(selected.Profile, prepared.Profile, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 profile changed or is no longer admitted.");
+        EnsureNoReparseParents(prepared.StagingDirectory);
+        EnsureNoReparseParents(Path.GetDirectoryName(prepared.JournalFile)!);
+        RequireRegularUnlinkedFile(prepared.JournalFile);
+        using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
+        var journal = doc.RootElement;
+        if (journal.GetProperty("phase").GetString() != "prepared" ||
+            journal.GetProperty("sessionId").GetString() != prepared.SessionId ||
+            journal.GetProperty("profile").GetString() != prepared.Profile ||
+            !string.Equals(journal.GetProperty("stageRoot").GetString(), prepared.StagingDirectory,
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 prepared session identity changed.");
+        var originals = journal.GetProperty("originalSources");
+        var paths = journal.GetProperty("originalSourcePaths");
+        var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in originals.EnumerateObject())
+        {
+            expected.Add(entry.Name);
+            if (!selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
+                !string.Equals(Path.GetFullPath(winner.PhysicalPath),
+                    paths.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 source winner changed: " + entry.Name);
+            EnsureNoReparseParents(Path.GetDirectoryName(winner.PhysicalPath)!);
+            RequireRegularUnlinkedFile(winner.PhysicalPath);
+            if (!Hash(winner.PhysicalPath).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 source bytes changed: " + entry.Name);
+        }
+        if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
+            throw new InvalidDataException("MO2 owner input inventory changed.");
+        var actual = Scan(prepared.StagingDirectory);
+        var sealedFiles = journal.GetProperty("generatedFiles").Deserialize<Mo2OverlayFile[]>()
+            ?? throw new InvalidDataException("MO2 overlay manifest missing.");
+        if (actual.Count != sealedFiles.Length || !sealedFiles.SequenceEqual(prepared.Files))
+            throw new InvalidDataException("MO2 overlay inventory changed.");
+        foreach (var file in sealedFiles)
+        {
+            if (!IsAllowedOutput(file.GameRelativePath) ||
+                !actual.TryGetValue(file.GameRelativePath, out var hash) ||
+                !hash.Equals(file.Sha256, StringComparison.OrdinalIgnoreCase) ||
+                new FileInfo(Path.Combine(prepared.StagingDirectory, file.GameRelativePath)).Length != file.Size)
+                throw new InvalidDataException("MO2 overlay bytes changed: " + file.GameRelativePath);
         }
     }
 
