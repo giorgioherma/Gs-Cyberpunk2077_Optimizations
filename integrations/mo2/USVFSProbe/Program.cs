@@ -293,10 +293,14 @@ internal static class Program
             Put(Path.Combine(sparse, scheduler), "STAGED_SCHEDULER");
             Put(Path.Combine(physicalOverwrite, "r6", "cache", "existing.txt"), "USER_CACHE");
             Export<ClearMappings>(library, "usvfsClearVirtualMappings")();
-            if (!link(physicalOverwrite, physicalGame, Recursive | CreateTarget) ||
-                !link(Path.Combine(sparse, "bin", "x64", "plugins"),
-                      Path.Combine(physicalGame, "bin", "x64", "plugins"), Recursive))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to reproduce physical-only sparse mapper");
+            if (!link(physicalOverwrite, physicalGame, Recursive | CreateTarget))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount physical-only Overwrite");
+            // USVFS resolves a nested mapping's parent through the existing
+            // Overwrite redirection, not the physical game. A root-level
+            // mapping has no missing virtual bin/x64 parent. Test this
+            // candidate before changing the shipped Python bridge.
+            if (!link(sparse, physicalGame, Recursive))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount root-level sparse profiler mapper");
 
             string observed = Path.Combine(folder, "physical-sparse-observations.txt");
             string physicalBatch = Path.Combine(folder, "physical-sparse-child.cmd");
