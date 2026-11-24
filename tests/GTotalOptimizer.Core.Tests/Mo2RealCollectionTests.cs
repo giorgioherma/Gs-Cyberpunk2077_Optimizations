@@ -71,7 +71,9 @@ internal static class Mo2RealCollectionTests
             }
             if (verifyPage2)
                 foreach (var required in new[] { "GRSP_Markers.csv", "RSP_CallSites.csv",
-                    "RSP_CallbackPressure.csv", "RSP_CallbackTargets.csv", "GRSP_Status.txt" })
+                    "RSP_CallbackPressure.csv", "RSP_CallbackTargets.csv", "GRSP_Status.txt",
+                    "RSP_FunctionMap.csv", "RSP_Cadence.csv", "RSP_WorkMap.csv",
+                    "GRSP_ByFunction.csv", "GRSP_Frames.csv", "GRSP_ByMod.csv" })
                     if (!File.Exists(Path.Combine(grspDir, required)))
                         throw new InvalidDataException("MO2_PAGE2_REPLAY_NATIVE_EVIDENCE_MISSING: " + required);
             string marker = Path.Combine(grspDir, "GCO-F11-Complete.flag");
@@ -92,6 +94,19 @@ internal static class Mo2RealCollectionTests
                 !CaptureAdmissionPolicy.CanContinue(index, true))
                 throw new InvalidDataException("MO2_REAL_OWNER_COLLECTION_INDEX_INCOMPLETE");
             _ = workflow.ReadCollected(game, verifyHashes: true);
+            if (verifyPage2)
+            {
+                // Diagnose the actual owner archive, not just the raw fixture.
+                // Keep the production Resolver's complete admission intact.
+                var archived = index.Redscript!.Files.Select(file => file.Path)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var required in new[] { "GRSP_Summary.json",
+                    "Data/Metadata/GRSP_Status.txt", "Data/Metadata/GCO-F11-Complete.flag",
+                    "Data/Runtime/GRSP_Markers.csv", "Data/Developer/RSP_CallSites.csv",
+                    "Data/Developer/RSP_CallbackPressure.csv", "Data/Developer/RSP_CallbackTargets.csv" })
+                    if (!archived.Contains(required))
+                        throw new InvalidDataException("MO2_PAGE2_OWNER_ARCHIVE_MISSING: " + required);
+            }
             if (written.Any(File.Exists) || File.Exists(marker))
                 throw new InvalidDataException("MO2_REAL_OWNER_LIVE_OUTPUT_NOT_RESET");
             if (verifyPage2)
