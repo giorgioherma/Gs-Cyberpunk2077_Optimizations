@@ -27,6 +27,9 @@ internal static class Program
     [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private delegate bool LinkDirectory(string source, string destination, uint flags);
+    [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private delegate bool LinkFile(string source, string destination, uint flags);
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     private delegate IntPtr Version();
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -285,9 +288,14 @@ internal static class Program
             string init = Path.Combine(host, "init.lua");
             string emitter = Path.Combine(host, "modules", "EventEmitter.lua");
             string scheduler = Path.Combine(host, "modules", "CETProfilerScheduler.lua");
+            string external = Path.Combine(host, "external", "Cron.lua");
+            string nativeSettings = Path.Combine("bin", "x64", "plugins", "cyber_engine_tweaks",
+                "mods", "nativeSettings", "init.lua");
             Put(Path.Combine(physicalGame, relativeAsi), "PHYSICAL_STOCK_ASI");
             Put(Path.Combine(physicalGame, init), "PHYSICAL_ORIGINAL_INIT");
             Put(Path.Combine(physicalGame, emitter), "PHYSICAL_EVENT_EMITTER");
+            Put(Path.Combine(physicalGame, external), "PHYSICAL_EXTERNAL_CRON");
+            Put(Path.Combine(physicalGame, nativeSettings), "PHYSICAL_NATIVE_SETTINGS");
             Put(Path.Combine(sparse, relativeAsi), "STAGED_PROFILER_ASI");
             Put(Path.Combine(sparse, init), "STAGED_ADAPTIVE_INIT");
             Put(Path.Combine(sparse, scheduler), "STAGED_SCHEDULER");
@@ -295,12 +303,21 @@ internal static class Program
             Export<ClearMappings>(library, "usvfsClearVirtualMappings")();
             if (!link(physicalOverwrite, physicalGame, Recursive | CreateTarget))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount physical-only Overwrite");
-            // USVFS resolves a nested mapping's parent through the existing
-            // Overwrite redirection, not the physical game. A root-level
-            // mapping has no missing virtual bin/x64 parent. Test this
-            // candidate before changing the shipped Python bridge.
+            // Root-level sparse mapping was proven to hide unchanged physical
+            // siblings (#25). Establish only the missing parent directories in
+            // the owned stage, then add explicit passthrough links to original
+            // effective files. No original file is copied or modified.
+            Directory.CreateDirectory(Path.Combine(sparse, Path.GetDirectoryName(external)!));
             if (!link(sparse, physicalGame, Recursive))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to mount root-level sparse profiler mapper");
+            var linkFile = Export<LinkFile>(library, "usvfsVirtualLinkFile");
+            foreach (var dependency in new[] { emitter, external })
+            {
+                string original = Path.Combine(physicalGame, dependency);
+                if (!linkFile(original, original, 0))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(),
+                        "Unable to expose physical original dependency: " + dependency);
+            }
 
             string observed = Path.Combine(folder, "physical-sparse-observations.txt");
             string physicalBatch = Path.Combine(folder, "physical-sparse-child.cmd");
@@ -316,6 +333,10 @@ internal static class Program
             scriptPhysical.AppendLine("if errorlevel 1 exit /b 34");
             scriptPhysical.AppendLine("type modules\\CETProfilerScheduler.lua >> \"" + observed + "\"");
             scriptPhysical.AppendLine("if errorlevel 1 exit /b 35");
+            scriptPhysical.AppendLine("type external\\Cron.lua >> \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 36");
+            scriptPhysical.AppendLine("type \"" + Path.Combine(physicalGame, nativeSettings) + "\" >> \"" + observed + "\"");
+            scriptPhysical.AppendLine("if errorlevel 1 exit /b 37");
             File.WriteAllText(physicalBatch, scriptPhysical.ToString(), Encoding.ASCII);
             var physicalCommand = new StringBuilder("\"" + commandInterpreter + "\" /D /C \"" + physicalBatch + "\"");
             if (!hooked(commandInterpreter, physicalCommand, IntPtr.Zero, IntPtr.Zero, false,
@@ -331,7 +352,9 @@ internal static class Program
                     !values.Contains("STAGED_PROFILER_ASI", StringComparison.Ordinal) ||
                     !values.Contains("STAGED_ADAPTIVE_INIT", StringComparison.Ordinal) ||
                     !values.Contains("PHYSICAL_EVENT_EMITTER", StringComparison.Ordinal) ||
-                    !values.Contains("STAGED_SCHEDULER", StringComparison.Ordinal))
+                    !values.Contains("STAGED_SCHEDULER", StringComparison.Ordinal) ||
+                    !values.Contains("PHYSICAL_EXTERNAL_CRON", StringComparison.Ordinal) ||
+                    !values.Contains("PHYSICAL_NATIVE_SETTINGS", StringComparison.Ordinal))
                     throw new InvalidDataException("MO2_PHYSICAL_SPARSE_DEPENDENCY_OR_OVERRIDE_FAILED: exit=" +
                         codePhysical + " wait=" + waitPhysical + " observed=" + values);
             }
@@ -342,7 +365,9 @@ internal static class Program
             }
             if (File.ReadAllText(Path.Combine(physicalGame, relativeAsi)) != "PHYSICAL_STOCK_ASI" ||
                 File.ReadAllText(Path.Combine(physicalGame, init)) != "PHYSICAL_ORIGINAL_INIT" ||
-                File.ReadAllText(Path.Combine(physicalGame, emitter)) != "PHYSICAL_EVENT_EMITTER")
+                File.ReadAllText(Path.Combine(physicalGame, emitter)) != "PHYSICAL_EVENT_EMITTER" ||
+                File.ReadAllText(Path.Combine(physicalGame, external)) != "PHYSICAL_EXTERNAL_CRON" ||
+                File.ReadAllText(Path.Combine(physicalGame, nativeSettings)) != "PHYSICAL_NATIVE_SETTINGS")
                 throw new InvalidDataException("MO2_PHYSICAL_SPARSE_ORIGINAL_MUTATED");
             Console.WriteLine("PASS physical-only sparse profiler mapping preserves original relative Lua dependencies");
         }
