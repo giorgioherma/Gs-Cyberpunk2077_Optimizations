@@ -1,5 +1,11 @@
 # Latest work / evidence status
 
+## 2026-11-24 — MO2 real plugin bootstrap GREEN; native selected-profile spawn diagnostic
+
+- [#18 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45287941980) proved official MO2 2.5.2 running with the actual GCO Python plugin and authenticated C# probe; [#22 FAILURE](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45290708015) then exposed native hooked launch access denied, despite the same disposable child running directly.
+- Upstream MO2 uses CREATE_BREAKAWAY_FROM_JOB and a blocking spawn-error dialog. Diagnostic `f4bd6738da05d415b4140ce091a18ffda89f800c` compares the same Win32 flag independently of USVFS and records job membership without bypassing restrictions or relaxing runtime assertions.
+- Six historical real-owner 0-Engine source states already passed #15. The selected-profile native launch, real Cyberpunk/F11, recovery and Page 2 gates remain open; MO2 feature gate stays off. See [authoritative stage ledger](integration/MO2-INTEGRATION-PROGRESS.md).
+
 ## 2026-11-23 — MO2 Stage 3 historical namespaced preservation and partial regeneration green
 
 - [MO2 CI #12 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45280176807): existing private historical 0-Engine source checked out read-only via authorized CI secret; real CET/GRSP owners preserved its completed namespaced worker; 6 verified overlay files, originals unchanged.
