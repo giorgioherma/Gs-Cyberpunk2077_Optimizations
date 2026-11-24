@@ -19,6 +19,11 @@
 
 
 
+
+## 2026-11-24 — Repeat-install package CI #1133 GREEN
+
+- Full GCO CI #1133 (run 45465983229, head `c1b3344`) SUCCESS, [test package v1.2.7](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45465983229/artifacts/14955287852), SHA-256 `e91c7350d4d7b5da7e7325b04f48c35f32daa186487de4526677d845aec9148c`. MO2 CI #27 (45465972387) native USVFS and six actual owner scenarios passed with historical results; foreign non-result data still refused. Overall #27 red only due to previously documented hosted Windows breakaway error 5 in live MO2 smoke. Actual repeat-install and native CET/GRSP gameplay remain local validation gates. RESTORE failed session, open new build, VERIFY, INSTALL, START. Old results preserved; no manual Overwrite cleanup.
+
 ## 2026-11-24 — Repeat-install GRSP historical result separation
 
 - Local #1132 INSTALL correctly fails closed: GRSP owner refuses its nonempty data folder, START remains disabled and RESTORE is actionable. Earlier local MO2 F11 capture wrote RESULTS into Overwrite; GCO's disposable installer projection included the previous capture output as though it were live installation state. The GRSP owner explicitly requires an empty data directory before install. No owner check is changed.
