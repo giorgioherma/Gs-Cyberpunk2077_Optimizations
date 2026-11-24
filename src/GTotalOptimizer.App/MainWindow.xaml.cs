@@ -1820,8 +1820,11 @@ public partial class MainWindow : Window
                 await Task.Delay(500);
             }
             var verified = Mo2CompanionDiscovery.Inspect(folder, instance);
-            if (!verified.Connected || !Mo2ProcessIdentity.IsElevated(verified.ProcessId))
-                throw new InvalidOperationException("MO2 did not open with the required permissions. Check its window.");
+            if (!verified.Connected)
+                throw new InvalidOperationException(verified.Detail);
+            var elevation = Mo2ProcessIdentity.InspectElevation(verified.ProcessId);
+            if (elevation.Elevated != true)
+                throw new InvalidOperationException(elevation.Detail);
             startupSucceeded = true;
         }
         catch (Exception ex)
