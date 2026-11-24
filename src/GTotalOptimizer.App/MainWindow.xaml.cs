@@ -1696,11 +1696,12 @@ public partial class MainWindow : Window
             !busy && !mo2RefreshRunning && !running && !mo2VerifyRequired && mo2SelectedSource is not null &&
             mo2Connected is not null && mo2Framework?.Ready == true;
         LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
-            mo2Prepared is not null && !mo2LaunchAttempted && !mo2VerifyRequired &&
+            mo2Prepared is { } prepared &&
+            (!mo2LaunchAttempted || Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared)) && !mo2VerifyRequired &&
             mo2Connected is not null && mo2Framework?.Ready == true;
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
-            SetStatus("Previous profiling session requires recovery. Existing results are preserved.");
+            SetStatus("Previous profiling session requires recovery. Click RESTORE.");
     }
 
     private async Task<Mo2ProfileSelection> InspectMo2TestSelectionAsync()
@@ -1786,12 +1787,25 @@ public partial class MainWindow : Window
     private async Task Mo2LaunchTestAsync()
     {
         if (busy || mo2RefreshRunning || GameRunning() || mo2Prepared is not { } prepared ||
-            mo2LaunchAttempted) return;
+            (mo2LaunchAttempted && !Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))) return;
         ClearStatusPin();
         SetBusy(true);
         try
         {
             var selection = await InspectMo2TestSelectionAsync();
+            if (mo2LaunchAttempted)
+            {
+                // Same START action as Direct: abandon old uncollected output,
+                // rebuild the one-shot virtual layer without another INSTALL.
+                Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+                mo2Prepared = null;
+                mo2LaunchAttempted = false;
+                selection = await InspectMo2TestSelectionAsync();
+                prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+                    packageRoot, selection.GameDirectory, selection.CandidateSource!,
+                    Guid.NewGuid().ToString("N"));
+                mo2Prepared = prepared;
+            }
             Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
             mo2LaunchAttempted = true;
             var reply = await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
@@ -1803,7 +1817,8 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             // Only the durable journal can establish whether dispatch was attempted.
-            mo2LaunchAttempted = !Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared);
+            mo2LaunchAttempted = mo2Prepared is { } active &&
+                !Mo2ProfilerOverlayBuilder.IsStillPrepared(active);
             Trace.TraceWarning("MO2 launch: " + ex);
             PinStatus(ex.Message);
 
