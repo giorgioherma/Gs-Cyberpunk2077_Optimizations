@@ -45,6 +45,11 @@ internal static class Mo2ProfilerOverlayBuilderTests
             Put(instanceRoot, "profiles/Heavy/modlist.txt", "+SelectedMod\n");
             Put(instanceRoot, "profiles/Other/modlist.txt", "-SelectedMod\n");
 
+            const string prior = "red4ext/plugins/G-REDscript-Profiler/RESULTS/Capture_0001_WORLD_123/GRSP_Summary.csv";
+            const string priorStatus = "red4ext/plugins/G-REDscript-Profiler/RESULTS/GRSP_Status.txt";
+            var overwrite = Path.Combine(instanceRoot, "overwrite");
+            Put(overwrite, prior, "previous capture");
+            Put(overwrite, priorStatus, "previous status");
             var instance = Mo2SourceInspector.Discover(instanceRoot);
             var stack = Mo2SourceInspector.Resolve(game, instance, "Heavy");
             if (!stack.Ready || !stack.ProfileVerified ||
@@ -53,6 +58,9 @@ internal static class Mo2ProfilerOverlayBuilderTests
 
             static void FakeOwnerInstall(string fixture)
             {
+                var grspData = Path.Combine(fixture, "red4ext", "plugins", "G-REDscript-Profiler");
+                if (Directory.Exists(grspData) && Directory.EnumerateFileSystemEntries(grspData).Any())
+                    throw new InvalidOperationException("GRSP owner refuses nonempty data folder");
                 Put(fixture, asi, "AUTHORITATIVE_CET_PROFILER");
                 Put(fixture, binding, "{\"key\":\"F11\"}");
                 Put(fixture, zero, "integrated_zero_engine()");
@@ -91,6 +99,14 @@ internal static class Mo2ProfilerOverlayBuilderTests
             {
                 if (j.RootElement.GetProperty("phase").GetString() != "prepared")
                     throw new InvalidDataException("MO2_SESSION_JOURNAL_NOT_PREPARED");
+                var archiveRoot = j.RootElement.GetProperty("priorGrspResultsRoot").GetString()!;
+                if (j.RootElement.GetProperty("priorGrspResults").GetRawText().Length <= 2 ||
+                    File.ReadAllText(Path.Combine(archiveRoot, prior)) != "previous capture" ||
+                    File.ReadAllText(Path.Combine(archiveRoot, priorStatus)) != "previous status" ||
+                    File.ReadAllText(Path.Combine(overwrite, prior)) != "previous capture" ||
+                    File.ReadAllText(Path.Combine(overwrite, priorStatus)) != "previous status" ||
+                    File.Exists(Path.Combine(result.StagingDirectory, prior)))
+                    throw new InvalidDataException("MO2_PRIOR_CAPTURE_NOT_PRESERVED_OR_LEAKED_INTO_STAGE");
                 var physical = j.RootElement.GetProperty("physicalPassthrough")
                     .EnumerateArray().Select(x => x.GetString()).ToHashSet();
                 if (!physical.SetEquals(new[] { emitter, sibling }) ||
@@ -114,6 +130,9 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 catch (InvalidDataException) { return; }
                 throw new Exception("MO2_STALE_PREPARED_OVERLAY_ACCEPTED");
             }
+            Put(overwrite, priorStatus, "changed historical status");
+            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
+            Put(overwrite, priorStatus, "previous status");
             Put(mod, owner, "changed after preparation");
             RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
             Put(mod, owner, "original_mod_callback()");
