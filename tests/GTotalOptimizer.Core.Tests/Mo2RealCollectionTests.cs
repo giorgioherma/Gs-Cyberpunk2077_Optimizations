@@ -30,7 +30,13 @@ internal static class Mo2RealCollectionTests
             child.WaitForExit();
             Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending", "test-launched", child.Id);
 
-            string zip = Path.GetFullPath("tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip");
+            // The older fixture is sufficient for owner collection but does not
+            // carry the full newer REDscript Resolver evidence contract.
+            // For Page 2 use the existing, independently verified GRSP replay
+            // fixture, with BOTH domains from that same recorded capture.
+            string zip = Path.GetFullPath(verifyPage2
+                ? "tests/fixtures/real-captures/GCO-Capture-15112026_155121.zip"
+                : "tests/fixtures/real-captures/GCO-Capture-15112026_021913.zip");
             if (!File.Exists(zip)) throw new FileNotFoundException("Recorded raw capture fixture missing.", zip);
             var bundle = ComponentBundleVerifier.Inspect(package);
             var patterns = Mo2NativeOutputReset.ReadCetPatterns(bundle.CetExecutable!);
@@ -39,6 +45,16 @@ internal static class Mo2RealCollectionTests
             foreach (var entry in archive.Entries)
             {
                 if (entry.Name.Length == 0) continue;
+                if (verifyPage2)
+                {
+                    // Exclude derived Reports copies. Only the indexed owner
+                    // folders contain the original native measurement bytes.
+                    var parts = entry.FullName.Replace('\\', '/').Split('/');
+                    if (parts.Any(part => part.Equals("Reports", StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    if (!parts.Any(part => part is "G-CET" or "CET" or "G-REDscript" or "G-RED" or "REDscript"))
+                        continue;
+                }
                 string? path = null;
                 if (Mo2NativeOutputReset.IsNativeResult(cetRoot + "/" + entry.Name, patterns))
                     path = Path.Combine(game, cetRoot, entry.Name);
@@ -53,6 +69,11 @@ internal static class Mo2RealCollectionTests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 entry.ExtractToFile(path, overwrite: false);
             }
+            if (verifyPage2)
+                foreach (var required in new[] { "GRSP_Markers.csv", "RSP_CallSites.csv",
+                    "RSP_CallbackPressure.csv", "RSP_CallbackTargets.csv", "GRSP_Status.txt" })
+                    if (!File.Exists(Path.Combine(grspDir, required)))
+                        throw new InvalidDataException("MO2_PAGE2_REPLAY_NATIVE_EVIDENCE_MISSING: " + required);
             string marker = Path.Combine(grspDir, "GCO-F11-Complete.flag");
             var incomplete = await workflow.InspectMo2CaptureAsync(game, selection);
             if (!incomplete.BothInstalled || !incomplete.CetCaptureReady || incomplete.GrspCaptureReady)
