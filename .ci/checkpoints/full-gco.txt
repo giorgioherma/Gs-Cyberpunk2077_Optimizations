@@ -1,1 +1,1 @@
-checkpoint=mo2-restore-recovery-after-launch-failure-20261124
+checkpoint=mo2-cross-integrity-elevation-proof-20261124
