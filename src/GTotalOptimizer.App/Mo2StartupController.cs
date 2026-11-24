@@ -97,6 +97,19 @@ internal static class Mo2StartupController
                 start.ArgumentList.Add("-i");
                 start.ArgumentList.Add(Path.GetFileName(location.InstanceFolder));
             }
+            // The already-approved VERIFY token authorizes only this exact
+            // GCO package's existing frame controller. The MO2 bridge never
+            // accepts an executable path or command line from a request.
+            var package = PortablePackagePaths.CurrentPackageRoot();
+            if (!ComponentBundleVerifier.Inspect(package).Ready) return 16;
+            string Seal(string path) => Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+            var launcher = Path.Combine(package, PortablePackagePaths.RootLauncherName);
+            var managed = Path.Combine(package, "app", PortablePackagePaths.ManagedExecutableName);
+            start.Environment["GCO_VERIFIED_PACKAGE_ROOT"] = package;
+            start.Environment["GCO_VERIFIED_MO2_INSTANCE"] = location.InstanceFolder;
+            start.Environment["GCO_VERIFIED_LAUNCHER_SHA256"] = Seal(launcher);
+            start.Environment["GCO_VERIFIED_APP_SHA256"] = Seal(managed);
             using var launched = Process.Start(start);
             return launched is null ? 15 : 0;
         }
