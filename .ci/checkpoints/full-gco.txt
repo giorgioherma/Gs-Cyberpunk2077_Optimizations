@@ -1,1 +1,1 @@
-checkpoint=mo2-repeat-install-preserve-prior-grsp-results-20261124
+checkpoint=mo2-direct-discard-parity-20261124
