@@ -22,6 +22,12 @@
 
 
 
+
+## 2026-11-24 — Full CI #1135 GREEN; Direct parity test build
+
+- Full GCO CI #1135 (45472130910, head `cb3d54b`) SUCCESS; [artifact v1.2.7](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45472130910/artifacts/14958217211), SHA-256 `19176714ec4d6904e06728bedb0f58452d080a86f46ceda3ddb3d16f6a5b90db`. Existing source resolution, corrected output guard, package integrity and Direct lifecycle contracts passed. #28 passed real USVFS and all six real owner reinstallation scenarios with discard policy; separate live MO2 smoke remains blocked by hosted Windows breakaway access denial. No gameplay success claimed.
+- Local test: RESTORE old session, open #1135, VERIFY if needed, INSTALL, START, F11. After game exit, START again must discard previous uncollected output and relaunch without reinstall prompt; RESTORE discards uncollected results while preserving unrelated files. No new automatic archives. Legacy journals without verified output roots are left non-destructive; new verified START clears live prior results. If #1133 already created a recovery copy, this update does not silently delete that historical copy. COLLECT/PresentMon/Page 2 remain pending MO2 integration; main and version unchanged.
+
 ## 2026-11-24 — Direct parity checkpoint results and narrow safety correction
 
 - MO2 CI #28 (45471388419, head `8046bfa`): Python/C# source contracts, real USVFS, all six actual owner scenarios and foreign GRSP refusal passed. Overall failed only at documented hosted Windows CREATE_BREAKAWAY_FROM_JOB error 5 in real MO2 launch. Full CI #1134 (45471398999, head `315a63b`) built integrated package and passed native owner smoke; full source contracts rejected a new overbroad Overwrite/game overlap guard. Existing fixture intentionally stores MO2 inside game root without touching plugin roots, which must remain supported.
