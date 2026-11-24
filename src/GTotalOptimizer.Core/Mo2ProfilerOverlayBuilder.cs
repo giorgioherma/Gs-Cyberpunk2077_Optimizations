@@ -344,7 +344,7 @@ public static class Mo2ProfilerOverlayBuilder
                     using var doc = JsonDocument.Parse(File.ReadAllText(command));
                     var root = doc.RootElement;
                     if (!root.TryGetProperty("sessionId", out var sid) || sid.GetString() != id) continue;
-                    if (root.GetProperty("operation").GetString() != "launch" ||
+                    if (root.GetProperty("operation").GetString() is not ("launch" or "frame-start") ||
                         !string.Equals(root.GetProperty("stagingRoot").GetString(),
                             Path.Combine(bridge, "staging", id), StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException("MO2 recovery command identity is invalid.");
