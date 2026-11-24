@@ -757,7 +757,7 @@
                                 </StackPanel>
                                 <StackPanel x:Name="Mo2SourceContents" Visibility="Collapsed"
                                             Margin="22,0,22,0" VerticalAlignment="Center">
-                                    <Grid Height="28">
+                                    <Grid Height="26">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="90"/>
@@ -766,7 +766,7 @@
                                         <Button x:Name="Mo2BrowseButton" Grid.Column="1" Content="OPEN"
                                                 Margin="16,0,0,0" Style="{StaticResource MinorButton}" Click="Mo2Browse_Click"/>
                                     </Grid>
-                                    <Grid Height="25" Margin="0,4,0,0">
+                                    <Grid Height="23" Margin="0,3,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
@@ -779,10 +779,11 @@
                                         <Button x:Name="Mo2BridgeButton" Grid.Column="2" Content="ADD BRIDGE"
                                                 Style="{StaticResource MinorButton}" Click="Mo2Bridge_Click"/>
                                     </Grid>
-                                    <TextBlock x:Name="Mo2GameText" Height="17" FontSize="12" Foreground="#F1F5F6"
+                                    <TextBlock x:Name="Mo2GameText" Height="15" FontSize="12" Foreground="#F1F5F6"
                                                TextTrimming="CharacterEllipsis" Text="Game: not confirmed"/>
-                                    <TextBlock x:Name="Mo2StatusText" Height="17" FontSize="12" Foreground="{StaticResource Cyan}"
+                                    <TextBlock x:Name="Mo2StatusText" Height="15" FontSize="12" Foreground="{StaticResource Cyan}"
                                                TextTrimming="CharacterEllipsis" Text="Experimental / discovery only"/>
+                                    <StackPanel x:Name="Mo2FrameworkSlot"/>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
