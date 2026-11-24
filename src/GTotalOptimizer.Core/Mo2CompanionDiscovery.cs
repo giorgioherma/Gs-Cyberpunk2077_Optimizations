@@ -101,18 +101,7 @@ public static class Mo2CompanionDiscovery
         }
     }
 
-    private static string? LiveProcessImage(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            if (process.HasExited) return null;
-            return process.MainModule?.FileName;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or
-            System.ComponentModel.Win32Exception or NotSupportedException)
-        { return null; }
-    }
+    private static string? LiveProcessImage(int pid) => Mo2ProcessIdentity.Image(pid);
 
     private static bool SameFile(string? left, string? right)
     {
