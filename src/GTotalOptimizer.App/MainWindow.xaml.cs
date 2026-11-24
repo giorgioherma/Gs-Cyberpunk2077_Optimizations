@@ -99,6 +99,7 @@ public partial class MainWindow : Window
     private bool mo2RefreshRunning;
     private Mo2CompanionStatus? mo2Connected;
     private Mo2ProfileSelection? mo2SelectedSource;
+    private FrameworkPreflightResult? mo2Framework;
     private Mo2OverlayPreparation? mo2Prepared;
     private bool mo2LaunchAttempted;
     private bool mo2LaunchConfirmed;
@@ -1460,6 +1461,9 @@ public partial class MainWindow : Window
         pendingExternalGamePid = null;
         GameRootContents.Visibility = Visibility.Visible;
         Mo2SourceContents.Visibility = Visibility.Collapsed;
+        Mo2FrameworkSlot.Children.Remove(FrameworkChecksRow);
+        GameRootContents.Children.Insert(2, FrameworkChecksRow);
+        SetFrameworkStatuses(null);
         GameSourceHeading.Text = "GAME ROOT / CYBERPUNK 2077";
         UpdatePathLock();
         ClearStatusPin();
@@ -1482,6 +1486,9 @@ public partial class MainWindow : Window
         SetPortraitStage(PortraitStage.Black);
         GameRootContents.Visibility = Visibility.Collapsed;
         Mo2SourceContents.Visibility = Visibility.Visible;
+        GameRootContents.Children.Remove(FrameworkChecksRow);
+        Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+        SetFrameworkStatuses(null);
         GameSourceHeading.Text = "MOD ORGANIZER 2";
         UpdatePathLock();
         ClearStatusPin();
@@ -1531,6 +1538,8 @@ public partial class MainWindow : Window
         mo2RefreshRunning = true;
         mo2Connected = null;
         mo2SelectedSource = null;
+        mo2Framework = null;
+        SetFrameworkStatuses(null);
         UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
             ContinueButton.IsEnabled = false;
@@ -1591,18 +1600,28 @@ public partial class MainWindow : Window
                 var result = await Task.Run(() => Mo2ProfileSelectionService.Inspect(folder,
                     location.InstanceFolder, selected, connected.GameDirectory));
                 var stack = result.CandidateSource;
-                if (result.Recognized && stack is not null) mo2SelectedSource = result;
+                if (result.Recognized && stack is not null)
+                {
+                    mo2SelectedSource = result;
+                    mo2Framework = await Task.Run(() =>
+                        FrameworkPreflight.InspectMo2(result.GameDirectory, stack));
+                    SetFrameworkStatuses(mo2Framework);
+                }
                 Mo2StatusText.Text = result.Recognized && stack is not null
                     ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetModCount} CET mods | {stack.RedscriptModCount} REDscript mods"
                     : result.Detail;
                 SetStatus($"MO2 bridge authenticated. UI profile: {connected.CurrentProfile}; selected: {selected}. " +
-                    (result.Recognized ? "Candidate sources resolved. Experimental profiling test only." : result.Detail));
+                    (result.Recognized ? (mo2Framework?.Ready == true
+                        ? "Candidate frameworks verified. Experimental profiling test only."
+                        : mo2Framework?.Detail ?? "Framework compatibility unverified.") : result.Detail));
             }
             finally { mo2SelectionUpdating = false; }
         }
         catch (Exception ex)
         {
             mo2Connected = null;
+            mo2Framework = null;
+            SetFrameworkStatuses(null);
             Mo2StatusText.Text = "MO2 verification failed";
             SetStatus("MO2 verification failed: " + ex.Message);
         }
@@ -1630,9 +1649,9 @@ public partial class MainWindow : Window
         InstallButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
             (restore ? !mo2LaunchAttempted || mo2LaunchConfirmed
                      : !mo2RecoveryBlocked && !mo2RetiredCapture && mo2SelectedSource is not null &&
-                       mo2Connected is not null);
+                       mo2Connected is not null && mo2Framework?.Ready == true);
         LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
-            restore && !mo2LaunchAttempted && mo2Connected is not null;
+            restore && !mo2LaunchAttempted && mo2Connected is not null && mo2Framework?.Ready == true;
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
             SetStatus("Prior MO2 test session retained. Recovery/collection is not yet available; do not start another test.");
@@ -1655,6 +1674,10 @@ public partial class MainWindow : Window
         if (!selection.Recognized || selection.CandidateSource is null)
             throw new InvalidOperationException(selection.Detail);
         mo2Connected = connected;
+        mo2Framework = await Task.Run(() => FrameworkPreflight.InspectMo2(
+            selection.GameDirectory, selection.CandidateSource!));
+        SetFrameworkStatuses(mo2Framework);
+        if (!mo2Framework.Ready) throw new InvalidOperationException(mo2Framework.Detail);
         return selection;
     }
 
