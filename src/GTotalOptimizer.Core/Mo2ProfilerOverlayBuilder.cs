@@ -250,12 +250,23 @@ public static class Mo2ProfilerOverlayBuilder
                 throw new InvalidDataException("MO2 recovery journal identity is invalid. Original files preserved.");
             EnsureNoReparseParents(Path.Combine(bridge, "staging", id));
             EnsureNoReparseParents(Path.Combine(bridge, "fixtures", id));
-            if (phase is "test-launch-pending" or "test-launched")
+            if (phase == "test-launched")
+            {
+                int pid = j["processId"]?.GetValue<int>() ?? 0;
+                if (pid <= 0) throw new InvalidDataException("MO2 launched process identity is missing.");
+                try
+                {
+                    using var process = System.Diagnostics.Process.GetProcessById(pid);
+                    if (!process.HasExited)
+                        throw new InvalidOperationException("Close the launched process before restoring profilers.");
+                }
+                catch (ArgumentException) { /* The process has exited. */ }
+                // Signed completion means the one-shot mapper has disarmed.
+                // A normal completed launch does not require closing MO2.
+            }
+            else if (phase == "test-launch-pending")
             {
                 requireMo2Closed();
-                int pid = j["processId"]?.GetValue<int>() ?? 0;
-                if (pid > 0 && Mo2ProcessIdentity.Image(pid) is not null)
-                    throw new InvalidOperationException("Close the launched process before restoring profilers.");
                 var archive = Path.Combine(bridge, "recovery", id);
                 foreach (var command in Directory.EnumerateFiles(bridge, "instance-*.json"))
                 {
