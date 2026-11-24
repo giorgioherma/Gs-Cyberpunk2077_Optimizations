@@ -16,6 +16,8 @@ public static class Mo2CompanionInstaller
         return sha.Equals("9d51d033f02d3c5462171bab08a2e7d63b2ae746eb3dc8677a713e7e925ecca7",
                    StringComparison.OrdinalIgnoreCase) ||
                sha.Equals("3005b331056bdd269621d9cc85ee021c1f785acab9eac3be374a2be920d01b71",
+                   StringComparison.OrdinalIgnoreCase) ||
+               sha.Equals("ee42d2e9ab862d1a8b4b3c3004ed854db3c8549e61a339644ff17111e3ab6f8b",
                    StringComparison.OrdinalIgnoreCase);
     }
 
