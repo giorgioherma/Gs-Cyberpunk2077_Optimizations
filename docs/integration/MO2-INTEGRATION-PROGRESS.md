@@ -23,6 +23,12 @@
 
 
 
+## 2026-11-25 — Actual MO2 Page 2 combined ZIP verified; runner-only launch blocker remains
+
+- [MO2 #32](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45508022429), `d517e3f`: actual real-owner step SUCCESS. Log: `PASS MO2 actual combined ZIP through existing Page 2 services: CET transforms=0, REDscript edits=1, files=13; selected winner and rollback hash verified`. Both real collection replays and all six original/partial/namespaced/legacy owner scenarios passed, with unchanged originals. Native USVFS and selected-profile contracts also passed. This proves the corrected native replay and actual combined output topology/ownership; it does not prove a CET optimization transform in this small fixture, SCC compilation of this specific MO2 ZIP, or Cyberpunk gameplay.
+- Overall #32 remains FAILURE solely at existing official MO2 noncurrent-profile launch smoke: `runnerInJob=True normalCreateProcess=0 breakawayCreateProcess=5`, `realMo2InJob=True`, `MO2_REAL_NONCURRENT_PROFILE_LAUNCH_BLOCKED_WITH_DIRECT_WIN32_BREAKAWAY_ACCESS_DENIED`. The genuine launch check was not changed or bypassed. A runner permitting MO2's process creation or local end-to-end test is required for that evidence.
+- Latest actual application package remains full GCO #1141 SUCCESS (`17cc863`); all subsequent changes are MO2 replay tests and documentation/checkpoint markers, not production application code. Next: use that build for the full selected-profile gameplay/F11 capture, restore, analyze and generate acceptance. Feature gate unchanged. No merge or stable version bump.
+
 ## 2026-11-25 — Correct native developer evidence replay topology
 
 - [MO2 #31](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45505690745), `dd9da48`: FAILED at `MO2_PAGE2_OWNER_ARCHIVE_MISSING: Data/Developer/RSP_CallSites.csv`. Full raw file presence checks passed. Read the actual GRSP owner `manager/ManagerServices.cs` (NormalizeArchiveLayout) and `manager/ResultReportService.cs` (GetArchiveRelativePath): native Developer/ is preserved as Data/Developer; arbitrary root files are correctly archived under Data/Metadata. The new replay had flattened that native directory, so the failure is the fixture's incorrect input layout, not evidence of an owner-manager defect.
