@@ -90,6 +90,9 @@ public static class Mo2ProfilerOverlayBuilder
 
         var baselines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var priorResults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var priorResultSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var evidence = Path.Combine(bridge, "recovery", sessionId, "prior-grsp-results");
         try
         {
             // No unnecessary REDscript or user red4ext files are copied.
@@ -102,6 +105,28 @@ public static class Mo2ProfilerOverlayBuilder
             {
                 token.ThrowIfCancellationRequested();
                 var relative = NormalizeRelative(key);
+                if (IsHistoricalGrspResult(relative))
+                {
+                    // Previous capture output is not an installation footprint.
+                    // Preserve it outside both the fixture and runtime stage:
+                    // the next capture can update shared status/index files.
+                    var historical = Path.GetFullPath(winning.PhysicalPath);
+                    EnsureNoReparseParents(Path.GetDirectoryName(historical)!);
+                    RequireRegularUnlinkedFile(historical);
+                    var hash = Hash(historical);
+                    bytes += new FileInfo(historical).Length;
+                    if (++count > 100_000 || bytes > 2L * 1024 * 1024 * 1024)
+                        throw new InvalidDataException("MO2 prior capture and source inventory exceeds safe bounds.");
+                    var archived = Path.Combine(evidence, relative);
+                    EnsureNoReparseParents(Path.GetDirectoryName(archived)!);
+                    Directory.CreateDirectory(Path.GetDirectoryName(archived)!);
+                    File.Copy(historical, archived, overwrite: false);
+                    if (Hash(archived) != hash || Hash(historical) != hash)
+                        throw new InvalidDataException("Previous GRSP capture changed during preservation: " + relative);
+                    priorResults[relative] = hash;
+                    priorResultSources[relative] = historical;
+                    continue;
+                }
                 if (!IsRequiredOwnerInput(relative)) continue;
                 var source = Path.GetFullPath(winning.PhysicalPath);
                 RequireRegularUnlinkedFile(source);
@@ -183,6 +208,8 @@ public static class Mo2ProfilerOverlayBuilder
                 fixtureRoot = fixture, stageRoot = stage, phase = "prepared",
                 originalSources = baselines, originalSourcePaths = owners, generatedFiles = changes,
                 physicalPassthrough = passthrough,
+                priorGrspResults = priorResults, priorGrspResultSources = priorResultSources,
+                priorGrspResultsRoot = evidence,
                 utc = DateTimeOffset.UtcNow
             });
             return new(selected.Profile, sessionId, stage, journal, changes, count,
@@ -475,6 +502,31 @@ public static class Mo2ProfilerOverlayBuilder
         }
         if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
             throw new InvalidDataException("MO2 owner input inventory changed.");
+        var historicalResults = journal.GetProperty("priorGrspResults");
+        var historicalSources = journal.GetProperty("priorGrspResultSources");
+        var evidenceRoot = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(prepared.JournalFile)!)!,
+            "recovery", prepared.SessionId, "prior-grsp-results");
+        if (!string.Equals(evidenceRoot, journal.GetProperty("priorGrspResultsRoot").GetString(),
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 prior result archive identity changed.");
+        var historicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in historicalResults.EnumerateObject())
+        {
+            if (!IsHistoricalGrspResult(NormalizeRelative(entry.Name)) ||
+                !selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
+                !string.Equals(Path.GetFullPath(winner.PhysicalPath),
+                    historicalSources.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Previous GRSP result winner changed: " + entry.Name);
+            var archived = Path.Combine(evidenceRoot, entry.Name);
+            EnsureNoReparseParents(Path.GetDirectoryName(archived)!);
+            RequireRegularUnlinkedFile(archived);
+            RequireRegularUnlinkedFile(winner.PhysicalPath);
+            if (Hash(archived) != entry.Value.GetString() || Hash(winner.PhysicalPath) != entry.Value.GetString())
+                throw new InvalidDataException("Previous GRSP capture changed before launch: " + entry.Name);
+            historicalKeys.Add(entry.Name);
+        }
+        if (!historicalKeys.SetEquals(selected.EffectiveFiles.Keys.Where(IsHistoricalGrspResult)))
+            throw new InvalidDataException("Previous GRSP result inventory changed.");
         var actual = Scan(prepared.StagingDirectory);
         var sealedFiles = journal.GetProperty("generatedFiles").Deserialize<Mo2OverlayFile[]>()
             ?? throw new InvalidDataException("MO2 overlay manifest missing.");
@@ -526,13 +578,17 @@ public static class Mo2ProfilerOverlayBuilder
         return result.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private static bool IsHistoricalGrspResult(string path) =>
+        path.StartsWith("red4ext/plugins/G-REDscript-Profiler/RESULTS/", StringComparison.OrdinalIgnoreCase);
+
     internal static bool IsRequiredOwnerInput(string path) =>
         path.Equals("bin/x64/plugins/cyber_engine_tweaks.asi", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("red4ext/plugins/G-REDscript-Profiler.dll", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("red4ext/plugins/redscript_profiler_alpha.dll", StringComparison.OrdinalIgnoreCase) ||
-        path.StartsWith("red4ext/plugins/G-REDscript-Profiler/", StringComparison.OrdinalIgnoreCase);
+        (path.StartsWith("red4ext/plugins/G-REDscript-Profiler/", StringComparison.OrdinalIgnoreCase) &&
+         !IsHistoricalGrspResult(path));
 
     internal static bool IsAllowedOutput(string path)
     {
