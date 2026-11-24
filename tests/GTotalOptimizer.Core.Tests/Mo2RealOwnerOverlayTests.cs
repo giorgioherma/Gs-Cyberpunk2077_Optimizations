@@ -79,6 +79,12 @@ internal static class Mo2RealOwnerOverlayTests
                         throw new InvalidDataException("MO2_REAL_0ENGINE_INPUT_PROJECTION_MISMATCH");
                 }
             }
+            // Reinstall following a completed MO2 capture: Overwrite is
+            // evidence, not a live GRSP manager installation footprint.
+            const string prior = "red4ext/plugins/G-REDscript-Profiler/RESULTS/Capture_0001_WORLD_123/GRSP_Summary.csv";
+            const string priorStatus = "red4ext/plugins/G-REDscript-Profiler/RESULTS/GRSP_Status.txt";
+            Put("overwrite/" + prior, "previous,completed,capture");
+            Put("overwrite/" + priorStatus, "previous status");
             var details = Mo2SourceInspector.Discover(instance);
             var effective = Mo2SourceInspector.Resolve(game, details, "Heavy");
             var expectedCetOwners = string.IsNullOrWhiteSpace(realZeroEngineDirectory) ? 1 : 2;
@@ -143,6 +149,17 @@ internal static class Mo2RealOwnerOverlayTests
             using var json = JsonDocument.Parse(File.ReadAllText(output.JournalFile));
             if (json.RootElement.GetProperty("phase").GetString() != "prepared")
                 throw new InvalidDataException("MO2_REAL_OWNER_SESSION_NOT_JOURNALED");
+            var archive = json.RootElement.GetProperty("priorGrspResultsRoot").GetString()!;
+            foreach (var relative in new[] { prior, priorStatus })
+            {
+                var original = Path.Combine(instance, "overwrite", relative);
+                var preserved = Path.Combine(archive, relative);
+                if (!File.Exists(original) || !File.Exists(preserved) ||
+                    Sha256(original) != Sha256(preserved) ||
+                    File.Exists(Path.Combine(output.StagingDirectory, relative)))
+                    throw new InvalidDataException("MO2_REAL_OWNER_PRIOR_CAPTURE_NOT_PRESERVED");
+            }
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(output, effective);
             if (!string.IsNullOrWhiteSpace(realZeroEngineDirectory) &&
                 (Sha256(Path.Combine(realZeroEngineDirectory, "init.lua")) != sourceZeroHash ||
                 !File.Exists(Path.Combine(instance, "mods", "SimpleCETMod", "bin", "x64",
