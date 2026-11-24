@@ -191,7 +191,8 @@ class GcoLaunchMappingController:
             )
         return False
 
-    def prepare(self, organizer, selected_profile, game_root, staging_root, session_id):
+    def prepare(self, organizer, selected_profile, game_root, staging_root, session_id,
+                physical_passthrough=()):
         if self._plan is not None:
             raise GcoOverlayContractError("An MO2 GCO launch is already prepared")
         if not isinstance(session_id, str) or not self._HEX_ID.fullmatch(session_id):
@@ -234,7 +235,6 @@ class GcoLaunchMappingController:
         if root != expected_root:
             raise GcoOverlayContractError("Profiler staging root is not the session-owned GCO directory")
         files = []
-        allowed_directories = set()
         for source in root.rglob("*"):
             if source.is_symlink():
                 raise GcoOverlayContractError("GCO stage contains a symlink")
@@ -250,25 +250,41 @@ class GcoLaunchMappingController:
             files.append((source, relative))
             if len(files) > self._MAX_FILES:
                 raise GcoOverlayContractError("Too many temporary profiler support files")
-            for allowed in self._ALLOWED_PARENT_DIRS:
-                if tuple(part.casefold() for part in relative.parts[:len(allowed)]) == allowed:
-                    allowed_directories.add(allowed)
         if not files:
             raise GcoOverlayContractError("Empty temporary profiler layer cannot be launched")
         # Sealing and approval of produced bytes stays with GCO and source owners.
         # Runtime verifies that mappings still point at the approved physical stage.
-        directory_mappings = []
-        for parent in sorted(allowed_directories):
-            source = root.joinpath(*parent)
-            dest = claimed_game.joinpath(*parent)
-            if not source.is_dir():
-                raise GcoOverlayContractError("Source mapping parent missing: " + str(parent))
-            directory_mappings.append((str(source), str(dest)))
+        # Match MO2's ordinary root mapping, then explicitly restore
+        # unchanged physical file winners. Never add a broad physical
+        # directory mapping that could shadow enabled profile packages.
+        mappings = [(str(root), str(claimed_game), True)]
+        if not isinstance(physical_passthrough, (list, tuple)) or len(physical_passthrough) > 250000:
+            raise GcoOverlayContractError("Invalid physical dependency manifest")
+        overridden = {str(rel).replace("\\", "/").casefold() for _, rel in files}
+        seen = set()
+        for value in physical_passthrough:
+            if not isinstance(value, str) or "\\" in value or ":" in value:
+                raise GcoOverlayContractError("Invalid physical dependency path")
+            parts = value.split("/")
+            lower = tuple(p.casefold() for p in parts)
+            if (any(p in ("", ".", "..") for p in parts)
+                    or not (lower[:3] == ("bin", "x64", "plugins")
+                            or lower[:2] == ("red4ext", "plugins")
+                            or lower == ("red4ext", "red4ext.dll"))
+                    or value.casefold() in overridden or value.casefold() in seen):
+                raise GcoOverlayContractError("Invalid or conflicting physical dependency: " + value)
+            seen.add(value.casefold())
+            physical = claimed_game.joinpath(*parts)
+            if (not physical.is_file() or physical.is_symlink()
+                    or physical.resolve(strict=True) != physical
+                    or not root.joinpath(*parts[:-1]).is_dir()):
+                raise GcoOverlayContractError("Physical dependency or mapping parent missing: " + value)
+            mappings.append((str(physical), str(physical), False))
         sealed = [
             (str(p), str(rel), p.stat().st_size, self._digest(p))
             for p, rel in files
         ]
-        self._plan = (selected_profile, str(exe), directory_mappings,
+        self._plan = (selected_profile, str(exe), mappings,
                       str(root), session_id, sealed)
         self._armed = False
         self._calls = 0
@@ -315,8 +331,8 @@ class GcoLaunchMappingController:
         self._calls += 1
         return [
             mobase.Mapping(source=source, destination=destination,
-                           is_directory=True, create_target=False)
-            for source, destination in dirs
+                           is_directory=is_directory, create_target=False)
+            for source, destination, is_directory in dirs
         ]
 
 
@@ -506,9 +522,19 @@ class GcoAuthenticatedMailbox:
             else:
                 if not self._controller._HEX_ID.fullmatch(request["sessionId"]):
                     raise GcoOverlayContractError("Invalid GCO profiler session ID")
+                journal_path = _bridge_root() / "journals" / (request["sessionId"] + ".json")
+                if journal_path.is_symlink() or not journal_path.is_file():
+                    raise GcoOverlayContractError("Profiler mapping journal missing")
+                journal = json.loads(journal_path.read_text(encoding="utf-8"))
+                if (journal.get("phase") != "test-launch-pending"
+                        or journal.get("sessionId") != request["sessionId"]
+                        or journal.get("profile") != request["profile"]
+                        or _canonical(journal.get("gameRoot", "")) != _canonical(request["gameRoot"])
+                        or _canonical(journal.get("stageRoot", "")) != _canonical(request["stagingRoot"])):
+                    raise GcoOverlayContractError("Profiler mapping journal identity mismatch")
                 self._controller.prepare(
                     self._organizer, request["profile"], request["gameRoot"],
-                    request["stagingRoot"], request["sessionId"])
+                    request["stagingRoot"], request["sessionId"], journal["physicalPassthrough"])
                 try:
                     handle = self._controller.launch(self._organizer, request["profile"])
                     pid = (process_id_for_testing or self._process_id)(handle)
