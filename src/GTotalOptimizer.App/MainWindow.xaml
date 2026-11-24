@@ -782,7 +782,7 @@
                                     <TextBlock x:Name="Mo2GameText" Height="15" FontSize="12" Foreground="#F1F5F6"
                                                TextTrimming="CharacterEllipsis" Text="Game: not confirmed"/>
                                     <TextBlock x:Name="Mo2StatusText" Height="15" FontSize="12" Foreground="{StaticResource Cyan}"
-                                               TextTrimming="CharacterEllipsis" Text="Experimental / discovery only"/>
+                                               TextTrimming="CharacterEllipsis" Text="Select MO2 folder and profile"/>
                                     <StackPanel x:Name="Mo2FrameworkSlot"/>
                                 </StackPanel>
                             </Grid>
