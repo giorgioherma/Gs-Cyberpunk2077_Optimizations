@@ -149,15 +149,14 @@ internal static class Mo2RealOwnerOverlayTests
             using var json = JsonDocument.Parse(File.ReadAllText(output.JournalFile));
             if (json.RootElement.GetProperty("phase").GetString() != "prepared")
                 throw new InvalidDataException("MO2_REAL_OWNER_SESSION_NOT_JOURNALED");
-            var archive = json.RootElement.GetProperty("priorGrspResultsRoot").GetString()!;
+            if (json.RootElement.TryGetProperty("priorGrspResultsRoot", out _))
+                throw new InvalidDataException("MO2_REAL_OWNER_INSTALL_ARCHIVED_UNCOLLECTED_RESULTS");
             foreach (var relative in new[] { prior, priorStatus })
             {
                 var original = Path.Combine(instance, "overwrite", relative);
-                var preserved = Path.Combine(archive, relative);
-                if (!File.Exists(original) || !File.Exists(preserved) ||
-                    Sha256(original) != Sha256(preserved) ||
+                if (!File.Exists(original) ||
                     File.Exists(Path.Combine(output.StagingDirectory, relative)))
-                    throw new InvalidDataException("MO2_REAL_OWNER_PRIOR_CAPTURE_NOT_PRESERVED");
+                    throw new InvalidDataException("MO2_REAL_OWNER_INSTALL_CHANGED_LIVE_OUTPUT");
             }
             Mo2ProfilerOverlayBuilder.VerifyPrepared(output, effective);
             if (realZeroEngineDirectory is null)
@@ -176,11 +175,16 @@ internal static class Mo2RealOwnerOverlayTests
                     ex.Message.Contains("Authoritative GRSP owner refused", StringComparison.Ordinal))
                 {
                     if (File.ReadAllText(Path.Combine(instance, "overwrite", unknown)) != "foreign configuration" ||
-                        Sha256(Path.Combine(instance, "overwrite", prior)) != Sha256(Path.Combine(archive, prior)))
+                        File.ReadAllText(Path.Combine(instance, "overwrite", prior)) != "previous,completed,capture")
                         throw new InvalidDataException("MO2_REAL_GRSP_REFUSAL_MODIFIED_ORIGINAL");
                     Console.WriteLine("PASS real GRSP owner still refuses foreign non-result data");
                 }
             }
+            Mo2ProfilerOverlayBuilder.DiscardBeforeStart(output);
+            if (File.Exists(Path.Combine(instance, "overwrite", prior)) ||
+                File.Exists(Path.Combine(instance, "overwrite", priorStatus)) ||
+                Directory.Exists(Path.Combine(local, "GCO", "MO2Bridge", "recovery", sessionId, "prior-grsp-results")))
+                throw new InvalidDataException("MO2_REAL_OWNER_START_FAILED_TO_DISCARD_OLD_OUTPUT");
             if (!string.IsNullOrWhiteSpace(realZeroEngineDirectory) &&
                 (Sha256(Path.Combine(realZeroEngineDirectory, "init.lua")) != sourceZeroHash ||
                 !File.Exists(Path.Combine(instance, "mods", "SimpleCETMod", "bin", "x64",
