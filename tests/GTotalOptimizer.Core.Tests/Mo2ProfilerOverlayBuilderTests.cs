@@ -147,6 +147,7 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 File.ReadAllText(Path.Combine(root, "RESULTS/Collected/GRSP_Summary.csv")) != "sealed capture" ||
                 Directory.Exists(Path.Combine(local, "GCO", "MO2Bridge", "recovery", Session, "prior-grsp-results")))
                 throw new InvalidDataException("MO2_START_UNCOLLECTED_DISCARD_OR_FOREIGN_PRESERVATION_FAILED");
+            Mo2ResultProjectionTests.Run(game, overwrite, result);
             stack = Mo2SourceInspector.Resolve(game, instance, "Heavy");
             Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
             Put(mod, owner, "changed after preparation");
