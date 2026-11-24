@@ -61,6 +61,17 @@ def main():
         sessionId=args.session_id,
         createdUtcMs=int(time.time() * 1000)
     )
+    # Test-only equivalent of GCO's durable pending journal, required by
+    # the production companion before it can consume a signed launch.
+    journal = status.parent / "journals" / (args.session_id + ".json")
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    with journal.open("x", encoding="utf-8") as stream:
+        json.dump(dict(schemaVersion=1, phase="test-launch-pending",
+            sessionId=args.session_id, profile=args.profile,
+            gameRoot=request["gameRoot"], stageRoot=request["stagingRoot"],
+            physicalPassthrough=[]), stream)
+        stream.flush()
+        os.fsync(stream.fileno())
     payload = "\n".join(str(request[field]) for field in _FIELDS)
     request["hmac"] = sign(secret, payload)
     fd, temp = tempfile.mkstemp(dir=status.parent, prefix=".mo2-test-launch-", suffix=".tmp")
