@@ -104,6 +104,7 @@ public partial class MainWindow : Window
     private Mo2OverlayPreparation? mo2Prepared;
     private bool mo2LaunchAttempted;
     private bool mo2RecoveryBlocked;
+    private bool mo2VerifyRequired;
     // The normal XAML tree is permanent. Maximize only overrides values on
     // existing sections and restores the exact saved local values afterward.
     private StackPanel? maximizedGameRootSection;
@@ -1052,7 +1053,8 @@ public partial class MainWindow : Window
         if (!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text))
         {
             bool needsMo2Restore;
-            try { needsMo2Restore = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+            try { needsMo2Restore = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
+                Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore(); }
             catch { needsMo2Restore = true; }
             if (needsMo2Restore)
             {
@@ -1476,7 +1478,7 @@ public partial class MainWindow : Window
 
     private async void DirectSource_Click(object sender, RoutedEventArgs e)
     {
-        if (!initialized || !mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        if (!initialized || !mo2Mode || !CanSwitchSource() || mo2RefreshRunning || mo2VerifyRequired) return;
         mo2Mode = false;
         mo2Connected = null;
         pendingExternalGameStart = pendingGameExitRefresh = false;
@@ -1603,6 +1605,12 @@ public partial class MainWindow : Window
                     SetStatus(instance.Detail);
                     return;
                 }
+                if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+                {
+                    Mo2StatusText.Text = "Click VERIFY";
+                    SetStatus("Click VERIFY before installing profilers.");
+                    return;
+                }
                 var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
                 if (!connected.Connected)
                 {
@@ -1668,10 +1676,15 @@ public partial class MainWindow : Window
     {
         if (!mo2Mode) return;
         bool running = GameRunning();
-        try { mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+        try
+        {
+            mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession();
+            mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+        }
         catch (Exception ex)
         {
             mo2RecoveryBlocked = true;
+            mo2VerifyRequired = true;
             SetStatus("MO2 session journal requires recovery: " + ex.Message);
         }
         UpdatePathLock();
@@ -1679,10 +1692,10 @@ public partial class MainWindow : Window
         InstallButton.Content = restore ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         InstallButton.Style = (Style)FindResource(restore ? "RestoreStageButton" : "StageActionButton");
         InstallButton.IsEnabled = restore ? !busy && !mo2RefreshRunning :
-            !busy && !mo2RefreshRunning && !running && mo2SelectedSource is not null &&
+            !busy && !mo2RefreshRunning && !running && !mo2VerifyRequired && mo2SelectedSource is not null &&
             mo2Connected is not null && mo2Framework?.Ready == true;
         LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
-            mo2Prepared is not null && !mo2LaunchAttempted &&
+            mo2Prepared is not null && !mo2LaunchAttempted && !mo2VerifyRequired &&
             mo2Connected is not null && mo2Framework?.Ready == true;
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
@@ -1691,6 +1704,8 @@ public partial class MainWindow : Window
 
     private async Task<Mo2ProfileSelection> InspectMo2TestSelectionAsync()
     {
+        if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+            throw new InvalidOperationException("Click VERIFY before installing profilers.");
         var instancePath = Mo2InstanceBox.SelectedItem as string ??
             throw new InvalidOperationException("Select an MO2 instance.");
         var profile = Mo2ProfileBox.SelectedItem as string ??
@@ -1735,7 +1750,16 @@ public partial class MainWindow : Window
                 mo2LaunchAttempted = false;
                 mo2RecoveryBlocked = false;
                 SetPortraitStage(PortraitStage.Black);
-                PinStatus("Profilers restored. Original files unchanged.");
+                mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+                if (mo2VerifyRequired)
+                {
+                    mo2Connected = null;
+                    mo2SelectedSource = null;
+                    mo2Framework = null;
+                    SetFrameworkStatuses(null);
+                    PinStatus("Profilers reset. Click VERIFY.");
+                }
+                else PinStatus("Profilers restored. Original files unchanged.");
             }
             else
             {
@@ -1800,7 +1824,8 @@ public partial class MainWindow : Window
             var existing = Mo2CompanionDiscovery.Inspect(folder, instance);
             // Reuse the correctly elevated live instance for the rest of
             // this session. Never trigger another UAC prompt just to probe.
-            if (existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing))
+            if (!Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() &&
+                existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing))
             {
                 await RefreshMo2SourceAsync();
                 return;
@@ -1863,7 +1888,7 @@ public partial class MainWindow : Window
         BrowseButton.IsEnabled = !busy && !locked;
         RefreshButton.IsEnabled = !busy && !mo2RefreshRunning;
         var switchAllowed = CanSwitchSource() && !mo2RefreshRunning;
-        DirectSourceButton.IsEnabled = mo2Mode && switchAllowed;
+        DirectSourceButton.IsEnabled = mo2Mode && switchAllowed && !mo2VerifyRequired;
         Mo2SourceButton.IsEnabled = !mo2Mode && switchAllowed;
         Mo2BrowseButton.IsEnabled = mo2Mode && switchAllowed;
         Mo2InstanceBox.IsEnabled = Mo2ProfileBox.IsEnabled = Mo2BrowseButton.IsEnabled;
