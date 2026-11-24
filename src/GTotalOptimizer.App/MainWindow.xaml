@@ -612,9 +612,15 @@
                                     <Path Data="M 1,18 L 5,1 M 7,18 L 11,1 M 13,18 L 17,1"
                                           Stroke="#00E2F2" StrokeThickness="2.7"
                                           Width="18" Height="20" Margin="0,0,9,0"/>
-                                     <TextBlock Text="GAME ROOT / CYBERPUNK 2077"
+                                     <TextBlock x:Name="GameSourceHeading" Text="GAME ROOT / CYBERPUNK 2077"
                                                Foreground="#F5F6F6" FontFamily="{StaticResource Oxanium}"
                                                FontWeight="Bold" FontSize="15.5" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Button x:Name="DirectSourceButton" Content="DIRECT" Width="74" Height="24"
+                                            Style="{StaticResource MinorButton}" Click="DirectSource_Click"/>
+                                    <Button x:Name="Mo2SourceButton" Content="MO2" Width="74" Height="24" Margin="6,0,0,0"
+                                            Style="{StaticResource MinorButton}" Click="Mo2Source_Click"/>
                                 </StackPanel>
                             </Grid>
                             <!-- Fixed size prevents Path geometry inflating StackPanel measure. -->
@@ -748,6 +754,35 @@
                                         <TextBlock x:Name="PresentStatusText" Style="{StaticResource SmallStatus}"
                                                    Width="175" Text="PresentMon · AUTOMATIC"/>
                                     </StackPanel>
+                                </StackPanel>
+                                <StackPanel x:Name="Mo2SourceContents" Visibility="Collapsed"
+                                            Margin="22,0,22,0" VerticalAlignment="Center">
+                                    <Grid Height="28">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="90"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="Mo2PathBox" IsReadOnly="True" Style="{StaticResource PathInput}"/>
+                                        <Button x:Name="Mo2BrowseButton" Grid.Column="1" Content="OPEN"
+                                                Margin="16,0,0,0" Style="{StaticResource MinorButton}" Click="Mo2Browse_Click"/>
+                                    </Grid>
+                                    <Grid Height="25" Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="112"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox x:Name="Mo2InstanceBox" DisplayMemberPath="." ToolTip="MO2 instance"
+                                                  SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="Mo2ProfileBox" Grid.Column="1" ToolTip="Selected launch profile"
+                                                  SelectionChanged="Mo2Selection_Changed" Margin="0,0,6,0"/>
+                                        <Button x:Name="Mo2BridgeButton" Grid.Column="2" Content="ADD BRIDGE"
+                                                Style="{StaticResource MinorButton}" Click="Mo2Bridge_Click"/>
+                                    </Grid>
+                                    <TextBlock x:Name="Mo2GameText" Height="17" FontSize="12" Foreground="#F1F5F6"
+                                               TextTrimming="CharacterEllipsis" Text="Game: not confirmed"/>
+                                    <TextBlock x:Name="Mo2StatusText" Height="17" FontSize="12" Foreground="{StaticResource Cyan}"
+                                               TextTrimming="CharacterEllipsis" Text="Experimental / discovery only"/>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
