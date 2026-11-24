@@ -46,6 +46,18 @@ internal static class Mo2CommandClientTests
             // Required rejection.
         }
 
+        var ownToken = new Mo2BridgeReply(true, "MO2 token=elevated; pid=23208", new string('b', 32), 0);
+        if (!Mo2CompanionCommandClient.ElevationVerified(23208, null, ownToken) ||
+            !Mo2CompanionCommandClient.ElevationVerified(23208, true, ownToken) ||
+            Mo2CompanionCommandClient.ElevationVerified(23208, false, ownToken) ||
+            Mo2CompanionCommandClient.ElevationVerified(23209, null, ownToken) ||
+            Mo2CompanionCommandClient.ElevationVerified(23208, null, ownToken with { Ok = false }) ||
+            Mo2CompanionCommandClient.ElevationVerified(23208, null,
+                ownToken with { Detail = "MO2 token=unknown; pid=23208" }) ||
+            Mo2CompanionCommandClient.ElevationVerified(23208, null,
+                ownToken with { Detail = "MO2 token=not-elevated; pid=23208" }))
+            throw new InvalidDataException("MO2_CROSS_INTEGRITY_SIGNED_ELEVATION_ADMISSION_FAILED");
+
         var status = new Mo2CompanionStatus(
             true, "Mocked", "", "Other", "", "", "", "", "",
             1, DateTimeOffset.UtcNow, new string('a', 32), "");
