@@ -1756,6 +1756,8 @@ public partial class MainWindow : Window
         var selection = await InspectMo2SelectionAsync();
         var prepared = mo2Prepared ??
             throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(mo2Connected!, packageRoot))
+            throw new InvalidOperationException("Click VERIFY to authorize frame capture for this GCO package.");
         if (mo2LaunchAttempted)
         {
             // The MO2 mapper is one-shot. Recreate only its deployment for
@@ -1814,7 +1816,7 @@ public partial class MainWindow : Window
 
     private async Task<ProfilerWorkflowResult> RestoreMo2DeploymentAsync()
     {
-        var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+        var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot, clearTracking: false);
         await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
         mo2Prepared = null;
         mo2LaunchAttempted = false;
@@ -1844,6 +1846,7 @@ public partial class MainWindow : Window
         var id = Workflow.ReadRecoverySessionId(game) ??
             throw new InvalidDataException("MO2 capture session identity unavailable.");
         Workflow.RetireMo2CaptureAttempt(game, id);
+        PresentMonCaptureController.ClearTrackedCsv(packageRoot);
     }
 
     private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
@@ -1864,7 +1867,8 @@ public partial class MainWindow : Window
             // this session. Never trigger another UAC prompt just to probe.
             if (!Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() &&
                 Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")) &&
-                existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing))
+                existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing) &&
+                await Mo2CompanionCommandClient.VerifyFramePackageAsync(existing, packageRoot))
             {
                 await RefreshMo2SourceAsync();
                 return;
@@ -1890,11 +1894,13 @@ public partial class MainWindow : Window
             if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
             if (!Mo2CompanionCommandClient.ElevationVerified(verified, probe))
                 throw new InvalidOperationException(Mo2ProcessIdentity.InspectElevation(verified.ProcessId).Detail);
+            if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(verified, packageRoot))
+                throw new InvalidOperationException("MO2 is not authorized for this GCO package.");
             if (Workflow.HasMo2CaptureAttempt &&
                 !Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() &&
                 !Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
             {
-                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot, clearTracking: false);
                 if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
                 RetireMo2CaptureJournal();
             }
@@ -2461,39 +2467,67 @@ public partial class MainWindow : Window
     // native capture state remains untouched, and pre-existing native results
     // are quarantined from this attempt in collection.json.
     private async Task<string?> BeginFreshCaptureAsync(string game,
-        LiveProfilerState state, bool gameAlreadyRunning)
+        LiveProfilerState? state, bool gameAlreadyRunning, Mo2ProfileSelection? mo2Selection = null)
     {
-        if (!Workflow.HasInstalledFrameworkBaseline(game, state))
+        if (mo2Selection is null && (state is null || !Workflow.HasInstalledFrameworkBaseline(game, state)))
             throw new InvalidOperationException(
                 "Verified, game-bound profiler installation is required. RESTORE PROFILERS remains available.");
         if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
             throw new InvalidOperationException("Bundled profiler provenance changed.");
         // Reset native owners while the game is closed. The old ETW writer is
         // separate and must be gracefully stopped by its existing controller.
-        var reset = await Workflow.ResetNativeOutputAsync(game);
-        if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
-        var clean = await Workflow.InspectAsync(game);
+        LiveProfilerState? clean = null;
+        string preparedId;
+        Func<Task>? authorizedRestart = null;
+        if (mo2Selection is null)
+        {
+            var reset = await Workflow.ResetNativeOutputAsync(game);
+            if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
+            clean = await Workflow.InspectAsync(game);
 
-        // Before changing the authoritative journal, provision the next
-        // destination. The ONE elevated controller then stops any prior
-        // GCO-owned PresentMon (including a surviving forced-close writer)
-        // and launches a fresh session with this distinct output CSV.
-        var preparedId = Guid.NewGuid().ToString("N");
-        CollectedCaptureStore.CreateDatedSessionFolder(
-            packageRoot, preparedId, DateTimeOffset.Now, game,
-            clean.CetCaptureReady, clean.GrspCaptureReady);
+            // Before changing the authoritative journal, provision the next
+            // destination. The ONE elevated controller then stops any prior
+            // GCO-owned PresentMon (including a surviving forced-close writer)
+            // and launches a fresh session with this distinct output CSV.
+            preparedId = Guid.NewGuid().ToString("N");
+            CollectedCaptureStore.CreateDatedSessionFolder(
+                packageRoot, preparedId, DateTimeOffset.Now, game,
+                clean.CetCaptureReady, clean.GrspCaptureReady);
+        }
+        else
+        {
+            var deployment = mo2Prepared ??
+                throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+            preparedId = deployment.SessionId;
+            if (!Workflow.HasMo2CaptureAttempt || Workflow.ReadRecoverySessionId(game) != preparedId)
+                throw new InvalidOperationException("MO2 frame capture session identity changed.");
+            authorizedRestart = () => Mo2CompanionCommandClient.StartFrameControllerAsync(
+                mo2Connected!, mo2Selection, deployment);
+        }
         var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, preparedId);
         string? warning = null;
         var monStarted = false;
         try
         {
-            await PresentMonCaptureController.RunAsync(packageRoot, csv,
-                restart: true, captureSessionId: preparedId);
+            if (authorizedRestart is null)
+                await PresentMonCaptureController.RunAsync(packageRoot, csv,
+                    restart: true, captureSessionId: preparedId);
+            else
+                await PresentMonCaptureController.RunAsync(packageRoot, csv,
+                    restart: true, captureSessionId: preparedId, authorizedRestart: authorizedRestart);
             monStarted = true;
         }
         catch (Exception ex)
         {
             warning = ex.Message;
+            // Unlike a settled controller failure, a lost MO2 acknowledgement
+            // may still start a writer. Preserve its journal and block START.
+            if (mo2Selection is not null && mo2Prepared is { } deployment &&
+                !Mo2ProfilerOverlayBuilder.IsStillPrepared(deployment))
+            {
+                mo2LaunchAttempted = true;
+                throw;
+            }
             // Optional startup failure may fall back to CET/GRSP, but only
             // after proving neither an OLD nor a newly-started PresentMon
             // still owns an active CSV. Never delete a running writer's scope.
@@ -2516,11 +2550,12 @@ public partial class MainWindow : Window
         // Retire only uncollected old scratch. A sealed collection stays
         // immutable. On success RunAsync already updated the tracking pointer
         // to the new CSV, so do not clear it while switching journals.
-        Workflow.AbandonCurrentUncollected(game);
+        if (mo2Selection is null) Workflow.AbandonCurrentUncollected(game);
         if (!monStarted) PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-        Workflow.BeginCaptureAttempt(game,
-            observedGameAlreadyRunning: gameAlreadyRunning,
-            ownerBeforeCapture: clean, preparedSessionId: preparedId);
+        if (mo2Selection is null)
+            Workflow.BeginCaptureAttempt(game,
+                observedGameAlreadyRunning: gameAlreadyRunning,
+                ownerBeforeCapture: clean, preparedSessionId: preparedId);
         return warning;
     }
 
@@ -2585,7 +2620,12 @@ public partial class MainWindow : Window
         {
             Mo2ProfileSelection? mo2Selection = null;
             string? warning = null;
-            if (mo2Mode) mo2Selection = await PrepareMo2LaunchAsync();
+            if (mo2Mode)
+            {
+                mo2Selection = await PrepareMo2LaunchAsync();
+                warning = await BeginFreshCaptureAsync(game, null,
+                    gameAlreadyRunning: false, mo2Selection: mo2Selection);
+            }
             else
             {
                 var state = await Workflow.InspectAsync(game);
@@ -2659,7 +2699,9 @@ public partial class MainWindow : Window
             }
             SetPortraitStage(PortraitStage.Capturing);
             PinStatus(mo2Mode
-                ? "Cyberpunk launch requested. Use F11 to start/stop profiling."
+                ? warning is null
+                    ? "Cyberpunk launch requested. Use F11 to start/stop profiling."
+                    : "Cyberpunk launch requested. F11 ready; PresentMon unavailable."
                 : warning is null
                     ? "Cyberpunk started. Use F11 to start/stop profiling."
                     : "Cyberpunk started. F11 ready; PresentMon unavailable.",
@@ -2675,9 +2717,9 @@ public partial class MainWindow : Window
             SetBusy(false);
             if (!launched) SetPortraitStage(mo2Mode && mo2Prepared is null
                 ? PortraitStage.Black : PortraitStage.Installed);
-            // Handoff requires the existing unified capture identity. Until
-            // the MO2 output provider supplies it, keep the same window open
-            // rather than arm a Direct observer against an unrelated journal.
+            // The native frame observer is shared. Keep WPF open until
+            // MO2 journal reopen can resume the prepared deployment without
+            // forcing RESTORE. No alternative tray or window is introduced.
             if (mo2Mode) RefreshMo2WorkflowAdmission();
             else if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
