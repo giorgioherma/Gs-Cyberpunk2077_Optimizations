@@ -2855,7 +2855,11 @@ public partial class MainWindow : Window
         // The inner collection verifies owner readiness after the latch.
         // One-shot state is durable BEFORE any native copy, ETW flush or
         // potential exception. Successful saves remain; failed scratch clears.
-        try { Workflow.RecordCollectInvoked(game, mo2Selection); }
+        try
+        {
+            if (mo2Selection is null) Workflow.RecordCollectInvoked(game);
+            else Workflow.RecordCollectInvoked(game, mo2Selection);
+        }
         catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
         ClearStatusPin();
         SetBusy(true);
@@ -2887,7 +2891,9 @@ public partial class MainWindow : Window
             string? frameWarning = stop.Error;
             if (stop.Stopped)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 1, 10, "COLLECT / PRESENTMON STOPPED");
-            var native = await Workflow.CollectResultsAsync(game, mo2Selection: mo2Selection);
+            var native = mo2Selection is null
+                ? await Workflow.CollectResultsAsync(game)
+                : await Task.Run(() => Workflow.CollectResultsAsync(game, mo2Selection: mo2Selection));
             if (native.Ok)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 2, 10, "COLLECT / CET + REDSCRIPT");
             if (native.Ok && stop.Stopped && stop.Csv is not null)
@@ -2927,7 +2933,9 @@ public partial class MainWindow : Window
             // archives are durable, hashes verify, and ETW is stopped. If this
             // cleanup fails, do not seal Collect; the same session can retry.
             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped, mo2Selection);
+            var saved = mo2Selection is null
+                ? Workflow.RecordCollectionAttempt(game, stop.Stopped)
+                : await Task.Run(() => Workflow.RecordCollectionAttempt(game, stop.Stopped, mo2Selection));
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             sealedSuccess = true;
@@ -2965,7 +2973,9 @@ public partial class MainWindow : Window
                         packageRoot, clearTracking: false);
                     if (stopped.Stopped)
                     {
-                        var reset = await Workflow.ResetNativeOutputAsync(game, mo2Selection: mo2Selection);
+                        var reset = mo2Selection is null
+                            ? await Workflow.ResetNativeOutputAsync(game)
+                            : await Task.Run(() => Workflow.ResetNativeOutputAsync(game, mo2Selection: mo2Selection));
                         if (reset.Ok)
                         {
                             if (mo2Selection is null) Workflow.AbandonCurrentUncollected(game);
