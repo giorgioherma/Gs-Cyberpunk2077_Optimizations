@@ -5,6 +5,18 @@ namespace GTotalOptimizer.Core;
 // Only installs GCO's own Python adapter; never touches game/mod/profile files.
 public static class Mo2CompanionInstaller
 {
+    // Only the exact previously shipped GCO-owned bridge is eligible for
+    // replacement. Normalize checkout line endings; refuse user modifications.
+    internal static bool IsKnownPreviousBridge(byte[] bytes)
+    {
+        if (bytes.Length == 0 || bytes.Length > 256 * 1024) return false;
+        var normalized = System.Text.Encoding.UTF8.GetBytes(
+            System.Text.Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n"));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(normalized))
+            .Equals("9d51d033f02d3c5462171bab08a2e7d63b2ae746eb3dc8677a713e7e925ecca7",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
     public static void Install(string applicationFolder, string packagedBridge)
     {
         var root = Path.GetFullPath(applicationFolder);
@@ -28,12 +40,16 @@ public static class Mo2CompanionInstaller
         }
         finally { foreach (var process in processes) process.Dispose(); }
         var target = Path.Combine(plugins, "gco_mo2_bridge.py");
+        bool upgrade = false;
         if (File.Exists(target))
         {
-            if ((File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0 ||
-                !File.ReadAllBytes(target).AsSpan().SequenceEqual(bytes))
+            if ((File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidOperationException("MO2 companion is redirected.");
+            var previous = File.ReadAllBytes(target);
+            if (previous.AsSpan().SequenceEqual(bytes)) return;
+            if (!IsKnownPreviousBridge(previous))
                 throw new InvalidOperationException("A different MO2 companion already exists. No files were overwritten.");
-            return;
+            upgrade = true;
         }
         var temporary = Path.Combine(plugins, ".gco-bridge-" + Guid.NewGuid().ToString("N") + ".tmp");
         try
@@ -43,7 +59,11 @@ public static class Mo2CompanionInstaller
                 stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
-            File.Move(temporary, target, overwrite: false);
+            if (upgrade && (!File.Exists(target) ||
+                (File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0 ||
+                !IsKnownPreviousBridge(File.ReadAllBytes(target))))
+                throw new InvalidOperationException("MO2 companion changed during setup.");
+            File.Move(temporary, target, overwrite: upgrade);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
