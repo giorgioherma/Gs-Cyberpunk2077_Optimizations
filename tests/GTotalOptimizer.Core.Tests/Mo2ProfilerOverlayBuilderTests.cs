@@ -128,6 +128,8 @@ internal static class Mo2ProfilerOverlayBuilderTests
             catch (InvalidOperationException) { }
 
             Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
+            await Mo2CaptureJournalTests.RunAsync(Path.Combine(root, "capture-package"),
+                game, instanceRoot, stack, result);
             static void RejectVerification(Action verify)
             {
                 try { verify(); }
