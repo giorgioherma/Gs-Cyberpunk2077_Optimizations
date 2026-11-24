@@ -1,1 +1,1 @@
-checkpoint=mo2-direct-discard-parity-20261124
+checkpoint=mo2-real-owner-collection-replay-20261124
