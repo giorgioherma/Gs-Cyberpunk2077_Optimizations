@@ -192,9 +192,11 @@ public static class Mo2ProfilerOverlayBuilder
 
     // Experimental sessions retain all stage/fixture/output bytes. A pending
     // or ambiguous launch cannot be reused, even after a GCO restart.
-    public static bool HasUnresolvedTestSession()
+    public static bool HasUnresolvedTestSession() => HasUnresolvedTestSession(null);
+
+    internal static bool HasUnresolvedTestSession(string? localAppData)
     {
-        var folder = Path.Combine(Environment.GetFolderPath(
+        var folder = Path.Combine(localAppData ?? Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData), "GCO", "MO2Bridge", "journals");
         if (!Directory.Exists(folder)) return false;
         EnsureNoReparseParents(folder);
@@ -203,7 +205,7 @@ public static class Mo2ProfilerOverlayBuilder
             RequireRegularUnlinkedFile(file);
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
             var phase = doc.RootElement.GetProperty("phase").GetString();
-            if (phase != "retired-unlaunched" && phase != "retired-test-capture") return true;
+            if (phase != "retired-unlaunched") return true;
         }
         return false;
     }
@@ -229,8 +231,18 @@ public static class Mo2ProfilerOverlayBuilder
         if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
             throw new InvalidOperationException("Close Cyberpunk before retiring this test.");
         // A positive signed launch is required; a timeout stays unresolved.
-        // No files are deleted and no collection/restore success is asserted.
-        RecordTestLaunchPhase(prepared, "test-launched", "retired-test-capture");
+        // Check the returned process too, even if it was not named Cyberpunk.
+        using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
+        int pid = doc.RootElement.GetProperty("processId").GetInt32();
+        if (pid <= 0) throw new InvalidDataException("MO2 test process identity missing.");
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            if (!process.HasExited) throw new InvalidOperationException("MO2 test launch process is still running.");
+        }
+        catch (ArgumentException) { /* The returned process no longer exists. */ }
+        // Preserve the full manifest; subsequent collection must resolve this session.
+        RecordTestLaunchPhase(prepared, "test-launched", "retired-test-capture", pid);
     }
 
     // Only an unlaunched prepared session may be retired here. Launched or
@@ -260,12 +272,7 @@ public static class Mo2ProfilerOverlayBuilder
             throw new InvalidOperationException("MO2 session is not proven unlaunched; retain recovery evidence.");
         // Preserve journal and bytes rather than recursively deleting a tree
         // which may contain unexpected links or runtime outputs.
-        WriteJournal(journal, new
-        {
-            schemaVersion = 1, sessionId = prepared.SessionId, profile = prepared.Profile,
-            stageRoot = stage, fixtureRoot = fixture, phase = "retired-unlaunched",
-            utc = DateTimeOffset.UtcNow
-        });
+        RecordTestLaunchPhase(prepared, "prepared", "retired-unlaunched");
     }
 
     // Recheck the selected source winners and sealed overlay immediately before
