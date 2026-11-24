@@ -1067,7 +1067,7 @@ public partial class MainWindow : Window
                 GameSourceHeading.Text = "MOD ORGANIZER 2";
                 SetFrameworkStatuses(null);
                 UpdatePathLock();
-                UpdateMo2TestButtons();
+                RefreshMo2WorkflowAdmission();
                 _ = RefreshMo2SourceAsync();
                 return;
             }
@@ -1276,7 +1276,7 @@ public partial class MainWindow : Window
             pendingExternalGameStart = pendingGameExitRefresh = false;
             pendingExternalGamePid = null;
             UpdatePathLock();
-            UpdateMo2TestButtons();
+            RefreshMo2WorkflowAdmission();
             return;
         }
         if (!inspection.IsValidGame) return;
@@ -1669,11 +1669,11 @@ public partial class MainWindow : Window
         {
             mo2RefreshRunning = false;
             UpdatePathLock();
-            UpdateMo2TestButtons();
+            RefreshMo2WorkflowAdmission();
         }
     }
 
-    private void UpdateMo2TestButtons()
+    private void RefreshMo2WorkflowAdmission()
     {
         if (!mo2Mode) return;
         bool running = GameRunning();
@@ -1689,13 +1689,15 @@ public partial class MainWindow : Window
             SetStatus("MO2 session journal requires recovery: " + ex.Message);
         }
         UpdatePathLock();
-        var restore = mo2Prepared is not null || mo2RecoveryBlocked;
-        InstallButton.Content = restore ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
-        InstallButton.Style = (Style)FindResource(restore ? "RestoreStageButton" : "StageActionButton");
+        var restore = UpdateProfilerAction(mo2SelectedSource?.GameDirectory);
+        var processLaunchPending = DateTime.UtcNow < launchProcessGuardUntilUtc;
+        LaunchButton.Content = running ? "GAME RUNNING"
+            : processLaunchPending ? "STARTING CYBERPUNK"
+            : "START CYBERPUNK";
         InstallButton.IsEnabled = restore ? !busy && !mo2RefreshRunning :
             !busy && !mo2RefreshRunning && !running && !mo2VerifyRequired && mo2SelectedSource is not null &&
             mo2Connected is not null && mo2Framework?.Ready == true;
-        LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
+        LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running && !processLaunchPending &&
             mo2Prepared is { } prepared &&
             (!mo2LaunchAttempted || Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared)) && !mo2VerifyRequired &&
             mo2Connected is not null && mo2Framework?.Ready == true;
@@ -1704,7 +1706,7 @@ public partial class MainWindow : Window
             SetStatus("Previous profiling session requires recovery. Click RESTORE.");
     }
 
-    private async Task<Mo2ProfileSelection> InspectMo2TestSelectionAsync()
+    private async Task<Mo2ProfileSelection> InspectMo2SelectionAsync()
     {
         if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
             throw new InvalidOperationException("Click VERIFY before installing profilers.");
@@ -1734,96 +1736,74 @@ public partial class MainWindow : Window
         return selection;
     }
 
-    private async Task Mo2InstallOrRestoreTestAsync()
+    // Deployment-specific work only. The existing INSTALL/START/RESTORE
+    // handlers own activity, busy state, portrait, errors and UI progression.
+    private async Task PrepareMo2DeploymentAsync()
     {
-        if (busy || mo2RefreshRunning) return;
-        ClearStatusPin();
-        if (GameRunning())
-        {
-            SetStatus("Close Cyberpunk before continuing.");
-            return;
-        }
-        SetBusy(true);
-        try
-        {
-            if (mo2Prepared is not null || mo2RecoveryBlocked ||
-                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession())
-            {
-                await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
-                mo2Prepared = null;
-                mo2LaunchAttempted = false;
-                mo2RecoveryBlocked = false;
-                SetPortraitStage(PortraitStage.Black);
-                mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
-                if (mo2VerifyRequired)
-                {
-                    mo2Connected = null;
-                    mo2SelectedSource = null;
-                    mo2Framework = null;
-                    SetFrameworkStatuses(null);
-                    PinStatus("Profilers reset. Click VERIFY.");
-                }
-                else PinStatus("Profilers restored. Original files unchanged.");
-            }
-            else
-            {
-                var selection = await InspectMo2TestSelectionAsync();
-                mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
-                    packageRoot, selection.GameDirectory, selection.CandidateSource!,
-                    Guid.NewGuid().ToString("N"));
-                mo2LaunchAttempted = false;
-                SetPortraitStage(PortraitStage.Installed);
-                SetStatus("Profilers prepared. Ready to start Cyberpunk.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning("MO2 profilers: " + ex);
-            PinStatus(ex.Message);
-        }
-        finally { SetBusy(false); UpdateMo2TestButtons(); }
+        var selection = await InspectMo2SelectionAsync();
+        mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+            packageRoot, selection.GameDirectory, selection.CandidateSource!,
+            Guid.NewGuid().ToString("N"));
+        mo2LaunchAttempted = false;
     }
 
-    private async Task Mo2LaunchTestAsync()
+    private async Task<Mo2ProfileSelection> PrepareMo2LaunchAsync()
     {
-        if (busy || mo2RefreshRunning || GameRunning() || mo2Prepared is not { } prepared ||
-            (mo2LaunchAttempted && !Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))) return;
-        ClearStatusPin();
-        SetBusy(true);
+        var selection = await InspectMo2SelectionAsync();
+        var prepared = mo2Prepared ??
+            throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        if (mo2LaunchAttempted)
+        {
+            // The MO2 mapper is one-shot. Recreate only its deployment for
+            // another START, with the existing owner-scoped discard policy.
+            Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+            mo2Prepared = null;
+            mo2LaunchAttempted = false;
+            await PrepareMo2DeploymentAsync();
+            selection = await InspectMo2SelectionAsync();
+            prepared = mo2Prepared!;
+        }
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
+        return selection;
+    }
+
+    private async Task<Mo2BridgeReply> DispatchMo2LaunchAsync(Mo2ProfileSelection selection)
+    {
+        var prepared = mo2Prepared ??
+            throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        mo2LaunchAttempted = true;
         try
         {
-            var selection = await InspectMo2TestSelectionAsync();
-            if (mo2LaunchAttempted)
-            {
-                // Same START action as Direct: abandon old uncollected output,
-                // rebuild the one-shot virtual layer without another INSTALL.
-                Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
-                mo2Prepared = null;
-                mo2LaunchAttempted = false;
-                selection = await InspectMo2TestSelectionAsync();
-                prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
-                    packageRoot, selection.GameDirectory, selection.CandidateSource!,
-                    Guid.NewGuid().ToString("N"));
-                mo2Prepared = prepared;
-            }
-            Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
-            mo2LaunchAttempted = true;
-            var reply = await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
+            return await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
                 mo2Connected!, selection, prepared, true);
-            SetPortraitStage(PortraitStage.Capturing);
-            SetStatus("Cyberpunk launch requested. Use F11 to start/stop profiling.");
-            Trace.TraceInformation("MO2 launch acknowledged (PID " + reply.ProcessId + ").");
         }
-        catch (Exception ex)
+        catch
         {
-            // Only the durable journal can establish whether dispatch was attempted.
-            mo2LaunchAttempted = mo2Prepared is { } active &&
-                !Mo2ProfilerOverlayBuilder.IsStillPrepared(active);
-            Trace.TraceWarning("MO2 launch: " + ex);
-            PinStatus(ex.Message);
-
+            // A timeout or negative acknowledgement is not proof that the
+            // mapper never launched. Only the durable journal decides retry.
+            mo2LaunchAttempted = !Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared);
+            throw;
         }
-        finally { SetBusy(false); UpdateMo2TestButtons(); }
+    }
+
+    private async Task<ProfilerWorkflowResult> RestoreMo2DeploymentAsync()
+    {
+        await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
+        mo2Prepared = null;
+        mo2LaunchAttempted = false;
+        mo2RecoveryBlocked = false;
+        mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+        if (mo2VerifyRequired)
+        {
+            mo2Connected = null;
+            mo2SelectedSource = null;
+            mo2Framework = null;
+            SetFrameworkStatuses(null);
+        }
+        return new ProfilerWorkflowResult(true,
+            mo2VerifyRequired ? "Profilers reset. Click VERIFY." :
+                "Profilers restored. Original files unchanged.",
+            RestoreVerified: !mo2VerifyRequired);
     }
 
     private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
@@ -1891,7 +1871,7 @@ public partial class MainWindow : Window
                     mo2Framework = null;
                     SetFrameworkStatuses(null);
                     Mo2StatusText.Text = "MO2 setup failed";
-                    UpdateMo2TestButtons();
+                    RefreshMo2WorkflowAdmission();
                 }
             }
         }
@@ -2120,7 +2100,9 @@ public partial class MainWindow : Window
     {
         // RESTORE is available from either GCO's session journal or an
         // authoritative profiler-owned game-side transaction marker.
-        var recovery = Workflow.RestoreActionAvailable(gameRoot);
+        var recovery = mo2Mode
+            ? mo2Prepared is not null || mo2RecoveryBlocked
+            : Workflow.RestoreActionAvailable(gameRoot);
         var label = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         var style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
@@ -2354,18 +2336,22 @@ public partial class MainWindow : Window
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        if (mo2Mode) { await Mo2InstallOrRestoreTestAsync(); return; }
         // Only RESTORE and CONTINUE trigger owner-managed restoration.
-        if (Workflow.RestoreActionAvailable(GamePathBox.Text))
+        if (mo2Mode
+            ? mo2Prepared is not null || mo2RecoveryBlocked || Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession()
+            : Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
         else
             await InstallProfilersAsync();
     }
     private async Task InstallProfilersAsync()
     {
-        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (mo2Mode ? mo2RefreshRunning || mo2SelectedSource is null
+                : !inspection.IsValidGame || inspection.GameRoot is null)) return;
+        if (mo2Mode && GameRunning()) { Warn("Close Cyberpunk before continuing.", "Profiler installation"); return; }
         ClearStatusPin();
-        var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
+        var frameworks = mo2Mode ? mo2Framework : FrameworkPreflight.Inspect(inspection.GameRoot!);
+        if (frameworks is null) return;
         if (!frameworks.Ready)
         {
             Trace.TraceWarning("Framework preflight: " + frameworks.Detail);
@@ -2378,7 +2364,13 @@ public partial class MainWindow : Window
         long installActivity = BeginConsoleActivity("Installing profilers");
         try
         {
-            var result = await Workflow.InstallAsync(inspection.GameRoot);
+            ProfilerWorkflowResult result;
+            if (mo2Mode)
+            {
+                await PrepareMo2DeploymentAsync();
+                result = new ProfilerWorkflowResult(true, "Profilers prepared.");
+            }
+            else result = await Workflow.InstallAsync(inspection.GameRoot!);
             if (result.Ok)
             {
                 SetPortraitStage(PortraitStage.Installed);
@@ -2396,7 +2388,13 @@ public partial class MainWindow : Window
             SetPortraitStage(PortraitStage.Black);
             Warn(ex.Message, "Profiler installation");
         }
-        finally { EndConsoleActivity(installActivity); SetBusy(false); await RefreshSourceAsync(); }
+        finally
+        {
+            EndConsoleActivity(installActivity);
+            SetBusy(false);
+            if (mo2Mode) RefreshMo2WorkflowAdmission();
+            else await RefreshSourceAsync();
+        }
     }
 
     // A new GCO or directly observed Cyberpunk launch follows the exact same
@@ -2499,21 +2497,21 @@ public partial class MainWindow : Window
         finally { EndConsoleActivity(externalStartActivity); SetBusy(false); }
     }
 
-    private async void Launch_Click(object sender, RoutedEventArgs e)
-    {
-        if (mo2Mode) await Mo2LaunchTestAsync();
-        else await LaunchCaptureAsync();
-    }
+    private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
     private async Task LaunchCaptureAsync()
     {
-        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (mo2Mode
+            ? mo2RefreshRunning || mo2Prepared is not { } prepared ||
+                (mo2LaunchAttempted && !Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))
+            : !inspection.IsValidGame || inspection.GameRoot is null)) return;
         if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
         if (DateTime.UtcNow < launchProcessGuardUntilUtc)
         {
             Warn("Cyberpunk startup is still being processed.", "Start");
             return;
         }
-        var game = inspection.GameRoot;
+        var game = mo2Mode ? mo2SelectedSource?.GameDirectory : inspection.GameRoot;
+        if (game is null) return;
         var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
         if (!File.Exists(executable))
         {
@@ -2527,34 +2525,64 @@ public partial class MainWindow : Window
         long launchActivity = BeginConsoleActivity("Preparing profilers and starting Cyberpunk");
         try
         {
-            var state = await Workflow.InspectAsync(game);
-            var warning = await BeginFreshCaptureAsync(game, state,
-                gameAlreadyRunning: false);
+            Mo2ProfileSelection? mo2Selection = null;
+            string? warning = null;
+            if (mo2Mode) mo2Selection = await PrepareMo2LaunchAsync();
+            else
+            {
+                var state = await Workflow.InspectAsync(game);
+                warning = await BeginFreshCaptureAsync(game, state,
+                    gameAlreadyRunning: false);
+            }
             try
             {
                 // Arm before CreateProcess so a fast WMI start is classified
                 // as this GCO launch rather than an external capture restart.
                 gcoLaunchInProgress = true;
                 ArmProcessStartGuard();
-                using var started = Process.Start(new ProcessStartInfo(executable)
+                if (mo2Selection is not null)
                 {
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(executable)!
-                }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
-                gcoLaunchedGamePid = started.Id;
-                // Only track the real game executable, not a transient launch
-                // delegate. If it has not started yet, wait for WMI/fallback.
-                try
-                {
-                    if (!started.HasExited &&
-                        string.Equals(started.ProcessName, "Cyberpunk2077",
-                            StringComparison.OrdinalIgnoreCase))
-                        GameStarted(started.Id);
+                    var reply = await DispatchMo2LaunchAsync(mo2Selection);
+                    Trace.TraceInformation("MO2 launch acknowledged (PID " + reply.ProcessId + ").");
+                    // A bridge acknowledgement need not identify the actual
+                    // game process. Track only a real Cyberpunk process.
+                    try
+                    {
+                        using var started = Process.GetProcessById(reply.ProcessId);
+                        if (!started.HasExited &&
+                            string.Equals(started.ProcessName, "Cyberpunk2077",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            gcoLaunchedGamePid = started.Id;
+                            GameStarted(started.Id);
+                        }
+                    }
+                    catch (ArgumentException) { }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
                 }
-                catch (InvalidOperationException)
+                else
                 {
-                    // Already exited: a game startup notification may still
-                    // arrive for the actual game PID.
+                    using var started = Process.Start(new ProcessStartInfo(executable)
+                    {
+                        UseShellExecute = true,
+                        WorkingDirectory = Path.GetDirectoryName(executable)!
+                    }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
+                    gcoLaunchedGamePid = started.Id;
+                    // Only track the real game executable, not a transient launch
+                    // delegate. If it has not started yet, wait for WMI/fallback.
+                    try
+                    {
+                        if (!started.HasExited &&
+                            string.Equals(started.ProcessName, "Cyberpunk2077",
+                                StringComparison.OrdinalIgnoreCase))
+                            GameStarted(started.Id);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Already exited: a game startup notification may still
+                        // arrive for the actual game PID.
+                    }
                 }
             }
             catch
@@ -2565,14 +2593,19 @@ public partial class MainWindow : Window
                 // A failed game launch is not a meaningful capture. Flush ETW,
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
-                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-                if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
+                if (!mo2Mode)
+                {
+                    var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                    if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
+                }
                 throw;
             }
             SetPortraitStage(PortraitStage.Capturing);
-            PinStatus(warning is null
-                ? "Cyberpunk started. Use F11 to start/stop profiling."
-                : "Cyberpunk started. F11 ready; PresentMon unavailable.",
+            PinStatus(mo2Mode
+                ? "Cyberpunk launch requested. Use F11 to start/stop profiling."
+                : warning is null
+                    ? "Cyberpunk started. Use F11 to start/stop profiling."
+                    : "Cyberpunk started. F11 ready; PresentMon unavailable.",
                 warning);
             launched = true;
         }
@@ -2583,11 +2616,13 @@ public partial class MainWindow : Window
             gcoLaunchedGamePid = null;
             EndConsoleActivity(launchActivity);
             SetBusy(false);
-            if (!launched) SetPortraitStage(PortraitStage.Installed);
-            // Handoff when the launch request succeeds. The native tray and
-            // observer are independent of whether Cyberpunk is observable
-            // yet; the user can reopen GCO after a slow start or crash.
-            if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
+            if (!launched) SetPortraitStage(mo2Mode && mo2Prepared is null
+                ? PortraitStage.Black : PortraitStage.Installed);
+            // Handoff requires the existing unified capture identity. Until
+            // the MO2 output provider supplies it, keep the same window open
+            // rather than arm a Direct observer against an unrelated journal.
+            if (mo2Mode) RefreshMo2WorkflowAdmission();
+            else if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
         }
     }
@@ -3285,14 +3320,14 @@ public partial class MainWindow : Window
 
     private async Task RestoreIncompleteSessionAsync()
     {
-        if (busy) return;
+        if (busy || (mo2Mode && mo2RefreshRunning)) return;
         // Prefer the verified journal root. If the journal is absent/corrupt,
         // use the user-selected game only when its owner marker proves a
         // managed installation. Owner managers perform all actual restoration.
         var game = Workflow.ReadRecoveryGameRoot() ??
             (inspection.IsValidGame ? inspection.GameRoot : GamePathBox.Text);
-        if (!Workflow.RestoreActionAvailable(game) ||
-            (Workflow.ReadRecoveryGameRoot() is null && !Workflow.HasOwnerRestoreState(game)))
+        if (!mo2Mode && (!Workflow.RestoreActionAvailable(game) ||
+            (Workflow.ReadRecoveryGameRoot() is null && !Workflow.HasOwnerRestoreState(game))))
         {
             Warn("Select the game with installed profilers to restore.", "Recovery required");
             return;
@@ -3310,15 +3345,31 @@ public partial class MainWindow : Window
         {
             // No capture index/collection attempt is required. Recover even
             // directly after a partial install, including after GCO restarts.
-            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-            // Restore original source files even when stopping PresentMon
-            // fails, but keep the durable journal and uncollected results
-            // until the full reset can be verified on a subsequent click.
-            // The owner restores and GCO scratch disposal are completed by
-            // the same workflow, not independently in the UI.
-            var result = await Workflow.RestoreOwnedAsync(game,
-                preserveIncompleteEvidence: false,
-                pendingPresentMonStopped: stop.Stopped);
+            ProfilerWorkflowResult result;
+            if (mo2Mode)
+            {
+                result = await RestoreMo2DeploymentAsync();
+                if (mo2VerifyRequired)
+                {
+                    // A pending MO2 dispatch can only be retired by VERIFY.
+                    // Return to INSTALL without claiming verified restoration.
+                    SetPortraitStage(PortraitStage.Black);
+                    PinStatus(result.Detail);
+                    return;
+                }
+            }
+            else
+            {
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                // Restore original source files even when stopping PresentMon
+                // fails, but keep the durable journal and uncollected results
+                // until the full reset can be verified on a subsequent click.
+                // The owner restores and GCO scratch disposal are completed by
+                // the same workflow, not independently in the UI.
+                result = await Workflow.RestoreOwnedAsync(game,
+                    preserveIncompleteEvidence: false,
+                    pendingPresentMonStopped: stop.Stopped);
+            }
             if (!result.RestoreVerified)
             {
                 Warn(result.Detail, "Recovery required");
@@ -3345,7 +3396,13 @@ public partial class MainWindow : Window
                 fullDetails);
         }
         catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
-        finally { EndConsoleActivity(restoreActivity); SetBusy(false); await RefreshSourceAsync(); }
+        finally
+        {
+            EndConsoleActivity(restoreActivity);
+            SetBusy(false);
+            if (mo2Mode) RefreshMo2WorkflowAdmission();
+            else await RefreshSourceAsync();
+        }
     }
 
     // Reset only the active workflow and resume bookmark, never the
