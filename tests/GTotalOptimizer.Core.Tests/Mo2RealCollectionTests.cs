@@ -62,7 +62,18 @@ internal static class Mo2RealCollectionTests
                           entry.Name.StartsWith("RSP_", StringComparison.OrdinalIgnoreCase)) &&
                          (entry.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ||
                           entry.Name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)))
-                    path = Path.Combine(grspDir, entry.Name);
+                {
+                    // Reverse only the owner's archive layout for the recorded
+                    // Page 2 input: raw native developer CSVs are in Developer/.
+                    // Flattening them makes the actual manager classify them as
+                    // Metadata, so its canonical analysis archive is incomplete.
+                    var parts = entry.FullName.Replace('\\', '/').Split('/');
+                    int developer = Array.FindIndex(parts, part =>
+                        part.Equals("Developer", StringComparison.OrdinalIgnoreCase));
+                    path = verifyPage2 && developer >= 0
+                        ? Path.Combine(grspDir, "Developer", Path.Combine(parts[(developer + 1)..]))
+                        : Path.Combine(grspDir, entry.Name);
+                }
                 if (path is null) continue;
                 if (!written.Add(path))
                     throw new InvalidDataException("Duplicate native replay file: " + entry.Name);
@@ -74,7 +85,8 @@ internal static class Mo2RealCollectionTests
                     "RSP_CallbackPressure.csv", "RSP_CallbackTargets.csv", "GRSP_Status.txt",
                     "RSP_FunctionMap.csv", "RSP_Cadence.csv", "RSP_WorkMap.csv",
                     "GRSP_ByFunction.csv", "GRSP_Frames.csv", "GRSP_ByMod.csv" })
-                    if (!File.Exists(Path.Combine(grspDir, required)))
+                    if (!File.Exists(Path.Combine(grspDir, required)) &&
+                        !File.Exists(Path.Combine(grspDir, "Developer", required)))
                         throw new InvalidDataException("MO2_PAGE2_REPLAY_NATIVE_EVIDENCE_MISSING: " + required);
             string marker = Path.Combine(grspDir, "GCO-F11-Complete.flag");
             var incomplete = await workflow.InspectMo2CaptureAsync(game, selection);
