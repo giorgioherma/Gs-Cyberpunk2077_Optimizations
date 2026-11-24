@@ -25,18 +25,27 @@ public static class Mo2ProcessIdentity
         finally { CloseHandle(process); }
     }
 
-    public static bool IsElevated(int pid)
+    public static bool IsElevated(int pid) => InspectElevation(pid).Elevated == true;
+
+    // Do not conflate a denied query or an exited process with an
+    // actual non-elevated token. Preserve the Win32 failure for diagnosis.
+    public static (bool? Elevated, string Detail) InspectElevation(int pid)
     {
-        if (!OperatingSystem.IsWindows() || pid <= 0) return false;
+        if (!OperatingSystem.IsWindows() || pid <= 0)
+            return (null, "Invalid Windows process identity.");
         var process = OpenProcess(QueryLimitedInformation, false, pid);
-        if (process == IntPtr.Zero) return false;
+        if (process == IntPtr.Zero)
+            return (null, "OpenProcess failed (Windows error " + Marshal.GetLastWin32Error() + ").");
         try
         {
-            if (!OpenProcessToken(process, TokenQuery, out var token)) return false;
+            if (!OpenProcessToken(process, TokenQuery, out var token))
+                return (null, "OpenProcessToken failed (Windows error " + Marshal.GetLastWin32Error() + ").");
             try
             {
-                return GetTokenInformation(token, TokenElevation, out int elevated,
-                    sizeof(int), out _) && elevated != 0;
+                if (!GetTokenInformation(token, TokenElevation, out int elevated,
+                        sizeof(int), out _))
+                    return (null, "GetTokenInformation failed (Windows error " + Marshal.GetLastWin32Error() + ").");
+                return elevated != 0 ? (true, "MO2 is elevated.") : (false, "MO2 is not running as administrator.");
             }
             finally { CloseHandle(token); }
         }
