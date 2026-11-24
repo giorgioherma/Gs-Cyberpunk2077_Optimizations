@@ -1,1 +1,1 @@
-checkpoint=mo2-automatic-elevated-verify-20261124
+checkpoint=mo2-restore-recovery-after-launch-failure-20261124
