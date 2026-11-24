@@ -19,6 +19,12 @@
 
 
 
+## 2026-11-24 — Focused actual MO2 optimization ZIP validation
+
+- Full GCO [#1141](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45501582630), commit `17cc863`: independently verified SUCCESS, including the additive Continue/source projection regression.
+- `2dafcc7`, `6a54735`, `1af05b3`: added actual Page 2 integration test to the existing real-owner historical namespaced 0-Engine scenario. Uses the existing recorded native CSV replay, real CET/GRSP managers, normal Continue, existing CET analysis, original REDscript plan and combined availability/Generate services. A representative known eligible stable-array-bound source in a selected-profile package shadows a different physical file while MO2's current profile is Other. Assert the real generated ZIP includes the transformed selected winner, the ownership sidecar records its original hash, and both original sources plus sealed capture remain unchanged. The synthetic REDscript input and synthetic completion flag are fixture-only; no historical stack identity or actual gameplay claimed. The original no-0-Engine collection test and assertions remain unchanged.
+- No production code, workflow definitions or existing test assertions changed in this checkpoint. New MO2-only TXT checkpoint requested. The existing hosted-runner breakaway smoke blocker remains; do not mask it. Actual generated output and local end-to-end gameplay are still pending.
+
 ## 2026-11-24 — MO2 CONTINUE and Page 2 effective-source integration
 
 - Full GCO [#1140](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45495757541), commit `951d83e`: independently verified SUCCESS. Separate MO2 [#29](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45495752603): real USVFS, profile contracts, real CET/GRSP owner installation and recorded-CSV collection replay PASSED (log explicitly verifies F11 admission and sealed evidence). Overall run FAILED at the existing official MO2 noncurrent-profile launch smoke: hosted runner process job reports `breakawayCreateProcess=5`, `MO2_REAL_NONCURRENT_PROFILE_LAUNCH_BLOCKED_WITH_DIRECT_WIN32_BREAKAWAY_ACCESS_DENIED`. Preserve this contract; do not claim runtime smoke success or weaken it.
