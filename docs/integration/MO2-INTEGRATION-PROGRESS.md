@@ -4,6 +4,14 @@
 **Authoritative design:** [MO2-INTEGRATION-DESIGN.md](MO2-INTEGRATION-DESIGN.md).  
 **Status at creation:** **DESIGN DOCUMENTED; NO IMPLEMENTATION STARTED; NO MO2 GAMEPLAY VALIDATION**. Existing `Mo2FeatureGate.Enabled=false` remains unchanged. Each stage below must update this ledger with commit, tests, evidence, unresolved gaps, and the next gate; no stage may be marked complete from tests of a mere file listing.
 
+## 2026-11-24 — Experimental MO2 Page 1 and companion installer wired; packaged Windows validation pending
+
+- [MO2 #23](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45403801859) FAILED at native launch, with independent evidence `runnerInJob=True normalCreateProcess=0 breakawayCreateProcess=5` and `realMo2InJob=True`. This establishes a hosted Windows Job Object restriction for MO2's required spawn flag; it does not establish successful selected-profile launch on user Windows. The strict runtime test stays intact; do not rerun it unchanged hoping for a green result.
+- Owner authorized adding MO2 to the existing GCO installer before local testing. Existing Page 1 now has Direct/MO2 source controls, one MO2 application folder picker, configured instance/profile dropdowns, persisted MO2 selection, authenticated read-only companion verification and candidate source counts. No extra page, new runtime, or optimizer implementation. Direct is the initial mode; Direct recovery pins selection. MO2 cannot invoke Direct profiler install/start/collect/continue or external-launch capture paths.
+- The actual tested Python bridge is published with the app under `app/mo2/gco_mo2_bridge.py`. Explicit ADD BRIDGE copies only that companion into the user's selected MO2 plugins folder, requires MO2 closed and user confirmation, never overwrites a different file, is idempotent for identical bytes, and refuses redirected locations. The existing authenticated probe verifies the live companion after MO2 is opened. No source mods, modlists, game files or profiler binaries are installed by this experimental UI.
+- Source checkpoints: `99581c4` UI, `969fc0e` source controls, `6f9ec2c` companion installer, `08ea760` packaging, `4e24256` installer contracts, `5beb06f` source-mode isolation, `309822b` packaged WPF mode-gate test, `3e24dff` exact packaged companion verification. Full GCO TXT checkpoint is needed for a real downloadable Windows package; no compile or user GUI result claimed yet.
+- First local test: choose MO2 folder, add bridge with MO2 closed, open MO2, REFRESH, verify game directory and all profile choices, select profile different from visible MO2 profile, check candidate source counts and signed connection; confirm profiler buttons are gated. This is discovery/bootstrap only. Actual native selected-profile launch, CET/GRSP overlay deployment, F11/collection, recovery and Page 2 source provider remain open. Keep `Mo2FeatureGate.Enabled=false`, main and Direct workflow untouched.
+
 ## 2026-11-24 — Real MO2 Python plugin verified; selected-profile spawn blocked, Win32 diagnostic added
 
 - [MO2 checkpoint #18 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45287941980), source `4a732daacd0226080c0c7049ebd3848faf94637d`: official MO2 2.5.2 GUI registered the actual GCO Python plugin, published real process/profile status, and authenticated the C# read-only HMAC probe. The mapper init/QDir ABI fix is proven for bootstrap. No game launch or native profiler execution was tested in #18.
@@ -101,7 +109,7 @@
 - Define fixture profiles: direct-only, portable MO2, global multiple instances, external Mods/Profiles/Overwrite paths, mixed physical + MO2, disabled/shadowed/partial mods, old RootBuilder, custom overwrite; collect source hashes and minimal runtime evidence.
 - **Exit:** documented reproducible API probe and clear supported/refused matrix. No user-facing feature activation.
 
-## Stage 1 — Discovery and Page 1 shell [IN PROGRESS — READ-ONLY CORE ONLY]
+## Stage 1 — Discovery and Page 1 shell [IN PROGRESS — UI AND COMPANION INSTALL WIRED; PACKAGED CI PENDING]
 
 - Implement two equal-footprint Direct/MO2 source modes inside existing Page 1 Game Source box; keep main layout and three existing capture buttons. In MO2: one MO2 folder picker, auto-resolved game root, optional instance choice, **profile dropdown listing all configured profiles**, real source/status counters; persist selected instance/profile. Advanced recovery only when auto-discovery cannot prove paths.
 - Extend existing `Mo2InstallLocator`/`Mo2SourceInspector` rather than new scanner; include physical game baseline, exact enabled packages, precedence, Overwrite and source-owner provenance. Never claim VFS-verified from physical scanning.
