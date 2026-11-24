@@ -14,6 +14,12 @@
 
 
 
+
+## 2026-11-24 — Real USVFS sparse nested mapping failure
+
+- MO2 CI #24 (run 45455462021, head `5d9d009`) failed in the new physical-only sparse mapping regression: Win32 error 3 before child launch. Earlier profile/Overwrite precedence and unrelated-profile native probes, Python and C# contracts passed. This is a real native mapping admission failure; the exact in-game CET API failure is still not reproduced. Full GCO CI #1131 (run 45449113966, head `c9af7a2`) passed the RESTORE/VERIFY changes.
+- USVFS assertPathExists traverses existing redirected parents; a root Overwrite mapping without bin/x64 can prevent nested plugin-directory mapping despite physical folders being present. `47b0b81` tests a root-level sparse stage mapping (the shape of MO2's ordinary mod mappings), splits Overwrite versus stage diagnostics, retains every ASI/init/scheduler/EventEmitter and unchanged-original assertion. Focused retry checkpoint `a4d537d`. No production mapper change until candidate is proven; no claim of CET native success.
+
 ## 2026-11-24 — CET stage verified; sparse physical-source runtime regression
 
 - Local uploaded stage ee72f613845d4ceaac6bb23cec02af09 contains all eight expected files. Seven static artifacts match journal SHA-256 exactly, including native ASI with CETProfilerStart string, modified 0-Engine init and adaptive scheduler. bindings.json changed from its staged 187 bytes to 318 bytes during runtime; preserve and investigate write routing rather than silently discard user changes. The staged init requires modules/EventEmitter and that unchanged dependency is correctly absent from the sparse delta, but failed at runtime. No evidence that staged binary is malformed.
