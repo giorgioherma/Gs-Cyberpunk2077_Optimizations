@@ -79,10 +79,18 @@ public sealed record Mo2CaptureIdentity(string SessionId, string GameRoot,
 public sealed class UnifiedProfilerWorkflow
 {
     private readonly string packageRoot;
+    private readonly string? mo2LocalAppData;
     private readonly ComponentCommandRunner owner = new();
     private string Journal => Path.Combine(packageRoot, "RESULTS", "GCO-active-profile-session.json");
 
-    public UnifiedProfilerWorkflow(string packageRoot) => this.packageRoot = Path.GetFullPath(packageRoot);
+    public UnifiedProfilerWorkflow(string packageRoot) : this(packageRoot, null) { }
+
+    // Explicit isolated test root; the shipped application uses LocalAppData.
+    internal UnifiedProfilerWorkflow(string packageRoot, string? mo2LocalAppData)
+    {
+        this.packageRoot = Path.GetFullPath(packageRoot);
+        this.mo2LocalAppData = mo2LocalAppData;
+    }
     public bool HasRecoveryJournal => File.Exists(Journal);
 
     // Profiler-owned game-side transaction markers identify whether RESTORE
@@ -476,7 +484,12 @@ public sealed class UnifiedProfilerWorkflow
             throw new InvalidOperationException("No matching MO2 capture attempt.");
         if (!identity.Matches(selection) || !OwnsSession(game))
             throw new InvalidDataException("Selected MO2 capture identity changed.");
-        var prepared = ResumeMo2CaptureAttempt(selection) ??
+        // Resolve again at the actual owner operation, not only at UI refresh.
+        // A changed output root or newly enabled result-bearing mod refuses.
+        var fresh = Mo2SourceInspector.Resolve(identity.GameRoot,
+            Mo2SourceInspector.Discover(identity.InstanceDirectory), identity.Profile);
+        selection = selection with { CandidateSource = fresh };
+        var prepared = ResumeMo2CaptureAttempt(selection, mo2LocalAppData) ??
             throw new InvalidOperationException("MO2 launch is not acknowledged.");
         if (!Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))
             throw new InvalidOperationException("Wait for Cyberpunk to close.");
