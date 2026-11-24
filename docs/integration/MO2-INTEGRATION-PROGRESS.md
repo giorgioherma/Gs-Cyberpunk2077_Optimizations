@@ -8,6 +8,12 @@
 
 
 
+
+## 2026-11-24 — Elevated VERIFY local follow-up
+
+- Full GCO CI #1129 (head `7bcc952`, run 45439439615) passed. User's journal confirms previous pending launch retired-recovered; new MO2 PID and fresh heartbeat prove restart/bridge initialization, not the process token elevation. GCO reported generic elevation failure because it conflated disconnected discovery, unavailable Windows token query and a confirmed non-elevated token. Actual cause of refusal is not yet proven; check Task Manager Elevated column on the live MO2 process.
+- `415432f`, `b970fe7`, `42db46b`, `b26a1a0`: distinguish unknown token and Win32 query errors from non-elevation, expose discovery mismatch, restrict heartbeat enumeration to exact status filenames (exclude mailbox responses), allow atomic heartbeat replacement during reads, regression tests. No weakened process/token check; not yet compiled. Batch next checkpoint after local elevation evidence. No native launch/F11 success claimed.
+
 ## 2026-11-24 — RESTORE must remain available after failed START
 
 - Owner reported all buttons locked after the local elevation failure; RESTORE must be available regardless of successful launch or bridge connection. `d7be82d`, `7f21459`, `e582b91`, `73e242e`: durable journal recovery on startup, RESTORE enabled for any outstanding session, normal confirmed launch restored with MO2 open after process exit, pending dispatch restored only after MO2 closes; stale matching launch mailbox archived, all fixture/stage/journal bytes retained. No game/mod files deleted or overwritten. Retired deployment state is not a collected capture; actual collection remains pending.
