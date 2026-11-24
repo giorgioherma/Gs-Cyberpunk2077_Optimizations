@@ -7,6 +7,12 @@
 
 
 
+
+## 2026-11-24 — RESTORE must remain available after failed START
+
+- Owner reported all buttons locked after the local elevation failure; RESTORE must be available regardless of successful launch or bridge connection. `d7be82d`, `7f21459`, `e582b91`, `73e242e`: durable journal recovery on startup, RESTORE enabled for any outstanding session, normal confirmed launch restored with MO2 open after process exit, pending dispatch restored only after MO2 closes; stale matching launch mailbox archived, all fixture/stage/journal bytes retained. No game/mod files deleted or overwritten. Retired deployment state is not a collected capture; actual collection remains pending.
+- Test covers refusal while MO2 may still launch, recovery after shutdown, foreign mailbox preservation, full manifest preservation and repeated restore no-op. Existing #1128 does not include these fixes. Next full package checkpoint must include recovery. No claim of actual elevated game launch yet.
+
 ## 2026-11-24 — Local MO2 launch failure diagnosed; automatic elevated VERIFY
 
 - User's local build #1127 reached INSTALL successfully (8 staged files); launch journal remained pending and MO2 retained the processing request with no matching signed response. Actual MO2 dialog confirmed Cyberpunk requested administrator privileges while MO2 was not elevated. No native profiler/gameplay/F11 success claimed.
