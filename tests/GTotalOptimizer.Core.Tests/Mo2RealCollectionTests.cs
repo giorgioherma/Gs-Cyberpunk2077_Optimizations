@@ -6,7 +6,7 @@ internal static class Mo2RealCollectionTests
     // Replay raw recorded CSV bytes through the real packaged owners; this
     // is a disposable collection contract, not MO2 gameplay evidence.
     public static async Task RunAsync(string package, string game, string instance,
-        string local, Mo2OverlayPreparation prepared)
+        string local, Mo2OverlayPreparation prepared, bool verifyPage2 = false)
     {
         var workflow = new UnifiedProfilerWorkflow(package, local);
         if (workflow.HasRecoveryJournal)
@@ -73,8 +73,19 @@ internal static class Mo2RealCollectionTests
             _ = workflow.ReadCollected(game, verifyHashes: true);
             if (written.Any(File.Exists) || File.Exists(marker))
                 throw new InvalidDataException("MO2_REAL_OWNER_LIVE_OUTPUT_NOT_RESET");
-            Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
-            workflow.RetireMo2CaptureAttempt(game, prepared.SessionId);
+            if (verifyPage2)
+            {
+                var restored = await workflow.ContinueAsync(game, false, false, true,
+                    mo2Selection: selection);
+                if (!restored.RestoreVerified)
+                    throw new InvalidDataException("MO2_REAL_OWNER_CONTINUE_FAILED: " + restored.Detail);
+                await Mo2RealGenerationTests.RunAsync(package, game, instance, prepared.SessionId);
+            }
+            else
+            {
+                Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+                workflow.RetireMo2CaptureAttempt(game, prepared.SessionId);
+            }
             if (!Directory.Exists(sessionFolder) || workflow.HasRecoveryJournal)
                 throw new InvalidDataException("MO2_REAL_OWNER_SEALED_CAPTURE_LOST");
             Console.WriteLine("PASS actual packaged CET/GRSP owners collect projected recorded raw files; F11 gate and sealed evidence verified");
