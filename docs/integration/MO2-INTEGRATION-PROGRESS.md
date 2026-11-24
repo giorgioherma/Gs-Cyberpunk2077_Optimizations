@@ -10,6 +10,13 @@
 
 
 
+
+## 2026-11-24 — RESTORE resets workflow; VERIFY owns MO2 restart
+
+- CI #1130 succeeded (head `06f616d`, run 45444413577). Local user reports successful elevated bridge connection and four framework gates; signed START reply failed with access denied on game r6/cache/modded. Exact cache-handling cause remains unproven; compare normal MO2 launch without GCO. No cache deletion, permission changes, native game/profiler/F11 success claimed.
+- Owner requires RESTORE not to close MO2 or request manual closure. `708d69f`, `31622b8`, `f522cd5`, `241b79a`, `f5e9462`: RESTORE retires the UI session with a durable retired-awaiting-verify state for uncertain dispatch, preserves all evidence and returns to INSTALL. No new install/start or Direct switch while that restart is pending. VERIFY's existing elevated helper gracefully shuts down matching MO2, archives only matching stale launch mailbox files, completes recovery, opens selected instance and authenticates it. Repeated restore and deferred recovery are idempotent; tests require no closure at RESTORE, closed process for cleanup and foreign mailbox preservation. Existing in-flight launch is not asserted cancelled. No changes to bridge payload or profiler owners.
+- Full packaging validation pending; real Cyberpunk launch/cache handling and capture collection remain unresolved.
+
 ## 2026-11-24 — Confirmed false-negative elevated MO2 verification
 
 - Local Task Manager shows Elevated=Yes for ModOrganizer.exe PID 23208, matching the uploaded fresh heartbeat. #1129 RESTORE and actual elevated startup are proven locally; the permission/connection rejection is a false negative. Exact failed Win32 call or discovery rejection was not captured by #1129.
