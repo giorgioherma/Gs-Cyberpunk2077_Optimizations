@@ -706,14 +706,33 @@ public static class Mo2ProfilerOverlayBuilder
         return result.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    // CET creates these exact per-mod runtime sidecars, including after a
+    // temporary controls overlay has disappeared. They are not installer
+    // source, may change during gameplay, and must remain in their original
+    // physical/MO2 locations. Never broaden this to arbitrary logs/databases.
+    internal static bool IsCetModRuntimeSidecar(string path)
+    {
+        const string root = "bin/x64/plugins/cyber_engine_tweaks/mods/";
+        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
+        var tail = path[root.Length..].Split('/');
+        return tail.Length == 2 && tail[0].Length != 0 &&
+            (tail[1].Equals(tail[0] + ".log", StringComparison.OrdinalIgnoreCase) ||
+             tail[1].Equals("db.sqlite3", StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool IsControlsRuntimeResidue(string path) =>
+        path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/",
+            StringComparison.OrdinalIgnoreCase) && IsCetModRuntimeSidecar(path);
+
     internal static bool IsRequiredOwnerInput(string path) =>
-        path.Equals("bin/x64/plugins/cyber_engine_tweaks.asi", StringComparison.OrdinalIgnoreCase) ||
+        !IsCetModRuntimeSidecar(path) &&
+        (path.Equals("bin/x64/plugins/cyber_engine_tweaks.asi", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("red4ext/plugins/G-REDscript-Profiler.dll", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("red4ext/plugins/redscript_profiler_alpha.dll", StringComparison.OrdinalIgnoreCase) ||
         (path.StartsWith("red4ext/plugins/G-REDscript-Profiler/", StringComparison.OrdinalIgnoreCase) &&
-         !Mo2NativeOutputReset.IsNativeResult(path, []));
+         !Mo2NativeOutputReset.IsNativeResult(path, [])));
 
     internal static bool IsAllowedOutput(string path)
     {
