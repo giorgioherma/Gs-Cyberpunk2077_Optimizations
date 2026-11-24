@@ -986,10 +986,10 @@ public sealed class UnifiedProfilerWorkflow
 
     public async Task<ProfilerWorkflowResult> ContinueAsync(string game,
         bool skipCet, bool skipRedscript, bool skipFrameTime,
-        CancellationToken token = default)
+        CancellationToken token = default, Mo2ProfileSelection? mo2Selection = null)
     {
-        if (HasMo2CaptureAttempt)
-            return new(false, "Use the MO2 capture provider for this session. No files changed.");
+        if (HasMo2CaptureAttempt != (mo2Selection is not null))
+            return new(false, "Use the matching capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before restoring.");
         if (!OwnsSession(game)) return new(false, "No matching GCO session.");
         var id = SessionId();
@@ -1004,20 +1004,42 @@ public sealed class UnifiedProfilerWorkflow
             return new(false, "PresentMon is not yet collected. Use COLLECT RESULTS to stop it first.");
         if (skipCet || skipRedscript || (saved.FrameTimeCsv is null && !skipFrameTime))
             return new(false, "Native captures cannot be skipped; missing frame data must be recorded.");
+        Mo2CaptureIdentity? mo2Identity = null;
         try
         {
-            var state = await InspectAsync(game, token);
-            if ((state.CetCaptureReady && saved.Cet is null) ||
+            if (mo2Selection is not null)
+            {
+                mo2Identity = ReadMo2CaptureIdentity();
+                if (mo2Identity is null || !mo2Identity.Matches(mo2Selection))
+                    throw new InvalidDataException("Selected MO2 capture identity changed.");
+                Mo2ProfilerOverlayBuilder.RestoreCollectedDeployment(mo2Identity, mo2LocalAppData);
+            }
+            else
+            {
+                var state = await InspectAsync(game, token);
+                if ((state.CetCaptureReady && saved.Cet is null) ||
                 (state.GrspCaptureReady && saved.Redscript is null))
-                return new(false, "A completed native capture remains uncollected. Collect results first.");
+                    return new(false, "A completed native capture remains uncollected. Collect results first.");
+            }
         }
-        catch (Exception ex) { return new(false, "Cannot inspect native capture state: " + ex.Message); }
+        catch (Exception ex) { return new(false, "Cannot verify native restoration: " + ex.Message); }
 
-        var restored = await RestoreOwnedAsync(game, CancellationToken.None,
-            preserveIncompleteEvidence: false);
-        if (!restored.RestoreVerified) return restored;
-        CollectedCaptureStore.MarkRestored(packageRoot, saved,
-            skipCet, skipRedscript, skipFrameTime);
+        if (mo2Identity is null)
+        {
+            var restored = await RestoreOwnedAsync(game, CancellationToken.None,
+                preserveIncompleteEvidence: false);
+            if (!restored.RestoreVerified) return restored;
+            CollectedCaptureStore.MarkRestored(packageRoot, saved,
+                skipCet, skipRedscript, skipFrameTime);
+        }
+        else
+        {
+            // Seal the restored source binding before releasing the recovery
+            // journal. A crash cannot silently convert an MO2 capture to Direct.
+            CollectedCaptureStore.MarkRestored(packageRoot, saved,
+                skipCet, skipRedscript, skipFrameTime, mo2Identity);
+            RetireMo2CaptureAttempt(game, id);
+        }
         return new(true, "Original profiler files restored. Results retained under " +
             CollectedCaptureStore.SessionFolder(packageRoot, id),
             saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
