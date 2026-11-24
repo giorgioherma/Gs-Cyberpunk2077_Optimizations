@@ -19,6 +19,55 @@ internal static class Mo2CaptureJournalTests
             workflow.HasCaptureAttempt(game))
             throw new InvalidDataException("MO2_CAPTURE_IDENTITY_OR_DIRECT_ADMISSION_INVALID");
 
+        // Tray reopen has no in-memory overlay. It must reconstruct the
+        // acknowledged deployment from the same package identity, never
+        // from a different currently selected profile or an uncertain launch.
+        var local = Directory.GetParent(Directory.GetParent(
+            Path.GetDirectoryName(prepared.JournalFile)!)!.FullName)!.FullName;
+        var resumed = new UnifiedProfilerWorkflow(packageRoot);
+        var binding = resumed.ReadMo2CaptureIdentity();
+        if (binding is null || !binding.Matches(selected) || binding.SessionId != id ||
+            resumed.ResumeMo2CaptureAttempt(selected, local) is not null)
+            throw new InvalidDataException("MO2_PREPARED_CAPTURE_FALSELY_RESUMED_AS_LAUNCHED");
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
+        if (resumed.ResumeMo2CaptureAttempt(selected, local) is not null)
+            throw new InvalidDataException("MO2_PENDING_LAUNCH_FALSELY_RESUMED");
+        Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending", "test-launched", 1);
+        try
+        {
+            var recovered = resumed.ResumeMo2CaptureAttempt(selected, local);
+            if (recovered is null || recovered.SessionId != id ||
+                recovered.StagingDirectory != prepared.StagingDirectory ||
+                !recovered.Files.SequenceEqual(prepared.Files))
+                throw new InvalidDataException("MO2_ACKNOWLEDGED_CAPTURE_NOT_REHYDRATED");
+            try
+            {
+                resumed.ResumeMo2CaptureAttempt(selected with { Profile = "Other" }, local);
+                throw new Exception("MO2_RESUMED_WRONG_PROFILE");
+            }
+            catch (InvalidDataException) { }
+            try
+            {
+                resumed.ResumeMo2CaptureAttempt(selected with {
+                    InstanceDirectory = Path.Combine(instance, "other") }, local);
+                throw new Exception("MO2_RESUMED_WRONG_INSTANCE");
+            }
+            catch (InvalidDataException) { }
+            try
+            {
+                resumed.ResumeMo2CaptureAttempt(selected with {
+                    CandidateSource = stack with { OverwriteDirectory = Path.Combine(instance, "other-output") } }, local);
+                throw new Exception("MO2_RESUMED_CHANGED_OUTPUT_ROOT");
+            }
+            catch (InvalidDataException) { }
+        }
+        finally
+        {
+            // Synthetic acknowledgement only; restore the fixture's
+            // unlaunched phase for the original owner-overlay tests.
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launched", "prepared");
+        }
+
         // A matching game path alone must never authorize the physical owner
         // managers for an MO2 attempt, including recovery after reopen.
         var reopened = new UnifiedProfilerWorkflow(packageRoot);
