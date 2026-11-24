@@ -190,6 +190,41 @@ public static class Mo2ProfilerOverlayBuilder
         }
     }
 
+    // Only an unlaunched prepared session may be retired here. Launched or
+    // uncertain sessions must retain their evidence for capture recovery.
+    public static void RetireUnlaunched(Mo2OverlayPreparation prepared)
+    {
+        if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
+            throw new InvalidOperationException("Close Cyberpunk before retiring the prepared overlay.");
+        var bridge = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData), "GCO", "MO2Bridge");
+        if (!SessionIdPattern.IsMatch(prepared.SessionId))
+            throw new InvalidDataException("Invalid MO2 session identity.");
+        var journal = Path.Combine(bridge, "journals", prepared.SessionId + ".json");
+        var stage = Path.Combine(bridge, "staging", prepared.SessionId);
+        var fixture = Path.Combine(bridge, "fixtures", prepared.SessionId);
+        if (!string.Equals(journal, prepared.JournalFile, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(stage, prepared.StagingDirectory, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 session is outside its owned storage.");
+        EnsureNoReparseParents(stage);
+        EnsureNoReparseParents(fixture);
+        EnsureNoReparseParents(journal);
+        RequireRegularUnlinkedFile(journal);
+        using var doc = JsonDocument.Parse(File.ReadAllText(journal));
+        var j = doc.RootElement;
+        if (j.GetProperty("phase").GetString() != "prepared" ||
+            j.GetProperty("sessionId").GetString() != prepared.SessionId)
+            throw new InvalidOperationException("MO2 session is not proven unlaunched; retain recovery evidence.");
+        // Preserve journal and bytes rather than recursively deleting a tree
+        // which may contain unexpected links or runtime outputs.
+        WriteJournal(journal, new
+        {
+            schemaVersion = 1, sessionId = prepared.SessionId, profile = prepared.Profile,
+            stageRoot = stage, fixtureRoot = fixture, phase = "retired-unlaunched",
+            utc = DateTimeOffset.UtcNow
+        });
+    }
+
     // Recheck the selected source winners and sealed overlay immediately before
     // launch admission. A prepared journal is not evidence of a launched game.
     public static void VerifyPrepared(Mo2OverlayPreparation prepared, Mo2Stack selected)
