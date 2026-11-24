@@ -19,6 +19,14 @@
 
 
 
+## 2026-11-24 — MO2 shared capture identity and recovery boundary
+
+- Previous shared-action checkpoint `887396a`: user confirmed green; exact run ID not independently retrieved.
+- `efa8249`, `5152fdb`, `53637e4`, `5b7969d`, `53af1f4`: MO2 START now binds its verified deployment ID, selected instance/profile and game root to the existing package-level GCO recovery journal and existing temporary capture store. No fabricated physical-install or completed-capture state. The existing discard policy retires uncollected attempts after deployment retirement, preserves collected evidence, and retains package recovery on uncertain dispatch or failed frame stop. Reopen routes an MO2-bound journal to MO2 recovery, not physical owner operations. Existing Direct capture/collection contracts remain unchanged; physical owner operations explicitly refuse an MO2 journal.
+- `cd04230`, `798f888`: additive MO2-only test uses the existing owner fixture to verify shared identity, Direct isolation, duplicate/foreign attempt refusal, and uncollected disposal. Existing assertions unchanged.
+- **Remaining blocker:** the Direct PresentMon restart controller requests UAC at START. MO2 already obtains authorization at VERIFY; do not add a second prompt or arbitrary elevated command execution to the bridge. Reuse the existing controller/observer through a narrowly authenticated, package-bound elevated start transport, and verify durable MO2 reopen/resume before using the existing native tray handoff. PresentMon recording, automatic tray handoff, COLLECT/CONTINUE and Page 2 are not enabled for MO2 by this batch. No new archive, window, UI layout, profiler owner or generator changes.
+- Validation: new source and focused tests committed; full GCO TXT checkpoint requested separately. No new successful CI or gameplay claim.
+
 ## 2026-11-24 — Shared application action handlers; MO2 is a deployment adapter
 
 - User correction: preserve the working GCO application, original contracts and intricate workflow. No new window/page, parallel application lifecycle, speculative redesign, altered contracts or UI/layout changes beyond required MO2 selection.
