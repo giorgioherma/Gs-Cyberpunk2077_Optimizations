@@ -23,6 +23,8 @@ public static class Mo2ProfilerOverlayBuilder
         string sessionId, CancellationToken token = default,
         string? localAppData = null)
     {
+        if (RequiresVerificationAfterRestore(localAppData))
+            throw new InvalidOperationException("Click VERIFY before installing profilers.");
         var bundle = ComponentBundleVerifier.Inspect(packageRoot);
         if (!bundle.Ready || bundle.CetExecutable is null || bundle.GrspExecutable is null)
             throw new InvalidOperationException(
@@ -205,7 +207,23 @@ public static class Mo2ProfilerOverlayBuilder
             RequireRegularUnlinkedFile(file);
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
             var phase = doc.RootElement.GetProperty("phase").GetString();
-            if (!IsRetiredPhase(phase)) return true;
+            if (!IsRetiredPhase(phase) && phase != "retired-awaiting-verify") return true;
+        }
+        return false;
+    }
+
+    public static bool RequiresVerificationAfterRestore(string? localAppData = null)
+    {
+        var folder = Path.Combine(localAppData ?? Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData), "GCO", "MO2Bridge", "journals");
+        if (!Directory.Exists(folder)) return false;
+        EnsureNoReparseParents(folder);
+        foreach (var file in Directory.EnumerateFiles(folder, "*.json"))
+        {
+            RequireRegularUnlinkedFile(file);
+            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            if (doc.RootElement.GetProperty("phase").GetString() == "retired-awaiting-verify")
+                return true;
         }
         return false;
     }
@@ -222,11 +240,24 @@ public static class Mo2ProfilerOverlayBuilder
         RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before restoring profilers.");
         return RestoreOutstandingSessions(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            () => RequireNoProcess("ModOrganizer",
-                "Close Mod Organizer 2 before restoring an interrupted launch."));
+            () => RequireNoProcess("ModOrganizer", "MO2 is still running."),
+            deferPending: true);
     }
 
-    internal static int RestoreOutstandingSessions(string localAppData, Action requireMo2Closed)
+    // Called only by VERIFY's elevated setup helper, after graceful shutdown
+    // and before reopening MO2. Never revive an interrupted launch.
+    public static int CompleteDeferredRestore()
+    {
+        RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before verifying MO2.");
+        RequireNoProcess("ModOrganizer", "MO2 is still running.");
+        return RestoreOutstandingSessions(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            () => RequireNoProcess("ModOrganizer", "MO2 is still running."),
+            deferredOnly: true);
+    }
+
+    internal static int RestoreOutstandingSessions(string localAppData, Action requireMo2Closed,
+        bool deferPending = false, bool deferredOnly = false)
     {
         var bridge = Path.Combine(Path.GetFullPath(localAppData), "GCO", "MO2Bridge");
         var folder = Path.Combine(bridge, "journals");
@@ -238,7 +269,9 @@ public static class Mo2ProfilerOverlayBuilder
             RequireRegularUnlinkedFile(file);
             var j = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
             string? phase = j["phase"]?.GetValue<string>();
-            if (IsRetiredPhase(phase)) continue;
+            if (IsRetiredPhase(phase) ||
+                (deferredOnly && phase != "retired-awaiting-verify") ||
+                (deferPending && phase == "retired-awaiting-verify")) continue;
             string id = j["sessionId"]?.GetValue<string>() ?? "";
             if (!SessionIdPattern.IsMatch(id) ||
                 !string.Equals(Path.GetFileName(file), id + ".json", StringComparison.OrdinalIgnoreCase) ||
@@ -264,7 +297,19 @@ public static class Mo2ProfilerOverlayBuilder
                 // Signed completion means the one-shot mapper has disarmed.
                 // A normal completed launch does not require closing MO2.
             }
-            else if (phase == "test-launch-pending")
+            else if (phase == "test-launch-pending" && deferPending)
+            {
+                // Reset the UI without asking the user to close MO2. The
+                // request may still be in progress; retain it and all stage
+                // bytes, and prohibit INSTALL/START until VERIFY restarts MO2.
+                j["previousPhase"] = phase;
+                j["phase"] = "retired-awaiting-verify";
+                j["utc"] = DateTimeOffset.UtcNow.ToString("O");
+                WriteJournal(file, j);
+                count++;
+                continue;
+            }
+            else if (phase is "test-launch-pending" or "retired-awaiting-verify")
             {
                 requireMo2Closed();
                 var archive = Path.Combine(bridge, "recovery", id);
@@ -290,9 +335,10 @@ public static class Mo2ProfilerOverlayBuilder
             }
             else if (phase is not ("prepared" or "preparing" or "recovery-required"))
                 throw new InvalidDataException("Unknown MO2 recovery phase. Original files preserved.");
-            j["previousPhase"] = phase;
+            if (phase != "retired-awaiting-verify") j["previousPhase"] = phase;
             j["phase"] = phase == "test-launched" ? "retired-test-capture" :
-                phase == "test-launch-pending" ? "retired-recovered" : "retired-unlaunched";
+                phase is "test-launch-pending" or "retired-awaiting-verify"
+                    ? "retired-recovered" : "retired-unlaunched";
             j["utc"] = DateTimeOffset.UtcNow.ToString("O");
             WriteJournal(file, j);
             count++;
