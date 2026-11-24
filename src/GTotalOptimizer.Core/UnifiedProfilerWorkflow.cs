@@ -454,8 +454,16 @@ public sealed class UnifiedProfilerWorkflow
             throw new InvalidOperationException("MO2 capture identity changed; preserve recovery evidence.");
         if (GameRunning())
             throw new InvalidOperationException("Close Cyberpunk before retiring captures.");
-        DiscardPendingStaging(expectedId);
-        CollectedCaptureStore.DiscardUncollected(packageRoot, game, expectedId);
+        var folder = CollectedCaptureStore.SessionFolder(packageRoot, expectedId);
+        if (Directory.Exists(folder))
+        {
+            var index = CollectedCaptureStore.Read(packageRoot, game, expectedId, verifyHashes: true);
+            if (!index.CollectionAttempted && !index.Restored)
+            {
+                DiscardPendingStaging(expectedId);
+                CollectedCaptureStore.DiscardUncollected(packageRoot, game, expectedId);
+            }
+        }
         File.Delete(Journal);
     }
 
