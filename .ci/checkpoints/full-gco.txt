@@ -1,1 +1,1 @@
-checkpoint=mo2-cross-integrity-elevation-proof-20261124
+checkpoint=mo2-restore-defer-restart-to-verify-20261124
