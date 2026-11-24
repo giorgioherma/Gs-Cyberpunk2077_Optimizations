@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 import tempfile
 import subprocess
+import stat
 from datetime import datetime, timezone
 
 import mobase
@@ -486,18 +487,29 @@ class GcoAuthenticatedMailbox:
             kernel.CloseHandle(token)
 
     @staticmethod
+    def _frame_unlinked(path):
+        for part in (path, *path.parents):
+            if not part.exists() and not part.is_symlink():
+                continue
+            info = part.lstat()
+            if (stat.S_ISLNK(info.st_mode) or
+                    getattr(info, "st_file_attributes", 0) & 0x400):
+                raise GcoOverlayContractError("GCO frame path is redirected")
+        return path
+
+    @staticmethod
     def _frame_package():
         # The elevated VERIFY helper binds the package, not the request.
         # No caller-controlled executable, arguments, or output path.
         value = os.environ.get("GCO_VERIFIED_PACKAGE_ROOT", "")
         if not value or not os.path.isabs(value):
             raise GcoOverlayContractError("Click VERIFY to authorize frame capture")
-        root = Path(value)
+        root = GcoAuthenticatedMailbox._frame_unlinked(Path(value))
         for relative, variable in (
             ("Gs-Cyberpunk2077_Optimizer.exe", "GCO_VERIFIED_LAUNCHER_SHA256"),
             ("app/G-Total-Optimizer.App.exe", "GCO_VERIFIED_APP_SHA256"),
         ):
-            target = root / relative
+            target = GcoAuthenticatedMailbox._frame_unlinked(root / relative)
             expected = os.environ.get(variable, "").lower()
             if (len(expected) != 64 or not target.is_file() or target.is_symlink()
                     or hashlib.sha256(target.read_bytes()).hexdigest() != expected):
@@ -514,7 +526,7 @@ class GcoAuthenticatedMailbox:
         stage = _bridge_root() / "staging" / session
         if _canonical(request["stagingRoot"]) != _canonical(stage):
             raise GcoOverlayContractError("Frame capture staging identity mismatch")
-        journal_path = _bridge_root() / "journals" / (session + ".json")
+        journal_path = self._frame_unlinked(_bridge_root() / "journals" / (session + ".json"))
         if journal_path.is_symlink() or not journal_path.is_file():
             raise GcoOverlayContractError("Frame capture deployment journal missing")
         deployment = json.loads(journal_path.read_text(encoding="utf-8"))
@@ -522,12 +534,18 @@ class GcoAuthenticatedMailbox:
                 or deployment.get("sessionId") != session
                 or deployment.get("profile") != request["profile"]
                 or _canonical(deployment.get("gameRoot", "")) != _canonical(request["gameRoot"])
-                or _canonical(deployment.get("stageRoot", "")) != _canonical(stage)
-                or _canonical(self._organizer.managedGame().gameDirectory()) != _canonical(request["gameRoot"])
-                or request["profile"] not in list(self._organizer.profileNames())):
+                or _canonical(deployment.get("stageRoot", "")) != _canonical(stage)):
             raise GcoOverlayContractError("Frame capture deployment identity mismatch")
-        results = root / "RESULTS"
-        active = results / "GCO-active-profile-session.json"
+        # Reuse the real mapper's supported profile and game admission; do
+        # not invent a profileNames API or arm mappings for this helper.
+        try:
+            self._controller.prepare(self._organizer, request["profile"],
+                request["gameRoot"], request["stagingRoot"], session,
+                deployment.get("physicalPassthrough"))
+        finally:
+            self._controller.cancel()
+        results = self._frame_unlinked(root / "RESULTS")
+        active = self._frame_unlinked(results / "GCO-active-profile-session.json")
         if active.is_symlink() or not active.is_file():
             raise GcoOverlayContractError("Frame capture journal missing")
         attempt = json.loads(active.read_text(encoding="utf-8-sig"))
@@ -555,10 +573,10 @@ class GcoAuthenticatedMailbox:
                         or index.get("CollectInvoked") or index.get("Cet") is not None
                         or index.get("Redscript") is not None or index.get("FrameTimeCsv") is not None):
                     raise GcoOverlayContractError("Frame capture index is not a fresh attempt")
-                matches.append(folder)
+                matches.append(self._frame_unlinked(folder))
         if len(matches) != 1:
             raise GcoOverlayContractError("Frame capture folder identity is ambiguous")
-        frame = matches[0] / "PresentMon"
+        frame = self._frame_unlinked(matches[0] / "PresentMon")
         if frame.is_symlink() or (frame.exists() and not frame.is_dir()):
             raise GcoOverlayContractError("Frame capture destination is redirected")
         csv = frame / "PresentMon.csv"
