@@ -16,6 +16,13 @@
 
 
 
+
+## 2026-11-24 — Native dependency preservation integrated into packaged bridge
+
+- MO2 CI #26 (45462099544, head `eb2829a`): real USVFS step PASS, including STAGED_PROFILER_ASI, STAGED_ADAPTIVE_INIT, PHYSICAL_EVENT_EMITTER, STAGED_SCHEDULER, PHYSICAL_EXTERNAL_CRON and PHYSICAL_NATIVE_SETTINGS. Real source-owner generation PASS. Full MO2 workflow remained red at genuine noncurrent-profile launch: hosted runner denied process spawn/breakaway (see job 138687164523). Do not mark genuine app launch as passed.
+- Production candidate `32d0b97`, `b6bda62`, `b362598`, `a093f4b`, `f0c2610`, `90d13e9`, `8124bd1`, `b9dfee0`, `7af7690`: selected-profile effective source includes entire plugin roots; journal explicitly records only unchanged physical winners (excludes stage and MO2/Overwrite winners); empty owned parent dirs plus root sparse mapping and exact physical identity links reproduce proven native mapping. The bridge requires pending journal identity, rejects invalid/conflicting paths, disarms one-shot layer, and uses no source copies or profile edits. VERIFY upgrades only exact known previously packaged bridge, refuses foreign plugin, and will not reuse mismatching package bytes. Regression coverage includes shadowed inputs, stage exclusions, original dependency visibility, authenticated launch and no leak.
+- Native DLL API identity in actual Cyberpunk, GRSP nonzero calls and real multi-profile launch remain unverified. Next full packaging checkpoint is for a local test build only; do not activate production feature gate.
+
 ## 2026-11-24 — Physical 0-Engine dependency failure reproduced with official USVFS
 
 - MO2 CI #25 (run 45458392275, head `a4d537d`) failed at the new physical-only native probe: root-level mapping succeeded and hooked child read STAGED_PROFILER_ASI and STAGED_ADAPTIVE_INIT, then exit 34 on original modules/EventEmitter.lua. This reproduces the missing physical sibling observed in local 0-Engine. Existing profile/Overwrite and profile-isolation probes still passed. Native DLL loading itself remains unproven.
