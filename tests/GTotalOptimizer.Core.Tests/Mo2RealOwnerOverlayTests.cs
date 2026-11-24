@@ -160,6 +160,27 @@ internal static class Mo2RealOwnerOverlayTests
                     throw new InvalidDataException("MO2_REAL_OWNER_PRIOR_CAPTURE_NOT_PRESERVED");
             }
             Mo2ProfilerOverlayBuilder.VerifyPrepared(output, effective);
+            if (realZeroEngineDirectory is null)
+            {
+                const string unknown = "red4ext/plugins/G-REDscript-Profiler/foreign-config.json";
+                Put("overwrite/" + unknown, "foreign configuration");
+                var foreign = Mo2SourceInspector.Resolve(game, details, "Heavy");
+                try
+                {
+                    await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+                        verifiedPackageRoot, game, foreign, "fedcba9876543210fedcba9876543210",
+                        localAppData: local);
+                    throw new Exception("MO2_REAL_GRSP_FOREIGN_INSTALL_DATA_ACCEPTED");
+                }
+                catch (InvalidOperationException ex) when (
+                    ex.Message.Contains("Authoritative GRSP owner refused", StringComparison.Ordinal))
+                {
+                    if (File.ReadAllText(Path.Combine(instance, "overwrite", unknown)) != "foreign configuration" ||
+                        Sha256(Path.Combine(instance, "overwrite", prior)) != Sha256(Path.Combine(archive, prior)))
+                        throw new InvalidDataException("MO2_REAL_GRSP_REFUSAL_MODIFIED_ORIGINAL");
+                    Console.WriteLine("PASS real GRSP owner still refuses foreign non-result data");
+                }
+            }
             if (!string.IsNullOrWhiteSpace(realZeroEngineDirectory) &&
                 (Sha256(Path.Combine(realZeroEngineDirectory, "init.lua")) != sourceZeroHash ||
                 !File.Exists(Path.Combine(instance, "mods", "SimpleCETMod", "bin", "x64",
