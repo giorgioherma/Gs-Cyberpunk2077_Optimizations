@@ -7,6 +7,12 @@
 
 
 
+
+## 2026-11-24 — Cache pre-launch failure isolated to integration path
+
+- Local normal MO2 launch with PROFILE A succeeds. GCO launch fails with signed Errno 13 at game r6/cache/modded both when the visible profile differs and when both select PROFILE A; latest journal shows the eight owner-generated profiler files contain no cache paths. This rules out profile mismatch as a necessary cause. Native loading still unproven.
+- Upstream MO2 v2.5.2 OrganizerCore::beforeRun calls AboutToRun before fileMapping/updateMapping. Cyberpunk basic_games master game_cyberpunk2077.py _map_cache_files uses shutil.copy2 on unmapped cache entries and performs copytree on cache refresh. A directory passed as a file is a plausible Windows error; installed plugin revision and traceback still required to prove the failing operation and explain the normal UI/API launch difference. Do not alter user cache/Overwrite permissions, skip upstream preparation callbacks, or patch installed game support without proof. No runtime source changes in this investigation.
+
 ## 2026-11-24 — RESTORE resets workflow; VERIFY owns MO2 restart
 
 - CI #1130 succeeded (head `06f616d`, run 45444413577). Local user reports successful elevated bridge connection and four framework gates; signed START reply failed with access denied on game r6/cache/modded. Exact cache-handling cause remains unproven; compare normal MO2 launch without GCO. No cache deletion, permission changes, native game/profiler/F11 success claimed.
