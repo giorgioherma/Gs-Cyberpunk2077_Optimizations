@@ -40,7 +40,7 @@ public static class Mo2ProfilerOverlayBuilder
                 "install", fixture, ct);
             if (!grsp.Ok) throw new InvalidOperationException(
                 "Authoritative GRSP owner refused disposable overlay fixture: " + grsp.Detail);
-        }, token, localAppData);
+        }, token, localAppData, Mo2NativeOutputReset.ReadCetPatterns(bundle.CetExecutable));
     }
 
     // Package internals stay private: the callback exists for structural fixture
@@ -48,7 +48,8 @@ public static class Mo2ProfilerOverlayBuilder
     internal static async Task<Mo2OverlayPreparation> PrepareAsync(
         string liveGameRoot, Mo2Stack selected, string sessionId,
         Func<string, CancellationToken, Task> ownersInstallFixture,
-        CancellationToken token = default, string? localAppData = null)
+        CancellationToken token = default, string? localAppData = null,
+        string[]? cetResultPatterns = null)
     {
         if (!SessionIdPattern.IsMatch(sessionId))
             throw new InvalidDataException("Invalid GCO session ID.");
@@ -90,9 +91,9 @@ public static class Mo2ProfilerOverlayBuilder
 
         var baselines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var priorResults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var priorResultSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var evidence = Path.Combine(bridge, "recovery", sessionId, "prior-grsp-results");
+        var resultPatterns = cetResultPatterns ?? [];
+        var overwrite = selected.OverwriteDirectory ??
+            throw new InvalidDataException("Verified MO2 Overwrite directory is unavailable.");
         try
         {
             // No unnecessary REDscript or user red4ext files are copied.
@@ -105,26 +106,10 @@ public static class Mo2ProfilerOverlayBuilder
             {
                 token.ThrowIfCancellationRequested();
                 var relative = NormalizeRelative(key);
-                if (IsHistoricalGrspResult(relative))
+                if (Mo2NativeOutputReset.IsNativeResult(relative, resultPatterns))
                 {
-                    // Previous capture output is not an installation footprint.
-                    // Preserve it outside both the fixture and runtime stage:
-                    // the next capture can update shared status/index files.
-                    var historical = Path.GetFullPath(winning.PhysicalPath);
-                    EnsureNoReparseParents(Path.GetDirectoryName(historical)!);
-                    RequireRegularUnlinkedFile(historical);
-                    var hash = Hash(historical);
-                    bytes += new FileInfo(historical).Length;
-                    if (++count > 100_000 || bytes > 2L * 1024 * 1024 * 1024)
-                        throw new InvalidDataException("MO2 prior capture and source inventory exceeds safe bounds.");
-                    var archived = Path.Combine(evidence, relative);
-                    EnsureNoReparseParents(Path.GetDirectoryName(archived)!);
-                    Directory.CreateDirectory(Path.GetDirectoryName(archived)!);
-                    File.Copy(historical, archived, overwrite: false);
-                    if (Hash(archived) != hash || Hash(historical) != hash)
-                        throw new InvalidDataException("Previous GRSP capture changed during preservation: " + relative);
-                    priorResults[relative] = hash;
-                    priorResultSources[relative] = historical;
+                    if (winning.FromMo2 && winning.Owner != "(MO2 Overwrite)")
+                        throw new InvalidDataException("Profiler results in an enabled MO2 package cannot be discarded safely: " + relative);
                     continue;
                 }
                 if (!IsRequiredOwnerInput(relative)) continue;
@@ -197,7 +182,8 @@ public static class Mo2ProfilerOverlayBuilder
             // siblings during relative reads. Explicit identity file links
             // preserve original physical winners without staging their bytes
             // or overriding enabled MO2 packages / Overwrite.
-            var passthrough = PhysicalPassthrough(selected, game, changes.Select(f => f.GameRelativePath));
+            var passthrough = PhysicalPassthrough(selected, game, changes.Select(f => f.GameRelativePath),
+                resultPatterns);
             foreach (var relative in passthrough)
                 Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(stage, relative))!);
 
@@ -208,8 +194,7 @@ public static class Mo2ProfilerOverlayBuilder
                 fixtureRoot = fixture, stageRoot = stage, phase = "prepared",
                 originalSources = baselines, originalSourcePaths = owners, generatedFiles = changes,
                 physicalPassthrough = passthrough,
-                priorGrspResults = priorResults, priorGrspResultSources = priorResultSources,
-                priorGrspResultsRoot = evidence,
+                overwriteRoot = overwrite, cetResultPatterns = resultPatterns,
                 utc = DateTimeOffset.UtcNow
             });
             return new(selected.Profile, sessionId, stage, journal, changes, count,
@@ -222,8 +207,7 @@ public static class Mo2ProfilerOverlayBuilder
                 schemaVersion = 1, sessionId, profile = selected.Profile, gameRoot = game,
                 fixtureRoot = fixture, stageRoot = stage, phase = "recovery-required",
                 error = ex.Message, originalSources = baselines,
-                originalSourcePaths = owners, priorGrspResults = priorResults,
-                priorGrspResultSources = priorResultSources, priorGrspResultsRoot = evidence,
+                originalSourcePaths = owners,
                 utc = DateTimeOffset.UtcNow
             });
             throw;
@@ -373,6 +357,10 @@ public static class Mo2ProfilerOverlayBuilder
             }
             else if (phase is not ("prepared" or "preparing" or "recovery-required"))
                 throw new InvalidDataException("Unknown MO2 recovery phase. Original files preserved.");
+            // Match Direct RESTORE: discard only live uncollected output.
+            // An uncertain dispatch is not safe to reset until VERIFY closed MO2.
+            if (j["overwriteRoot"] is not null && j["cetResultPatterns"] is not null)
+                Mo2NativeOutputReset.Discard(j);
             if (phase != "retired-awaiting-verify") j["previousPhase"] = phase;
             j["phase"] = phase == "test-launched" ? "retired-test-capture" :
                 phase is "test-launch-pending" or "retired-awaiting-verify"
@@ -405,6 +393,18 @@ public static class Mo2ProfilerOverlayBuilder
         journal["processId"] = processId;
         journal["utc"] = DateTimeOffset.UtcNow.ToString("O");
         WriteJournal(prepared.JournalFile, journal);
+    }
+
+    internal static void DiscardBeforeStart(Mo2OverlayPreparation prepared)
+    {
+        RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before starting a new capture.");
+        EnsureNoReparseParents(prepared.JournalFile);
+        RequireRegularUnlinkedFile(prepared.JournalFile);
+        var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(prepared.JournalFile))!.AsObject();
+        if (journal["sessionId"]?.GetValue<string>() != prepared.SessionId ||
+            journal["phase"]?.GetValue<string>() != "prepared")
+            throw new InvalidOperationException("No verified prepared capture session.");
+        Mo2NativeOutputReset.Discard(journal);
     }
 
     public static bool IsStillPrepared(Mo2OverlayPreparation prepared)
@@ -504,31 +504,15 @@ public static class Mo2ProfilerOverlayBuilder
         }
         if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
             throw new InvalidDataException("MO2 owner input inventory changed.");
-        var historicalResults = journal.GetProperty("priorGrspResults");
-        var historicalSources = journal.GetProperty("priorGrspResultSources");
-        var evidenceRoot = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(prepared.JournalFile)!)!,
-            "recovery", prepared.SessionId, "prior-grsp-results");
-        if (!string.Equals(evidenceRoot, journal.GetProperty("priorGrspResultsRoot").GetString(),
+        var resultPatterns = journal.GetProperty("cetResultPatterns").Deserialize<string[]>()
+            ?? throw new InvalidDataException("CET result policy missing.");
+        if (!string.Equals(selected.OverwriteDirectory, journal.GetProperty("overwriteRoot").GetString(),
                 StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("MO2 prior result archive identity changed.");
-        var historicalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in historicalResults.EnumerateObject())
-        {
-            if (!IsHistoricalGrspResult(NormalizeRelative(entry.Name)) ||
-                !selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
-                !string.Equals(Path.GetFullPath(winner.PhysicalPath),
-                    historicalSources.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Previous GRSP result winner changed: " + entry.Name);
-            var archived = Path.Combine(evidenceRoot, entry.Name);
-            EnsureNoReparseParents(Path.GetDirectoryName(archived)!);
-            RequireRegularUnlinkedFile(archived);
-            RequireRegularUnlinkedFile(winner.PhysicalPath);
-            if (Hash(archived) != entry.Value.GetString() || Hash(winner.PhysicalPath) != entry.Value.GetString())
-                throw new InvalidDataException("Previous GRSP capture changed before launch: " + entry.Name);
-            historicalKeys.Add(entry.Name);
-        }
-        if (!historicalKeys.SetEquals(selected.EffectiveFiles.Keys.Where(IsHistoricalGrspResult)))
-            throw new InvalidDataException("Previous GRSP result inventory changed.");
+            throw new InvalidDataException("MO2 Overwrite directory changed.");
+        foreach (var (relative, winner) in selected.EffectiveFiles)
+            if (Mo2NativeOutputReset.IsNativeResult(relative, resultPatterns) &&
+                winner.FromMo2 && winner.Owner != "(MO2 Overwrite)")
+                throw new InvalidDataException("Profiler results in an enabled MO2 package cannot be discarded safely: " + relative);
         var actual = Scan(prepared.StagingDirectory);
         var sealedFiles = journal.GetProperty("generatedFiles").Deserialize<Mo2OverlayFile[]>()
             ?? throw new InvalidDataException("MO2 overlay manifest missing.");
@@ -537,7 +521,7 @@ public static class Mo2ProfilerOverlayBuilder
         var passthrough = journal.GetProperty("physicalPassthrough").Deserialize<string[]>()
             ?? throw new InvalidDataException("MO2 physical dependency manifest missing.");
         var latest = PhysicalPassthrough(selected, journal.GetProperty("gameRoot").GetString()!,
-            sealedFiles.Select(f => f.GameRelativePath));
+            sealedFiles.Select(f => f.GameRelativePath), resultPatterns);
         if (!passthrough.SequenceEqual(latest, StringComparer.OrdinalIgnoreCase))
             throw new InvalidDataException("MO2 physical dependency winners changed.");
         foreach (var relative in passthrough)
@@ -558,13 +542,14 @@ public static class Mo2ProfilerOverlayBuilder
     }
 
     private static string[] PhysicalPassthrough(Mo2Stack selected, string game,
-        IEnumerable<string> stagedPaths)
+        IEnumerable<string> stagedPaths, string[] resultPatterns)
     {
         var overridden = stagedPaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var result = new List<string>();
         foreach (var (key, winner) in selected.EffectiveFiles)
         {
             if (winner.FromMo2 || overridden.Contains(key) ||
+                Mo2NativeOutputReset.IsNativeResult(key, resultPatterns) ||
                 !(key.StartsWith("bin/x64/plugins/", StringComparison.OrdinalIgnoreCase) ||
                   key.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase) ||
                   key.Equals("red4ext/RED4ext.dll", StringComparison.OrdinalIgnoreCase)))
@@ -580,9 +565,6 @@ public static class Mo2ProfilerOverlayBuilder
         return result.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static bool IsHistoricalGrspResult(string path) =>
-        path.StartsWith("red4ext/plugins/G-REDscript-Profiler/RESULTS/", StringComparison.OrdinalIgnoreCase);
-
     internal static bool IsRequiredOwnerInput(string path) =>
         path.Equals("bin/x64/plugins/cyber_engine_tweaks.asi", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json", StringComparison.OrdinalIgnoreCase) ||
@@ -590,7 +572,7 @@ public static class Mo2ProfilerOverlayBuilder
         path.Equals("red4ext/plugins/G-REDscript-Profiler.dll", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("red4ext/plugins/redscript_profiler_alpha.dll", StringComparison.OrdinalIgnoreCase) ||
         (path.StartsWith("red4ext/plugins/G-REDscript-Profiler/", StringComparison.OrdinalIgnoreCase) &&
-         !IsHistoricalGrspResult(path));
+         !Mo2NativeOutputReset.IsNativeResult(path, []));
 
     internal static bool IsAllowedOutput(string path)
     {
