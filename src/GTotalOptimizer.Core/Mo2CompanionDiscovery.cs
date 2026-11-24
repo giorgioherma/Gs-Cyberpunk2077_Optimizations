@@ -45,15 +45,22 @@ public static class Mo2CompanionDiscovery
         {
             var files = Directory.EnumerateFiles(bridgeDirectory, "instance-*.json",
                     SearchOption.TopDirectoryOnly)
+                .Where(file => System.Text.RegularExpressions.Regex.IsMatch(
+                    Path.GetFileName(file), @"^instance-[a-f0-9]{24}\.json$",
+                    System.Text.RegularExpressions.RegexOptions.CultureInvariant))
                 .Take(MaximumStatusFiles + 1).ToArray();
             if (files.Length > MaximumStatusFiles)
                 return Empty("Too many MO2 bridge status records; cannot identify the instance.");
             var accepted = new List<Mo2CompanionStatus>();
+            string refusal = disconnected.Detail;
             foreach (var file in files)
             {
                 // Do not parse attacker-controlled symlink targets.
                 if (new FileInfo(file).LinkTarget is not null) continue;
-                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                // Python publishes by atomic replace; allow deletion/rename
+                // of the previous heartbeat while it is being read.
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
                 if (stream.Length == 0 || stream.Length > 16 * 1024) continue;
                 using var json = JsonDocument.Parse(stream);
                 var root = json.RootElement;
@@ -72,19 +79,36 @@ public static class Mo2CompanionDiscovery
                 var overwrite = Read(root, "overwriteRoot");
                 var baseDirectory = Read(root, "instanceRoot");
                 int pid = ReadInt(root, "processId");
-                if (!SameFolder(Path.GetDirectoryName(exe), application) ||
-                    !SameFolder(mods, instance.ModsDirectory) ||
+                if (!SameFolder(Path.GetDirectoryName(exe), application)) continue;
+                if (!SameFolder(mods, instance.ModsDirectory) ||
                     !SameFolder(overwrite, instance.OverwriteDirectory) ||
-                    !SameFolder(Path.GetDirectoryName(profilePath), instance.ProfilesDirectory) ||
-                    !File.Exists(Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe")) ||
-                    pid <= 0) continue;
+                    !SameFolder(Path.GetDirectoryName(profilePath), instance.ProfilesDirectory))
+                {
+                    refusal = "MO2 is open, but its instance paths do not match the selected instance.";
+                    continue;
+                }
+                if (!File.Exists(Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe")) || pid <= 0)
+                {
+                    refusal = "MO2 game directory or process identity is invalid.";
+                    continue;
+                }
                 if (!DateTimeOffset.TryParse(Read(root, "updatedUtc"), out var heartbeat) ||
-                    now < heartbeat || now - heartbeat > MaximumAge) continue;
+                    now < heartbeat || now - heartbeat > MaximumAge)
+                {
+                    refusal = "MO2 bridge heartbeat is stale.";
+                    continue;
+                }
                 // A live PID can be reused by another process. Verify the actual
                 // running image, not just a self-reported executable or live PID.
                 var actualImage = processImageForTesting is null
                     ? LiveProcessImage(pid) : processImageForTesting(pid);
-                if (!SameFile(actualImage, exe)) continue;
+                if (!SameFile(actualImage, exe))
+                {
+                    refusal = actualImage is null
+                        ? "Could not read the running MO2 process image."
+                        : "MO2 process image does not match the selected installation.";
+                    continue;
+                }
                 accepted.Add(new(true, "MO2 companion read-only identity confirmed; selected-profile deployment not yet proven.",
                     game, profile, exe, baseDirectory, mods, overwrite,
                     profilePath, pid, heartbeat, epoch, file));
@@ -92,7 +116,7 @@ public static class Mo2CompanionDiscovery
             return accepted.Count == 1 ? accepted[0] :
                 Empty(accepted.Count > 1
                     ? "Multiple matching MO2 bridge processes; select a unique running instance."
-                    : disconnected.Detail);
+                    : refusal);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
             or ArgumentException or NotSupportedException)
