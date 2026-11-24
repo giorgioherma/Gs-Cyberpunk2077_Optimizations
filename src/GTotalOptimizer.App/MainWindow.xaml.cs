@@ -1272,16 +1272,7 @@ public partial class MainWindow : Window
     {
         if (!initialized || !IsLoaded || closingInProgress ||
             closureCleanupVerified || busy || gameStateRefreshInFlight) return;
-        if (mo2Mode)
-        {
-            // The experimental source mode never starts Direct capture or ETW.
-            pendingExternalGameStart = pendingGameExitRefresh = false;
-            pendingExternalGamePid = null;
-            UpdatePathLock();
-            RefreshMo2WorkflowAdmission();
-            return;
-        }
-        if (!inspection.IsValidGame) return;
+        if (!mo2Mode && !inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
         try
         {
@@ -1295,7 +1286,10 @@ public partial class MainWindow : Window
                 if (pid == observedGamePid && GameRunning())
                 {
                     pendingGameExitRefresh = false;
-                    await HandleExternalGameLaunchAsync();
+                    // A game started outside GCO has no authorized one-shot
+                    // MO2 mapping. Refresh its status but never attach the
+                    // Direct owner reset to that process.
+                    if (!mo2Mode) await HandleExternalGameLaunchAsync();
                 }
             }
 
@@ -1576,9 +1570,12 @@ public partial class MainWindow : Window
         try
         {
             var saved = UserSettings.ReadMo2Setup();
-            var folder = Mo2PathBox.Text;
+            var binding = Workflow.ReadMo2CaptureIdentity();
+            var folder = binding?.ApplicationDirectory ?? Mo2PathBox.Text;
+            if (binding?.ApplicationDirectory is not null)
+                Mo2PathBox.Text = folder;
             var location = Mo2InstallLocator.Inspect(folder,
-                Mo2InstanceBox.SelectedItem as string ?? saved.InstanceFolder);
+                binding?.InstanceDirectory ?? Mo2InstanceBox.SelectedItem as string ?? saved.InstanceFolder);
             mo2SelectionUpdating = true;
             try
             {
@@ -1592,13 +1589,20 @@ public partial class MainWindow : Window
                     SetStatus(location.Detail);
                     return;
                 }
+                if (binding is not null &&
+                    !string.Equals(Path.GetFullPath(location.InstanceFolder).TrimEnd(Path.DirectorySeparatorChar),
+                        binding.InstanceDirectory, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The original MO2 instance is unavailable.");
                 var instance = Mo2SourceInspector.Discover(location.InstanceFolder);
-                var profile = Mo2ProfileBox.SelectedItem as string ?? saved.Profile;
+                var profile = binding?.Profile ?? Mo2ProfileBox.SelectedItem as string ?? saved.Profile;
                 Mo2ProfileBox.ItemsSource = instance.Profiles;
-                Mo2ProfileBox.SelectedItem = instance.Profiles.FirstOrDefault(
-                    p => p.Equals(profile, StringComparison.OrdinalIgnoreCase))
-                    ?? instance.Profiles.FirstOrDefault(p => p.Equals(instance.PreferredProfile,
+                var selectedProfile = instance.Profiles.FirstOrDefault(
+                    p => p.Equals(profile, StringComparison.OrdinalIgnoreCase));
+                Mo2ProfileBox.SelectedItem = binding is not null ? selectedProfile :
+                    selectedProfile ?? instance.Profiles.FirstOrDefault(p => p.Equals(instance.PreferredProfile,
                         StringComparison.OrdinalIgnoreCase));
+                if (binding is not null && selectedProfile is null)
+                    throw new InvalidDataException("The original MO2 profile is unavailable.");
                 UserSettings.WriteMo2Setup(folder, location.InstanceFolder,
                     Mo2ProfileBox.SelectedItem as string ?? "");
                 if (!instance.Recognized)
@@ -1651,6 +1655,16 @@ public partial class MainWindow : Window
                 var stack = result.CandidateSource;
                 if (result.Recognized && stack is not null)
                 {
+                    if (binding is not null)
+                    {
+                        if (!binding.Matches(result))
+                            throw new InvalidDataException("The original MO2 capture source changed.");
+                        if (mo2Prepared is null)
+                        {
+                            mo2Prepared = await Task.Run(() => Workflow.ResumeMo2CaptureAttempt(result));
+                            mo2LaunchAttempted = mo2Prepared is not null;
+                        }
+                    }
                     mo2SelectedSource = result;
                     mo2Framework = await Task.Run(() =>
                         FrameworkPreflight.InspectMo2(result.GameDirectory, stack));
@@ -1669,6 +1683,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             mo2Connected = null;
+            mo2SelectedSource = null;
             mo2Framework = null;
             SetFrameworkStatuses(null);
             Mo2StatusText.Text = "MO2 verification failed";
@@ -1714,6 +1729,21 @@ public partial class MainWindow : Window
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
             SetStatus("Previous profiling session requires recovery. Click RESTORE.");
+        else if (mo2Prepared is not null && mo2LaunchAttempted &&
+            Workflow.HasMo2CaptureAttempt && mo2SelectedSource is not null && !mo2VerifyRequired)
+        {
+            SetPortraitStage(PortraitStage.Capturing);
+            if (running)
+            {
+                ClearStatusPin();
+                SetStatus("Cyberpunk running. Record gameplay; F11 START / STOP.");
+            }
+            else if (LaunchButton.IsEnabled)
+            {
+                ClearStatusPin();
+                SetStatus("Cyberpunk closed. Start again or restore profilers.");
+            }
+        }
     }
 
     private async Task<Mo2ProfileSelection> InspectMo2SelectionAsync()
@@ -1764,6 +1794,14 @@ public partial class MainWindow : Window
         var selection = await InspectMo2SelectionAsync();
         var prepared = mo2Prepared ??
             throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        if (Workflow.HasMo2CaptureAttempt)
+        {
+            var binding = Workflow.ReadMo2CaptureIdentity();
+            if (binding is null || binding.SessionId != prepared.SessionId || !binding.Matches(selection))
+                throw new InvalidDataException("The original MO2 capture source changed.");
+            if (mo2LaunchAttempted && Workflow.ResumeMo2CaptureAttempt(selection) is null)
+                throw new InvalidOperationException("Previous capture requires recovery.");
+        }
         if (mo2LaunchAttempted)
         {
             // The MO2 mapper is one-shot. Recreate only its deployment for
@@ -2723,11 +2761,10 @@ public partial class MainWindow : Window
             SetBusy(false);
             if (!launched) SetPortraitStage(mo2Mode && mo2Prepared is null
                 ? PortraitStage.Black : PortraitStage.Installed);
-            // The native frame observer is shared. Keep WPF open until
-            // MO2 journal reopen can resume the prepared deployment without
-            // forcing RESTORE. No alternative tray or window is introduced.
-            if (mo2Mode) RefreshMo2WorkflowAdmission();
-            else if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
+            // Both sources now have the same package-bound capture identity.
+            // The existing native tray observes the actual game and reopens
+            // this same window; MO2 resumes from its acknowledged journal.
+            if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
         }
     }
