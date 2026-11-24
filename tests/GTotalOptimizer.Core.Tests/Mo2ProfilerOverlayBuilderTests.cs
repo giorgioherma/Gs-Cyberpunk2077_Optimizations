@@ -50,6 +50,12 @@ internal static class Mo2ProfilerOverlayBuilderTests
             var overwrite = Path.Combine(instanceRoot, "overwrite");
             Put(overwrite, prior, "previous capture");
             Put(overwrite, priorStatus, "previous status");
+            const string cetResult = "bin/x64/plugins/cyber_engine_tweaks/CET_Runtime_Profile_ByMod.csv";
+            const string unrelated = "red4ext/plugins/Codeware/user.log";
+            Put(game, cetResult, "old physical CET capture");
+            Put(overwrite, cetResult, "old virtual CET capture");
+            Put(overwrite, unrelated, "unrelated Overwrite data");
+            Put(root, "RESULTS/Collected/GRSP_Summary.csv", "sealed capture");
             var instance = Mo2SourceInspector.Discover(instanceRoot);
             var stack = Mo2SourceInspector.Resolve(game, instance, "Heavy");
             if (!stack.Ready || !stack.ProfileVerified ||
@@ -75,7 +81,7 @@ internal static class Mo2ProfilerOverlayBuilderTests
 
             var result = await Mo2ProfilerOverlayBuilder.PrepareAsync(game, stack, Session,
                 (fixture, _) => { FakeOwnerInstall(fixture); return Task.CompletedTask; },
-                localAppData: local);
+                localAppData: local, cetResultPatterns: ["CET_Runtime_Profile_*.csv"]);
             var expected = new[] { asi, binding, zero, scheduler, controls, controlTitle, dll, grspTitle };
             if (result.Files.Count != expected.Length ||
                 expected.Any(e => !result.Files.Any(f => f.GameRelativePath == e)) ||
@@ -99,14 +105,12 @@ internal static class Mo2ProfilerOverlayBuilderTests
             {
                 if (j.RootElement.GetProperty("phase").GetString() != "prepared")
                     throw new InvalidDataException("MO2_SESSION_JOURNAL_NOT_PREPARED");
-                var archiveRoot = j.RootElement.GetProperty("priorGrspResultsRoot").GetString()!;
-                if (j.RootElement.GetProperty("priorGrspResults").GetRawText().Length <= 2 ||
-                    File.ReadAllText(Path.Combine(archiveRoot, prior)) != "previous capture" ||
-                    File.ReadAllText(Path.Combine(archiveRoot, priorStatus)) != "previous status" ||
-                    File.ReadAllText(Path.Combine(overwrite, prior)) != "previous capture" ||
-                    File.ReadAllText(Path.Combine(overwrite, priorStatus)) != "previous status" ||
-                    File.Exists(Path.Combine(result.StagingDirectory, prior)))
-                    throw new InvalidDataException("MO2_PRIOR_CAPTURE_NOT_PRESERVED_OR_LEAKED_INTO_STAGE");
+                if (j.RootElement.TryGetProperty("priorGrspResultsRoot", out _) ||
+                    !File.Exists(Path.Combine(overwrite, prior)) ||
+                    !File.Exists(Path.Combine(game, cetResult)) ||
+                    File.Exists(Path.Combine(result.StagingDirectory, prior)) ||
+                    File.Exists(Path.Combine(result.StagingDirectory, cetResult)))
+                    throw new InvalidDataException("MO2_INSTALL_MUST_NOT_ARCHIVE_OR_DISCARD_CAPTURE");
                 var physical = j.RootElement.GetProperty("physicalPassthrough")
                     .EnumerateArray().Select(x => x.GetString()).ToHashSet();
                 if (!physical.SetEquals(new[] { emitter, sibling }) ||
@@ -130,9 +134,19 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 catch (InvalidDataException) { return; }
                 throw new Exception("MO2_STALE_PREPARED_OVERLAY_ACCEPTED");
             }
-            Put(overwrite, priorStatus, "changed historical status");
-            RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
-            Put(overwrite, priorStatus, "previous status");
+            // START discards uncollected output without archiving it.
+            Mo2ProfilerOverlayBuilder.DiscardBeforeStart(result);
+            Mo2ProfilerOverlayBuilder.DiscardBeforeStart(result);
+            if (File.Exists(Path.Combine(overwrite, prior)) ||
+                File.Exists(Path.Combine(overwrite, priorStatus)) ||
+                File.Exists(Path.Combine(game, cetResult)) ||
+                File.Exists(Path.Combine(overwrite, cetResult)) ||
+                File.ReadAllText(Path.Combine(overwrite, unrelated)) != "unrelated Overwrite data" ||
+                File.ReadAllText(Path.Combine(root, "RESULTS/Collected/GRSP_Summary.csv")) != "sealed capture" ||
+                Directory.Exists(Path.Combine(local, "GCO", "MO2Bridge", "recovery", Session, "prior-grsp-results")))
+                throw new InvalidDataException("MO2_START_UNCOLLECTED_DISCARD_OR_FOREIGN_PRESERVATION_FAILED");
+            stack = Mo2SourceInspector.Resolve(game, instance, "Heavy");
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack);
             Put(mod, owner, "changed after preparation");
             RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
             Put(mod, owner, "original_mod_callback()");
@@ -150,6 +164,8 @@ internal static class Mo2ProfilerOverlayBuilderTests
             if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(result))
                 throw new InvalidDataException("MO2_PRE_DISPATCH_RESTORE_NOT_AVAILABLE");
             Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "prepared", "test-launch-pending");
+            Put(overwrite, prior, "new uncollected capture");
+            Put(result.StagingDirectory, cetResult, "new stage capture");
             if (Mo2ProfilerOverlayBuilder.IsStillPrepared(result))
                 throw new InvalidDataException("MO2_PENDING_DISPATCH_MISCLASSIFIED_AS_PREPARED");
             RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
@@ -175,6 +191,7 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local) ||
                 !Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore(local) ||
                 !File.Exists(pending) || !Directory.Exists(result.StagingDirectory) ||
+                !File.Exists(Path.Combine(overwrite, prior)) ||
                 Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, RequireClosed, deferPending: true) != 0)
                 throw new InvalidDataException("MO2_RESTORE_MUST_RESET_WITHOUT_CLOSING_MO2");
             RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
@@ -193,6 +210,9 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 File.Exists(pending) || !File.Exists(foreignCommand) ||
                 Directory.GetFiles(Path.Combine(bridge, "recovery", result.SessionId)).Length != 1 ||
                 !Directory.Exists(result.StagingDirectory) ||
+                File.Exists(Path.Combine(overwrite, prior)) ||
+                File.Exists(Path.Combine(result.StagingDirectory, cetResult)) ||
+                File.ReadAllText(Path.Combine(overwrite, unrelated)) != "unrelated Overwrite data" ||
                 Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { }, deferredOnly: true) != 0)
                 throw new InvalidDataException("MO2_VERIFY_DEFERRED_RESTORE_OR_IDEMPOTENCE_FAILED");
             using (var journal = JsonDocument.Parse(File.ReadAllText(result.JournalFile)))
