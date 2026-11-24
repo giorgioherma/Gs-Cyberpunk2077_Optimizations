@@ -1633,6 +1633,12 @@ public partial class MainWindow : Window
                     SetStatus("Click VERIFY to start MO2 with the required permissions.");
                     return;
                 }
+                if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(connected, packageRoot))
+                {
+                    Mo2StatusText.Text = "Click VERIFY to prepare MO2";
+                    SetStatus("Click VERIFY to authorize this GCO package.");
+                    return;
+                }
                 var selected = Mo2ProfileBox.SelectedItem as string;
                 if (string.IsNullOrWhiteSpace(selected))
                 {
@@ -1728,6 +1734,8 @@ public partial class MainWindow : Window
         if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
         if (!Mo2CompanionCommandClient.ElevationVerified(connected, probe))
             throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
+        if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(connected, packageRoot))
+            throw new InvalidOperationException("Click VERIFY to authorize this GCO package.");
         var selection = await Task.Run(() => Mo2ProfileSelectionService.Inspect(
             folder, instancePath, profile, connected.GameDirectory));
         if (!selection.Recognized || selection.CandidateSource is null)
@@ -1756,8 +1764,6 @@ public partial class MainWindow : Window
         var selection = await InspectMo2SelectionAsync();
         var prepared = mo2Prepared ??
             throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
-        if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(mo2Connected!, packageRoot))
-            throw new InvalidOperationException("Click VERIFY to authorize frame capture for this GCO package.");
         if (mo2LaunchAttempted)
         {
             // The MO2 mapper is one-shot. Recreate only its deployment for
