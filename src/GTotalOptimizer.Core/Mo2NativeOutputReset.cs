@@ -69,6 +69,9 @@ internal static class Mo2NativeOutputReset
             throw new InvalidDataException("Missing CET owner result inventory.");
         ValidatePatterns(patterns);
 
+        // The session-owned stage is also a possible output destination.
+        var stage = Path.GetFullPath(journal["stageRoot"]?.GetValue<string>() ??
+            throw new InvalidDataException("Missing session stage root."));
         return (new[] { game, overwrite, stage }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), patterns);
     }
 
