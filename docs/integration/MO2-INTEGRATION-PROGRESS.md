@@ -23,6 +23,13 @@
 
 
 
+## 2026-11-25 — Local MO2 reinstall: accept CET runtime sidecars
+
+- User's real PROFILE A deployment journal reported `Source owner deleted a file not representable by a MO2 overlay: bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/CETProfilerControls.log`. VERIFY succeeded; RESTORE retired the failed unlaunched deployment. Overwrite retained only controls log and CET-generated `db.sqlite3`, not controls source. The authoritative CET installer replaces the entire controls directory in its isolated fixture, which exposed the adapter's incorrect source classification.
+- `07d7d28`, `8ab4a7b`, `cf1b79e`: exclude exact per-mod CET runtime sidecars (mod-name.log and db.sqlite3) from installer source projection and source seals. Preserve original files and normal physical passthrough; do not copy them into generated overlays or delete live state. Permit only these inert controls residues after restoration, excluding them from the Page 2 source view; actual controls Lua and other unexpected controls files still block admission. Trace informational residue detection; no extra RESTORE or retry dialog. Direct and both owner managers unchanged.
+- `051e2f5`, `ae4b4e4`: additive real-owner reinstall/replay coverage with prior controls and mod runtime sidecars; verify preserved bytes, updated sidecars accepted, Continue tolerates sidecars created during capture, Page 2 still refuses active controls source. Existing assertions and workflow definitions retained.
+- Full package and MO2 checkpoints pending; no new local gameplay validation yet. Existing official MO2 runner breakaway restriction remains independent.
+
 ## 2026-11-25 — Actual MO2 Page 2 combined ZIP verified; runner-only launch blocker remains
 
 - [MO2 #32](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45508022429), `d517e3f`: actual real-owner step SUCCESS. Log: `PASS MO2 actual combined ZIP through existing Page 2 services: CET transforms=0, REDscript edits=1, files=13; selected winner and rollback hash verified`. Both real collection replays and all six original/partial/namespaced/legacy owner scenarios passed, with unchanged originals. Native USVFS and selected-profile contracts also passed. This proves the corrected native replay and actual combined output topology/ownership; it does not prove a CET optimization transform in this small fixture, SCC compilation of this specific MO2 ZIP, or Cyberpunk gameplay.
