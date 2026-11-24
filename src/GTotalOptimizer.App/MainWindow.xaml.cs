@@ -1610,10 +1610,10 @@ public partial class MainWindow : Window
                 Mo2StatusText.Text = result.Recognized && stack is not null
                     ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetModCount} CET mods | {stack.RedscriptModCount} REDscript mods"
                     : result.Detail;
-                SetStatus($"MO2 bridge authenticated. UI profile: {connected.CurrentProfile}; selected: {selected}. " +
-                    (result.Recognized ? (mo2Framework?.Ready == true
-                        ? "Candidate frameworks verified. Experimental profiling test only."
-                        : mo2Framework?.Detail ?? "Framework compatibility unverified.") : result.Detail));
+                SetStatus(result.Recognized
+                    ? (mo2Framework?.Ready == true ? $"Profile ready: {selected}."
+                        : mo2Framework?.Detail ?? "Framework compatibility unverified.")
+                    : result.Detail);
             }
             finally { mo2SelectionUpdating = false; }
         }
@@ -1654,7 +1654,7 @@ public partial class MainWindow : Window
             restore && !mo2LaunchAttempted && mo2Connected is not null && mo2Framework?.Ready == true;
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
-            SetStatus("Prior MO2 test session retained. Recovery/collection is not yet available; do not start another test.");
+            SetStatus("Previous profiling session requires recovery. Existing results are preserved.");
     }
 
     private async Task<Mo2ProfileSelection> InspectMo2TestSelectionAsync()
@@ -1684,11 +1684,6 @@ public partial class MainWindow : Window
     private async Task Mo2InstallOrRestoreTestAsync()
     {
         if (busy || mo2RefreshRunning || GameRunning()) return;
-        if (mo2Prepared is null && System.Windows.MessageBox.Show(this,
-            "Prepare a temporary MO2 profiling test overlay? Actual native loading is not yet verified. " +
-            "Collection and Page 2 are disabled. Keep this GCO window open and close Cyberpunk before Restore.",
-            "Experimental MO2 profiling", MessageBoxButton.YesNo, MessageBoxImage.Warning,
-            MessageBoxResult.No) != MessageBoxResult.Yes) return;
         SetBusy(true);
         try
         {
@@ -1698,12 +1693,12 @@ public partial class MainWindow : Window
                 {
                     Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
                     mo2RetiredCapture = true;
-                    SetStatus("MO2 test retired. All staged and capture evidence retained; collection is not yet implemented.");
+                    SetStatus("Profilers restored. Capture files preserved.");
                 }
                 else if (!mo2LaunchAttempted)
                 {
                     Mo2ProfilerOverlayBuilder.RetireUnlaunched(prepared);
-                    SetStatus("Unlaunched MO2 test retired; original files and recovery bytes retained.");
+                    SetStatus("Profilers restored. Original files unchanged.");
                 }
                 else throw new InvalidOperationException("Launch outcome uncertain. Preserve the session for recovery.");
                 mo2Prepared = null;
@@ -1712,17 +1707,17 @@ public partial class MainWindow : Window
             else
             {
                 if (mo2RetiredCapture || Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession())
-                    throw new InvalidOperationException("An earlier MO2 test needs recovery/collection.");
+                    throw new InvalidOperationException("Previous profiling session requires recovery.");
                 var selection = await InspectMo2TestSelectionAsync();
                 mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
                     packageRoot, selection.GameDirectory, selection.CandidateSource!,
                     Guid.NewGuid().ToString("N"));
                 mo2LaunchAttempted = mo2LaunchConfirmed = false;
                 SetPortraitStage(PortraitStage.Installed);
-                SetStatus("MO2 test overlay prepared. START launches the selected profile; no original mods changed.");
+                SetStatus("Profilers prepared. Ready to start Cyberpunk.");
             }
         }
-        catch (Exception ex) { Warn(ex.Message, "MO2 test session"); }
+        catch (Exception ex) { Warn(ex.Message, "MO2 profilers"); }
         finally { SetBusy(false); UpdateMo2TestButtons(); }
     }
 
@@ -1730,11 +1725,6 @@ public partial class MainWindow : Window
     {
         if (busy || mo2RefreshRunning || GameRunning() || mo2Prepared is not { } prepared ||
             mo2LaunchAttempted) return;
-        if (System.Windows.MessageBox.Show(this,
-            "Launch Cyberpunk using MO2 profile " + prepared.Profile +
-            "? This is a native profiler loading test only; F11 results will not be collected by GCO yet.",
-            "Experimental MO2 launch", MessageBoxButton.YesNo, MessageBoxImage.Warning,
-            MessageBoxResult.No) != MessageBoxResult.Yes) return;
         SetBusy(true);
         try
         {
@@ -1745,14 +1735,14 @@ public partial class MainWindow : Window
                 mo2Connected!, selection, prepared, true);
             mo2LaunchConfirmed = true;
             SetPortraitStage(PortraitStage.Capturing);
-            SetStatus("MO2 launch acknowledged (PID " + reply.ProcessId +
-                "). Verify CET and REDscript in game, then test F11. Close Cyberpunk before Restore.");
+            SetStatus("Cyberpunk launch requested. Use F11 to start/stop profiling.");
+            Trace.TraceInformation("MO2 launch acknowledged (PID " + reply.ProcessId + ").");
         }
         catch (Exception ex)
         {
-            Warn(ex.Message, "MO2 test launch");
+            Warn(ex.Message, "Start Cyberpunk");
             if (mo2LaunchAttempted)
-                SetStatus("MO2 launch outcome uncertain. Recovery evidence retained; do not retry.");
+                SetStatus("Cyberpunk launch could not be confirmed. Existing results preserved; do not retry.");
         }
         finally { SetBusy(false); UpdateMo2TestButtons(); }
     }
@@ -1771,7 +1761,7 @@ public partial class MainWindow : Window
             if (!File.Exists(Path.Combine(folder, "ModOrganizer.exe")))
                 throw new InvalidOperationException("Select the MO2 application folder first.");
             if (System.Windows.MessageBox.Show(this,
-                "Add the GCO test companion to this MO2 installation? Close MO2 first. Existing plugins will not be overwritten.",
+                "Install the GCO bridge? Close MO2 first. Existing plugins will not be overwritten.",
                 "MO2 companion", MessageBoxButton.YesNo, MessageBoxImage.Question,
                 MessageBoxResult.No) != MessageBoxResult.Yes) return;
             Mo2CompanionInstaller.Install(folder,
