@@ -220,6 +220,31 @@ internal static class Mo2ProfilerOverlayBuilderTests
                     journal.RootElement.GetProperty("originalSources").GetRawText().Length <= 2)
                     throw new InvalidDataException("MO2_TEST_RETIREMENT_LOST_RECOVERY_MANIFEST");
 
+            // A normal completed launch can START again, without a restore
+            // action, and only the uncollected live output is discarded.
+            const string restartId = "1234567890abcdef1234567890abcdef";
+            var restart = await Mo2ProfilerOverlayBuilder.PrepareAsync(game, stack, restartId,
+                (fixture, _) => { FakeOwnerInstall(fixture); return Task.CompletedTask; },
+                localAppData: local, cetResultPatterns: ["CET_Runtime_Profile_*.csv"]);
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(restart, "prepared", "test-launch-pending");
+            // Use an actually exited child process, not a guessed PID.
+            using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", "/d /c exit 0")
+                { UseShellExecute = false, CreateNoWindow = true })!;
+            child.WaitForExit();
+            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(restart, "test-launch-pending", "test-launched", child.Id);
+            Put(overwrite, prior, "uncollected repeat-start result");
+            Put(overwrite, cetResult, "uncollected repeat-start CET");
+            if (!Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(restart))
+                throw new InvalidDataException("MO2_REPEAT_START_NOT_AVAILABLE");
+            Mo2ProfilerOverlayBuilder.RetireCompletedTest(restart);
+            if (File.Exists(Path.Combine(overwrite, prior)) ||
+                File.Exists(Path.Combine(overwrite, cetResult)) ||
+                Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(restart) ||
+                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local) ||
+                File.ReadAllText(Path.Combine(root, "RESULTS/Collected/GRSP_Summary.csv")) != "sealed capture")
+                throw new InvalidDataException("MO2_REPEAT_START_RESET_FAILED");
+
             async Task ShouldReject(string name, Action<string> change)
             {
                 string id = Convert.ToHexString(
