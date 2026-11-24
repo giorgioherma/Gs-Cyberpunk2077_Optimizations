@@ -22,8 +22,8 @@ internal static class Mo2CaptureJournalTests
         // Tray reopen has no in-memory overlay. It must reconstruct the
         // acknowledged deployment from the same package identity, never
         // from a different currently selected profile or an uncertain launch.
-        var local = Directory.GetParent(Directory.GetParent(
-            Path.GetDirectoryName(prepared.JournalFile)!)!.FullName)!.FullName;
+        var journalDirectory = new FileInfo(prepared.JournalFile).Directory!;
+        var local = journalDirectory.Parent!.Parent!.Parent!.FullName;
         var resumed = new UnifiedProfilerWorkflow(packageRoot);
         var binding = resumed.ReadMo2CaptureIdentity();
         if (binding is null || !binding.Matches(selected) || binding.SessionId != id ||
