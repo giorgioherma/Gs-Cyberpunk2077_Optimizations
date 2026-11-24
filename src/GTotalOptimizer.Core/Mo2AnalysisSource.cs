@@ -96,6 +96,13 @@ public sealed class Mo2AnalysisSource : IDisposable
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
         if (current.Count != files.Count)
             throw new InvalidDataException("MO2 source inventory changed; analyze again.");
+        var projectedPaths = Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(Root, path).Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!projectedPaths.Remove("bin/x64/Cyberpunk2077.exe") ||
+            !projectedPaths.SetEquals(files.Keys) ||
+            new FileInfo(Target("bin/x64/Cyberpunk2077.exe")).Length != 0)
+            throw new InvalidDataException("MO2 disposable source inventory changed.");
         foreach (var (relative, original) in files)
         {
             token.ThrowIfCancellationRequested();
