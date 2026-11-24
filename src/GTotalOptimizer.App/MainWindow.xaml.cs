@@ -103,8 +103,6 @@ public partial class MainWindow : Window
     private FrameworkPreflightResult? mo2Framework;
     private Mo2OverlayPreparation? mo2Prepared;
     private bool mo2LaunchAttempted;
-    private bool mo2LaunchConfirmed;
-    private bool mo2RetiredCapture;
     private bool mo2RecoveryBlocked;
     // The normal XAML tree is permanent. Maximize only overrides values on
     // existing sections and restores the exact saved local values afterward.
@@ -1049,6 +1047,29 @@ public partial class MainWindow : Window
             Trace.TraceWarning("Cyberpunk start notifications unavailable; 10-second fallback: " + error);
             gameStateTimer.Start();
         }
+        // Direct recovery remains authoritative when present. Otherwise resume
+        // interrupted MO2 recovery even if its companion is no longer running.
+        if (!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text))
+        {
+            bool needsMo2Restore;
+            try { needsMo2Restore = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+            catch { needsMo2Restore = true; }
+            if (needsMo2Restore)
+            {
+                mo2Mode = true;
+                mo2RecoveryBlocked = true;
+                GameRootContents.Visibility = Visibility.Collapsed;
+                Mo2SourceContents.Visibility = Visibility.Visible;
+                GameRootContents.Children.Remove(FrameworkChecksRow);
+                Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+                GameSourceHeading.Text = "MOD ORGANIZER 2";
+                SetFrameworkStatuses(null);
+                UpdatePathLock();
+                UpdateMo2TestButtons();
+                _ = RefreshMo2SourceAsync();
+                return;
+            }
+        }
         ResumeLastRestoredWorkspace();
         _ = RefreshSourceAsync();
     }
@@ -1450,7 +1471,7 @@ public partial class MainWindow : Window
     }
 
     private bool CanSwitchSource() =>
-        !busy && !mo2StartupRunning && mo2Prepared is null && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
+        !busy && !mo2StartupRunning && mo2Prepared is null && !mo2RecoveryBlocked && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
         !Workflow.RestoreActionAvailable(GamePathBox.Text) && !GameRunning();
 
     private async void DirectSource_Click(object sender, RoutedEventArgs e)
@@ -1653,15 +1674,15 @@ public partial class MainWindow : Window
             mo2RecoveryBlocked = true;
             SetStatus("MO2 session journal requires recovery: " + ex.Message);
         }
-        var restore = mo2Prepared is not null;
+        var restore = mo2Prepared is not null || mo2RecoveryBlocked;
         InstallButton.Content = restore ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         InstallButton.Style = (Style)FindResource(restore ? "RestoreStageButton" : "StageActionButton");
-        InstallButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
-            (restore ? !mo2LaunchAttempted || mo2LaunchConfirmed
-                     : !mo2RecoveryBlocked && !mo2RetiredCapture && mo2SelectedSource is not null &&
-                       mo2Connected is not null && mo2Framework?.Ready == true);
+        InstallButton.IsEnabled = restore ? !busy && !mo2RefreshRunning :
+            !busy && !mo2RefreshRunning && !running && mo2SelectedSource is not null &&
+            mo2Connected is not null && mo2Framework?.Ready == true;
         LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running &&
-            restore && !mo2LaunchAttempted && mo2Connected is not null && mo2Framework?.Ready == true;
+            mo2Prepared is not null && !mo2LaunchAttempted &&
+            mo2Connected is not null && mo2Framework?.Ready == true;
         CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
             SetStatus("Previous profiling session requires recovery. Existing results are preserved.");
@@ -1695,41 +1716,42 @@ public partial class MainWindow : Window
 
     private async Task Mo2InstallOrRestoreTestAsync()
     {
-        if (busy || mo2RefreshRunning || GameRunning()) return;
+        if (busy || mo2RefreshRunning) return;
+        ClearStatusPin();
+        if (GameRunning())
+        {
+            SetStatus("Close Cyberpunk before continuing.");
+            return;
+        }
         SetBusy(true);
         try
         {
-            if (mo2Prepared is { } prepared)
+            if (mo2Prepared is not null || mo2RecoveryBlocked ||
+                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession())
             {
-                if (mo2LaunchConfirmed)
-                {
-                    Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
-                    mo2RetiredCapture = true;
-                    SetStatus("Profilers restored. Capture files preserved.");
-                }
-                else if (!mo2LaunchAttempted)
-                {
-                    Mo2ProfilerOverlayBuilder.RetireUnlaunched(prepared);
-                    SetStatus("Profilers restored. Original files unchanged.");
-                }
-                else throw new InvalidOperationException("Launch outcome uncertain. Preserve the session for recovery.");
+                await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
                 mo2Prepared = null;
+                mo2LaunchAttempted = false;
+                mo2RecoveryBlocked = false;
                 SetPortraitStage(PortraitStage.Black);
+                PinStatus("Profilers restored. Original files unchanged.");
             }
             else
             {
-                if (mo2RetiredCapture || Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession())
-                    throw new InvalidOperationException("Previous profiling session requires recovery.");
                 var selection = await InspectMo2TestSelectionAsync();
                 mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
                     packageRoot, selection.GameDirectory, selection.CandidateSource!,
                     Guid.NewGuid().ToString("N"));
-                mo2LaunchAttempted = mo2LaunchConfirmed = false;
+                mo2LaunchAttempted = false;
                 SetPortraitStage(PortraitStage.Installed);
                 SetStatus("Profilers prepared. Ready to start Cyberpunk.");
             }
         }
-        catch (Exception ex) { Warn(ex.Message, "MO2 profilers"); }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("MO2 profilers: " + ex);
+            PinStatus(ex.Message);
+        }
         finally { SetBusy(false); UpdateMo2TestButtons(); }
     }
 
@@ -1746,7 +1768,6 @@ public partial class MainWindow : Window
             mo2LaunchAttempted = true;
             var reply = await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
                 mo2Connected!, selection, prepared, true);
-            mo2LaunchConfirmed = true;
             SetPortraitStage(PortraitStage.Capturing);
             SetStatus("Cyberpunk launch requested. Use F11 to start/stop profiling.");
             Trace.TraceInformation("MO2 launch acknowledged (PID " + reply.ProcessId + ").");
