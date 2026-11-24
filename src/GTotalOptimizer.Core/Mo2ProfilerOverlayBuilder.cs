@@ -222,6 +222,8 @@ public static class Mo2ProfilerOverlayBuilder
                 schemaVersion = 1, sessionId, profile = selected.Profile, gameRoot = game,
                 fixtureRoot = fixture, stageRoot = stage, phase = "recovery-required",
                 error = ex.Message, originalSources = baselines,
+                originalSourcePaths = owners, priorGrspResults = priorResults,
+                priorGrspResultSources = priorResultSources, priorGrspResultsRoot = evidence,
                 utc = DateTimeOffset.UtcNow
             });
             throw;
