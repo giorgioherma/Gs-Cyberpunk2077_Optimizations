@@ -2,6 +2,14 @@
 
 
 
+
+## 2026-11-24 — Local MO2 launch failure diagnosed; automatic elevated VERIFY
+
+- User's local build #1127 reached INSTALL successfully (8 staged files); launch journal remained pending and MO2 retained the processing request with no matching signed response. Actual MO2 dialog confirmed Cyberpunk requested administrator privileges while MO2 was not elevated. No native profiler/gameplay/F11 success claimed.
+- Owner requires VERIFY to manage MO2 startup/normal shutdown/bridge setup and request UAC once rather than manual open/close or INSTALL/START confirmation dialogs. `82e1af2`–`f460982`: narrow elevated helper through existing package launcher, selected portable/global instance, no force kill, reuse matching elevated MO2, limited Windows image/token queries, elevation preflight before dispatch, restore availability if pre-dispatch fails, actionable errors. Existing production gate stays off. Global instance selection uses upstream `-i <instanceName>`; nonstandard unproven instance paths are refused.
+- The failed #1127 session and stale mailbox must be preserved until the user cancels the MO2 error and recovery is established. Do not silently retire a pending launch as unlaunched. Actual one-UAC/elevated game launch and cross-integrity bridge verification remain local-test requirements. MO2 PresentMon/collection still pending.
+- First feedback batch (mod counts, shared framework indicators, streamlined normal UI, no INSTALL/START popups) included in next full package checkpoint. No version bump, main/owner repo changes, or production activation.
+
 ## 2026-11-24 — First local-test feedback: source counts and framework indicators
 
 - Full GCO [CI #1127 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45431619768), source `e62611f`, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.7-run1127-a1` (ID 14939860989). User reports MO2 discovery and INSTALL reached. Native launch/F11 not yet reported.
