@@ -65,6 +65,9 @@ public static class Mo2ProfilerOverlayBuilder
             !selected.EffectiveFiles.ContainsKey("bin/x64/plugins/cyber_engine_tweaks.asi"))
             throw new InvalidDataException(
                 "Effective supported CET ASI is unavailable; no filename or version guess.");
+        var resultPatterns = cetResultPatterns ?? [];
+        var overwrite = selected.OverwriteDirectory ??
+            throw new InvalidDataException("Verified MO2 Overwrite directory is unavailable.");
         var local = localAppData ??
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(local)) throw new InvalidDataException("LocalAppData is required.");
@@ -91,9 +94,6 @@ public static class Mo2ProfilerOverlayBuilder
 
         var baselines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var resultPatterns = cetResultPatterns ?? [];
-        var overwrite = selected.OverwriteDirectory ??
-            throw new InvalidDataException("Verified MO2 Overwrite directory is unavailable.");
         try
         {
             // No unnecessary REDscript or user red4ext files are copied.
@@ -420,22 +420,42 @@ public static class Mo2ProfilerOverlayBuilder
         catch { return false; } // An unreadable journal is never proof of no launch.
     }
 
-    public static void RetireCompletedTest(Mo2OverlayPreparation prepared)
+    public static bool CanRestartCompletedTest(Mo2OverlayPreparation prepared)
     {
-        if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
-            throw new InvalidOperationException("Close Cyberpunk before retiring this test.");
-        // A positive signed launch is required; a timeout stays unresolved.
-        // Check the returned process too, even if it was not named Cyberpunk.
-        using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
-        int pid = doc.RootElement.GetProperty("processId").GetInt32();
-        if (pid <= 0) throw new InvalidDataException("MO2 test process identity missing.");
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById(pid);
-            if (!process.HasExited) throw new InvalidOperationException("MO2 test launch process is still running.");
+            RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before starting a new capture.");
+            EnsureNoReparseParents(prepared.JournalFile);
+            RequireRegularUnlinkedFile(prepared.JournalFile);
+            using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
+            var j = doc.RootElement;
+            if (j.GetProperty("sessionId").GetString() != prepared.SessionId ||
+                j.GetProperty("phase").GetString() != "test-launched" ||
+                !string.Equals(j.GetProperty("stageRoot").GetString(), prepared.StagingDirectory,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !j.TryGetProperty("overwriteRoot", out _) ||
+                !j.TryGetProperty("cetResultPatterns", out _)) return false;
+            int pid = j.GetProperty("processId").GetInt32();
+            if (pid <= 0) return false;
+            try
+            {
+                using var process = System.Diagnostics.Process.GetProcessById(pid);
+                return process.HasExited;
+            }
+            catch (ArgumentException) { return true; }
         }
-        catch (ArgumentException) { /* The returned process no longer exists. */ }
-        // Preserve the full manifest; subsequent collection must resolve this session.
+        catch { return false; }
+    }
+
+    // A deliberate START after the previous game closed discards uncollected
+    // output and retires only that attempt; the UI then prepares a fresh layer.
+    public static void RetireCompletedTest(Mo2OverlayPreparation prepared)
+    {
+        if (!CanRestartCompletedTest(prepared))
+            throw new InvalidOperationException("Previous launch is not safely finished. RESTORE remains available.");
+        var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(prepared.JournalFile))!.AsObject();
+        int pid = journal["processId"]!.GetValue<int>();
+        Mo2NativeOutputReset.Discard(journal);
         RecordTestLaunchPhase(prepared, "test-launched", "retired-test-capture", pid);
     }
 
