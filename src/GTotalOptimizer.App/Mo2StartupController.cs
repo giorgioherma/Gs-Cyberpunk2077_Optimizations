@@ -82,6 +82,9 @@ internal static class Mo2StartupController
             }
             finally { foreach (var process in processes) process.Dispose(); }
             if (GameRunning()) return 12;
+            // Pending launch requests retired by RESTORE are only archived
+            // now, when the old MO2 process cannot act on them.
+            Mo2ProfilerOverlayBuilder.CompleteDeferredRestore();
             Mo2CompanionInstaller.Install(folder,
                 Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py"));
             var start = new ProcessStartInfo(exe)
