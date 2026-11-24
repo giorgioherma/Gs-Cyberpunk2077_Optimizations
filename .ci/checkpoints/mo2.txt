@@ -1,1 +1,1 @@
-checkpoint=mo2-real-combined-zip-selected-winner-20261124
+checkpoint=mo2-page2-full-native-evidence-replay-20261124
