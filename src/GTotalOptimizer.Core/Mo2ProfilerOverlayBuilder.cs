@@ -470,6 +470,77 @@ public static class Mo2ProfilerOverlayBuilder
             j.GetProperty("originalSources").EnumerateObject().Count(), "Resumed acknowledged launch.");
     }
 
+    // CONTINUE is restricted to this collected session, not the global
+    // recovery sweep. The mapper has already disarmed on acknowledgement.
+    // Verify the exact original owner inputs before and after retirement.
+    internal static void RestoreCollectedDeployment(Mo2CaptureIdentity identity,
+        string? localAppData = null)
+    {
+        RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before restoring profilers.");
+        var bridge = Path.Combine(Path.GetFullPath(localAppData ??
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)), "GCO", "MO2Bridge");
+        if (!SessionIdPattern.IsMatch(identity.SessionId))
+            throw new InvalidDataException("Invalid MO2 capture identity.");
+        var path = Path.Combine(bridge, "journals", identity.SessionId + ".json");
+        EnsureNoReparseParents(path);
+        RequireRegularUnlinkedFile(path);
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var journal = document.RootElement;
+        if (journal.GetProperty("schemaVersion").GetInt32() != 1 ||
+            journal.GetProperty("sessionId").GetString() != identity.SessionId ||
+            !string.Equals(journal.GetProperty("profile").GetString(), identity.Profile, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(journal.GetProperty("gameRoot").GetString(), identity.GameRoot, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(journal.GetProperty("stageRoot").GetString(),
+                Path.Combine(bridge, "staging", identity.SessionId), StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(journal.GetProperty("fixtureRoot").GetString(),
+                Path.Combine(bridge, "fixtures", identity.SessionId), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 collected deployment identity changed.");
+        var phase = journal.GetProperty("phase").GetString();
+        VerifyOriginals();
+        if (phase == "test-launched")
+        {
+            var selected = ResolveSelected();
+            var prepared = ReadLaunchedPreparation(identity, selected, localAppData) ??
+                throw new InvalidDataException("MO2 launch is not acknowledged.");
+            RetireCompletedTest(prepared);
+        }
+        else if (phase != "retired-test-capture")
+            throw new InvalidOperationException("MO2 deployment still requires recovery.");
+        VerifyOriginals();
+
+        Mo2Stack ResolveSelected()
+        {
+            var selected = Mo2SourceInspector.Resolve(identity.GameRoot,
+                Mo2SourceInspector.Discover(identity.InstanceDirectory), identity.Profile);
+            if (!selected.Ready || !selected.ProfileVerified || selected.GameOnlyFallback ||
+                !string.Equals(selected.OverwriteDirectory, journal.GetProperty("overwriteRoot").GetString(),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 selected source or output directory changed.");
+            return selected;
+        }
+        void VerifyOriginals()
+        {
+            var selected = ResolveSelected();
+            var originals = journal.GetProperty("originalSources");
+            var paths = journal.GetProperty("originalSourcePaths");
+            var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in originals.EnumerateObject())
+            {
+                expected.Add(entry.Name);
+                if (!selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
+                    !string.Equals(Path.GetFullPath(winner.PhysicalPath),
+                        paths.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Original MO2 profiler input changed: " + entry.Name);
+                EnsureNoReparseParents(winner.PhysicalPath);
+                RequireRegularUnlinkedFile(winner.PhysicalPath);
+                if (!Hash(winner.PhysicalPath).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
+            }
+            if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
+                throw new InvalidDataException("Original MO2 profiler input inventory changed.");
+        }
+    }
+
     public static bool CanRestartCompletedTest(Mo2OverlayPreparation prepared)
     {
         try
