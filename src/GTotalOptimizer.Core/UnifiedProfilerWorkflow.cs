@@ -459,10 +459,50 @@ public sealed class UnifiedProfilerWorkflow
         // Require the existing package's durable index. A deployment
         // journal alone is not evidence of a GCO capture.
         var saved = ReadCollected(identity.GameRoot, verifyHashes: true);
-        if (saved is null || saved.CollectInvoked || saved.CollectionAttempted || saved.Restored)
-            throw new InvalidDataException("MO2 capture index is unavailable or already collected.");
+        if (saved is null || saved.Restored)
+            throw new InvalidDataException("MO2 capture index is unavailable or already restored.");
         return Mo2ProfilerOverlayBuilder.ReadLaunchedPreparation(identity,
             selection.CandidateSource, localAppData);
+    }
+
+    // The only MO2-specific collection boundary is the owner-installed
+    // disposable fixture. Use the same owner status, collect and reset
+    // operations as Direct, but never pass the live game to them.
+    private (string Fixture, System.Text.Json.Nodes.JsonObject Journal) Mo2CaptureFixture(
+        string game, Mo2ProfileSelection selection, bool project)
+    {
+        if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting.");
+        var identity = ReadMo2CaptureIdentity() ??
+            throw new InvalidOperationException("No matching MO2 capture attempt.");
+        if (!identity.Matches(selection) || !OwnsSession(game))
+            throw new InvalidDataException("Selected MO2 capture identity changed.");
+        var prepared = ResumeMo2CaptureAttempt(selection) ??
+            throw new InvalidOperationException("MO2 launch is not acknowledged.");
+        if (!Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))
+            throw new InvalidOperationException("Wait for Cyberpunk to close.");
+        var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(prepared.JournalFile))!.AsObject();
+        var fixture = journal["fixtureRoot"]!.GetValue<string>();
+        var bundle = ComponentBundleVerifier.Inspect(packageRoot);
+        if (!bundle.Ready || bundle.CetExecutable is null)
+            throw new InvalidDataException("Bundled profiler provenance changed.");
+        var patterns = journal["cetResultPatterns"]?.Deserialize<string[]>() ??
+            throw new InvalidDataException("CET owner result policy is missing.");
+        if (!patterns.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(
+                Mo2NativeOutputReset.ReadCetPatterns(bundle.CetExecutable)))
+            throw new InvalidDataException("CET owner result policy changed.");
+        if (selection.CandidateSource!.EffectiveFiles.Any(pair =>
+            Mo2NativeOutputReset.IsNativeResult(pair.Key, patterns) &&
+            pair.Value.FromMo2 && pair.Value.Owner != "(MO2 Overwrite)"))
+            throw new InvalidDataException("Profiler results inside an enabled MO2 mod cannot be collected safely.");
+        if (project) Mo2NativeOutputReset.ProjectForCollection(journal, fixture);
+        return (fixture, journal);
+    }
+
+    public async Task<LiveProfilerState> InspectMo2CaptureAsync(string game,
+        Mo2ProfileSelection selection, CancellationToken token = default)
+    {
+        var source = Mo2CaptureFixture(game, selection, project: true);
+        return await InspectAsync(source.Fixture, token);
     }
 
     public void BeginMo2CaptureAttempt(Mo2ProfileSelection selection,
@@ -601,15 +641,18 @@ public sealed class UnifiedProfilerWorkflow
     // starts from an empty CET + GRSP recording state. Never call from a game
     // process or without an admitted GCO managed installation.
     public async Task<ProfilerWorkflowResult> ResetNativeOutputAsync(string game,
-        CancellationToken token = default)
+        CancellationToken token = default, Mo2ProfileSelection? mo2Selection = null)
     {
-        if (HasMo2CaptureAttempt)
-            return new(false, "Use the MO2 capture provider for this session. No files changed.");
+        if (HasMo2CaptureAttempt != (mo2Selection is not null))
+            return new(false, "Use the matching capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before resetting captures.");
         if (!OwnsSession(game)) return new(false, "GCO capture ownership is not verified.");
         try
         {
-            var state = await InspectAsync(game, token);
+            var source = mo2Selection is null ? default :
+                Mo2CaptureFixture(game, mo2Selection, project: false);
+            var ownerGame = mo2Selection is null ? game : source.Fixture;
+            var state = await InspectAsync(ownerGame, token);
             if (!state.BothInstalled)
                 return new(false, "Profiler ownership changed; preserve results and restore safely.");
             // Both owners get a reset attempt independently. One failed
@@ -619,17 +662,18 @@ public sealed class UnifiedProfilerWorkflow
             {
                 try
                 {
-                    var result = await Run(kind, "discard-live", game, token);
+                    var result = await Run(kind, "discard-live", ownerGame, token);
                     if (!result.Ok) failures.Add(kind + ": " + result.Detail);
                 }
                 catch (Exception ex) { failures.Add(kind + ": " + ex.Message); }
             }
-            var after = await InspectAsync(game, token);
+            var after = await InspectAsync(ownerGame, token);
             if (!after.BothInstalled || after.CetCaptureReady || after.GrspCaptureReady)
                 return new(false, "Native capture reset incomplete: " +
                     string.Join("; ", failures) + ". START blocked until both owners are clean.");
             // Final owner state wins over a command warning only if BOTH
             // installed profilers and BOTH empty result scopes are verified.
+            if (mo2Selection is not null) Mo2NativeOutputReset.Discard(source.Journal);
             return new(true, "Uncollected CET and REDscript native output reset.");
         }
         catch (Exception ex)
@@ -658,18 +702,21 @@ public sealed class UnifiedProfilerWorkflow
         return discarded;
     }
 
-    public CollectedCaptureIndex RecordCollectInvoked(string game)
+    public CollectedCaptureIndex RecordCollectInvoked(string game, Mo2ProfileSelection? mo2Selection = null)
     {
         if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting.");
-        if (!HasCaptureAttempt(game))
+        if (mo2Selection is not null) Mo2CaptureFixture(game, mo2Selection, project: false);
+        else if (!HasCaptureAttempt(game))
             throw new InvalidOperationException("No current capture attempt.");
         return CollectedCaptureStore.MarkCollectInvoked(packageRoot, game, SessionId());
     }
 
-    public CollectedCaptureIndex RecordCollectionAttempt(string game, bool presentMonStopped)
+    public CollectedCaptureIndex RecordCollectionAttempt(string game, bool presentMonStopped,
+        Mo2ProfileSelection? mo2Selection = null)
     {
         if (GameRunning()) throw new InvalidOperationException("Close Cyberpunk before collecting results.");
-        if (!HasCaptureAttempt(game))
+        if (mo2Selection is not null) Mo2CaptureFixture(game, mo2Selection, project: false);
+        else if (!HasCaptureAttempt(game))
             throw new InvalidOperationException("A capture launch has not been recorded.");
         return CollectedCaptureStore.MarkCollectionAttempted(packageRoot, game, SessionId(), presentMonStopped);
     }
@@ -814,16 +861,23 @@ public sealed class UnifiedProfilerWorkflow
     }
 
     // Collection never restores; source-owner archives remain untouched.
-    public async Task<ProfilerWorkflowResult> CollectResultsAsync(string game, CancellationToken token = default)
+    public async Task<ProfilerWorkflowResult> CollectResultsAsync(string game, CancellationToken token = default,
+        Mo2ProfileSelection? mo2Selection = null)
     {
-        if (HasMo2CaptureAttempt)
-            return new(false, "Use the MO2 capture provider for this session. No files changed.");
+        if (HasMo2CaptureAttempt != (mo2Selection is not null))
+            return new(false, "Use the matching capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before collecting.");
         if (!OwnsSession(game)) return new(false, "No matching GCO session. No files changed.");
         var id = SessionId();
         var saved = CollectedCaptureStore.Read(packageRoot, game, id, verifyHashes: true);
         LiveProfilerState state;
-        try { state = await InspectAsync(game, token); }
+        var ownerGame = game;
+        try
+        {
+            if (mo2Selection is not null)
+                ownerGame = Mo2CaptureFixture(game, mo2Selection, project: true).Fixture;
+            state = await InspectAsync(ownerGame, token);
+        }
         catch (Exception ex) { return new(false, "Owner capture status unavailable: " + ex.Message); }
         var stagedCet = StagedArchive(id, BackendKind.Cet);
         var stagedRed = StagedArchive(id, BackendKind.Grsp);
@@ -865,7 +919,7 @@ public sealed class UnifiedProfilerWorkflow
                 var archive = stagedCet;
                 if (archive is null)
                 {
-                    var c = Require(await Run(BackendKind.Cet, "collect", game, token));
+                    var c = Require(await Run(BackendKind.Cet, "collect", ownerGame, token));
                     archive = c.ArchivePath;
                 }
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
@@ -878,7 +932,7 @@ public sealed class UnifiedProfilerWorkflow
                 var archive = stagedRed;
                 if (archive is null)
                 {
-                    var g = Require(await Run(BackendKind.Grsp, "collect", game, token));
+                    var g = Require(await Run(BackendKind.Grsp, "collect", ownerGame, token));
                     archive = g.ArchivePath;
                 }
                 saved = CollectedCaptureStore.CopyOwner(packageRoot, game, id,
@@ -889,7 +943,7 @@ public sealed class UnifiedProfilerWorkflow
             // Cleanup of failed attempts belongs to the one-shot GUI action.
             if (saved.Cet is null || saved.Redscript is null)
                 return new(false, "One owner archive is missing; native collection incomplete.");
-            var reset = await ResetNativeOutputAsync(game, token);
+            var reset = await ResetNativeOutputAsync(game, token, mo2Selection);
             if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
         }
         catch (Exception ex)
@@ -908,7 +962,9 @@ public sealed class UnifiedProfilerWorkflow
                 : "");
         return new(saved.Cet is not null && saved.Redscript is not null, "Collected " +            (saved.Cet is null ? "no CET" : "CET") + " / " +
             (saved.Redscript is null ? "no REDscript" : "REDscript") +
-            ". Original game files are still instrumented until Continue or explicit Restore." +
+            (mo2Selection is null
+                ? ". Original game files are still instrumented until Continue or explicit Restore."
+                : ". Profilers remain prepared until Continue or explicit Restore.") +
             staleNotice,
             saved.Cet is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"CET"),
             saved.Redscript is null ? null : CollectedCaptureStore.DomainFolder(packageRoot,id,"REDscript"),
