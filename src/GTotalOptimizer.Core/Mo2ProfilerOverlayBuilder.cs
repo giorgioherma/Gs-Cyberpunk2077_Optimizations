@@ -205,9 +205,95 @@ public static class Mo2ProfilerOverlayBuilder
             RequireRegularUnlinkedFile(file);
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
             var phase = doc.RootElement.GetProperty("phase").GetString();
-            if (phase != "retired-unlaunched") return true;
+            if (!IsRetiredPhase(phase)) return true;
         }
         return false;
+    }
+
+    private static bool IsRetiredPhase(string? phase) =>
+        phase is "retired-unlaunched" or "retired-test-capture" or "retired-recovered";
+
+    // Restore is a recovery entry point, not dependent on an in-memory
+    // preparation, a successful launch, or a live bridge. Never delete stage,
+    // fixture, journal or capture files. Pending mailbox commands can only
+    // be quarantined after every MO2 process has exited.
+    public static int RestoreOutstandingSessions()
+    {
+        RequireNoProcess("Cyberpunk2077", "Close Cyberpunk before restoring profilers.");
+        return RestoreOutstandingSessions(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            () => RequireNoProcess("ModOrganizer",
+                "Close Mod Organizer 2 before restoring an interrupted launch."));
+    }
+
+    internal static int RestoreOutstandingSessions(string localAppData, Action requireMo2Closed)
+    {
+        var bridge = Path.Combine(Path.GetFullPath(localAppData), "GCO", "MO2Bridge");
+        var folder = Path.Combine(bridge, "journals");
+        if (!Directory.Exists(folder)) return 0;
+        EnsureNoReparseParents(folder);
+        var count = 0;
+        foreach (var file in Directory.EnumerateFiles(folder, "*.json"))
+        {
+            RequireRegularUnlinkedFile(file);
+            var j = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            string? phase = j["phase"]?.GetValue<string>();
+            if (IsRetiredPhase(phase)) continue;
+            string id = j["sessionId"]?.GetValue<string>() ?? "";
+            if (!SessionIdPattern.IsMatch(id) ||
+                !string.Equals(Path.GetFileName(file), id + ".json", StringComparison.OrdinalIgnoreCase) ||
+                j["schemaVersion"]?.GetValue<int>() != 1 ||
+                !string.Equals(j["stageRoot"]?.GetValue<string>(), Path.Combine(bridge, "staging", id),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(j["fixtureRoot"]?.GetValue<string>(), Path.Combine(bridge, "fixtures", id),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("MO2 recovery journal identity is invalid. Original files preserved.");
+            EnsureNoReparseParents(Path.Combine(bridge, "staging", id));
+            EnsureNoReparseParents(Path.Combine(bridge, "fixtures", id));
+            if (phase is "test-launch-pending" or "test-launched")
+            {
+                requireMo2Closed();
+                int pid = j["processId"]?.GetValue<int>() ?? 0;
+                if (pid > 0 && Mo2ProcessIdentity.Image(pid) is not null)
+                    throw new InvalidOperationException("Close the launched process before restoring profilers.");
+                var archive = Path.Combine(bridge, "recovery", id);
+                foreach (var command in Directory.EnumerateFiles(bridge, "instance-*.json"))
+                {
+                    var name = Path.GetFileName(command);
+                    if (!Regex.IsMatch(name, @"^instance-[a-f0-9]{24}\.(request|processing)\.json$",
+                            RegexOptions.CultureInvariant)) continue;
+                    RequireRegularUnlinkedFile(command);
+                    using var doc = JsonDocument.Parse(File.ReadAllText(command));
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("sessionId", out var sid) || sid.GetString() != id) continue;
+                    if (root.GetProperty("operation").GetString() != "launch" ||
+                        !string.Equals(root.GetProperty("stagingRoot").GetString(),
+                            Path.Combine(bridge, "staging", id), StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException("MO2 recovery command identity is invalid.");
+                    EnsureNoReparseParents(archive);
+                    Directory.CreateDirectory(archive);
+                    requireMo2Closed();
+                    File.Move(command, Path.Combine(archive, name + "." + Guid.NewGuid().ToString("N")),
+                        overwrite: false);
+                }
+            }
+            else if (phase is not ("prepared" or "preparing" or "recovery-required"))
+                throw new InvalidDataException("Unknown MO2 recovery phase. Original files preserved.");
+            j["previousPhase"] = phase;
+            j["phase"] = phase == "test-launched" ? "retired-test-capture" :
+                phase == "test-launch-pending" ? "retired-recovered" : "retired-unlaunched";
+            j["utc"] = DateTimeOffset.UtcNow.ToString("O");
+            WriteJournal(file, j);
+            count++;
+        }
+        return count;
+    }
+
+    private static void RequireNoProcess(string name, string message)
+    {
+        var processes = System.Diagnostics.Process.GetProcessesByName(name);
+        try { if (processes.Length != 0) throw new InvalidOperationException(message); }
+        finally { foreach (var process in processes) process.Dispose(); }
     }
 
     internal static void RecordTestLaunchPhase(Mo2OverlayPreparation prepared,
