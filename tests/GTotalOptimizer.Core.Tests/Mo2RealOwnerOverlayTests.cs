@@ -85,6 +85,14 @@ internal static class Mo2RealOwnerOverlayTests
             const string priorStatus = "red4ext/plugins/G-REDscript-Profiler/RESULTS/GRSP_Status.txt";
             Put("overwrite/" + prior, "previous,completed,capture");
             Put("overwrite/" + priorStatus, "previous status");
+            // Reproduce a second installation after a previous MO2 capture:
+            // runtime sidecars remain in Overwrite, but no controls source.
+            const string controlsLog = "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/CETProfilerControls.log";
+            const string controlsDb = "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/db.sqlite3";
+            const string exampleLog = "bin/x64/plugins/cyber_engine_tweaks/mods/Example/Example.log";
+            const string exampleDb = "bin/x64/plugins/cyber_engine_tweaks/mods/Example/db.sqlite3";
+            foreach (var residue in new[] { controlsLog, controlsDb, exampleLog, exampleDb })
+                Put("overwrite/" + residue, "previous runtime state");
             var details = Mo2SourceInspector.Discover(instance);
             var effective = Mo2SourceInspector.Resolve(game, details, "Heavy");
             var expectedCetOwners = string.IsNullOrWhiteSpace(realZeroEngineDirectory) ? 1 : 2;
@@ -159,6 +167,19 @@ internal static class Mo2RealOwnerOverlayTests
                     throw new InvalidDataException("MO2_REAL_OWNER_INSTALL_CHANGED_LIVE_OUTPUT");
             }
             Mo2ProfilerOverlayBuilder.VerifyPrepared(output, effective);
+            foreach (var residue in new[] { controlsLog, controlsDb, exampleLog, exampleDb })
+            {
+                if (File.ReadAllText(Path.Combine(instance, "overwrite", residue)) != "previous runtime state" ||
+                    names.Contains(residue) ||
+                    json.RootElement.GetProperty("originalSources").TryGetProperty(residue, out _))
+                    throw new InvalidDataException("MO2_CET_RUNTIME_SIDECAR_TREATED_AS_SOURCE: " + residue);
+            }
+            // Runtime state can change without changing executable sources.
+            // Keep the real owner archive, restore and Page 2 checks active.
+            foreach (var residue in new[] { controlsLog, controlsDb, exampleLog, exampleDb })
+                Put("overwrite/" + residue, "updated runtime state");
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(output,
+                Mo2SourceInspector.Resolve(game, details, "Heavy"));
             if (realZeroEngineDirectory is null)
             {
                 const string unknown = "red4ext/plugins/G-REDscript-Profiler/foreign-config.json";
@@ -202,6 +223,10 @@ internal static class Mo2RealOwnerOverlayTests
                 await Mo2RealCollectionTests.RunAsync(verifiedPackageRoot, game, instance, local,
                     output, verifyPage2: true);
             }
+            foreach (var residue in new[] { controlsLog, controlsDb, exampleLog, exampleDb })
+                if (File.ReadAllText(Path.Combine(instance, "overwrite", residue)) != "updated runtime state")
+                    throw new InvalidDataException("MO2_CET_RUNTIME_SIDECAR_NOT_PRESERVED: " + residue);
+            Console.WriteLine("PASS real CET owner accepts and preserves residual controls log/database and mod runtime state");
             Console.WriteLine("PASS Stage 3 REAL CET + GRSP owner install on disposable " +
                 (realZeroEngineDirectory is null ? "original no-0-Engine" :
                     "historical 0-Engine " + scenario) +
