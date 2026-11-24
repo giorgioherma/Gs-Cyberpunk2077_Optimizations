@@ -32,6 +32,12 @@ internal static class Mo2ProfilerOverlayBuilderTests
 
             Put(game, "bin/x64/Cyberpunk2077.exe", "FAKE EXE");
             Put(game, asi, "ORIGINAL_CET_ASI");
+            const string emitter = "bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/modules/EventEmitter.lua";
+            const string sibling = "bin/x64/plugins/cyber_engine_tweaks/config.json";
+            const string shadowed = "bin/x64/plugins/cyber_engine_tweaks/mods/SelectedMod/init.lua";
+            Put(game, emitter, "original_emitter");
+            Put(game, sibling, "original_config");
+            Put(game, shadowed, "physical_shadowed");
             Put(mod, binding, "{\"key\":\"user-selected-key\"}");
             Put(mod, zero, "original_zero_engine()");
             Put(mod, owner, "original_mod_callback()");
@@ -82,8 +88,17 @@ internal static class Mo2ProfilerOverlayBuilderTests
                     "{\"key\":\"user-selected-key\"}")
                 throw new InvalidDataException("MO2_ORIGINAL_MODS_OR_OWNER_METADATA_LEAKED");
             using (var j = JsonDocument.Parse(File.ReadAllText(result.JournalFile)))
+            {
                 if (j.RootElement.GetProperty("phase").GetString() != "prepared")
                     throw new InvalidDataException("MO2_SESSION_JOURNAL_NOT_PREPARED");
+                var physical = j.RootElement.GetProperty("physicalPassthrough")
+                    .EnumerateArray().Select(x => x.GetString()).ToHashSet();
+                if (!physical.SetEquals(new[] { emitter, sibling }) ||
+                    File.Exists(Path.Combine(result.StagingDirectory, emitter)) ||
+                    File.Exists(Path.Combine(result.StagingDirectory, sibling)) ||
+                    !Directory.Exists(Path.GetDirectoryName(Path.Combine(result.StagingDirectory, emitter))))
+                    throw new InvalidDataException("MO2_PHYSICAL_PASSTHROUGH_WINNERS_OR_PARENTS_INCORRECT");
+            }
             try
             {
                 await Mo2ProfilerOverlayBuilder.PrepareAsync(game, stack, Session,
