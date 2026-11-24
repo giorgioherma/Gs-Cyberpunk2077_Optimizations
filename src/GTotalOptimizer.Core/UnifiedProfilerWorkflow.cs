@@ -60,6 +60,22 @@ public static class LiveProfilerStateParser
     }
 }
 
+public sealed record Mo2CaptureIdentity(string SessionId, string GameRoot,
+    string InstanceDirectory, string Profile, string? ApplicationDirectory)
+{
+    public bool Matches(Mo2ProfileSelection selection) =>
+        selection.Recognized &&
+        string.Equals(GameRoot, Path.GetFullPath(selection.GameDirectory).TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(InstanceDirectory, Path.GetFullPath(selection.InstanceDirectory).TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Profile, selection.Profile, StringComparison.OrdinalIgnoreCase) &&
+        (ApplicationDirectory is null ||
+            string.Equals(ApplicationDirectory,
+                Path.GetFullPath(selection.ApplicationDirectory).TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase));
+}
+
 public sealed class UnifiedProfilerWorkflow
 {
     private readonly string packageRoot;
@@ -408,12 +424,54 @@ public sealed class UnifiedProfilerWorkflow
         }
     }
 
+    public Mo2CaptureIdentity? ReadMo2CaptureIdentity()
+    {
+        if (!HasMo2CaptureAttempt) return null;
+        using var doc = JsonDocument.Parse(File.ReadAllText(Journal));
+        var root = doc.RootElement;
+        string ReadPath(string key)
+        {
+            var value = root.GetProperty(key).GetString();
+            if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value))
+                throw new InvalidDataException("MO2 capture source path is invalid: " + key);
+            return Normalize(value);
+        }
+        var game = ReadPath("gameRoot");
+        var id = ReadRecoverySessionId(game) ??
+            throw new InvalidDataException("MO2 capture identity is invalid.");
+        var profile = root.GetProperty("mo2Profile").GetString();
+        if (string.IsNullOrWhiteSpace(profile))
+            throw new InvalidDataException("MO2 capture profile is missing.");
+        // Earlier GCO development journals did not store the application
+        // path. They still bind the instance, profile and game; current
+        // companion discovery must authenticate the saved application.
+        var app = root.TryGetProperty("mo2Application", out _) ? ReadPath("mo2Application") : null;
+        return new(id, game, ReadPath("mo2Instance"), profile, app);
+    }
+
+    public Mo2OverlayPreparation? ResumeMo2CaptureAttempt(Mo2ProfileSelection selection,
+        string? localAppData = null)
+    {
+        var identity = ReadMo2CaptureIdentity() ??
+            throw new InvalidOperationException("No matching MO2 capture attempt.");
+        if (!identity.Matches(selection) || selection.CandidateSource is null)
+            throw new InvalidDataException("Selected MO2 profile does not match the capture.");
+        // Require the existing package's durable index. A deployment
+        // journal alone is not evidence of a GCO capture.
+        var saved = ReadCollected(identity.GameRoot, verifyHashes: true);
+        if (saved is null || saved.CollectInvoked || saved.CollectionAttempted || saved.Restored)
+            throw new InvalidDataException("MO2 capture index is unavailable or already collected.");
+        return Mo2ProfilerOverlayBuilder.ReadLaunchedPreparation(identity,
+            selection.CandidateSource, localAppData);
+    }
+
     public void BeginMo2CaptureAttempt(Mo2ProfileSelection selection,
         Mo2OverlayPreparation prepared)
     {
         if (GameRunning()) throw new InvalidOperationException("Cyberpunk is running.");
         if (!selection.Recognized || selection.CandidateSource is null ||
             !Path.IsPathFullyQualified(selection.InstanceDirectory) ||
+            !Path.IsPathFullyQualified(selection.ApplicationDirectory) ||
             !Path.IsPathFullyQualified(selection.GameDirectory) ||
             !string.Equals(selection.Profile, prepared.Profile, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("MO2 capture source identity is unverified.");
@@ -438,6 +496,7 @@ public sealed class UnifiedProfilerWorkflow
         {
             gameRoot = game, stage = "mo2-capture-attempt", sessionId = id,
             mo2Instance = Normalize(selection.InstanceDirectory), mo2Profile = selection.Profile,
+            mo2Application = Normalize(selection.ApplicationDirectory),
             updatedUtc = DateTimeOffset.UtcNow
         }));
         File.Move(temp, Journal, overwrite: false);
