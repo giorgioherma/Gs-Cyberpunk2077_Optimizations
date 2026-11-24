@@ -534,7 +534,7 @@ class GcoAuthenticatedMailbox:
                     raise GcoOverlayContractError("Profiler mapping journal identity mismatch")
                 self._controller.prepare(
                     self._organizer, request["profile"], request["gameRoot"],
-                    request["stagingRoot"], request["sessionId"], journal["physicalPassthrough"])
+                    request["stagingRoot"], request["sessionId"], journal.get("physicalPassthrough"))
                 try:
                     handle = self._controller.launch(self._organizer, request["profile"])
                     pid = (process_id_for_testing or self._process_id)(handle)
