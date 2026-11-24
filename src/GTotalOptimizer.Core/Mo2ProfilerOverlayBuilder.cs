@@ -168,12 +168,21 @@ public static class Mo2ProfilerOverlayBuilder
                     StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidDataException("Owner overlay lacks CET ASI, GRSP DLL or CET control entry point.");
 
-            // This does not claim actual MO2 USVFS, native DLL or gameplay proof.
+            // USVFS root-level sparse directory mappings can hide physical
+            // siblings during relative reads. Explicit identity file links
+            // preserve original physical winners without staging their bytes
+            // or overriding enabled MO2 packages / Overwrite.
+            var passthrough = PhysicalPassthrough(selected, game, changes.Select(f => f.GameRelativePath));
+            foreach (var relative in passthrough)
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(stage, relative))!);
+
+            // This does not claim actual native DLL or gameplay proof.
             WriteJournal(journal, new
             {
                 schemaVersion = 1, sessionId, profile = selected.Profile, gameRoot = game,
                 fixtureRoot = fixture, stageRoot = stage, phase = "prepared",
                 originalSources = baselines, originalSourcePaths = owners, generatedFiles = changes,
+                physicalPassthrough = passthrough,
                 utc = DateTimeOffset.UtcNow
             });
             return new(selected.Profile, sessionId, stage, journal, changes, count,
@@ -471,6 +480,19 @@ public static class Mo2ProfilerOverlayBuilder
             ?? throw new InvalidDataException("MO2 overlay manifest missing.");
         if (actual.Count != sealedFiles.Length || !sealedFiles.SequenceEqual(prepared.Files))
             throw new InvalidDataException("MO2 overlay inventory changed.");
+        var passthrough = journal.GetProperty("physicalPassthrough").Deserialize<string[]>()
+            ?? throw new InvalidDataException("MO2 physical dependency manifest missing.");
+        var latest = PhysicalPassthrough(selected, journal.GetProperty("gameRoot").GetString()!,
+            sealedFiles.Select(f => f.GameRelativePath));
+        if (!passthrough.SequenceEqual(latest, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidDataException("MO2 physical dependency winners changed.");
+        foreach (var relative in passthrough)
+        {
+            var parent = Path.GetDirectoryName(Path.Combine(prepared.StagingDirectory, relative))!;
+            EnsureNoReparseParents(parent);
+            if (!Directory.Exists(parent))
+                throw new InvalidDataException("MO2 dependency mapping parent missing: " + relative);
+        }
         foreach (var file in sealedFiles)
         {
             if (!IsAllowedOutput(file.GameRelativePath) ||
@@ -479,6 +501,29 @@ public static class Mo2ProfilerOverlayBuilder
                 new FileInfo(Path.Combine(prepared.StagingDirectory, file.GameRelativePath)).Length != file.Size)
                 throw new InvalidDataException("MO2 overlay bytes changed: " + file.GameRelativePath);
         }
+    }
+
+    private static string[] PhysicalPassthrough(Mo2Stack selected, string game,
+        IEnumerable<string> stagedPaths)
+    {
+        var overridden = stagedPaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var (key, winner) in selected.EffectiveFiles)
+        {
+            if (winner.FromMo2 || overridden.Contains(key) ||
+                !(key.StartsWith("bin/x64/plugins/", StringComparison.OrdinalIgnoreCase) ||
+                  key.StartsWith("red4ext/plugins/", StringComparison.OrdinalIgnoreCase) ||
+                  key.Equals("red4ext/RED4ext.dll", StringComparison.OrdinalIgnoreCase)))
+                continue;
+            var relative = NormalizeRelative(key);
+            var physical = Path.GetFullPath(Path.Combine(game, relative));
+            if (!physical.Equals(Path.GetFullPath(winner.PhysicalPath), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Invalid physical MO2 dependency winner: " + relative);
+            EnsureNoReparseParents(Path.GetDirectoryName(physical)!);
+            RequireRegularUnlinkedFile(physical);
+            result.Add(relative);
+        }
+        return result.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     internal static bool IsRequiredOwnerInput(string path) =>
