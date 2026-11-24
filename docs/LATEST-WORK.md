@@ -14,6 +14,13 @@
 
 
 
+
+## 2026-11-24 — Repeat-install GRSP historical result separation
+
+- Local #1132 INSTALL correctly fails closed: GRSP owner refuses its nonempty data folder, START remains disabled and RESTORE is actionable. Earlier local MO2 F11 capture wrote RESULTS into Overwrite; GCO's disposable installer projection included the previous capture output as though it were live installation state. The GRSP owner explicitly requires an empty data directory before install. No owner check is changed.
+- `ed0409c`, `4c4fd6d`: classify only GRSP RESULTS descendants as historical capture evidence, preserve hash-verified effective files in session-owned recovery/prior-grsp-results outside fixture/stage, keep original Overwrite/physical sources untouched, revalidate original and archived bytes/identity/inventory before dispatch. Preserve archive provenance even on refusal. DLLs, manager state, CaptureTitle and foreign data outside RESULTS still pass unchanged into authoritative owner refusal. This is not Stage 5 result collection; old results must never be mistaken for new capture evidence.
+- `183c411`, `6c591a6`, `f4d8275`: mock and real owner reinstallation regressions with historical Overwrite results, byte preservation, drift refusal, and real GRSP foreign-data refusal. Native game tests still required. No changes to Direct, owner repos, product version or production feature gate.
+
 ## 2026-11-24 — Full GCO CI #1132 GREEN; updated MO2 local test package ready
 
 - Full GCO CI #1132 (run 45463133753, head `4ebba873c862fa2b2ed460806ba93dba394622e3`) completed SUCCESS. Artifact [Gs-Cyberpunk2077_Optimizer-v1.2.7-run1132-a1](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45463133753/artifacts/14954496697), SHA-256 `6d64a14592e3ad9213a1bbb6b5bb6a37ee0c89a9eaa9758257f8868adf184676`. All 18 Python bridge tests, selected-profile C# contracts, physical dependency manifest and source-owner fixture, packaged bridge byte identity, Direct return, owner install/restore and integrated package checks passed. Version unchanged; production feature gate remains disabled.
