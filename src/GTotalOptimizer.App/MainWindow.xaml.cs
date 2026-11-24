@@ -1593,7 +1593,7 @@ public partial class MainWindow : Window
                 var stack = result.CandidateSource;
                 if (result.Recognized && stack is not null) mo2SelectedSource = result;
                 Mo2StatusText.Text = result.Recognized && stack is not null
-                    ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetOwners} CET | {stack.RedscriptFiles} REDscript files"
+                    ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetModCount} CET mods | {stack.RedscriptModCount} REDscript mods"
                     : result.Detail;
                 SetStatus($"MO2 bridge authenticated. UI profile: {connected.CurrentProfile}; selected: {selected}. " +
                     (result.Recognized ? "Candidate sources resolved. Experimental profiling test only." : result.Detail));
