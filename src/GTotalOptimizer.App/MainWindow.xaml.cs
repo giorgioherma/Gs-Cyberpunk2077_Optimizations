@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private CollectedCaptureIndex? savedCapture;
     private string? completedSessionId;
     private string? completedGameRoot;
+    private Mo2CaptureIdentity? completedMo2Source;
     private bool captureAndRestoreVerified;
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
     private readonly CombinedOptimizationPassService combinedPassGenerator = new();
@@ -156,17 +157,33 @@ public partial class MainWindow : Window
         // Removing/changing the mod revokes a previously checked option.
         bool installed = captureAndRestoreVerified &&
             ResultsPage.Visibility == Visibility.Visible &&
-            GameInspector.HasInstalledHotscenes(completedGameRoot);
+            (completedMo2Source is null
+                ? GameInspector.HasInstalledHotscenes(completedGameRoot)
+                : CurrentMo2HotscenesPath() is not null);
         SetHotscenesOptionVisible(installed);
     }
 
-    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
-    private static bool HasCompletedHotscenesEnglishOnly(string game)
+    private string? CurrentMo2HotscenesPath()
     {
         try
         {
-            string file = Path.Combine(game, "bin", "x64", "plugins",
-                "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (completedMo2Source is null) return null;
+            var stack = Mo2AnalysisSource.Resolve(completedMo2Source);
+            return stack.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/hotscenes/init.lua");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        { return null; }
+    }
+
+    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
+    private static bool HasCompletedHotscenesEnglishOnly(string game) =>
+        HasCompletedHotscenesEnglishOnlyFile(Path.Combine(game, "bin", "x64", "plugins",
+            "cyber_engine_tweaks", "mods", "hotscenes", "init.lua"));
+
+    private static bool HasCompletedHotscenesEnglishOnlyFile(string file)
+    {
+        try
+        {
             if (!File.Exists(file)) return false;
             string source = File.ReadAllText(file);
             return source.Contains("-- G-CET personal:hotscenes-english-only-v1",
@@ -186,8 +203,10 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.IsChecked != true) return false;
         try
         {
-            string file = Path.Combine(completedGameRoot, "bin", "x64",
-                "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            string? file = completedMo2Source is null
+                ? Path.Combine(completedGameRoot, "bin", "x64",
+                    "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua")
+                : CurrentMo2HotscenesPath();
             if (!File.Exists(file)) return false;
             // Incomplete generated markers are not a new optimization:
             // the CET owner must refuse them rather than reapply a partial pass.
@@ -1092,6 +1111,18 @@ public partial class MainWindow : Window
             if (saved is null) return;
             completedSessionId = saved.SessionId;
             completedGameRoot = saved.GameRoot;
+            completedMo2Source = saved.Mo2Source;
+            if (completedMo2Source is not null && !mo2Mode)
+            {
+                mo2Mode = true;
+                Mo2PathBox.Text = completedMo2Source.ApplicationDirectory ??
+                    UserSettings.ReadMo2Setup().InstallationFolder;
+                GameRootContents.Visibility = Visibility.Collapsed;
+                Mo2SourceContents.Visibility = Visibility.Visible;
+                GameRootContents.Children.Remove(FrameworkChecksRow);
+                Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+                GameSourceHeading.Text = "MOD ORGANIZER 2";
+            }
             captureAndRestoreVerified = true;
             savedCapture = saved;
             UpdateResultTexts(saved);
@@ -1758,7 +1789,10 @@ public partial class MainWindow : Window
             mo2LaunchAttempted && Workflow.HasMo2CaptureAttempt;
         CollectButton.IsEnabled = captureReady &&
             CaptureAdmissionPolicy.CanCollect(true, true, liveState, savedCapture);
-        ContinueButton.IsEnabled = false;
+        ContinueButton.IsEnabled = captureReady && !profilerReportRunning &&
+            CaptureAdmissionPolicy.CanContinue(savedCapture,
+                PresentMonCaptureController.ReadTrackedCsv(packageRoot) is null) &&
+            savedCapture is not null && HasCompletedProfilerReport(packageRoot, savedCapture.SessionId);
         if (mo2RecoveryBlocked && mo2Prepared is null)
             SetStatus("Previous profiling session requires recovery. Click RESTORE.");
         else if (mo2Prepared is not null && mo2LaunchAttempted &&
@@ -1778,7 +1812,7 @@ public partial class MainWindow : Window
                 if (HasCompletedProfilerReport(packageRoot, complete.SessionId))
                 {
                     ClearStatusPin();
-                    SetStatus("Profiler results collected.");
+                    SetStatus("Combined profiler report ready. Click CONTINUE.");
                 }
             }
             else if (LaunchButton.IsEnabled)
@@ -3052,8 +3086,7 @@ public partial class MainWindow : Window
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
             ClearStatusPin();
-            SetStatus(mo2Mode ? "Combined profiler report ready." :
-                "Combined profiler report ready. Click CONTINUE.");
+            SetStatus("Combined profiler report ready. Click CONTINUE.");
             reportReady = true;
             return true;
         }
@@ -3101,7 +3134,9 @@ public partial class MainWindow : Window
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
     private async Task ContinueToAnalyticsAsync()
     {
-        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (!captureAndRestoreVerified && (mo2Mode
+            ? mo2RefreshRunning || mo2SelectedSource is null || !Workflow.HasMo2CaptureAttempt
+            : !inspection.IsValidGame || inspection.GameRoot is null))) return;
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
@@ -3116,7 +3151,9 @@ public partial class MainWindow : Window
             SetActiveTab(true);
             return;
         }
-        var game = inspection.GameRoot;
+        var mo2Selection = mo2Mode ? mo2SelectedSource : null;
+        var game = mo2Selection?.GameDirectory ?? inspection.GameRoot;
+        if (game is null) return;
         if (GameRunning()) { Warn("Close Cyberpunk before restoring.", "Game running"); return; }
         CollectedCaptureIndex? saved;
         try { saved = Workflow.ReadCollected(game, verifyHashes: true); }
@@ -3142,9 +3179,14 @@ public partial class MainWindow : Window
         {
             // Only source-owner restoration can authorize Page 2. Missing
             // intentional domains are explicitly acknowledged above.
-            var result = await Workflow.ContinueAsync(game,
-                skipCet: false, skipRedscript: false,
-                skipFrameTime: saved!.FrameTimeCsv is null);
+            var result = mo2Selection is null
+                ? await Workflow.ContinueAsync(game,
+                    skipCet: false, skipRedscript: false,
+                    skipFrameTime: saved!.FrameTimeCsv is null)
+                : await Task.Run(() => Workflow.ContinueAsync(game,
+                    skipCet: false, skipRedscript: false,
+                    skipFrameTime: saved!.FrameTimeCsv is null,
+                    mo2Selection: mo2Selection));
             if (!result.RestoreVerified)
             {
                 SetStatus(result.Detail);
@@ -3155,6 +3197,15 @@ public partial class MainWindow : Window
                 HotscenesEnglishOnlyCheckBox.IsChecked = false;
             completedSessionId = saved.SessionId;
             completedGameRoot = game;
+            if (mo2Selection is not null)
+            {
+                saved = CollectedCaptureStore.ReadRestored(packageRoot, game, saved.SessionId);
+                mo2Prepared = null;
+                mo2LaunchAttempted = mo2RecoveryBlocked = mo2VerifyRequired = false;
+                GamePathBox.Text = game;
+                UserSettings.WriteGameRoot(game);
+            }
+            completedMo2Source = saved.Mo2Source;
             captureAndRestoreVerified = true;
             refreshCancellation?.Cancel();
             string? workspaceWarning = null;
@@ -3273,8 +3324,10 @@ public partial class MainWindow : Window
         long analyzeProgress = BeginWorkProgress(WorkPhase.Analyze, "ANALYZE / CET SOURCES");
         try
         {
+            using var mo2Source = saved.Mo2Source is null ? null :
+                await Task.Run(() => Mo2AnalysisSource.Create(saved, cancel.Token), cancel.Token);
             var report = await readOnlyAnalyzer.AnalyzeAsync(
-                packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
+                packageRoot, completedGameRoot, saved.SessionId, cancel.Token, mo2Source);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
             SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 5, "ANALYZE / REDSCRIPT SOURCES");
@@ -3291,7 +3344,7 @@ public partial class MainWindow : Window
             string redPlanStatus;
             try
             {
-                string sourceRoot = completedGameRoot!;
+                string sourceRoot = mo2Source?.Root ?? completedGameRoot!;
                 string sessionRoot = CollectedCaptureStore.SessionFolder(
                     packageRoot, saved.SessionId);
                 string planPath = Path.Combine(sessionRoot,
@@ -3339,7 +3392,7 @@ public partial class MainWindow : Window
                 // Generate-only, as required by the owner's opt-in contract.
                 analyzedAvailability = await combinedPassGenerator.InspectAvailableAsync(
                     packageRoot, completedGameRoot!, saved.SessionId, cancel.Token,
-                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress));
+                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress), mo2Source);
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
                 SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 5, 5,
@@ -3469,7 +3522,9 @@ public partial class MainWindow : Window
             }
             if (pass.HotscenesEnglishOnlyRequested &&
                 pass.HotscenesEnglishOnlyEdits == 0 &&
-                !HasCompletedHotscenesEnglishOnly(game))
+                !(completedMo2Source is null
+                    ? HasCompletedHotscenesEnglishOnly(game)
+                    : CurrentMo2HotscenesPath() is { } current && HasCompletedHotscenesEnglishOnlyFile(current)))
                 summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
             RefreshPlannedWork();
@@ -3626,6 +3681,7 @@ public partial class MainWindow : Window
         analyzedSessionId = null;
         completedSessionId = null;
         completedGameRoot = null;
+        completedMo2Source = null;
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
         analyzedAvailability = null;
