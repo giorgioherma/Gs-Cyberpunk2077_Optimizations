@@ -56,6 +56,8 @@ public static class Mo2CompanionCommandClient
             throw new InvalidOperationException("Explicit local MO2 test admission is required.");
         if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
             throw new InvalidOperationException("Close Cyberpunk before launching the MO2 test.");
+        if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+            throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
         // Once the launch is attempted, even a signed failure can follow a
         // created process. Never classify a failed/timeout request as unlaunched.
@@ -63,7 +65,7 @@ public static class Mo2CompanionCommandClient
         var reply = await SendAsync(connected, "launch", prepared.Profile,
             prepared.StagingDirectory, cancellationToken, prepared.SessionId);
         if (!reply.Ok || reply.ProcessId <= 0)
-            throw new InvalidOperationException("MO2 test launch unverified; retain recovery evidence. " + reply.Detail);
+            throw new InvalidOperationException("MO2 launch failed: " + reply.Detail);
         Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending",
             "test-launched", reply.ProcessId);
         return reply;
@@ -154,8 +156,7 @@ public static class Mo2CompanionCommandClient
             await Task.Delay(200, cancellationToken);
         }
         throw new TimeoutException(
-            "MO2 companion did not respond. Retain the request and session journal; do not " +
-            "assume the game was not started or remove profiler files.");
+            "MO2 did not respond. Check its window for an error or permission prompt.");
     }
 
     internal static string CanonicalRequest(IReadOnlyDictionary<string, object> payload)
