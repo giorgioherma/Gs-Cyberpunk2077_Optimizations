@@ -1,1 +1,1 @@
-checkpoint=mo2-page2-full-native-evidence-replay-20261124
+checkpoint=mo2-native-developer-layout-replay-20261125
