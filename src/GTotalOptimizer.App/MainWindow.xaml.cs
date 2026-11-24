@@ -1237,9 +1237,17 @@ public partial class MainWindow : Window
 
     private async Task ReconcileGameProcessChangesAsync()
     {
-        if (!initialized || !IsLoaded || closingInProgress || mo2Mode ||
-            closureCleanupVerified || busy || gameStateRefreshInFlight ||
-            !inspection.IsValidGame) return;
+        if (!initialized || !IsLoaded || closingInProgress ||
+            closureCleanupVerified || busy || gameStateRefreshInFlight) return;
+        if (mo2Mode)
+        {
+            // The experimental source mode never starts Direct capture or ETW.
+            pendingExternalGameStart = pendingGameExitRefresh = false;
+            pendingExternalGamePid = null;
+            UpdatePathLock();
+            return;
+        }
+        if (!inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
         try
         {
@@ -1441,6 +1449,8 @@ public partial class MainWindow : Window
         if (!initialized || !mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
         mo2Mode = false;
         mo2Connected = null;
+        pendingExternalGameStart = pendingGameExitRefresh = false;
+        pendingExternalGamePid = null;
         GameRootContents.Visibility = Visibility.Visible;
         Mo2SourceContents.Visibility = Visibility.Collapsed;
         GameSourceHeading.Text = "GAME ROOT / CYBERPUNK 2077";
@@ -1609,7 +1619,8 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException("Select the MO2 application folder first.");
             if (System.Windows.MessageBox.Show(this,
                 "Add the GCO test companion to this MO2 installation? Close MO2 first. Existing plugins will not be overwritten.",
-                "MO2 companion", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+                "MO2 companion", MessageBoxButton.YesNo, MessageBoxImage.Question,
+                MessageBoxResult.No) != MessageBoxResult.Yes) return;
             Mo2CompanionInstaller.Install(folder,
                 Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py"));
             SetStatus("GCO companion installed. Open MO2 and click REFRESH.");
@@ -1627,9 +1638,10 @@ public partial class MainWindow : Window
         GamePathBox.IsEnabled = !busy;
         BrowseButton.IsEnabled = !busy && !locked;
         RefreshButton.IsEnabled = !busy && !mo2RefreshRunning;
-        DirectSourceButton.IsEnabled = mo2Mode && CanSwitchSource() && !mo2RefreshRunning;
-        Mo2SourceButton.IsEnabled = !mo2Mode && CanSwitchSource();
-        Mo2BrowseButton.IsEnabled = mo2Mode && CanSwitchSource() && !mo2RefreshRunning;
+        var switchAllowed = CanSwitchSource() && !mo2RefreshRunning;
+        DirectSourceButton.IsEnabled = mo2Mode && switchAllowed;
+        Mo2SourceButton.IsEnabled = !mo2Mode && switchAllowed;
+        Mo2BrowseButton.IsEnabled = mo2Mode && switchAllowed;
         Mo2InstanceBox.IsEnabled = Mo2ProfileBox.IsEnabled = Mo2BrowseButton.IsEnabled;
         Mo2BridgeButton.IsEnabled = Mo2BrowseButton.IsEnabled;
         Mo2BridgeButton.Content = mo2Connected is null ? "ADD BRIDGE" : "VERIFY";
@@ -2018,7 +2030,7 @@ public partial class MainWindow : Window
                 !profilerReportRunning && !HasCompletedProfilerReport(packageRoot, saved.SessionId))
             {
                 await GenerateCollectedProfilerReportAsync(current.GameRoot!, saved.SessionId);
-                if (cancel.IsCancellationRequested || !IsLoaded || busy) return;
+                if (cancel.IsCancellationRequested || !IsLoaded || busy || mo2Mode) return;
                 ContinueButton.IsEnabled = HasCompletedProfilerReport(packageRoot, saved.SessionId);
             }
             // Adapt the captions to actual verified workflow state. Disabled
