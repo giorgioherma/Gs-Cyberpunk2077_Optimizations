@@ -113,7 +113,11 @@ internal static class Mo2ProfilerOverlayBuilderTests
 
             if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
                 throw new InvalidDataException("MO2_PREPARED_SESSION_NOT_RECOVERABLE");
+            if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(result))
+                throw new InvalidDataException("MO2_PRE_DISPATCH_RESTORE_NOT_AVAILABLE");
             Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "prepared", "test-launch-pending");
+            if (Mo2ProfilerOverlayBuilder.IsStillPrepared(result))
+                throw new InvalidDataException("MO2_PENDING_DISPATCH_MISCLASSIFIED_AS_PREPARED");
             RejectVerification(() => Mo2ProfilerOverlayBuilder.VerifyPrepared(result, stack));
             if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
                 throw new InvalidDataException("MO2_UNCERTAIN_LAUNCH_NOT_BLOCKED");
