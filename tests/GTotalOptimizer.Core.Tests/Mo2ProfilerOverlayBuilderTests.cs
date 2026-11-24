@@ -127,10 +127,31 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 throw new InvalidDataException("MO2_UNCERTAIN_LAUNCH_RETIRED_AS_UNLAUNCHED");
             }
             catch (InvalidOperationException) { }
-            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "test-launch-pending", "test-launched", 123);
-            Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(result, "test-launched", "retired-test-capture", 123);
-            if (!Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
-                throw new InvalidDataException("MO2_UNCOLLECTED_CAPTURE_REUSE_ALLOWED");
+            var bridge = Path.Combine(local, "GCO", "MO2Bridge");
+            var pending = Path.Combine(bridge, "instance-" + new string('a', 24) + ".processing.json");
+            File.WriteAllText(pending, JsonSerializer.Serialize(new
+            {
+                sessionId = result.SessionId, operation = "launch",
+                stagingRoot = result.StagingDirectory
+            }));
+            var foreignCommand = Path.Combine(bridge, "instance-" + new string('b', 24) + ".processing.json");
+            File.WriteAllText(foreignCommand, JsonSerializer.Serialize(new { sessionId = new string('c', 32) }));
+            try
+            {
+                Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local,
+                    () => throw new InvalidOperationException("MO2 still running"));
+                throw new InvalidDataException("MO2_PENDING_RESTORE_ACCEPTED_WHILE_BRIDGE_RUNNING");
+            }
+            catch (InvalidOperationException) { }
+            if (!File.Exists(pending) || !Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local))
+                throw new InvalidDataException("MO2_UNCERTAIN_SESSION_MUTATED_ON_REFUSAL");
+            if (Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { }) != 1 ||
+                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local) ||
+                File.Exists(pending) || !File.Exists(foreignCommand) ||
+                Directory.GetFiles(Path.Combine(bridge, "recovery", result.SessionId)).Length != 1 ||
+                !Directory.Exists(result.StagingDirectory) ||
+                Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { }) != 0)
+                throw new InvalidDataException("MO2_INTERRUPTED_SESSION_RESTORE_OR_IDEMPOTENCE_FAILED");
             using (var journal = JsonDocument.Parse(File.ReadAllText(result.JournalFile)))
                 if (journal.RootElement.GetProperty("generatedFiles").GetArrayLength() != expected.Length ||
                     journal.RootElement.GetProperty("originalSources").GetRawText().Length <= 2)
