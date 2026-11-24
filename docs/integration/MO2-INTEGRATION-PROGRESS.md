@@ -23,6 +23,12 @@
 
 
 
+## 2026-11-24 — Diagnose MO2 Page 2 replay admission failure
+
+- [MO2 #30](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45503746821), `094b5e9`: FAILED during the new Page 2 integration replay. Native USVFS, selected-profile tests, real no-0-Engine owner install and original collection replay passed. CET analysis and source plan reached combined availability, where GRSP refused: `GCO collection index omits required GRSP evidence`. The old diagnostic did not identify the exact missing file; official MO2 launch smoke was not reached.
+- `610a4d2`, `dded40b`: the new Page 2 replay now uses the existing independently validated 15:51 GRSP fixture instead of the older 02:19 capture used for the collection-only replay. Both owner domains come from the same recorded capture; exclude derived Reports duplicates. Require the full native input set and explicitly check the actual owner archive index for every file required by GRSP admission. If the owner drops/misclassifies evidence, report the exact path rather than bypassing validation. Earlier collection-only replay, production Resolver, existing assertions and workflow definitions unchanged.
+- Validation pending on existing MO2 TXT checkpoint. The precise omitted path in #30 remains unknown; the new run must verify actual generated ZIP before declaring the issue resolved. Existing hosted-runner MO2 breakaway restriction remains independent.
+
 ## 2026-11-24 — Focused actual MO2 optimization ZIP validation
 
 - Full GCO [#1141](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45501582630), commit `17cc863`: independently verified SUCCESS, including the additive Continue/source projection regression.
