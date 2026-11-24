@@ -1563,6 +1563,8 @@ public partial class MainWindow : Window
         mo2Connected = null;
         mo2SelectedSource = null;
         mo2Framework = null;
+        liveState = null;
+        savedCapture = null;
         SetFrameworkStatuses(null);
         UpdatePathLock();
         InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
@@ -1669,6 +1671,31 @@ public partial class MainWindow : Window
                     mo2Framework = await Task.Run(() =>
                         FrameworkPreflight.InspectMo2(result.GameDirectory, stack));
                     SetFrameworkStatuses(mo2Framework);
+                    if (binding is not null && mo2Prepared is not null &&
+                        mo2LaunchAttempted && !GameRunning())
+                    {
+                        savedCapture = Workflow.ReadCollected(result.GameDirectory, verifyHashes: true);
+                        if (savedCapture?.CollectInvoked != true && savedCapture?.CollectionAttempted != true)
+                        {
+                            try
+                            {
+                                liveState = await Task.Run(() =>
+                                    Workflow.InspectMo2CaptureAsync(result.GameDirectory, result));
+                            }
+                            catch (Exception ex)
+                            {
+                                Trace.TraceWarning("MO2 owner capture inspection: " + ex);
+                            }
+                        }
+                        else if (CaptureAdmissionPolicy.CanContinue(savedCapture,
+                                     PresentMonCaptureController.ReadTrackedCsv(packageRoot) is null) &&
+                                 savedCapture is { } complete)
+                        {
+                            UpdateResultTexts(complete);
+                            if (!HasCompletedProfilerReport(packageRoot, complete.SessionId))
+                                await GenerateCollectedProfilerReportAsync(result.GameDirectory, complete.SessionId);
+                        }
+                    }
                 }
                 Mo2StatusText.Text = result.Recognized && stack is not null
                     ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetModCount} CET mods | {stack.RedscriptModCount} REDscript mods"
@@ -1726,22 +1753,41 @@ public partial class MainWindow : Window
             mo2Prepared is { } prepared &&
             (!mo2LaunchAttempted || Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared)) && !mo2VerifyRequired &&
             mo2Connected is not null && mo2Framework?.Ready == true;
-        CollectButton.IsEnabled = ContinueButton.IsEnabled = false;
+        var captureReady = !busy && !mo2RefreshRunning && !running && !processLaunchPending &&
+            !mo2VerifyRequired && mo2SelectedSource is not null && mo2Prepared is not null &&
+            mo2LaunchAttempted && Workflow.HasMo2CaptureAttempt;
+        CollectButton.IsEnabled = captureReady &&
+            CaptureAdmissionPolicy.CanCollect(true, true, liveState, savedCapture);
+        ContinueButton.IsEnabled = false;
         if (mo2RecoveryBlocked && mo2Prepared is null)
             SetStatus("Previous profiling session requires recovery. Click RESTORE.");
         else if (mo2Prepared is not null && mo2LaunchAttempted &&
             Workflow.HasMo2CaptureAttempt && mo2SelectedSource is not null && !mo2VerifyRequired)
         {
-            SetPortraitStage(PortraitStage.Capturing);
+            var collected = savedCapture?.CollectionAttempted == true;
+            SetPortraitStage(collected ? PortraitStage.Collecting :
+                savedCapture?.CollectInvoked == true ? PortraitStage.Installed : PortraitStage.Capturing);
             if (running)
             {
                 ClearStatusPin();
                 SetStatus("Cyberpunk running. Record gameplay; F11 START / STOP.");
             }
+            else if (collected && savedCapture is { } complete)
+            {
+                UpdateResultTexts(complete);
+                if (HasCompletedProfilerReport(packageRoot, complete.SessionId))
+                {
+                    ClearStatusPin();
+                    SetStatus("Profiler results collected.");
+                }
+            }
             else if (LaunchButton.IsEnabled)
             {
                 ClearStatusPin();
-                SetStatus("Cyberpunk closed. Start again or restore profilers.");
+                SetStatus(savedCapture?.CollectInvoked == true ?
+                    "Collect failed. START again or RESTORE." :
+                    CaptureAdmissionPolicy.PendingCaptureGuidance(
+                        CaptureAdmissionPolicy.AvailableNativeCaptures(liveState, savedCapture)));
             }
         }
     }
@@ -2774,14 +2820,18 @@ public partial class MainWindow : Window
     private async void Collect_Click(object sender, RoutedEventArgs e) => await CollectResultsAsync();
     private async Task CollectResultsAsync()
     {
-        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
-        var game = inspection.GameRoot;
+        if (busy || (mo2Mode ? mo2RefreshRunning || mo2SelectedSource is null || mo2Prepared is null ||
+                !mo2LaunchAttempted || !Workflow.HasMo2CaptureAttempt :
+                !inspection.IsValidGame || inspection.GameRoot is null)) return;
+        var mo2Selection = mo2Mode ? mo2SelectedSource : null;
+        var game = mo2Selection?.GameDirectory ?? inspection.GameRoot;
+        if (game is null) return;
         if (GameRunning())
         {
             Warn("Close Cyberpunk before collecting results.", "Collection");
             return;
         }
-        if (!Workflow.HasCaptureAttempt(game))
+        if (mo2Selection is null ? !Workflow.HasCaptureAttempt(game) : !Workflow.HasMo2CaptureAttempt)
         {
             Warn("Start Cyberpunk before collecting results.", "Collection");
             return;
@@ -2805,7 +2855,7 @@ public partial class MainWindow : Window
         // The inner collection verifies owner readiness after the latch.
         // One-shot state is durable BEFORE any native copy, ETW flush or
         // potential exception. Successful saves remain; failed scratch clears.
-        try { Workflow.RecordCollectInvoked(game); }
+        try { Workflow.RecordCollectInvoked(game, mo2Selection); }
         catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
         ClearStatusPin();
         SetBusy(true);
@@ -2818,7 +2868,11 @@ public partial class MainWindow : Window
         {
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
-            var nativeStatus = await Workflow.InspectAsync(game);
+            if (mo2Selection is not null)
+                mo2Selection = await InspectMo2SelectionAsync();
+            var nativeStatus = mo2Selection is null
+                ? await Workflow.InspectAsync(game)
+                : await Task.Run(() => Workflow.InspectMo2CaptureAsync(game, mo2Selection));
             var indexed = Workflow.ReadCollected(game, verifyHashes: true);
             var staged = Workflow.PendingStagedNativeCaptures(game);
             var ready = CaptureAdmissionPolicy.AvailableNativeCaptures(
@@ -2833,7 +2887,7 @@ public partial class MainWindow : Window
             string? frameWarning = stop.Error;
             if (stop.Stopped)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 1, 10, "COLLECT / PRESENTMON STOPPED");
-            var native = await Workflow.CollectResultsAsync(game);
+            var native = await Workflow.CollectResultsAsync(game, mo2Selection: mo2Selection);
             if (native.Ok)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 2, 10, "COLLECT / CET + REDSCRIPT");
             if (native.Ok && stop.Stopped && stop.Csv is not null)
@@ -2873,7 +2927,7 @@ public partial class MainWindow : Window
             // archives are durable, hashes verify, and ETW is stopped. If this
             // cleanup fails, do not seal Collect; the same session can retry.
             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
+            var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped, mo2Selection);
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             sealedSuccess = true;
@@ -2911,10 +2965,12 @@ public partial class MainWindow : Window
                         packageRoot, clearTracking: false);
                     if (stopped.Stopped)
                     {
-                        var reset = await Workflow.ResetNativeOutputAsync(game);
+                        var reset = await Workflow.ResetNativeOutputAsync(game, mo2Selection: mo2Selection);
                         if (reset.Ok)
                         {
-                            Workflow.AbandonCurrentUncollected(game);
+                            if (mo2Selection is null) Workflow.AbandonCurrentUncollected(game);
+                            // MO2 retains the one-shot latch and temporary
+                            // index until START/RESTORE retires the layer.
                             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
                         }
                         else Trace.TraceWarning("Failed-Collect native cleanup: " + reset.Detail);
@@ -2986,7 +3042,8 @@ public partial class MainWindow : Window
             Trace.TraceInformation("Unified profiler report: " + result.HtmlPath +
                 " | PresentMon frames=" + result.PresentMonFrames);
             ClearStatusPin();
-            SetStatus("Combined profiler report ready. Click CONTINUE.");
+            SetStatus(mo2Mode ? "Combined profiler report ready." :
+                "Combined profiler report ready. Click CONTINUE.");
             reportReady = true;
             return true;
         }
