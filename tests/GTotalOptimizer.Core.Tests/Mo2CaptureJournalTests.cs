@@ -46,6 +46,21 @@ internal static class Mo2CaptureJournalTests
         // This fixture never dispatches a real game or starts a frame writer.
         // The production caller retires its deployment before invoking this.
         var folder = CollectedCaptureStore.SessionFolder(packageRoot, id);
+        // A lost bridge acknowledgement must not delete a controller that
+        // may still be starting. The original controller settles this proof.
+        var frame = Path.Combine(folder, "PresentMon");
+        Directory.CreateDirectory(frame);
+        var proof = Path.Combine(frame, "PresentMon-controller.json");
+        File.WriteAllText(proof, """{"ok":false,"pending":true}""");
+        try
+        {
+            reopened.RetireMo2CaptureAttempt(game, id);
+            throw new Exception("MO2_PENDING_FRAME_DISPATCH_DISCARDED");
+        }
+        catch (InvalidOperationException) { }
+        if (!reopened.HasRecoveryJournal || !File.Exists(proof))
+            throw new InvalidDataException("MO2_PENDING_FRAME_EVIDENCE_LOST");
+        File.WriteAllText(proof, """{"ok":false,"detail":"controller exited"}""");
         reopened.RetireMo2CaptureAttempt(game, id);
         if (reopened.HasRecoveryJournal || Directory.Exists(folder))
             throw new InvalidDataException("MO2_UNCOLLECTED_CAPTURE_NOT_RETIRED");
