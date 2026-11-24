@@ -1,1 +1,1 @@
-checkpoint=mo2-page1-experimental-companion-installer-20261124
+checkpoint=mo2-experimental-profiling-lifecycle-20261124
