@@ -13,6 +13,13 @@
 
 
 
+
+## 2026-11-24 — CET stage verified; sparse physical-source runtime regression
+
+- Local uploaded stage ee72f613845d4ceaac6bb23cec02af09 contains all eight expected files. Seven static artifacts match journal SHA-256 exactly, including native ASI with CETProfilerStart string, modified 0-Engine init and adaptive scheduler. bindings.json changed from its staged 187 bytes to 318 bytes during runtime; preserve and investigate write routing rather than silently discard user changes. The staged init requires modules/EventEmitter and that unchanged dependency is correctly absent from the sparse delta, but failed at runtime. No evidence that staged binary is malformed.
+- Actual MO2 2.5.2 / USVFS 0.5.6.1 log confirms injected Cyberpunk PID 24916, clearing forced libraries without a subsequent force-load entry, successful hook initialization, GRSP output to Overwrite, and error reporter activity. CET log's 24180 is a thread ID, not an alternative confirmed game PID. No binary-load path or missing-dependency lookup appears at current log level. Native loading and actual Lua resolution remain distinct unresolved issues.
+- `0562c17`: extended existing real USVFS probe with a physical-only baseline matching the local case, sparse staged ASI/init/scheduler, original EventEmitter sibling, and Overwrite. Uses production plugin-directory mapping and a hooked native child with relative reads; checks effective content and unchanged originals. Previous fixture used a whole-stage root mapping and virtual ASI from profile/Overwrite, which did not cover this failure. Focused checkpoint requested; no production runtime changes pending proof of failure mechanism. Native DLL load still requires separate evidence.
+
 ## 2026-11-24 — First real MO2 game launch and completed GRSP F11 session; CET unresolved
 
 - Owner moved the empty physical game r6/cache/modded directory out of the cache; GCO launch succeeded. Exact upstream cache operation remains unproven; no automatic cache deletion or mutation approved.
