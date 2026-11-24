@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Security.Principal;
 using GTotalOptimizer.Core;
 
@@ -29,8 +28,17 @@ internal static class Mo2StartupController
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         await controller.WaitForExitAsync(timeout.Token);
         if (controller.ExitCode != 0)
-            throw new InvalidOperationException("MO2 setup failed (code " + controller.ExitCode +
-                "). Check that MO2 can close normally and no game is running.");
+            throw new InvalidOperationException(controller.ExitCode switch
+            {
+                10 => "Administrator permission was not granted.",
+                11 => "Select a valid MO2 installation and instance.",
+                12 => "Close Cyberpunk before verifying MO2.",
+                13 => "Another MO2 installation is running. Close it before continuing.",
+                14 => "MO2 could not close normally. Check its window.",
+                15 => "MO2 could not start.",
+                16 => "MO2 setup failed. Check the installation and bridge files.",
+                _ => "MO2 setup failed (code " + controller.ExitCode + ")."
+            });
     }
 
     internal static int ExecuteElevated(string folder, string instanceFolder)
