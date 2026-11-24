@@ -29,6 +29,34 @@ public sealed record Mo2Stack(
     IReadOnlyList<string> Warnings,
     bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false)
 {
+    // UI counts use the same unit in both domains: distinct enabled MO2
+    // packages contributing effective source, plus loose-source mod roots
+    // where no package ownership is available (physical game/Overwrite).
+    public int CetModCount => CountMods(true);
+    public int RedscriptModCount => CountMods(false);
+
+    private int CountMods(bool cet)
+    {
+        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in EffectiveFiles.Values)
+        {
+            var parts = file.GameRelativePath.Split('/');
+            bool matches = cet
+                ? parts.Length == 7 &&
+                  file.GameRelativePath.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
+                      StringComparison.OrdinalIgnoreCase) &&
+                  parts[6].Equals("init.lua", StringComparison.OrdinalIgnoreCase)
+                : parts.Length >= 3 &&
+                  file.GameRelativePath.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) &&
+                  file.GameRelativePath.EndsWith(".reds", StringComparison.OrdinalIgnoreCase);
+            if (!matches) continue;
+            bool packaged = file.FromMo2 && file.Owner != "(MO2 Overwrite)";
+            owners.Add(packaged ? "package:" + file.Owner :
+                "loose:" + parts[cet ? 5 : 2]);
+        }
+        return owners.Count;
+    }
+
     public string? Winner(string relative) =>
         EffectiveFiles.TryGetValue(relative.Replace('\\', '/'), out var file) ? file.PhysicalPath : null;
 }
