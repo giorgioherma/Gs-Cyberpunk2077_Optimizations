@@ -6,6 +6,19 @@ internal static class Mo2CompanionDiscoveryTests
 {
     public static void Run()
     {
+        if (Mo2ProcessIdentity.Image(-1) is not null || Mo2ProcessIdentity.IsElevated(-1))
+            throw new InvalidDataException("MO2_INVALID_PID_ACCEPTED");
+        if (OperatingSystem.IsWindows())
+        {
+            using var current = Process.GetCurrentProcess();
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            bool elevated = new System.Security.Principal.WindowsPrincipal(identity)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            if (!string.Equals(Mo2ProcessIdentity.Image(current.Id), Environment.ProcessPath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                Mo2ProcessIdentity.IsElevated(current.Id) != elevated)
+                throw new InvalidDataException("MO2_WINDOWS_PROCESS_IDENTITY_OR_ELEVATION_MISMATCH");
+        }
         var root = Path.Combine(Path.GetTempPath(), "gco-mo2-companion-" + Guid.NewGuid().ToString("N"));
         try
         {
