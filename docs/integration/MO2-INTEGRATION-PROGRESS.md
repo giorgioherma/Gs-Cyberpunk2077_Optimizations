@@ -23,6 +23,13 @@
 
 
 
+## 2026-11-24 — Shared application action handlers; MO2 is a deployment adapter
+
+- User correction: preserve the working GCO application, original contracts and intricate workflow. No new window/page, parallel application lifecycle, speculative redesign, altered contracts or UI/layout changes beyond required MO2 selection.
+- `aca5db5`, `e66675d`: removed standalone MO2 INSTALL/RESTORE and START handlers. Both sources now enter the existing `InstallProfilersAsync`, `LaunchCaptureAsync`, `RestoreIncompleteSessionAsync` and shared `UpdateProfilerAction` for activity, busy state, console diagnostics, portrait, process-start guard and recovery-button presentation. Existing MO2 builder, signed launch, selected-profile proof, repeat-start discard and deferred VERIFY safety are reused at the deployment boundary. No existing tests, workflow definitions, XAML, owner managers, optimizer algorithms, version or feature gate changed in this batch.
+- **Scope and remaining gates:** this is a first shared-action refactor, not completed MO2 capture parity. MO2 still needs a verified capture-output provider for the existing `UnifiedProfilerWorkflow` journal, PresentMon/native tray lifecycle, COLLECT/CONTINUE, and the existing Page 2 analyzers/generators. Until that provider exists, do not manufacture Direct owner status, claim capture completion, arm a Direct tray against an unrelated journal, or enable collection. Do not add parallel archive/report/optimizer paths. Keep existing Direct contracts intact; add only separate MO2 evidence for genuinely MO2-specific behavior.
+- Validation: source inspection only at this checkpoint; existing full GCO TXT checkpoint requested separately. No new successful CI or gameplay evidence yet.
+
 ## 2026-11-24 — Full CI #1135 GREEN; Direct parity test build
 
 - Full GCO CI #1135 (45472130910, head `cb3d54b`) SUCCESS; [artifact v1.2.7](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45472130910/artifacts/14958217211), SHA-256 `19176714ec4d6904e06728bedb0f58452d080a86f46ceda3ddb3d16f6a5b90db`. Existing source resolution, corrected output guard, package integrity and Direct lifecycle contracts passed. #28 passed real USVFS and all six real owner reinstallation scenarios with discard policy; separate live MO2 smoke remains blocked by hosted Windows breakaway access denial. No gameplay success claimed.
