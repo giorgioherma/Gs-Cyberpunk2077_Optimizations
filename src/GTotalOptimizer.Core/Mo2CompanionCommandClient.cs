@@ -27,6 +27,31 @@ public static class Mo2CompanionCommandClient
         Mo2CompanionStatus connected, CancellationToken cancellationToken = default) =>
         SendAsync(connected, "probe", "", "", cancellationToken);
 
+    // The response has already passed epoch/request/HMAC validation. A
+    // remote token query may be denied across integrity levels, so accept
+    // the authenticated companion's own token result for that exact PID.
+    // A confirmed non-elevated Windows token always wins over a reply.
+    internal static bool ElevationVerified(int pid, bool? windowsElevation, Mo2BridgeReply reply)
+    {
+        if (pid <= 0 || !reply.Ok || windowsElevation == false) return false;
+        if (windowsElevation == true) return true;
+        return reply.ProcessId == 0 && string.Equals(reply.Detail,
+            "MO2 token=elevated; pid=" + pid.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
+    }
+
+    public static bool ElevationVerified(Mo2CompanionStatus connected, Mo2BridgeReply reply) =>
+        connected.Connected && ElevationVerified(connected.ProcessId,
+            Mo2ProcessIdentity.InspectElevation(connected.ProcessId).Elevated, reply);
+
+    public static async Task<bool> VerifyElevatedAsync(Mo2CompanionStatus connected,
+        CancellationToken cancellationToken = default)
+    {
+        if (!connected.Connected) return false;
+        var reply = await ProbeAsync(connected, cancellationToken);
+        return ElevationVerified(connected, reply);
+    }
+
     // DO NOT expose this through Page 1 until source-owner staging, recovery,
     // real MO2 process launch and native gameplay checks pass.
     public static Task<Mo2BridgeReply> LaunchAsync(
@@ -56,7 +81,7 @@ public static class Mo2CompanionCommandClient
             throw new InvalidOperationException("Explicit local MO2 test admission is required.");
         if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
             throw new InvalidOperationException("Close Cyberpunk before launching the MO2 test.");
-        if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+        if (!await VerifyElevatedAsync(connected, cancellationToken))
             throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
         // Once the launch is attempted, even a signed failure can follow a
