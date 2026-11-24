@@ -81,6 +81,8 @@ public static class Mo2CompanionCommandClient
             throw new InvalidOperationException("Explicit local MO2 test admission is required.");
         if (System.Diagnostics.Process.GetProcessesByName("Cyberpunk2077").Length != 0)
             throw new InvalidOperationException("Close Cyberpunk before launching the MO2 test.");
+        if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+            throw new InvalidOperationException("Click VERIFY before starting Cyberpunk.");
         if (!await VerifyElevatedAsync(connected, cancellationToken))
             throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource);
