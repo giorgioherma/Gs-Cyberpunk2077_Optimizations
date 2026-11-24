@@ -97,6 +97,7 @@ public partial class MainWindow : Window
     private bool mo2Mode;
     private bool mo2SelectionUpdating;
     private bool mo2RefreshRunning;
+    private bool mo2StartupRunning;
     private Mo2CompanionStatus? mo2Connected;
     private Mo2ProfileSelection? mo2SelectedSource;
     private FrameworkPreflightResult? mo2Framework;
@@ -1449,7 +1450,7 @@ public partial class MainWindow : Window
     }
 
     private bool CanSwitchSource() =>
-        !busy && mo2Prepared is null && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
+        !busy && !mo2StartupRunning && mo2Prepared is null && !gameStateRefreshInFlight && !Workflow.HasRecoveryJournal &&
         !Workflow.RestoreActionAvailable(GamePathBox.Text) && !GameRunning();
 
     private async void DirectSource_Click(object sender, RoutedEventArgs e)
@@ -1534,7 +1535,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshMo2SourceAsync()
     {
-        if (!initialized || !mo2Mode || mo2RefreshRunning) return;
+        if (!initialized || !mo2Mode || mo2RefreshRunning || mo2StartupRunning) return;
         mo2RefreshRunning = true;
         mo2Connected = null;
         mo2SelectedSource = null;
@@ -1583,13 +1584,19 @@ public partial class MainWindow : Window
                 {
                     Mo2GameText.Text = "Game: awaiting MO2 companion";
                     Mo2StatusText.Text = connected.Detail;
-                    SetStatus("Add the GCO bridge with MO2 closed, then open the selected MO2 instance and click REFRESH.");
+                    SetStatus("Click VERIFY to prepare Mod Organizer 2.");
                     return;
                 }
                 Mo2GameText.Text = "Game: " + connected.GameDirectory;
                 var reply = await Mo2CompanionCommandClient.ProbeAsync(connected);
                 if (!reply.Ok) throw new InvalidOperationException(reply.Detail);
                 mo2Connected = connected;
+                if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+                {
+                    Mo2StatusText.Text = "Click VERIFY to prepare MO2";
+                    SetStatus("Click VERIFY to start MO2 with the required permissions.");
+                    return;
+                }
                 var selected = Mo2ProfileBox.SelectedItem as string;
                 if (string.IsNullOrWhiteSpace(selected))
                 {
@@ -1667,6 +1674,8 @@ public partial class MainWindow : Window
         var instance = Mo2SourceInspector.Discover(instancePath);
         var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
         if (!connected.Connected) throw new InvalidOperationException(connected.Detail);
+        if (!Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+            throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
         var probe = await Mo2CompanionCommandClient.ProbeAsync(connected);
         if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
         var selection = await Task.Run(() => Mo2ProfileSelectionService.Inspect(
@@ -1750,26 +1759,55 @@ public partial class MainWindow : Window
     private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
     {
         if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        ClearStatusPin();
         try
         {
-            if (mo2Connected is not null)
+            var folder = Mo2PathBox.Text;
+            var location = Mo2InstallLocator.Inspect(folder, Mo2InstanceBox.SelectedItem as string);
+            if (!location.HasConfiguration || location.InstanceFolder is null)
+                throw new InvalidOperationException(location.Detail);
+            var instance = Mo2SourceInspector.Discover(location.InstanceFolder);
+            if (!instance.Recognized) throw new InvalidOperationException(instance.Detail);
+            var existing = Mo2CompanionDiscovery.Inspect(folder, instance);
+            // Reuse the correctly elevated live instance for the rest of
+            // this session. Never trigger another UAC prompt just to probe.
+            if (existing.Connected && Mo2ProcessIdentity.IsElevated(existing.ProcessId))
             {
                 await RefreshMo2SourceAsync();
                 return;
             }
-            var folder = Mo2PathBox.Text;
-            if (!File.Exists(Path.Combine(folder, "ModOrganizer.exe")))
-                throw new InvalidOperationException("Select the MO2 application folder first.");
-            if (System.Windows.MessageBox.Show(this,
-                "Install the GCO bridge? Close MO2 first. Existing plugins will not be overwritten.",
-                "MO2 companion", MessageBoxButton.YesNo, MessageBoxImage.Question,
-                MessageBoxResult.No) != MessageBoxResult.Yes) return;
-            Mo2CompanionInstaller.Install(folder,
-                Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py"));
-            SetStatus("GCO companion installed. Open MO2 and click REFRESH.");
-            await RefreshMo2SourceAsync();
+            mo2StartupRunning = true;
+            SetBusy(true);
+            SetStatus("Preparing Mod Organizer 2...");
+            await Mo2StartupController.StartAsync(packageRoot, folder, location.InstanceFolder);
+            // MO2 creates the authenticated companion heartbeat only after
+            // loading its selected instance and plugins.
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+                if (connected.Connected && Mo2ProcessIdentity.IsElevated(connected.ProcessId))
+                    break;
+                await Task.Delay(500);
+            }
+            var verified = Mo2CompanionDiscovery.Inspect(folder, instance);
+            if (!verified.Connected || !Mo2ProcessIdentity.IsElevated(verified.ProcessId))
+                throw new InvalidOperationException("MO2 did not open with the required permissions. Check its window.");
         }
-        catch (Exception ex) { Warn(ex.Message, "MO2 companion"); }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("MO2 setup: " + ex);
+            PinStatus("MO2 verification failed: " + ex.Message);
+        }
+        finally
+        {
+            if (mo2StartupRunning)
+            {
+                mo2StartupRunning = false;
+                SetBusy(false);
+                await RefreshMo2SourceAsync();
+            }
+        }
     }
 
     private void UpdatePathLock()
@@ -1787,7 +1825,7 @@ public partial class MainWindow : Window
         Mo2BrowseButton.IsEnabled = mo2Mode && switchAllowed;
         Mo2InstanceBox.IsEnabled = Mo2ProfileBox.IsEnabled = Mo2BrowseButton.IsEnabled;
         Mo2BridgeButton.IsEnabled = Mo2BrowseButton.IsEnabled;
-        Mo2BridgeButton.Content = mo2Connected is null ? "ADD BRIDGE" : "VERIFY";
+        Mo2BridgeButton.Content = "VERIFY";
     }
 
     private void SetBusy(bool isBusy)
