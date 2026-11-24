@@ -1105,6 +1105,42 @@ internal static class Program
                 DrainDispatcher();
             }
 
+            // Exercise actual source selector handlers in the packaged WPF
+            // app, not an assertion about coordinates or cosmetic text.
+            var sourceShell = new MainWindow
+            {
+                WpfVerificationMode = true,
+                ShowActivated = false,
+                ShowInTaskbar = false
+            };
+            try
+            {
+                sourceShell.Show();
+                DrainDispatcher();
+                sourceShell.Mo2PathBox.Text = "";
+                sourceShell.Mo2SourceButton.RaiseEvent(new System.Windows.RoutedEventArgs(
+                    System.Windows.Controls.Button.ClickEvent));
+                DrainDispatcher();
+                if (sourceShell.Mo2SourceContents.Visibility != System.Windows.Visibility.Visible ||
+                    sourceShell.GameRootContents.Visibility != System.Windows.Visibility.Collapsed ||
+                    sourceShell.InstallButton.IsEnabled || sourceShell.LaunchButton.IsEnabled ||
+                    sourceShell.CollectButton.IsEnabled || sourceShell.ContinueButton.IsEnabled ||
+                    Mo2FeatureGate.Enabled)
+                    throw new InvalidOperationException("MO2 test source mode exposed Direct or unverified profiler actions.");
+                sourceShell.DirectSourceButton.RaiseEvent(new System.Windows.RoutedEventArgs(
+                    System.Windows.Controls.Button.ClickEvent));
+                DrainDispatcher();
+                if (sourceShell.GameRootContents.Visibility != System.Windows.Visibility.Visible ||
+                    sourceShell.Mo2SourceContents.Visibility != System.Windows.Visibility.Collapsed)
+                    throw new InvalidOperationException("Could not return to the original Direct source panel.");
+                Console.WriteLine("PASS packaged MO2 source selector, gated profiling and Direct mode return");
+            }
+            finally
+            {
+                sourceShell.Close();
+                DrainDispatcher();
+            }
+
             // Exercise the actual START-to-tray WPF unload while NO game
             // process was launched. Waiting for Cyberpunk here would be a
             // regression: this packaged test has no Cyberpunk executable.
