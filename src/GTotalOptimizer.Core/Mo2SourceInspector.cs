@@ -27,7 +27,8 @@ public sealed record Mo2Stack(
     int ShadowedFiles, bool HasZeroEngine, bool HasRedscript,
     IReadOnlyDictionary<string, Mo2WinningFile> EffectiveFiles,
     IReadOnlyList<string> Warnings,
-    bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false)
+    bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false,
+    string? OverwriteDirectory = null)
 {
     // UI counts use the same unit in both domains: distinct enabled MO2
     // packages contributing effective source, plus loose-source mod roots
@@ -156,7 +157,8 @@ public static class Mo2SourceInspector
 
             var caveat = "Loose-file precedence only; MO2 USVFS, RootBuilder, archive and file-exception loading remain unverified.";
             return Build(profile, entries.Count, winners, shadows, [caveat],
-                profileVerified: true, gameOnlyFallback: false);
+                profileVerified: true, gameOnlyFallback: false) with
+                { OverwriteDirectory = Path.GetFullPath(instance.OverwriteDirectory) };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
             or NotSupportedException or InvalidDataException)
