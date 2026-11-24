@@ -1537,6 +1537,9 @@ public partial class MainWindow : Window
     {
         if (!initialized || !mo2Mode || mo2RefreshRunning || mo2StartupRunning) return;
         mo2RefreshRunning = true;
+        ClearStatusPin();
+        SetStatus("Verifying profile...");
+        Mo2StatusText.Text = "Checking selected profile";
         mo2Connected = null;
         mo2SelectedSource = null;
         mo2Framework = null;
@@ -1734,6 +1737,7 @@ public partial class MainWindow : Window
     {
         if (busy || mo2RefreshRunning || GameRunning() || mo2Prepared is not { } prepared ||
             mo2LaunchAttempted) return;
+        ClearStatusPin();
         SetBusy(true);
         try
         {
@@ -1749,9 +1753,11 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Warn(ex.Message, "Start Cyberpunk");
-            if (mo2LaunchAttempted)
-                SetStatus("Cyberpunk launch could not be confirmed. Existing results preserved; do not retry.");
+            // Only the durable journal can establish whether dispatch was attempted.
+            mo2LaunchAttempted = !Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared);
+            Trace.TraceWarning("MO2 launch: " + ex);
+            PinStatus(ex.Message);
+
         }
         finally { SetBusy(false); UpdateMo2TestButtons(); }
     }
@@ -1760,6 +1766,7 @@ public partial class MainWindow : Window
     {
         if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
         ClearStatusPin();
+        bool startupSucceeded = false;
         try
         {
             var folder = Mo2PathBox.Text;
@@ -1793,6 +1800,7 @@ public partial class MainWindow : Window
             var verified = Mo2CompanionDiscovery.Inspect(folder, instance);
             if (!verified.Connected || !Mo2ProcessIdentity.IsElevated(verified.ProcessId))
                 throw new InvalidOperationException("MO2 did not open with the required permissions. Check its window.");
+            startupSucceeded = true;
         }
         catch (Exception ex)
         {
@@ -1805,7 +1813,16 @@ public partial class MainWindow : Window
             {
                 mo2StartupRunning = false;
                 SetBusy(false);
-                await RefreshMo2SourceAsync();
+                if (startupSucceeded) await RefreshMo2SourceAsync();
+                else
+                {
+                    mo2Connected = null;
+                    mo2SelectedSource = null;
+                    mo2Framework = null;
+                    SetFrameworkStatuses(null);
+                    Mo2StatusText.Text = "MO2 setup failed";
+                    UpdateMo2TestButtons();
+                }
             }
         }
     }
