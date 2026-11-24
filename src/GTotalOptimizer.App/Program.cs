@@ -53,6 +53,9 @@ internal static class Program
         if (args.Length == 4 && args[0] == PresentMonCaptureController.CliSwitch)
             return PresentMonCaptureController.ExecuteElevated(args[1], args[2], args[3]);
 
+        if (args.Length == 3 && args[0] == Mo2StartupController.CliSwitch)
+            return Mo2StartupController.ExecuteElevated(args[1], args[2]);
+
         var app = new System.Windows.Application
         {
             ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose
