@@ -451,10 +451,12 @@ class TestAuthenticatedMo2Bridge(unittest.TestCase):
                 heartbeat = json.loads(mailbox._status.read_text(encoding="utf-8"))
                 self.assertEqual(heartbeat["bridgeEpoch"], mailbox.epoch)
                 self.request(mailbox)
-                self.assertTrue(mailbox.process_one())
+                with patch.object(mailbox, "_own_elevation", return_value="elevated"):
+                    self.assertTrue(mailbox.process_one())
                 reply = self.read_response(mailbox)
                 self.assertTrue(reply["ok"])
                 self.assertEqual(reply["processId"], 0)
+                self.assertEqual(reply["detail"], "MO2 token=elevated; pid=" + str(os.getpid()))
                 self.assertEqual(mapper.mappings(), [])
                 self.request(mailbox, request_id="22222222222222222222222222222222",
                              signing=False)
