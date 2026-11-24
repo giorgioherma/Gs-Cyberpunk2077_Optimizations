@@ -48,6 +48,15 @@ internal static class Mo2ContinueTests
                 throw new InvalidDataException("MO2_CONTINUE_SOURCE_DRIFT_ACCEPTED");
         }
         finally { File.WriteAllBytes(original, bytes); }
+        // Native CET may create log/database sidecars during the game even
+        // when they did not exist at INSTALL. They must not block restore.
+        const string residueRoot = "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls";
+        var residue = Path.Combine(instance, "overwrite", residueRoot);
+        Directory.CreateDirectory(residue);
+        var log = Path.Combine(residue, "CETProfilerControls.log");
+        var db = Path.Combine(residue, "db.sqlite3");
+        File.WriteAllText(log, "runtime log");
+        File.WriteAllText(db, "runtime database");
         var completed = await workflow.ContinueAsync(game, false, false, true, mo2Selection: selection);
         var captured = CollectedCaptureStore.ReadRestored(package, game, id);
         if (!completed.RestoreVerified || workflow.HasRecoveryJournal ||
@@ -66,6 +75,8 @@ internal static class Mo2ContinueTests
             if (File.ReadAllText(Path.Combine(projected, relative)) != "original_mod_callback()" ||
                 new FileInfo(Path.Combine(projected, "bin/x64/Cyberpunk2077.exe")).Length != 0)
                 throw new InvalidDataException("MO2_PAGE2_WRONG_SOURCE_WINNER");
+            if (Directory.Exists(Path.Combine(projected, residueRoot)))
+                throw new InvalidDataException("MO2_PAGE2_COPIED_INERT_CONTROLS_RESIDUE");
             source.RequireBinding(captured);
             try
             {
@@ -83,6 +94,28 @@ internal static class Mo2ContinueTests
         if (Directory.Exists(projected) ||
             !File.ReadAllBytes(original).SequenceEqual(bytes))
             throw new InvalidDataException("MO2_PAGE2_PROJECTION_CLEANUP_FAILED");
+        if (File.ReadAllText(log) != "runtime log" || File.ReadAllText(db) != "runtime database")
+            throw new InvalidDataException("MO2_CONTINUE_CHANGED_CET_RUNTIME_RESIDUE");
+        // Active control source must still fail admission. Do not confuse
+        // harmless inert files with installed profiler controls.
+        var active = Path.Combine(residue, "init.lua");
+        File.WriteAllText(active, "active profiler controls");
+        try
+        {
+            try
+            {
+                using var unexpected = Mo2AnalysisSource.Create(captured);
+                throw new Exception("MO2_PAGE2_ACTIVE_CONTROLS_ACCEPTED");
+            }
+            catch (InvalidDataException) { }
+        }
+        finally
+        {
+            File.Delete(active);
+            File.Delete(log);
+            File.Delete(db);
+            Directory.Delete(residue);
+        }
         Console.WriteLine("PASS MO2 shared Continue, original source restoration, pinned effective source and drift refusal");
     }
 }
