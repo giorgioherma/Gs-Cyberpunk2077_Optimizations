@@ -248,6 +248,9 @@ internal static class Mo2ProfilerOverlayBuilderTests
                 File.ReadAllText(Path.Combine(root, "RESULTS/Collected/GRSP_Summary.csv")) != "sealed capture")
                 throw new InvalidDataException("MO2_REPEAT_START_RESET_FAILED");
 
+            await Mo2ContinueTests.RunAsync(root, game, instanceRoot, local, stack,
+                (fixture, _) => { FakeOwnerInstall(fixture); return Task.CompletedTask; });
+
             async Task ShouldReject(string name, Action<string> change)
             {
                 string id = Convert.ToHexString(
