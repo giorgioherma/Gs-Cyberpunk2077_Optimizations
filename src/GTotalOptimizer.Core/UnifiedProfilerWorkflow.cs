@@ -476,6 +476,8 @@ public sealed class UnifiedProfilerWorkflow
     public string BeginCaptureAttempt(string game, bool observedGameAlreadyRunning = false,
         LiveProfilerState? ownerBeforeCapture = null, string? preparedSessionId = null)
     {
+        if (HasMo2CaptureAttempt)
+            throw new InvalidOperationException("Use the MO2 capture provider for this session.");
         var gameRunning = GameRunning();
         if (gameRunning && !observedGameAlreadyRunning)
             throw new InvalidOperationException("Cyberpunk is running.");
@@ -523,6 +525,8 @@ public sealed class UnifiedProfilerWorkflow
     public async Task<ProfilerWorkflowResult> ResetNativeOutputAsync(string game,
         CancellationToken token = default)
     {
+        if (HasMo2CaptureAttempt)
+            return new(false, "Use the MO2 capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before resetting captures.");
         if (!OwnsSession(game)) return new(false, "GCO capture ownership is not verified.");
         try
@@ -636,6 +640,8 @@ public sealed class UnifiedProfilerWorkflow
     public async Task<ProfilerWorkflowResult> RestoreOwnedAsync(string game, CancellationToken token = default,
         bool preserveIncompleteEvidence = false, bool pendingPresentMonStopped = true)
     {
+        if (HasMo2CaptureAttempt)
+            return new(false, "Use the MO2 capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before profiler restoration.");
         try
         {
@@ -732,6 +738,8 @@ public sealed class UnifiedProfilerWorkflow
     // Collection never restores; source-owner archives remain untouched.
     public async Task<ProfilerWorkflowResult> CollectResultsAsync(string game, CancellationToken token = default)
     {
+        if (HasMo2CaptureAttempt)
+            return new(false, "Use the MO2 capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before collecting.");
         if (!OwnsSession(game)) return new(false, "No matching GCO session. No files changed.");
         var id = SessionId();
@@ -833,6 +841,8 @@ public sealed class UnifiedProfilerWorkflow
         bool skipCet, bool skipRedscript, bool skipFrameTime,
         CancellationToken token = default)
     {
+        if (HasMo2CaptureAttempt)
+            return new(false, "Use the MO2 capture provider for this session. No files changed.");
         if (GameRunning()) return new(false, "Close Cyberpunk before restoring.");
         if (!OwnsSession(game)) return new(false, "No matching GCO session.");
         var id = SessionId();
