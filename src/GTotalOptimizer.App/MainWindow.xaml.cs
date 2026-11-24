@@ -1605,7 +1605,8 @@ public partial class MainWindow : Window
                     SetStatus(instance.Detail);
                     return;
                 }
-                if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+                if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() ||
+                    !Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")))
                 {
                     Mo2StatusText.Text = "Click VERIFY";
                     SetStatus("Click VERIFY before installing profilers.");
@@ -1711,6 +1712,8 @@ public partial class MainWindow : Window
         var profile = Mo2ProfileBox.SelectedItem as string ??
             throw new InvalidOperationException("Select an MO2 profile.");
         var folder = Mo2PathBox.Text;
+        if (!Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")))
+            throw new InvalidOperationException("Click VERIFY before installing profilers.");
         var instance = Mo2SourceInspector.Discover(instancePath);
         var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
         if (!connected.Connected) throw new InvalidOperationException(connected.Detail);
@@ -1825,6 +1828,7 @@ public partial class MainWindow : Window
             // Reuse the correctly elevated live instance for the rest of
             // this session. Never trigger another UAC prompt just to probe.
             if (!Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() &&
+                Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")) &&
                 existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing))
             {
                 await RefreshMo2SourceAsync();
