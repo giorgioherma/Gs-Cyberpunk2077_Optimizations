@@ -197,6 +197,11 @@ internal static class Mo2RealOwnerOverlayTests
                     "G-REDscript-Profiler", "foreign-config.json"));
                 await Mo2RealCollectionTests.RunAsync(verifiedPackageRoot, game, instance, local, output);
             }
+            else if (scenario == "namespaced-complete")
+            {
+                await Mo2RealCollectionTests.RunAsync(verifiedPackageRoot, game, instance, local,
+                    output, verifyPage2: true);
+            }
             Console.WriteLine("PASS Stage 3 REAL CET + GRSP owner install on disposable " +
                 (realZeroEngineDirectory is null ? "original no-0-Engine" :
                     "historical 0-Engine " + scenario) +
