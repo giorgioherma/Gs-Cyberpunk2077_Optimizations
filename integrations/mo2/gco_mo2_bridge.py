@@ -441,6 +441,34 @@ class GcoAuthenticatedMailbox:
             self._seen = {request["requestId"]}
 
     @staticmethod
+    def _own_elevation():
+        # Read our own token, not a remote process token. Report unknown
+        # separately from non-elevated; never infer elevation from a path.
+        if os.name != "nt":
+            return "unknown"
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        advapi.OpenProcessToken.argtypes = [
+            ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)]
+        advapi.GetTokenInformation.argtypes = [
+            ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint32)]
+        token = ctypes.c_void_p()
+        if not advapi.OpenProcessToken(kernel.GetCurrentProcess(), 8, ctypes.byref(token)):
+            return "unknown"
+        try:
+            value = ctypes.c_uint32()
+            size = ctypes.c_uint32()
+            if not advapi.GetTokenInformation(token, 20, ctypes.byref(value),
+                    ctypes.sizeof(value), ctypes.byref(size)):
+                return "unknown"
+            return "elevated" if value.value else "not-elevated"
+        finally:
+            kernel.CloseHandle(token)
+
+    @staticmethod
     def _process_id(handle):
         if os.name != "nt":
             raise GcoOverlayContractError("MO2 launch PID requires Windows")
@@ -474,7 +502,7 @@ class GcoAuthenticatedMailbox:
             self._check(request)
             operation = request["operation"]
             if operation == "probe":
-                pid, detail = 0, "Connected MO2 instance; selected-profile launch is available for approved source"
+                pid, detail = 0, "MO2 token=" + self._own_elevation() + "; pid=" + str(os.getpid())
             else:
                 if not self._controller._HEX_ID.fullmatch(request["sessionId"]):
                     raise GcoOverlayContractError("Invalid GCO profiler session ID")
