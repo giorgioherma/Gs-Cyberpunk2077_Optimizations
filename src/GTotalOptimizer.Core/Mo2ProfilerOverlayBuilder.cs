@@ -13,7 +13,7 @@ public sealed record Mo2OverlayPreparation(
 // Only the existing CET/GRSP managers may transform fixture input. The builder
 // projects current selected-profile sources, invokes those managers against an
 // isolated fixture, and extracts their verified delta. No Lua rewriting here.
-public static class Mo2ProfilerOverlayBuilder
+public static partial class Mo2ProfilerOverlayBuilder
 {
     private static readonly Regex SessionIdPattern = new(
         "^[a-f0-9]{32}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -364,6 +364,7 @@ public static class Mo2ProfilerOverlayBuilder
             // An uncertain dispatch is not safe to reset until VERIFY closed MO2.
             if (j["overwriteRoot"] is not null && j["cetResultPatterns"] is not null)
                 Mo2NativeOutputReset.Discard(j);
+            RestorePhysicalCet(JsonSerializer.SerializeToElement(j));
             if (phase != "retired-awaiting-verify") j["previousPhase"] = phase;
             j["phase"] = phase == "test-launched" ? "retired-test-capture" :
                 phase is "test-launch-pending" or "retired-awaiting-verify"
@@ -418,7 +419,8 @@ public static class Mo2ProfilerOverlayBuilder
             RequireRegularUnlinkedFile(prepared.JournalFile);
             using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
             return doc.RootElement.GetProperty("sessionId").GetString() == prepared.SessionId &&
-                doc.RootElement.GetProperty("phase").GetString() == "prepared";
+                doc.RootElement.GetProperty("phase").GetString() == "prepared" &&
+                !doc.RootElement.TryGetProperty("physicalCet", out _);
         }
         catch { return false; } // An unreadable journal is never proof of no launch.
     }
@@ -499,7 +501,7 @@ public static class Mo2ProfilerOverlayBuilder
                 Path.Combine(bridge, "fixtures", identity.SessionId), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("MO2 collected deployment identity changed.");
         var phase = journal.GetProperty("phase").GetString();
-        VerifyOriginals();
+        VerifyOriginals(allowPhysicalProfiler: phase == "test-launched");
         if (phase == "test-launched")
         {
             var selected = ResolveSelected();
@@ -521,8 +523,11 @@ public static class Mo2ProfilerOverlayBuilder
                 throw new InvalidDataException("MO2 selected source or output directory changed.");
             return selected;
         }
-        void VerifyOriginals()
+        void VerifyOriginals(bool allowPhysicalProfiler = false)
         {
+            var physical = ReadPhysicalCet(journal);
+            if (allowPhysicalProfiler && physical is not null)
+                RequirePhysicalCetBackup(physical);
             var selected = ResolveSelected();
             var originals = journal.GetProperty("originalSources");
             var paths = journal.GetProperty("originalSourcePaths");
@@ -536,7 +541,11 @@ public static class Mo2ProfilerOverlayBuilder
                     throw new InvalidDataException("Original MO2 profiler input changed: " + entry.Name);
                 EnsureNoReparseParents(winner.PhysicalPath);
                 RequireRegularUnlinkedFile(winner.PhysicalPath);
-                if (!Hash(winner.PhysicalPath).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase))
+                var current = Hash(winner.PhysicalPath);
+                if (!current.Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase) &&
+                    !(allowPhysicalProfiler && physical is not null &&
+                      entry.Name.Equals(CetAsiRelative, StringComparison.OrdinalIgnoreCase) &&
+                      !winner.FromMo2 && current.Equals(physical.InstalledHash, StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
             }
             if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
@@ -580,6 +589,7 @@ public static class Mo2ProfilerOverlayBuilder
         var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(prepared.JournalFile))!.AsObject();
         int pid = journal["processId"]!.GetValue<int>();
         Mo2NativeOutputReset.Discard(journal);
+        RestorePhysicalCet(JsonSerializer.SerializeToElement(journal));
         RecordTestLaunchPhase(prepared, "test-launched", "retired-test-capture", pid);
     }
 
@@ -610,6 +620,7 @@ public static class Mo2ProfilerOverlayBuilder
             throw new InvalidOperationException("MO2 session is not proven unlaunched; retain recovery evidence.");
         // Preserve journal and bytes rather than recursively deleting a tree
         // which may contain unexpected links or runtime outputs.
+        RestorePhysicalCet(j);
         RecordTestLaunchPhase(prepared, "prepared", "retired-unlaunched");
     }
 
@@ -626,6 +637,7 @@ public static class Mo2ProfilerOverlayBuilder
         using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
         var journal = doc.RootElement;
         if (journal.GetProperty("phase").GetString() != "prepared" ||
+            journal.TryGetProperty("physicalCet", out _) ||
             journal.GetProperty("sessionId").GetString() != prepared.SessionId ||
             journal.GetProperty("profile").GetString() != prepared.Profile ||
             !string.Equals(journal.GetProperty("stageRoot").GetString(), prepared.StagingDirectory,

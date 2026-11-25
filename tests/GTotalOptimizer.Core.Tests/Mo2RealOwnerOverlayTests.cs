@@ -227,6 +227,29 @@ internal static class Mo2RealOwnerOverlayTests
                 if (File.ReadAllText(Path.Combine(instance, "overwrite", residue)) != "updated runtime state")
                     throw new InvalidDataException("MO2_CET_RUNTIME_SIDECAR_NOT_PRESERVED: " + residue);
             Console.WriteLine("PASS real CET owner accepts and preserves residual controls log/database and mod runtime state");
+            if (realZeroEngineDirectory is null)
+            {
+                // Additive real-owner proof of the physical native deployment.
+                // The original virtual-overlay and collection contracts above
+                // remain unchanged. This uses actual owner-produced ASI bytes
+                // and the actual CET manager's original backup.
+                var physicalLocal = Path.Combine(folder, "physical-native-local");
+                var fresh = Mo2SourceInspector.Resolve(game, details, "Heavy");
+                var physical = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+                    verifiedPackageRoot, game, fresh, Guid.NewGuid().ToString("N"), localAppData: physicalLocal);
+                var expectedNative = physical.Files.Single(f =>
+                    f.GameRelativePath.Equals(Mo2ProfilerOverlayBuilder.CetAsiRelative, StringComparison.OrdinalIgnoreCase));
+                Mo2ProfilerOverlayBuilder.VerifyPrepared(physical, fresh);
+                Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(physical, fresh);
+                if (Sha256(asi) != expectedNative.Sha256 ||
+                    File.Exists(Path.Combine(physical.StagingDirectory, Mo2ProfilerOverlayBuilder.CetAsiRelative)) ||
+                    !File.Exists(Path.Combine(physical.StagingDirectory, "red4ext", "plugins", "G-REDscript-Profiler.dll")))
+                    throw new InvalidDataException("MO2_REAL_PHYSICAL_CET_NATIVE_DEPLOYMENT_FAILED");
+                if (Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(physicalLocal, () => { }) != 1 ||
+                    Sha256(asi) != sourceSha)
+                    throw new InvalidDataException("MO2_REAL_PHYSICAL_CET_NATIVE_RESTORE_FAILED");
+                Console.WriteLine("PASS real owner physical CET ASI exact deployment and restore; GRSP remains virtual");
+            }
             Console.WriteLine("PASS Stage 3 REAL CET + GRSP owner install on disposable " +
                 (realZeroEngineDirectory is null ? "original no-0-Engine" :
                     "historical 0-Engine " + scenario) +

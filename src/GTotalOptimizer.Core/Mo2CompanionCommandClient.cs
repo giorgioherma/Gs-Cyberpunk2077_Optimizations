@@ -121,6 +121,11 @@ public static class Mo2CompanionCommandClient
         var fresh = Mo2SourceInspector.Resolve(selection.GameDirectory,
             Mo2SourceInspector.Discover(selection.InstanceDirectory), selection.Profile, cancellationToken);
         Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, fresh);
+        // A physical CET ASI is loaded by the physical game loader, even when
+        // USVFS exposes a different file to Lua. Use the owner's verified ASI
+        // and backup for just this native file before dispatch. A winning MO2
+        // ASI retains the existing virtual deployment without modification.
+        Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(prepared, fresh);
         // Once the launch is attempted, even a signed failure can follow a
         // created process. Never classify a failed/timeout request as unlaunched.
         Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");

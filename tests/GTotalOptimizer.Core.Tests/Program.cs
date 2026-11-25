@@ -8,6 +8,7 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
     Mo2CompanionDiscoveryTests.Run();
     Mo2CommandClientTests.Run();
     await Mo2ProfilerOverlayBuilderTests.RunAsync();
+    await Mo2PhysicalCetDeploymentTests.RunAsync();
     return;
 }
 
