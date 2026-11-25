@@ -101,7 +101,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-REDruntime_Framework
-          ref: 796ab660dc1b1c395662fc13ee618496a41f89f7 # G-REDruntime v0.6.1, verified framework CI #15
+          ref: e6f91ebdfda6970e293706fef56daf12300442d8 # G-REDruntime v0.6.2, version-only successor
           path: unified/vendor-redruntime
           persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
@@ -204,7 +204,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-REDruntime_Framework
-          ref: 796ab660dc1b1c395662fc13ee618496a41f89f7 # G-REDruntime v0.6.1, verified framework CI #15
+          ref: e6f91ebdfda6970e293706fef56daf12300442d8 # G-REDruntime v0.6.2, version-only successor
           persist-credentials: false
           path: unified/.gco-ci-framework
           sparse-checkout: |
