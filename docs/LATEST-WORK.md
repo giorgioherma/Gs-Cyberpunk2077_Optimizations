@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-25 — Existing loose gameplay settings change during capture
+- Local PROFILE B session `8f7a5ce94bed4c478c4bb68e37f73f43`: capture archive exists; physical live CET SHA matches the installed owner profiler, fixture original backup SHA matches journal, launched/game processes absent, no Direct CET manager state. Read-only source hash check found exactly one change: Enhanced Vehicle System/settings.json, an existing MO2 Overwrite winner. CONTINUE's original-source hash verification would refuse that legitimate runtime change. Explicit RESTORE uses a separate path; its exact failure remains unconfirmed.
+- Extend the existing post-capture loose-data exception to changed existing same-path winners in ordinary mod roots, excluding profiler-owned outputs, package files, executable sources, missing/replaced winners and links. Preserve bytes, strict START seal, prior additions policy and original ASI restoration. Extend existing physical/virtual CONTINUE regression with changed Overwrite and physical data plus negative packaged-config drift. Existing MO2 RESTORE catch now exposes its real exception in the bounded console instead of a generic retry. No Direct workflow/owner/generator/version edits. Full checkpoint requested; user recovery and CI pending.
+
+
 ## 2026-11-25 — G-REDruntime v0.6.2 version-only update
 - Framework owner commit `e6f91ebdfda6970e293706fef56daf12300442d8` changes version metadata only from v0.6.1; no optimization or runtime service changes. Both owner checkouts pin v0.6.2. GCO remains v1.2.7. Previous standalone SCC #1148 passed the unchanged runtime logic. Versioned framework packaging CI and subsequent GCO package validation remain separate; no new GCO checkpoint triggered.
 

@@ -3671,7 +3671,17 @@ public partial class MainWindow : Window
                     : "Original files restored. Check saved workspace.",
                 fullDetails);
         }
-        catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
+        catch (Exception ex)
+        {
+            if (mo2Mode)
+            {
+                // Preserve the actionable cause in the existing console.
+                // A generic retry message hides long recovery exceptions.
+                PinStatus("Restore failed: " + ex.Message, "Recovery required: " + ex);
+                Trace.TraceWarning("MO2 restore: " + ex);
+            }
+            else Warn(ex.Message, "Recovery required");
+        }
         finally
         {
             EndConsoleActivity(restoreActivity);

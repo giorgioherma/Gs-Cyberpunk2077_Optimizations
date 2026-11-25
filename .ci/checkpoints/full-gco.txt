@@ -1,1 +1,1 @@
-checkpoint=standalone-redruntime-vanilla-handler-20261125
+checkpoint=mo2-preserve-existing-loose-runtime-settings-20261125

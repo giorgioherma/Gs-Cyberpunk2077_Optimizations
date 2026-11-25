@@ -41,6 +41,12 @@ internal static class Mo2RestoreRuntimeAdditionTests
             Put(game, Asi, "physical original");
             if (!physical) Put(mod, Asi, "MO2 original");
             Put(mod, Mods + "Active/init.lua", "original callback");
+            const string existingConfig = Mods + "Active/settings.json";
+            const string existingPhysical = Mods + "Active/physical.ini";
+            const string packagedConfig = Mods + "Active/packaged.json";
+            Put(overwrite, existingConfig, "old gameplay settings");
+            Put(game, existingPhysical, "old physical settings");
+            Put(mod, packagedConfig, "original packaged settings");
             Put(instance, "ModOrganizer.ini", "[Settings]\nbase_directory=.\nselected_profile=Test\n");
             Put(instance, "profiles/Test/modlist.txt", "+Active\n");
             Directory.CreateDirectory(overwrite);
@@ -81,8 +87,10 @@ internal static class Mo2RestoreRuntimeAdditionTests
             }
             CollectedCaptureStore.MarkCollectInvoked(package, game, id);
             CollectedCaptureStore.MarkCollectionAttempted(package, game, id, true);
-            const string config = Mods + "Active/settings.json";
+            const string config = Mods + "Active/new-settings.json";
             const string data = Mods + "Active/data/state.ini";
+            Put(overwrite, existingConfig, "updated gameplay settings");
+            Put(game, existingPhysical, "updated physical settings");
             Put(overwrite, config, "new gameplay settings");
             Put(game, data, "new gameplay data");
             Put(overwrite, Binding, "{\"F11\":1}");
@@ -104,6 +112,12 @@ internal static class Mo2RestoreRuntimeAdditionTests
                 File.ReadAllText(At(mod, Mods + "Active/init.lua")) == "changed callback",
                 "existing source drift was accepted");
             Put(mod, Mods + "Active/init.lua", "original callback");
+            Put(mod, packagedConfig, "changed package data");
+            var packageDrift = await workflow.ContinueAsync(game, false, false, true, mo2Selection: Selection());
+            Require(!packageDrift.RestoreVerified && packageDrift.Detail.Contains(packagedConfig) &&
+                workflow.HasRecoveryJournal && File.ReadAllText(At(mod, packagedConfig)) == "changed package data",
+                "existing package data drift was accepted");
+            Put(mod, packagedConfig, "original packaged settings");
 
             // Both deployment routes must now continue with all new user
             // data preserved, original CET bytes and no active profiler files.
@@ -114,7 +128,9 @@ internal static class Mo2RestoreRuntimeAdditionTests
             Require(File.ReadAllText(At(game, Asi)) == "physical original" &&
                 (physical || File.ReadAllText(At(mod, Asi)) == "MO2 original"),
                 "original CET ASI not restored");
-            Require(File.ReadAllText(At(overwrite, config)) == "new gameplay settings" &&
+            Require(File.ReadAllText(At(overwrite, existingConfig)) == "updated gameplay settings" &&
+                File.ReadAllText(At(game, existingPhysical)) == "updated physical settings" &&
+                File.ReadAllText(At(overwrite, config)) == "new gameplay settings" &&
                 File.ReadAllText(At(game, data)) == "new gameplay data" &&
                 File.ReadAllText(At(overwrite, Binding)) == "{\"F11\":1}",
                 "runtime-created user data changed");

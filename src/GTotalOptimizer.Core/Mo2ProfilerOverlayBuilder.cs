@@ -531,10 +531,10 @@ public static partial class Mo2ProfilerOverlayBuilder
             var selected = ResolveSelected();
             var originals = journal.GetProperty("originalSources");
             var paths = journal.GetProperty("originalSourcePaths");
-            var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var expected = originals.EnumerateObject().Select(entry => entry.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in originals.EnumerateObject())
             {
-                expected.Add(entry.Name);
                 if (!selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
                     !string.Equals(Path.GetFullPath(winner.PhysicalPath),
                         paths.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
@@ -542,17 +542,25 @@ public static partial class Mo2ProfilerOverlayBuilder
                 EnsureNoReparseParents(winner.PhysicalPath);
                 RequireRegularUnlinkedFile(winner.PhysicalPath);
                 var current = Hash(winner.PhysicalPath);
-                if (!current.Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase) &&
-                    !(allowPhysicalProfiler && physical is not null &&
-                      entry.Name.Equals(CetAsiRelative, StringComparison.OrdinalIgnoreCase) &&
-                      !winner.FromMo2 && current.Equals(physical.InstalledHash, StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
+                if (current.Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase) ||
+                    (allowPhysicalProfiler && physical is not null &&
+                     entry.Name.Equals(CetAsiRelative, StringComparison.OrdinalIgnoreCase) &&
+                     !winner.FromMo2 && current.Equals(physical.InstalledHash, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                // Same original winner, ordinary loose data only. The game
+                // may save settings into an existing Overwrite/physical file.
+                // Never exempt profiler-owned outputs, package files or Lua.
+                if (!IsAllowedOutput(entry.Name) && IsPostCaptureLooseAddition(winner, expected))
+                {
+                    System.Diagnostics.Trace.TraceInformation("Preserved modified MO2 runtime file: " + entry.Name);
+                    continue;
+                }
+                throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
             }
             // Every original input must still have its original winner and
-            // exact bytes (apart from the owned, temporary physical ASI).
-            // Gameplay may create new loose mod data or bindings. These are
-            // not profiler installations and must not block retirement or
-            // be removed. START's full sealed inventory stays strict.
+            // exact bytes except the owned temporary ASI and existing loose
+            // ordinary mod data. Gameplay may also create new loose mod data
+            // or bindings. Preserve these; START's full seal stays strict.
             var added = selected.EffectiveFiles.Values.Where(w =>
                 IsRequiredOwnerInput(w.GameRelativePath) && !expected.Contains(w.GameRelativePath)).ToArray();
             var blocked = added.Where(w => !IsPostCaptureLooseAddition(w, expected)).ToArray();
@@ -569,7 +577,7 @@ public static partial class Mo2ProfilerOverlayBuilder
         }
     }
 
-    // Only loose additions within an existing ordinary CET mod qualify.
+    // Only loose runtime data within an existing ordinary CET mod qualifies.
     // New packages, new mod roots, native libraries and profiler paths
     // remain blockers. CET owns its user binding state; the owner installer
     // may seed F11 but never restores or deletes the user's bindings.
