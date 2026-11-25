@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## 2026-11-25 — G-REDruntime v0.6.2 version-only update
+- Framework owner commit `e6f91ebdfda6970e293706fef56daf12300442d8` changes version metadata only from v0.6.1; no optimization or runtime service changes. Both owner checkouts pin v0.6.2. GCO remains v1.2.7. Previous standalone SCC #1148 passed the unchanged runtime logic. Versioned framework packaging CI and subsequent GCO package validation remain separate; no new GCO checkpoint triggered.
+
+
 ## 2026-11-25 — G-REDruntime v0.6.1 dependency-free framework update
 - [Full GCO #1148 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45535565601): official SCC 0.5.31 compiled all 12 packaged framework sources against vanilla alone, zero external script providers. G-REDruntime owner version-only bump and clean archive [framework CI #15 SUCCESS](https://github.com/giorgioherma/G-REDruntime_Framework/actions/runs/45537122020), commit `796ab660dc1b1c395662fc13ee618496a41f89f7`.
 - Both package and optional SCC owner checkouts now pin that exact versioned framework source. Existing vanilla-only SCC gate unchanged. GCO version stays **1.2.7**, no product version bump or stable/MO2 branch merge. No new GCO checkpoint triggered for the pin alone; subsequent package CI validates the exact pinned version. Local gameplay retest pending.
