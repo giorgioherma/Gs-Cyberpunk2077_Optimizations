@@ -1,5 +1,12 @@
 # Latest work / evidence status
 
+## 2026-11-25 — CET profiler integrity / demand-driven 0-Engine (ACTIVE ON CET_profiler_integrity)
+- Owner requested dedicated GCO branch based on main, independent of MO2 integration. [Canonical investigation and stage gates](integration/CET-PROFILER-INTEGRITY-AND-DEMAND-DRIVEN-0ENGINE.md); AGENTS now directs branch agents there first. Evidence/plan commit 4208abd3b0850cc23228999e4be9bbd3fecddda8.
+- Independently re-read four raw captures from private RESULTS(5).zip: original/optimized/optimized/original 0-Engine exclusive ms/s 1.334518 / 14.202716 / 14.217747 / 1.377332; onUpdate mean exclusive us 13.241 / 230.393 / 226.770 / 13.408 at comparable ~59 Hz. Original callback line 1393 vs optimized 1237; scheduler frame scopes 4186 / 0 / 0 / 4968. Zero explicit GC rows. This is diagnostic, not a validated performance regression or gameplay-equivalent baseline.
+- Current CET owner ZeroEngineService.cs independently confirms separate appended adaptive onUpdate with no original invocation. Upstream single-slot registration behavior documented; exact deployed native fork and route proof OPEN. P0.1 next: establish binary provenance and effective registration, then reproduce with actual generated source in single-slot execution harness; minimal owner bridge fix and restore verification. P1 consumer audit, P2 universal demand-driven runtime and P3 measurements blocked until corrected profiler and baseline.
+- Do not modify GCO UI, REDscript, MO2 work, G-GC or PresentMon admission as part of P0. Keep one authoritative CET scheduler, existing generation order, exact restoration and compatibility. No source changes, CI, native rebuild, pin update, version bump or gameplay validation at this documentation checkpoint. Verify owner artifacts and use deliberate existing checkpoints when implementation is ready.
+
+
 ## 2026-11-25 — G-REDruntime v0.6.2 version-only update
 - Framework owner commit `e6f91ebdfda6970e293706fef56daf12300442d8` changes version metadata only from v0.6.1; no optimization or runtime service changes. Both owner checkouts pin v0.6.2. GCO remains v1.2.7. Previous standalone SCC #1148 passed the unchanged runtime logic. Versioned framework packaging CI and subsequent GCO package validation remain separate; no new GCO checkpoint triggered.
 
