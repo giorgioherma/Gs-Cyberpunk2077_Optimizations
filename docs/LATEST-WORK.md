@@ -19,6 +19,12 @@
 
 
 
+## 2026-11-25 — Physical CET post-capture framework indicator
+
+- [Full GCO #1143 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45515909953) on `e33da6e`. User locally reported successful capture completion with physical CET deployment; screenshot shows COLLECT enabled and a false CET red indicator: required 1.37.1, found profiler PE version 2.16.1. Actual capture bytes/attribution and complete collection/Continue/Generate remain to be verified.
+- Direct already retains its verified baseline while native CET is replaced. Both MO2 refresh and pre-START framework admission now route through the existing workflow, using the actual original CET owner backup for the CET version check only when the package capture identity, acknowledged deployment, selected profile/game, physical winner, installed ASI hash and original backup hash agree. All other framework checks remain live; unknown native bytes, unrelated profiles and invalid backup cannot inherit approval. No framework-version relaxation or UI/layout changes.
+- Additive regression covers acknowledged capture, no journal, wrong profile, foreign ASI, damaged original backup, and retired session. Existing test assertions and workflows unchanged. One full package checkpoint requested; compilation and player retest pending.
+
 ## 2026-11-25 — Local native CET loader diagnosis and conditional physical ASI deployment
 
 - User's elevated live process module enumeration showed CET loaded from `F:\Cyberpunk 2077\bin\x64\plugins\cyber_engine_tweaks.asi`, while GRSP loaded from the current GCO staging directory. 0-Engine and controls load; `CETProfilerStart` is missing. The prior sparse-USVFS correction fixed the physical Lua siblings but did not replace the native ASI selected by the physical loader. The user's framework mods are installed directly in the game.

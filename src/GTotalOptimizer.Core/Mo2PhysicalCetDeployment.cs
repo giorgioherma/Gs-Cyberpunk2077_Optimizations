@@ -102,6 +102,36 @@ public static partial class Mo2ProfilerOverlayBuilder
         }
     }
 
+    // Only a matching, acknowledged capture may use the verified original
+    // CET binary as its framework version input while the profiler is live.
+    internal static string? VerifiedOriginalCetForFrameworkCheck(
+        Mo2OverlayPreparation prepared, Mo2CaptureIdentity identity, Mo2Stack selected)
+    {
+        EnsureNoReparseParents(prepared.JournalFile);
+        RequireRegularUnlinkedFile(prepared.JournalFile);
+        using var doc = JsonDocument.Parse(File.ReadAllText(prepared.JournalFile));
+        var journal = doc.RootElement;
+        if (journal.GetProperty("phase").GetString() != "test-launched" ||
+            journal.GetProperty("sessionId").GetString() != identity.SessionId ||
+            prepared.SessionId != identity.SessionId ||
+            !string.Equals(journal.GetProperty("profile").GetString(), identity.Profile,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(journal.GetProperty("gameRoot").GetString(), identity.GameRoot,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(selected.Profile, identity.Profile, StringComparison.OrdinalIgnoreCase) ||
+            !selected.Ready || !selected.ProfileVerified || selected.GameOnlyFallback)
+            return null;
+        var state = ReadPhysicalCet(journal);
+        if (state is null ||
+            !selected.EffectiveFiles.TryGetValue(CetAsiRelative, out var winner) ||
+            winner.FromMo2 ||
+            !string.Equals(Path.GetFullPath(winner.PhysicalPath), state.Target, StringComparison.OrdinalIgnoreCase) ||
+            !Hash(state.Target).Equals(state.InstalledHash, StringComparison.OrdinalIgnoreCase))
+            return null;
+        RequirePhysicalCetBackup(state);
+        return state.Backup;
+    }
+
     private static PhysicalCetState? ReadPhysicalCet(JsonElement journal)
     {
         if (!journal.TryGetProperty("physicalCet", out var native)) return null;

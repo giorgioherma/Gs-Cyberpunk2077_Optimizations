@@ -473,6 +473,28 @@ public sealed class UnifiedProfilerWorkflow
             selection.CandidateSource, localAppData);
     }
 
+    // Direct mode retains its verified framework baseline during a native
+    // profiler install. For MO2, substitute only CET's verified original
+    // binary, leaving every other selected-profile framework check live.
+    public FrameworkPreflightResult InspectMo2Frameworks(Mo2ProfileSelection selection)
+    {
+        var stack = selection.CandidateSource ??
+            throw new InvalidDataException("Selected MO2 framework inventory is unavailable.");
+        return FrameworkPreflight.InspectMo2(selection.GameDirectory, stack,
+            VerifiedMo2FrameworkCet(selection));
+    }
+
+    internal string? VerifiedMo2FrameworkCet(Mo2ProfileSelection selection)
+    {
+        var identity = ReadMo2CaptureIdentity();
+        if (identity is null || !identity.Matches(selection) || selection.CandidateSource is null)
+            return null;
+        var prepared = ResumeMo2CaptureAttempt(selection, mo2LocalAppData);
+        return prepared is null ? null :
+            Mo2ProfilerOverlayBuilder.VerifiedOriginalCetForFrameworkCheck(
+                prepared, identity, selection.CandidateSource);
+    }
+
     // The only MO2-specific collection boundary is the owner-installed
     // disposable fixture. Use the same owner status, collect and reset
     // operations as Direct, but never pass the live game to them.

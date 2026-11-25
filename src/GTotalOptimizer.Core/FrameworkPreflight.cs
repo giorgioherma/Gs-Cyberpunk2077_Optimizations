@@ -228,13 +228,17 @@ public static class FrameworkPreflight
 
     // Same compatibility rules, but use the selected profile's winning
     // loose-file bytes. Runtime native loading remains a separate test.
-    public static FrameworkPreflightResult InspectMo2(string gameRoot, Mo2Stack stack)
+    public static FrameworkPreflightResult InspectMo2(string gameRoot, Mo2Stack stack) =>
+        InspectMo2(gameRoot, stack, null);
+
+    internal static FrameworkPreflightResult InspectMo2(string gameRoot, Mo2Stack stack,
+        string? verifiedOriginalCet)
     {
         if (!stack.Ready || !stack.ProfileVerified || stack.GameOnlyFallback)
             throw new InvalidDataException("MO2 selected-profile framework inventory is unverified.");
         string Winner(string relative) => stack.Winner(relative) ?? "";
         var exe = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
-        var cet = Winner("bin/x64/plugins/cyber_engine_tweaks.asi");
+        var cet = verifiedOriginalCet ?? Winner("bin/x64/plugins/cyber_engine_tweaks.asi");
         var red4 = Winner("red4ext/RED4ext.dll");
         return Evaluate(new(
             new(File.Exists(exe), PeVersion(exe, productOnly: true)),

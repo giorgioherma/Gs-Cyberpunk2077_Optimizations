@@ -1700,7 +1700,7 @@ public partial class MainWindow : Window
                     }
                     mo2SelectedSource = result;
                     mo2Framework = await Task.Run(() =>
-                        FrameworkPreflight.InspectMo2(result.GameDirectory, stack));
+                        Workflow.InspectMo2Frameworks(result));
                     SetFrameworkStatuses(mo2Framework);
                     if (binding is not null && mo2Prepared is not null &&
                         mo2LaunchAttempted && !GameRunning())
@@ -1851,8 +1851,7 @@ public partial class MainWindow : Window
         if (!selection.Recognized || selection.CandidateSource is null)
             throw new InvalidOperationException(selection.Detail);
         mo2Connected = connected;
-        mo2Framework = await Task.Run(() => FrameworkPreflight.InspectMo2(
-            selection.GameDirectory, selection.CandidateSource!));
+        mo2Framework = await Task.Run(() => Workflow.InspectMo2Frameworks(selection));
         SetFrameworkStatuses(mo2Framework);
         if (!mo2Framework.Ready) throw new InvalidOperationException(mo2Framework.Detail);
         return selection;

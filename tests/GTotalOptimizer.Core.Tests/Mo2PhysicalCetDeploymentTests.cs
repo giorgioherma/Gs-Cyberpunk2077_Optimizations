@@ -107,10 +107,13 @@ internal static class Mo2PhysicalCetDeploymentTests
             Require(Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { }, deferredOnly: true) == 1 &&
                 File.ReadAllText(Target(asi)) == original,
                 "Deferred VERIFY did not restore physical native CET");
-            async Task<Mo2OverlayPreparation> AcknowledgedLaunch()
+            async Task<Mo2OverlayPreparation> AcknowledgedLaunch(UnifiedProfilerWorkflow? workflow = null)
             {
                 var prepared = await Prepare("Physical", Guid.NewGuid().ToString("N"));
                 Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, Resolve("Physical"));
+                if (workflow is not null)
+                    workflow.BeginMo2CaptureAttempt(new Mo2ProfileSelection(true, "", instance, instance,
+                        game, "Physical", ["Physical", "Virtual"], Resolve("Physical")), prepared);
                 Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(prepared, Resolve("Physical"));
                 Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
                 using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
@@ -154,6 +157,36 @@ internal static class Mo2PhysicalCetDeploymentTests
                 "Damaged owner backup changed native source or stage");
             Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { });
             Console.WriteLine("PASS physical/virtual CET deployment, exact rollback, drift, pending recovery, repeat START and CONTINUE");
+
+            var frameworkWorkflow = new UnifiedProfilerWorkflow(Path.Combine(root, "framework-package"), local);
+            Mo2ProfileSelection Selection(string profile) => new(true, "", instance, instance,
+                game, profile, ["Physical", "Virtual"], Resolve(profile));
+            Require(frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Physical")) is null,
+                "Framework baseline admitted without a capture journal");
+            var active = await AcknowledgedLaunch(frameworkWorkflow);
+            var originalInput = frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Physical"));
+            Require(originalInput is not null && File.ReadAllText(originalInput) == original,
+                "Acknowledged physical CET profiler lost its verified framework baseline");
+            Require(frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Virtual")) is null,
+                "Framework baseline leaked to a different MO2 profile");
+            Put(game, asi, "unrecognized CET binary");
+            Require(frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Physical")) is null,
+                "Framework baseline masked foreign CET bytes");
+            Put(game, asi, instrumented);
+            File.WriteAllText(originalInput!, "tampered backup");
+            try
+            {
+                frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Physical"));
+                throw new Exception("Framework baseline accepted a damaged owner backup");
+            }
+            catch (InvalidDataException ex) when (ex.Message.Contains("backup failed verification")) { }
+            File.WriteAllText(originalInput!, original);
+            Mo2ProfilerOverlayBuilder.RetireCompletedTest(active);
+            frameworkWorkflow.RetireMo2CaptureAttempt(game, active.SessionId);
+            Require(frameworkWorkflow.VerifiedMo2FrameworkCet(Selection("Physical")) is null &&
+                File.ReadAllText(Target(asi)) == original,
+                "Retired framework baseline remained active");
+            Console.WriteLine("PASS MO2 framework original CET input is bound to a verified active physical capture");
         }
         finally
         {
