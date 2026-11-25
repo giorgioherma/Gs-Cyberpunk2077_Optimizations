@@ -1,1 +1,1 @@
-checkpoint=standalone-redruntime-vanilla-compile-20261125
+checkpoint=standalone-redruntime-vanilla-handler-20261125
