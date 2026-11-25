@@ -51,8 +51,7 @@ public static partial class Mo2ProfilerOverlayBuilder
             throw new InvalidDataException("CET owner deployment manifest changed.");
         var native = manifest.Single(f => f.GameRelativePath.Equals(CetAsiRelative,
             StringComparison.OrdinalIgnoreCase));
-        var original = journal["originalSources"]?[CetAsiRelative]?.GetValue<string>() ??
-            throw new InvalidDataException("Original CET ASI identity is missing.");
+        var original = ReadAsiProperty(JsonSerializer.SerializeToElement(journal["originalSources"]));
         var staged = Path.Combine(prepared.StagingDirectory, CetAsiRelative);
         EnsureNoReparseParents(staged);
         RequireRegularUnlinkedFile(staged);
@@ -123,9 +122,9 @@ public static partial class Mo2ProfilerOverlayBuilder
         if (original.Length != 64 || !original.All(Uri.IsHexDigit) ||
             installed.Length != 64 || !installed.All(Uri.IsHexDigit) ||
             original.Equals(installed, StringComparison.OrdinalIgnoreCase) ||
-            !original.Equals(journal.GetProperty("originalSources").GetProperty(CetAsiRelative).GetString(),
+            !original.Equals(ReadAsiProperty(journal.GetProperty("originalSources")),
                 StringComparison.OrdinalIgnoreCase) ||
-            !target.Equals(journal.GetProperty("originalSourcePaths").GetProperty(CetAsiRelative).GetString(),
+            !target.Equals(ReadAsiProperty(journal.GetProperty("originalSourcePaths")),
                 StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Physical CET source identity changed.");
         EnsureNoReparseParents(target);
@@ -135,6 +134,15 @@ public static partial class Mo2ProfilerOverlayBuilder
         if (Directory.Exists(liveState) || File.Exists(liveState))
             throw new InvalidOperationException("An existing physical CET profiler manager transaction must be restored first.");
         return new(id, target, backup, original, installed);
+    }
+
+    private static string ReadAsiProperty(JsonElement inventory)
+    {
+        var matches = inventory.EnumerateObject().Where(p =>
+            p.Name.Equals(CetAsiRelative, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length != 1 || matches[0].Value.GetString() is not string value)
+            throw new InvalidDataException("Original CET ASI identity is missing or ambiguous.");
+        return value;
     }
 
     private static void RequirePhysicalCetBackup(PhysicalCetState state)

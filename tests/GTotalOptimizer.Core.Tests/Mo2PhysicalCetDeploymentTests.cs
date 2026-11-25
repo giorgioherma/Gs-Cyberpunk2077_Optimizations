@@ -107,7 +107,53 @@ internal static class Mo2PhysicalCetDeploymentTests
             Require(Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { }, deferredOnly: true) == 1 &&
                 File.ReadAllText(Target(asi)) == original,
                 "Deferred VERIFY did not restore physical native CET");
-            Console.WriteLine("PASS physical/virtual CET deployment, exact rollback, drift and pending recovery");
+            async Task<Mo2OverlayPreparation> AcknowledgedLaunch()
+            {
+                var prepared = await Prepare("Physical", Guid.NewGuid().ToString("N"));
+                Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, Resolve("Physical"));
+                Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(prepared, Resolve("Physical"));
+                Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
+                using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", "/d /c exit 0")
+                    { UseShellExecute = false, CreateNoWindow = true })!;
+                child.WaitForExit();
+                Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "test-launch-pending",
+                    "test-launched", child.Id);
+                return prepared;
+            }
+            var repeat = await AcknowledgedLaunch();
+            Mo2ProfilerOverlayBuilder.RetireCompletedTest(repeat);
+            Require(File.ReadAllText(Target(asi)) == original &&
+                !Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(repeat),
+                "Repeated START did not restore physical CET before fresh preparation");
+
+            var collected = await AcknowledgedLaunch();
+            var binding = new Mo2CaptureIdentity(collected.SessionId, game, instance, "Physical", null);
+            var resumed = Mo2ProfilerOverlayBuilder.ReadLaunchedPreparation(binding, Resolve("Physical"), local);
+            Require(resumed is not null && !resumed.Files.Any(f => f.GameRelativePath == asi),
+                "Resumed physical CET launch retained a redundant virtual ASI");
+            Mo2ProfilerOverlayBuilder.RestoreCollectedDeployment(binding, local);
+            Require(File.ReadAllText(Target(asi)) == original &&
+                !Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(local),
+                "CONTINUE did not restore exact original physical CET");
+            Mo2ProfilerOverlayBuilder.RestoreCollectedDeployment(binding, local);
+            Require(File.ReadAllText(Target(asi)) == original, "Repeated CONTINUE changed original bytes");
+
+            var invalid = await Prepare("Physical", Guid.NewGuid().ToString("N"));
+            using (var doc = JsonDocument.Parse(File.ReadAllText(invalid.JournalFile)))
+                Put(doc.RootElement.GetProperty("fixtureRoot").GetString()!, backup, "damaged owner backup");
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(invalid, Resolve("Physical"));
+            try
+            {
+                Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(invalid, Resolve("Physical"));
+                throw new Exception("Damaged CET owner backup was accepted");
+            }
+            catch (InvalidDataException ex) when (ex.Message.Contains("backup failed verification")) { }
+            Require(File.ReadAllText(Target(asi)) == original &&
+                File.Exists(Path.Combine(invalid.StagingDirectory, asi)),
+                "Damaged owner backup changed native source or stage");
+            Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions(local, () => { });
+            Console.WriteLine("PASS physical/virtual CET deployment, exact rollback, drift, pending recovery, repeat START and CONTINUE");
         }
         finally
         {
