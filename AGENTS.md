@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## Mandatory demand-adaptive cadence (owner decision 2026-11-25)
+The fastest active consumer determines a shared producer's required freshness, not merely whether a listener exists. Recalculate on actual registration, activation, deactivation and removal. Zero demand stops recurring work; event-only and getter-only demand do not impose polling. Preserve original per-consumer delivery cadence, phase/offset and clock semantics. Exact differently phased deadlines need the union of due frames or an on-demand refresh immediately before delivery, not blind modulo of the fastest interval. Share one valid sample wherever safe. Unknown legacy requirements retain their original freshness until proven. Test nondivisible periods, rate changes, last removal and actual native reads/allocations. No arbitrary throttles, redundant timer or scheduler. Owner contract commit 031a8137302df13d30307131a1ad9b6e4a958800.
+
+
 ## MANDATORY — universal demand-driven execution (owner clarification 2026-11-25)
 All framework services and observers must be demand-driven, always. Zero consumers means zero recurring service work, including wake/registration polling. At the earliest safe point skip native lookups, event-specific state derivation, allocations and dispatch when there is no effective observer or other direct/internal consumer. Return the cheapest correct result; do not fabricate state or suppress required state tracking, synchronous getter behavior, lifecycle/persistence/cleanup. Preserve retained state references, existing registrations and native single-slot/init-only behavior. Actual supported registration/activation drives demand; last-consumer removal stops it. No small-collection mode, blanket throttling, redundant scheduler, or artificial measurement suppression. Profiler-only overhead remains expected during capture. Read current investigation and CET owner PROJECT-CONTRACT before P1/P2.
 

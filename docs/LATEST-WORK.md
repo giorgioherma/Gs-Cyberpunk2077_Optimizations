@@ -1,5 +1,9 @@
 # Latest work / evidence status
 
+## Mandatory demand-adaptive cadence (owner decision 2026-11-25)
+The fastest active consumer determines a shared producer's required freshness, not merely whether a listener exists. Recalculate on actual registration, activation, deactivation and removal. Zero demand stops recurring work; event-only and getter-only demand do not impose polling. Preserve original per-consumer delivery cadence, phase/offset and clock semantics. Exact differently phased deadlines need the union of due frames or an on-demand refresh immediately before delivery, not blind modulo of the fastest interval. Share one valid sample wherever safe. Unknown legacy requirements retain their original freshness until proven. Test nondivisible periods, rate changes, last removal and actual native reads/allocations. No arbitrary throttles, redundant timer or scheduler. Owner contract commit 031a8137302df13d30307131a1ad9b6e4a958800.
+
+
 ## 2026-11-25 — Corrected PROFILE B evidence and universal demand-driven contract
 - RESULTS(6).zip corrected original 082646 vs existing optimized 083432: 0-Engine 18.228545 → 13.899913 exclusive ms/s; total CET 26.441238 → 21.414382. Corrected original wrapper 7–14 executes original host; zero scheduled jobs both. These rates include instrumentation; precise overhead split remains unknown. P1 consumer audit next; no new optimization generation or performance promise.
 - Owner requires demand-driven always, earliest safe no-observer/consumer return before native lookups; preserve state getter/internal dependencies, lifecycle/cleanup, and effective activation/removal. Actual source audit began (proxy, frame/subscription handles, state/observer dependencies); see canonical ledger. CET owner documentation b1ddab90. No code/CI/version change.
