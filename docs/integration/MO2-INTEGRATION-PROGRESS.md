@@ -23,6 +23,12 @@
 
 
 
+## 2026-11-25 — User collection/report success; CONTINUE retirement and recovery button
+
+- [Full GCO #1144 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45518677669) on `dad6f8c`. User verified all four framework gates green, PROFILE B with five enabled MO2 packages, six CET mods and five REDscript mods; COLLECT completed and combined reports were created, no native result leftovers reported in Overwrite. CONTINUE failed with "Original MO2 profiler input inventory changed." This means original sealed winners and hashes passed up to the set-comparison, but extra required-input paths were found; exact extra filenames have not been supplied.
+- The retirement inventory check now preserves newly created loose configuration/data inside existing ordinary CET mod roots and a newly created loose binding file. It still verifies every original winner/hash, refuses additions from enabled packages, new source/native/profiler paths and new roots, and reports concrete blocked relative paths. Prelaunch verification is unchanged. Physical native restoration continues using the exact owner backup; MO2-owned CET/GRSP/controls are removed from the active view by retiring the one-shot overlay. Private stage/fixture recovery evidence remains intentionally retained.
+- The shared CONTINUE finally block previously called SetBusy(false), which disabled all workflow actions indefinitely on a failed restore. Restore admission is now recomputed immediately for both providers while keeping the failure status and all other actions disabled. No new UI, owner manager or changes to the existing contracts. Added complete synthetic collection/CONTINUE regression for both physical and virtual CET, new runtime data, real source drift and active profiler refusal, and restored Page 2 source view. Actual extra path and local restore retest pending.
+
 ## 2026-11-25 — Physical CET post-capture framework indicator
 
 - [Full GCO #1143 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45515909953) on `e33da6e`. User locally reported successful capture completion with physical CET deployment; screenshot shows COLLECT enabled and a false CET red indicator: required 1.37.1, found profiler PE version 2.16.1. Actual capture bytes/attribution and complete collection/Continue/Generate remain to be verified.

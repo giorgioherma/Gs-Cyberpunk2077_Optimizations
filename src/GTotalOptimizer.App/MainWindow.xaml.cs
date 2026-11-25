@@ -3226,7 +3226,17 @@ public partial class MainWindow : Window
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
-        finally { EndConsoleActivity(continueActivity); SetBusy(false); }
+        finally
+        {
+            EndConsoleActivity(continueActivity);
+            SetBusy(false);
+            // SetBusy(false) disables the action buttons until admission is
+            // recomputed. A failed CONTINUE must immediately retain RESTORE
+            // in either provider, independent of framework/bridge checks.
+            // Do not re-enable START/INSTALL or clear the failure status.
+            if (!captureAndRestoreVerified && CapturePage.Visibility == Visibility.Visible)
+                InstallButton.IsEnabled = UpdateProfilerAction(game);
+        }
     }
 
     private void RefreshCompletedWorkspace()

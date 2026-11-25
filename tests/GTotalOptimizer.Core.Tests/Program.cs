@@ -9,6 +9,7 @@ if (args.Length > 0 && args[0] == "--mo2-profile-contract")
     Mo2CommandClientTests.Run();
     await Mo2ProfilerOverlayBuilderTests.RunAsync();
     await Mo2PhysicalCetDeploymentTests.RunAsync();
+    await Mo2RestoreRuntimeAdditionTests.RunAsync();
     return;
 }
 

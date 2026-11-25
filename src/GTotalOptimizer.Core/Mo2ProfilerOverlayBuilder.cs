@@ -548,9 +548,52 @@ public static partial class Mo2ProfilerOverlayBuilder
                       !winner.FromMo2 && current.Equals(physical.InstalledHash, StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
             }
-            if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))
-                throw new InvalidDataException("Original MO2 profiler input inventory changed.");
+            // Every original input must still have its original winner and
+            // exact bytes (apart from the owned, temporary physical ASI).
+            // Gameplay may create new loose mod data or bindings. These are
+            // not profiler installations and must not block retirement or
+            // be removed. START's full sealed inventory stays strict.
+            var added = selected.EffectiveFiles.Values.Where(w =>
+                IsRequiredOwnerInput(w.GameRelativePath) && !expected.Contains(w.GameRelativePath)).ToArray();
+            var blocked = added.Where(w => !IsPostCaptureLooseAddition(w, expected)).ToArray();
+            if (blocked.Length != 0)
+                throw new InvalidDataException("Original MO2 profiler input inventory changed: " +
+                    string.Join(", ", blocked.Take(5).Select(w => w.GameRelativePath)) +
+                    (blocked.Length > 5 ? $" (+{blocked.Length - 5} more)" : ""));
+            foreach (var winner in added)
+            {
+                EnsureNoReparseParents(winner.PhysicalPath);
+                RequireRegularUnlinkedFile(winner.PhysicalPath);
+                System.Diagnostics.Trace.TraceInformation("Preserved new MO2 runtime file: " + winner.GameRelativePath);
+            }
         }
+    }
+
+    // Only loose additions within an existing ordinary CET mod qualify.
+    // New packages, new mod roots, native libraries and profiler paths
+    // remain blockers. CET owns its user binding state; the owner installer
+    // may seed F11 but never restores or deletes the user's bindings.
+    private static bool IsPostCaptureLooseAddition(Mo2WinningFile winner, HashSet<string> originals)
+    {
+        if (winner.FromMo2 && winner.Owner != "(MO2 Overwrite)") return false;
+        var relative = winner.GameRelativePath;
+        if (relative.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json",
+                StringComparison.OrdinalIgnoreCase))
+            return true;
+        const string root = "bin/x64/plugins/cyber_engine_tweaks/mods/";
+        if (!relative.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(root + "CETProfilerControls/", StringComparison.OrdinalIgnoreCase) ||
+            IsAllowedOutput(relative))
+            return false;
+        var tail = relative[root.Length..];
+        var separator = tail.IndexOf('/');
+        if (separator <= 0 || !originals.Contains(root + tail[..separator] + "/init.lua"))
+            return false;
+        // Only configuration/data, not newly introduced executable source.
+        return Path.GetExtension(relative).ToLowerInvariant() is
+            ".json" or ".ini" or ".toml" or ".yaml" or ".yml" or ".cfg" or ".conf" or
+            ".xml" or ".txt" or ".csv" or ".log" or ".db" or ".sqlite" or ".sqlite3" or
+            ".sqlite3-wal" or ".sqlite3-shm";
     }
 
     public static bool CanRestartCompletedTest(Mo2OverlayPreparation prepared)
