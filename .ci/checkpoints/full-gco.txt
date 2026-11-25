@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-mo2-main-cet-integrity-20261125
+checkpoint=v1.2.7-mo2-main-cet-integrity-with-mo2-contracts-20261125
