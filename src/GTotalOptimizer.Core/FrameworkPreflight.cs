@@ -199,6 +199,12 @@ public static class FrameworkPreflight
         var alternateLibrary = Path.Combine(tools, "scc.dll");
         var config = Path.Combine(gameRoot, "engine", "config", "base", "scripts.ini");
 
+        return InspectRedscriptFiles(compiler, library, alternateLibrary, config);
+    }
+
+    private static FrameworkEvidence InspectRedscriptFiles(string compiler, string library,
+        string alternateLibrary, string config)
+    {
         var hasExe = File.Exists(compiler);
         var hasLibrary = File.Exists(library);
         var hasAlternate = File.Exists(alternateLibrary);
@@ -210,7 +216,7 @@ public static class FrameworkPreflight
         var version = hasExe
             ? RedscriptCompilerFingerprints.IdentifyExecutable(FileSha256(compiler))
             : null;
-        var officialPair = version == "0.5.31" &&
+        var officialPair = version == "0.5.31" && hasLibrary &&
             FileSha256(library) == RedscriptCompilerFingerprints.Official031Library;
         var mismatch = shape && version == "0.5.31" && !officialPair;
         return new(
@@ -218,6 +224,30 @@ public static class FrameworkPreflight
             mismatch ? null : version,
             shape,
             mismatch ? "redscript 0.5.31 scc.exe recognized, but scc_lib.dll does not match the official 0.5.31 release. Reinstall matching redscript files." : null);
+    }
+
+    // Same compatibility rules, but use the selected profile's winning
+    // loose-file bytes. Runtime native loading remains a separate test.
+    public static FrameworkPreflightResult InspectMo2(string gameRoot, Mo2Stack stack) =>
+        InspectMo2(gameRoot, stack, null);
+
+    internal static FrameworkPreflightResult InspectMo2(string gameRoot, Mo2Stack stack,
+        string? verifiedOriginalCet)
+    {
+        if (!stack.Ready || !stack.ProfileVerified || stack.GameOnlyFallback)
+            throw new InvalidDataException("MO2 selected-profile framework inventory is unverified.");
+        string Winner(string relative) => stack.Winner(relative) ?? "";
+        var exe = Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe");
+        var cet = verifiedOriginalCet ?? Winner("bin/x64/plugins/cyber_engine_tweaks.asi");
+        var red4 = Winner("red4ext/RED4ext.dll");
+        return Evaluate(new(
+            new(File.Exists(exe), PeVersion(exe, productOnly: true)),
+            new(File.Exists(cet), PeVersion(cet)),
+            new(File.Exists(Winner("bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/init.lua")), null),
+            new(File.Exists(red4), PeVersion(red4)),
+            InspectRedscriptFiles(Winner("engine/tools/scc.exe"),
+                Winner("engine/tools/scc_lib.dll"), Winner("engine/tools/scc.dll"),
+                Winner("engine/config/base/scripts.ini"))));
     }
 
     public static FrameworkPreflightResult Inspect(string gameRoot)

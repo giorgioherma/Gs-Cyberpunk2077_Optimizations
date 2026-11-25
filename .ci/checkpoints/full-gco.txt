@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-page2-source-mod-summary-20261123
+checkpoint=v1.2.7-mo2-main-cet-integrity-20261125

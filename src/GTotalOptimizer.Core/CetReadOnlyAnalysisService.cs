@@ -45,9 +45,9 @@ public sealed class CetReadOnlyAnalysisService
 
     public async Task<CetAnalysisOutcome> AnalyzeAsync(
         string packageRoot, string gameRoot, string sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Mo2AnalysisSource? mo2Source = null)
         => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
-            generatePass: false, cancellationToken).ConfigureAwait(false)).Analysis;
+            generatePass: false, cancellationToken, mo2Source: mo2Source).ConfigureAwait(false)).Analysis;
 
     public async Task<CetPassOutcome> GenerateCetPassAsync(
         string packageRoot, string gameRoot, string sessionId,
@@ -64,16 +64,17 @@ public sealed class CetReadOnlyAnalysisService
     public async Task<CetPassOutcome> GenerateCetStagedAsync(
         string packageRoot, string gameRoot, string sessionId,
         string externalZip, CancellationToken cancellationToken = default,
-        bool hotscenesEnglishOnly = false)
+        bool hotscenesEnglishOnly = false, Mo2AnalysisSource? mo2Source = null)
         => (await ExecuteAsync(packageRoot, gameRoot, sessionId,
-            generatePass: true, cancellationToken, externalZip, hotscenesEnglishOnly)
+            generatePass: true, cancellationToken, externalZip, hotscenesEnglishOnly, mo2Source)
             .ConfigureAwait(false)).Pass
             ?? throw new InvalidOperationException("CET did not return a staged pass.");
 
     private async Task<(CetAnalysisOutcome Analysis, CetPassOutcome? Pass)> ExecuteAsync(
         string packageRoot, string gameRoot, string sessionId,
         bool generatePass, CancellationToken cancellationToken,
-        string? stagedOutput = null, bool hotscenesEnglishOnly = false)
+        string? stagedOutput = null, bool hotscenesEnglishOnly = false,
+        Mo2AnalysisSource? mo2Source = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         packageRoot = Path.GetFullPath(packageRoot);
@@ -85,7 +86,11 @@ public sealed class CetReadOnlyAnalysisService
         if (saved.Cet is null || saved.Redscript is null)
             throw new InvalidDataException("Both collected native owner archives are required.");
 
-        var inspection = GameInspector.Inspect(gameRoot);
+        if ((saved.Mo2Source is not null) != (mo2Source is not null))
+            throw new InvalidDataException("The capture requires its original source provider.");
+        mo2Source?.RequireBinding(saved);
+        var effectiveGame = mo2Source?.Root ?? gameRoot;
+        var inspection = GameInspector.Inspect(effectiveGame);
         if (!inspection.HasVerifiedPhysicalSource ||
             inspection.SourceKind != SourceKind.GameRoot ||
             inspection.CetModCount < 1 || inspection.CetModsRoot is null)
@@ -146,7 +151,7 @@ public sealed class CetReadOnlyAnalysisService
                 throw new InvalidDataException("CET reporting did not consume the verified PresentMon F11 frame evidence.");
 
             using var resolved = await RunOwnerAsync(executable,
-                ["--capture", stagedCapture, "--game", gameRoot, "--json"],
+                ["--capture", stagedCapture, "--game", effectiveGame, "--json"],
                 packageRoot, cancellationToken);
             var cli = resolved.RootElement;
             RequireOk(cli, "CET Resolver");
@@ -190,7 +195,7 @@ public sealed class CetReadOnlyAnalysisService
                 // CET owns the source rewrite; only opt-in forwarding is
                 // performed here. The flag is never sent during ANALYZE.
                 using var generation = await RunOwnerAsync(executable,
-                    BuildGenerateOwnerArguments(stagedCapture, gameRoot,
+                    BuildGenerateOwnerArguments(stagedCapture, effectiveGame,
                         temporaryZip, hotscenesEnglishOnly),
                     packageRoot, cancellationToken).ConfigureAwait(false);
                 var cliPass = generation.RootElement;
@@ -217,6 +222,7 @@ public sealed class CetReadOnlyAnalysisService
                     : Path.GetFullPath(stagedOutput);
                 if (stagedOutput is not null)
                 {
+                    mo2Source?.VerifyCurrent(cancellationToken);
                     var realGame = Path.GetFullPath(gameRoot).TrimEnd(
                         Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
                     var realSession = Path.GetFullPath(sessionFolder).TrimEnd(

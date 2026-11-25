@@ -27,8 +27,37 @@ public sealed record Mo2Stack(
     int ShadowedFiles, bool HasZeroEngine, bool HasRedscript,
     IReadOnlyDictionary<string, Mo2WinningFile> EffectiveFiles,
     IReadOnlyList<string> Warnings,
-    bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false)
+    bool HasCetAsi = false, bool ProfileVerified = true, bool GameOnlyFallback = false,
+    string? OverwriteDirectory = null)
 {
+    // UI counts use the same unit in both domains: distinct enabled MO2
+    // packages contributing effective source, plus loose-source mod roots
+    // where no package ownership is available (physical game/Overwrite).
+    public int CetModCount => CountMods(true);
+    public int RedscriptModCount => CountMods(false);
+
+    private int CountMods(bool cet)
+    {
+        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in EffectiveFiles.Values)
+        {
+            var parts = file.GameRelativePath.Split('/');
+            bool matches = cet
+                ? parts.Length == 7 &&
+                  file.GameRelativePath.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
+                      StringComparison.OrdinalIgnoreCase) &&
+                  parts[6].Equals("init.lua", StringComparison.OrdinalIgnoreCase)
+                : parts.Length >= 3 &&
+                  file.GameRelativePath.StartsWith("r6/scripts/", StringComparison.OrdinalIgnoreCase) &&
+                  file.GameRelativePath.EndsWith(".reds", StringComparison.OrdinalIgnoreCase);
+            if (!matches) continue;
+            bool packaged = file.FromMo2 && file.Owner != "(MO2 Overwrite)";
+            owners.Add(packaged ? "package:" + file.Owner :
+                "loose:" + parts[cet ? 5 : 2]);
+        }
+        return owners.Count;
+    }
+
     public string? Winner(string relative) =>
         EffectiveFiles.TryGetValue(relative.Replace('\\', '/'), out var file) ? file.PhysicalPath : null;
 }
@@ -92,6 +121,21 @@ public static class Mo2SourceInspector
                 "modlist.txt absent: no MO2 packages or Overwrite; only physical game files.", profile, token);
         try
         {
+            // Native capture cleanup must never target an enabled package,
+            // the profiles directory, or a nested/aliased game root.
+            static bool Overlaps(string first, string second)
+            {
+                var a = Path.TrimEndingDirectorySeparator(Path.GetFullPath(first));
+                var b = Path.TrimEndingDirectorySeparator(Path.GetFullPath(second));
+                return string.Equals(a, b, StringComparison.OrdinalIgnoreCase) ||
+                    IsChildPath(a, b) || IsChildPath(b, a);
+            }
+            if (Overlaps(instance.OverwriteDirectory, instance.ModsDirectory) ||
+                Overlaps(instance.OverwriteDirectory, instance.ProfilesDirectory) ||
+                Overlaps(instance.OverwriteDirectory, Path.Combine(gameRoot!, "bin", "x64", "plugins")) ||
+                Overlaps(instance.OverwriteDirectory, Path.Combine(gameRoot!, "red4ext", "plugins")))
+                return ResolveGameOnly(gameRoot,
+                    "MO2 Overwrite overlaps game, mods or profiles; output routing is unsafe.", profile, token);
             var entries = ReadEnabledMods(modlist);
             if (entries.Count > 0 && !Directory.Exists(instance.ModsDirectory))
                 return ResolveGameOnly(gameRoot, "Configured MO2 Mods directory missing; enabled MO2 files excluded.", profile, token);
@@ -128,7 +172,8 @@ public static class Mo2SourceInspector
 
             var caveat = "Loose-file precedence only; MO2 USVFS, RootBuilder, archive and file-exception loading remain unverified.";
             return Build(profile, entries.Count, winners, shadows, [caveat],
-                profileVerified: true, gameOnlyFallback: false);
+                profileVerified: true, gameOnlyFallback: false) with
+                { OverwriteDirectory = Path.GetFullPath(instance.OverwriteDirectory) };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
             or NotSupportedException or InvalidDataException)
@@ -193,25 +238,28 @@ public static class Mo2SourceInspector
         Dictionary<string, Mo2WinningFile> winners, ref int scanned, ref int shadows,
         CancellationToken token)
     {
+        // The profiler overlay must preserve unchanged physical siblings,
+        // including CET native/runtime dependencies outside mods/.
         var paths = new[]
         {
-            Path.Combine("bin", "x64", "plugins", "cyber_engine_tweaks", "mods"),
+            Path.Combine("bin", "x64", "plugins"),
             Path.Combine("r6", "scripts"),
             Path.Combine("red4ext", "plugins")
         };
-        // CET's native ASI may be game-installed or in an enabled MO2 package.
-        // RootBuilder-specific mappings remain unproven and never get inferred.
-        var nativeRoot = Path.Combine(root, "bin", "x64", "plugins");
-        foreach (var asiName in new[] { "cyber_engine_tweaks.asi", "cet.asi" })
+        // Same profile precedence as Lua/REDscript sources, including
+        // physical baseline and Overwrite. These are preflight inputs only.
+        foreach (var relative in new[] {
+            "red4ext/RED4ext.dll", "engine/tools/scc.exe",
+            "engine/tools/scc_lib.dll", "engine/tools/scc.dll",
+            "engine/config/base/scripts.ini" })
         {
             token.ThrowIfCancellationRequested();
-            var asiFile = Path.Combine(nativeRoot, asiName);
-            if (!File.Exists(asiFile)) continue;
+            var file = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(file)) continue;
             if (++scanned > MaximumScannedFiles)
                 throw new InvalidDataException("Too many files for bounded MO2 source inventory.");
-            var nativeRel = Path.GetRelativePath(root, asiFile).Replace('\\', '/');
-            if (winners.ContainsKey(nativeRel)) shadows++;
-            winners[nativeRel] = new(nativeRel, asiFile, owner, priority, fromMo2);
+            if (winners.ContainsKey(relative)) shadows++;
+            winners[relative] = new(relative, file, owner, priority, fromMo2);
         }
         foreach (var path in paths)
         {

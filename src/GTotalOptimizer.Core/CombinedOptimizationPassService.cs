@@ -118,11 +118,15 @@ public sealed class CombinedOptimizationPassService
     public async Task<CombinedPassAvailability> InspectAvailableAsync(
         string packageRoot, string gameRoot, string sessionId,
         CancellationToken token = default,
-        IProgress<WorkflowStepProgress>? progress = null)
+        IProgress<WorkflowStepProgress>? progress = null, Mo2AnalysisSource? mo2Source = null)
     {
         string package = Path.GetFullPath(packageRoot);
         string game = Path.GetFullPath(gameRoot);
         var captured = CollectedCaptureStore.ReadRestored(package, game, sessionId);
+        if ((captured.Mo2Source is not null) != (mo2Source is not null))
+            throw new InvalidDataException("The capture requires its original source provider.");
+        mo2Source?.RequireBinding(captured);
+        string effectiveGame = mo2Source?.Root ?? game;
         if (captured.Cet is null || captured.Redscript is null)
             throw new InvalidDataException("GCO_BOTH_COMPLETED_CAPTURE_DOMAINS_REQUIRED");
         string session = CollectedCaptureStore.SessionFolder(package, sessionId);
@@ -139,11 +143,11 @@ public sealed class CombinedOptimizationPassService
             // opt-in. Never execute it during read-only Analyze.
             var cetResult = await cet.GenerateCetStagedAsync(
                 package, game, sessionId, Path.Combine(temp, "cet-owner.zip"),
-                token, hotscenesEnglishOnly: false).ConfigureAwait(false);
+                token, hotscenesEnglishOnly: false, mo2Source: mo2Source).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             progress?.Report(new(3, 5, "ANALYZE / CET CHANGES VERIFIED"));
             string analysis = Path.Combine(temp, "redscript-analysis.json");
-            await Task.Run(() => Program.AnalyzeCollected(session, game, analysis),
+            await Task.Run(() => Program.AnalyzeCollected(session, effectiveGame, analysis),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             string frameworkOwner = Path.Combine(package, "components",
@@ -151,11 +155,12 @@ public sealed class CombinedOptimizationPassService
             string? providedRuntime = Directory.Exists(frameworkOwner)
                 ? frameworkOwner : null;
             var red = await Task.Run(() =>
-                RedscriptGenerationPlan.Stage(game, plan, analysis,
+                RedscriptGenerationPlan.Stage(effectiveGame, plan, analysis,
                     Path.Combine(temp, "redscript-stage"), providedRuntime),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             progress?.Report(new(4, 5, "ANALYZE / REDSCRIPT CHANGES VERIFIED"));
+            mo2Source?.VerifyCurrent(token);
             return new(cetResult.OptimizationTransformCount,
                 red.AppliedEdits, red.Skipped)
             {
@@ -166,10 +171,10 @@ public sealed class CombinedOptimizationPassService
                     .Where(item => item.Order > 10)
                     .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
                 RedscriptSourceModCount = DistinctRedscriptSourceModNames(
-                    Directory.EnumerateFiles(Path.Combine(game, "r6", "scripts"),
+                    Directory.EnumerateFiles(Path.Combine(effectiveGame, "r6", "scripts"),
                             "*.reds", SearchOption.AllDirectories)
                         .Select(file => Path.GetRelativePath(
-                            Path.Combine(game, "r6", "scripts"), file)))
+                            Path.Combine(effectiveGame, "r6", "scripts"), file)))
                     .Length,
                 RedscriptOptimizedModCount = DistinctRedscriptSourceModNames(
                     Directory.Exists(Path.Combine(temp, "redscript-stage",
@@ -245,6 +250,9 @@ public sealed class CombinedOptimizationPassService
         string package = Path.GetFullPath(packageRoot);
         string game = Path.GetFullPath(gameRoot);
         var captured = CollectedCaptureStore.ReadRestored(package, game, sessionId);
+        using var mo2Source = captured.Mo2Source is null ? null :
+            await Task.Run(() => Mo2AnalysisSource.Create(captured, token), token).ConfigureAwait(false);
+        string effectiveGame = mo2Source?.Root ?? game;
         if (captured.Cet is null || captured.Redscript is null)
             throw new InvalidDataException("GCO_BOTH_COMPLETED_CAPTURE_DOMAINS_REQUIRED");
         string session = CollectedCaptureStore.SessionFolder(package, sessionId);
@@ -263,13 +271,13 @@ public sealed class CombinedOptimizationPassService
             string cetZip = Path.Combine(temp, "cet-owner.zip");
             var cetResult = await cet.GenerateCetStagedAsync(
                 package, game, sessionId, cetZip, token,
-                hotscenesEnglishOnly).ConfigureAwait(false);
+                hotscenesEnglishOnly, mo2Source).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             progress?.Report(new(1, 6, "GENERATE / CET OPTIMIZATIONS READY"));
             string analysis = Path.Combine(temp, "redscript-analysis.json");
             await Task.Run(() =>
             {
-                Program.AnalyzeCollected(session, game, analysis);
+                Program.AnalyzeCollected(session, effectiveGame, analysis);
             }, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
@@ -283,7 +291,7 @@ public sealed class CombinedOptimizationPassService
             string? providedFramework = Directory.Exists(frameworkOwner)
                 ? frameworkOwner : null;
             var red = await Task.Run(() =>
-                RedscriptGenerationPlan.Stage(game, plan, analysis, planOutput,
+                RedscriptGenerationPlan.Stage(effectiveGame, plan, analysis, planOutput,
                     providedFramework),
                 token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
@@ -311,7 +319,7 @@ public sealed class CombinedOptimizationPassService
             // If the player already has a framework file (including a compatible
             // customization), package those exact installed bytes, not an older
             // historical version. Generated source takes precedence.
-            _ = CopyCompleteFramework(game, overlay, frameworkOwner, owners);
+            _ = CopyCompleteFramework(effectiveGame, overlay, frameworkOwner, owners);
 
             // Official SCC compilation belongs to CI; no compiler binaries
             // or profiler payloads are shipped in the optimized game ZIP.
@@ -339,8 +347,8 @@ public sealed class CombinedOptimizationPassService
             string final = Path.Combine(finalFolder, zipName);
             try
             {
-                var allOutput = CollectOutput(overlay, owners, game, token);
-                var omittedPaths = FindIdenticalFrameworkFiles(overlay, game,
+                var allOutput = CollectOutput(overlay, owners, effectiveGame, token);
+                var omittedPaths = FindIdenticalFrameworkFiles(overlay, effectiveGame,
                     frameworkOwner, owners, token).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var omitted = allOutput.Where(e => omittedPaths.Contains(e.Path)).ToArray();
                 var indexed = allOutput.Where(e => !omittedPaths.Contains(e.Path)).ToList();
@@ -407,7 +415,9 @@ public sealed class CombinedOptimizationPassService
                         officialScc031Validation = "CI_ONLY_NOT_RUN_IN_APP",
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
-                        installRecommendation = "Vortex overlay after originals; manually back up before direct installation",
+                        installRecommendation = mo2Source is null
+                            ? "Vortex overlay after originals; manually back up before direct installation"
+                            : "MO2 separate enabled mod after original source packages; verify winning priority",
                         identicalFrameworkFilesOmitted = omitted.Select(e => new {
                             path = e.Path, owner = e.Owner, sha256 = Sha(e.FullName)
                         }).ToArray(),
@@ -430,11 +440,12 @@ public sealed class CombinedOptimizationPassService
                 // An omitted dependency must still be identical at publication.
                 // Source drift must not leave a ZIP with a missing framework.
                 if (omitted.Length > 0 && !omittedPaths.IsSubsetOf(
-                    FindIdenticalFrameworkFiles(overlay, game, frameworkOwner, owners, token)
+                    FindIdenticalFrameworkFiles(overlay, effectiveGame, frameworkOwner, owners, token)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase)))
                     throw new InvalidDataException("GCO_IDENTICAL_FRAMEWORK_CHANGED_BEFORE_PUBLICATION");
                 if (Directory.Exists(finalFolder) || File.Exists(finalFolder))
                     throw new IOException("An optimization pass already has this timestamp.");
+                mo2Source?.VerifyCurrent(token);
                 Directory.Move(stagedFolder, finalFolder);
                 progress?.Report(new(6, 6, "GENERATE / ZIP PUBLISHED"));
                 return new(final, cetFiles, redFiles, indexed.Count,

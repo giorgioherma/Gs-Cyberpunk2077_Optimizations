@@ -18,7 +18,7 @@ on:
   # Milestone only: source/test/packaging commits do not launch full CI.
   # workflow_dispatch above remains available when a user starts a run.
   push:
-    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration, MO2_integration ]
     paths:
       - '.ci/checkpoints/full-gco.txt'
 
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 08a8b5790372fd9ec5893500489d2b5e24eb1f4b
+          ref: 60c4cd50a0cf14ba8f270053480ed40e87bdd4c1
           path: unified/vendor-cet
           persist-credentials: false
       - name: Resolve latest verified GRSP owner-native build
@@ -138,6 +138,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # Read-only MO2 companion API contract on its isolated branch.
+      # This runs only at a full-gco TXT checkpoint, not every Python change.
+      - uses: actions/setup-python@v5
+        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        with:
+          python-version: '3.12'
+      - name: Verify MO2 bridge against strict mocked MO2 API
+        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        shell: pwsh
+        working-directory: unified
+        run: |
+          python -m unittest discover -s tests/mo2 -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_COMPANION_API_TESTS_FAILED' }
       # R4 validation: private live REDscript source is checked out ONLY on
       # this REDscript development branch, from GCO's existing scoped token.
       # Source stays outside publish/release and is removed even on failure.
@@ -610,13 +623,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
           # Both owner artifacts and GCO's disposable source checkout are from
           # the same verified CET #2616 commit. Keep original native owner
           # assets and compare the owner CLI with the rebuilt .NET10 Resolver.
-          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
       - name: Import independently verified GRSP native instrumentation
@@ -885,6 +898,19 @@ jobs:
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
+          # MO2 is an isolated feature branch. This focused contract is run only
+          # at a deliberate full-gco TXT checkpoint, never per source commit.
+          if ('${{ github.ref }}' -eq 'refs/heads/MO2_integration') {
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
+            if ($LASTEXITCODE -ne 0) { throw 'MO2 selected-profile and companion identity contract failed' }
+            $bridge = Join-Path $root 'app/mo2/gco_mo2_bridge.py'
+            if (!(Test-Path -LiteralPath $bridge -PathType Leaf)) { throw 'MO2 packaged companion missing' }
+            if ((Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath 'integrations/mo2/gco_mo2_bridge.py' -Algorithm SHA256).Hash) {
+              throw 'MO2 packaged companion differs from tested source'
+            }
+            Write-Host 'PASS actual MO2 companion bytes included in the GCO package'
+          }
           # Stage 1: execute both the exact CET owner-built Resolver and our
           # source-retargeted .NET10 Resolver against the same disposable
           # measured-callback evidence. Do not edit sealed user captures.

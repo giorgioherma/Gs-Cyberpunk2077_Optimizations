@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private CollectedCaptureIndex? savedCapture;
     private string? completedSessionId;
     private string? completedGameRoot;
+    private Mo2CaptureIdentity? completedMo2Source;
     private bool captureAndRestoreVerified;
     private readonly CetReadOnlyAnalysisService readOnlyAnalyzer = new();
     private readonly CombinedOptimizationPassService combinedPassGenerator = new();
@@ -94,6 +95,17 @@ public partial class MainWindow : Window
     private bool busy;
     private bool pathUpdate;
     private bool initialized;
+    private bool mo2Mode;
+    private bool mo2SelectionUpdating;
+    private bool mo2RefreshRunning;
+    private bool mo2StartupRunning;
+    private Mo2CompanionStatus? mo2Connected;
+    private Mo2ProfileSelection? mo2SelectedSource;
+    private FrameworkPreflightResult? mo2Framework;
+    private Mo2OverlayPreparation? mo2Prepared;
+    private bool mo2LaunchAttempted;
+    private bool mo2RecoveryBlocked;
+    private bool mo2VerifyRequired;
     // The normal XAML tree is permanent. Maximize only overrides values on
     // existing sections and restores the exact saved local values afterward.
     private StackPanel? maximizedGameRootSection;
@@ -145,17 +157,33 @@ public partial class MainWindow : Window
         // Removing/changing the mod revokes a previously checked option.
         bool installed = captureAndRestoreVerified &&
             ResultsPage.Visibility == Visibility.Visible &&
-            GameInspector.HasInstalledHotscenes(completedGameRoot);
+            (completedMo2Source is null
+                ? GameInspector.HasInstalledHotscenes(completedGameRoot)
+                : CurrentMo2HotscenesPath() is not null);
         SetHotscenesOptionVisible(installed);
     }
 
-    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
-    private static bool HasCompletedHotscenesEnglishOnly(string game)
+    private string? CurrentMo2HotscenesPath()
     {
         try
         {
-            string file = Path.Combine(game, "bin", "x64", "plugins",
-                "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            if (completedMo2Source is null) return null;
+            var stack = Mo2AnalysisSource.Resolve(completedMo2Source);
+            return stack.Winner("bin/x64/plugins/cyber_engine_tweaks/mods/hotscenes/init.lua");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        { return null; }
+    }
+
+    // G-CET owner opt-in marker: completion needs absent removed feature hooks.
+    private static bool HasCompletedHotscenesEnglishOnly(string game) =>
+        HasCompletedHotscenesEnglishOnlyFile(Path.Combine(game, "bin", "x64", "plugins",
+            "cyber_engine_tweaks", "mods", "hotscenes", "init.lua"));
+
+    private static bool HasCompletedHotscenesEnglishOnlyFile(string file)
+    {
+        try
+        {
             if (!File.Exists(file)) return false;
             string source = File.ReadAllText(file);
             return source.Contains("-- G-CET personal:hotscenes-english-only-v1",
@@ -175,8 +203,10 @@ public partial class MainWindow : Window
             HotscenesEnglishOnlyCheckBox.IsChecked != true) return false;
         try
         {
-            string file = Path.Combine(completedGameRoot, "bin", "x64",
-                "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua");
+            string? file = completedMo2Source is null
+                ? Path.Combine(completedGameRoot, "bin", "x64",
+                    "plugins", "cyber_engine_tweaks", "mods", "hotscenes", "init.lua")
+                : CurrentMo2HotscenesPath();
             if (!File.Exists(file)) return false;
             // Incomplete generated markers are not a new optimization:
             // the CET owner must refuse them rather than reapply a partial pass.
@@ -348,6 +378,7 @@ public partial class MainWindow : Window
         GamePathBox.Text = Workflow.ReadRecoveryGameRoot() ??
                            UserSettings.ReadGameRoot();
         pathUpdate = false;
+        Mo2PathBox.Text = UserSettings.ReadMo2Setup().InstallationFolder;
         UpdatePathLock();
         SetPortraitStage(PortraitStage.Black);
     }
@@ -1036,6 +1067,32 @@ public partial class MainWindow : Window
             Trace.TraceWarning("Cyberpunk start notifications unavailable; 10-second fallback: " + error);
             gameStateTimer.Start();
         }
+        // Direct recovery remains authoritative when present. Otherwise resume
+        // interrupted MO2 recovery even if its companion is no longer running.
+        if (Workflow.HasMo2CaptureAttempt ||
+            (!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text)))
+        {
+            bool needsMo2Restore;
+            try { needsMo2Restore = Workflow.HasMo2CaptureAttempt ||
+                Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
+                Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore(); }
+            catch { needsMo2Restore = true; }
+            if (needsMo2Restore)
+            {
+                mo2Mode = true;
+                mo2RecoveryBlocked = true;
+                GameRootContents.Visibility = Visibility.Collapsed;
+                Mo2SourceContents.Visibility = Visibility.Visible;
+                GameRootContents.Children.Remove(FrameworkChecksRow);
+                Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+                GameSourceHeading.Text = "MOD ORGANIZER 2";
+                SetFrameworkStatuses(null);
+                UpdatePathLock();
+                RefreshMo2WorkflowAdmission();
+                _ = RefreshMo2SourceAsync();
+                return;
+            }
+        }
         ResumeLastRestoredWorkspace();
         _ = RefreshSourceAsync();
     }
@@ -1054,6 +1111,18 @@ public partial class MainWindow : Window
             if (saved is null) return;
             completedSessionId = saved.SessionId;
             completedGameRoot = saved.GameRoot;
+            completedMo2Source = saved.Mo2Source;
+            if (completedMo2Source is not null && !mo2Mode)
+            {
+                mo2Mode = true;
+                Mo2PathBox.Text = completedMo2Source.ApplicationDirectory ??
+                    UserSettings.ReadMo2Setup().InstallationFolder;
+                GameRootContents.Visibility = Visibility.Collapsed;
+                Mo2SourceContents.Visibility = Visibility.Visible;
+                GameRootContents.Children.Remove(FrameworkChecksRow);
+                Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+                GameSourceHeading.Text = "MOD ORGANIZER 2";
+            }
             captureAndRestoreVerified = true;
             savedCapture = saved;
             UpdateResultTexts(saved);
@@ -1233,8 +1302,8 @@ public partial class MainWindow : Window
     private async Task ReconcileGameProcessChangesAsync()
     {
         if (!initialized || !IsLoaded || closingInProgress ||
-            closureCleanupVerified || busy || gameStateRefreshInFlight ||
-            !inspection.IsValidGame) return;
+            closureCleanupVerified || busy || gameStateRefreshInFlight) return;
+        if (!mo2Mode && !inspection.IsValidGame) return;
         gameStateRefreshInFlight = true;
         try
         {
@@ -1248,7 +1317,10 @@ public partial class MainWindow : Window
                 if (pid == observedGamePid && GameRunning())
                 {
                     pendingGameExitRefresh = false;
-                    await HandleExternalGameLaunchAsync();
+                    // A game started outside GCO has no authorized one-shot
+                    // MO2 mapping. Refresh its status but never attach the
+                    // Direct owner reset to that process.
+                    if (!mo2Mode) await HandleExternalGameLaunchAsync();
                 }
             }
 
@@ -1356,7 +1428,7 @@ public partial class MainWindow : Window
 
     private async void GamePath_Changed(object sender, TextChangedEventArgs e)
     {
-        if (!initialized || pathUpdate || busy) return;
+        if (!initialized || pathUpdate || busy || mo2Mode) return;
         var recoveryRoot = Workflow.ReadRecoveryGameRoot();
         if (recoveryRoot is not null &&
             !string.Equals(GamePathBox.Text, recoveryRoot,
@@ -1427,6 +1499,561 @@ public partial class MainWindow : Window
         else await RefreshSourceAsync();
     }
 
+    private bool CanSwitchSource() =>
+        !busy && !mo2StartupRunning && mo2Prepared is null && !mo2RecoveryBlocked && !gameStateRefreshInFlight &&
+        ((!Workflow.HasRecoveryJournal && !Workflow.RestoreActionAvailable(GamePathBox.Text)) ||
+            (mo2Mode && mo2VerifyRequired && Workflow.HasMo2CaptureAttempt)) && !GameRunning();
+
+    private async void DirectSource_Click(object sender, RoutedEventArgs e)
+    {
+        if (!initialized || !mo2Mode || !CanSwitchSource() || mo2RefreshRunning || mo2VerifyRequired) return;
+        mo2Mode = false;
+        mo2Connected = null;
+        pendingExternalGameStart = pendingGameExitRefresh = false;
+        pendingExternalGamePid = null;
+        GameRootContents.Visibility = Visibility.Visible;
+        Mo2SourceContents.Visibility = Visibility.Collapsed;
+        Mo2FrameworkSlot.Children.Remove(FrameworkChecksRow);
+        GameRootContents.Children.Insert(2, FrameworkChecksRow);
+        SetFrameworkStatuses(null);
+        GameSourceHeading.Text = "GAME ROOT / CYBERPUNK 2077";
+        UpdatePathLock();
+        ClearStatusPin();
+        await RefreshSourceAsync();
+    }
+
+    private async void Mo2Source_Click(object sender, RoutedEventArgs e)
+    {
+        if (!initialized || mo2Mode || !CanSwitchSource()) return;
+        // Revoke an in-flight Direct refresh before showing MO2 controls.
+        refreshCancellation?.Cancel();
+        mo2Mode = true;
+        inspection = GameInspector.Inspect(null);
+        liveState = null;
+        savedCapture = null;
+        pendingExternalGameStart = pendingGameExitRefresh = false;
+        pendingExternalGamePid = null;
+        InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
+            ContinueButton.IsEnabled = false;
+        SetPortraitStage(PortraitStage.Black);
+        GameRootContents.Visibility = Visibility.Collapsed;
+        Mo2SourceContents.Visibility = Visibility.Visible;
+        GameRootContents.Children.Remove(FrameworkChecksRow);
+        Mo2FrameworkSlot.Children.Add(FrameworkChecksRow);
+        SetFrameworkStatuses(null);
+        GameSourceHeading.Text = "MOD ORGANIZER 2";
+        UpdatePathLock();
+        ClearStatusPin();
+        await RefreshMo2SourceAsync();
+    }
+
+    private async void Mo2Browse_Click(object sender, RoutedEventArgs e)
+    {
+        if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        using var browse = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Select the MO2 folder containing ModOrganizer.exe",
+            ShowNewFolderButton = false,
+            SelectedPath = Directory.Exists(Mo2PathBox.Text) ? Mo2PathBox.Text : ""
+        };
+        if (browse.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        mo2SelectionUpdating = true;
+        try
+        {
+            Mo2PathBox.Text = browse.SelectedPath;
+            Mo2InstanceBox.ItemsSource = null;
+            Mo2ProfileBox.ItemsSource = null;
+            UserSettings.WriteMo2Setup(browse.SelectedPath, "", "");
+        }
+        finally { mo2SelectionUpdating = false; }
+        await RefreshMo2SourceAsync();
+    }
+
+    private async void Mo2Selection_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!initialized || !mo2Mode || mo2SelectionUpdating || mo2RefreshRunning) return;
+        if (ReferenceEquals(sender, Mo2InstanceBox))
+        {
+            mo2SelectionUpdating = true;
+            try { Mo2ProfileBox.ItemsSource = null; }
+            finally { mo2SelectionUpdating = false; }
+        }
+        UserSettings.WriteMo2Setup(Mo2PathBox.Text,
+            Mo2InstanceBox.SelectedItem as string ?? "",
+            Mo2ProfileBox.SelectedItem as string ?? "");
+        await RefreshMo2SourceAsync();
+    }
+
+    private async Task RefreshMo2SourceAsync()
+    {
+        if (!initialized || !mo2Mode || mo2RefreshRunning || mo2StartupRunning) return;
+        mo2RefreshRunning = true;
+        ClearStatusPin();
+        SetStatus("Verifying profile...");
+        Mo2StatusText.Text = "Checking selected profile";
+        mo2Connected = null;
+        mo2SelectedSource = null;
+        mo2Framework = null;
+        liveState = null;
+        savedCapture = null;
+        SetFrameworkStatuses(null);
+        UpdatePathLock();
+        InstallButton.IsEnabled = LaunchButton.IsEnabled = CollectButton.IsEnabled =
+            ContinueButton.IsEnabled = false;
+        try
+        {
+            var saved = UserSettings.ReadMo2Setup();
+            var binding = Workflow.ReadMo2CaptureIdentity();
+            var folder = binding?.ApplicationDirectory ?? Mo2PathBox.Text;
+            if (binding?.ApplicationDirectory is not null)
+                Mo2PathBox.Text = folder;
+            var location = Mo2InstallLocator.Inspect(folder,
+                binding?.InstanceDirectory ?? Mo2InstanceBox.SelectedItem as string ?? saved.InstanceFolder);
+            mo2SelectionUpdating = true;
+            try
+            {
+                Mo2InstanceBox.ItemsSource = location.InstanceChoices;
+                Mo2InstanceBox.SelectedItem = location.InstanceFolder;
+                if (!location.HasConfiguration || location.InstanceFolder is null)
+                {
+                    Mo2ProfileBox.ItemsSource = null;
+                    Mo2GameText.Text = "Game: not confirmed";
+                    Mo2StatusText.Text = location.Detail;
+                    SetStatus(location.Detail);
+                    return;
+                }
+                if (binding is not null &&
+                    !string.Equals(Path.GetFullPath(location.InstanceFolder).TrimEnd(Path.DirectorySeparatorChar),
+                        binding.InstanceDirectory, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("The original MO2 instance is unavailable.");
+                var instance = Mo2SourceInspector.Discover(location.InstanceFolder);
+                var profile = binding?.Profile ?? Mo2ProfileBox.SelectedItem as string ?? saved.Profile;
+                Mo2ProfileBox.ItemsSource = instance.Profiles;
+                var selectedProfile = instance.Profiles.FirstOrDefault(
+                    p => p.Equals(profile, StringComparison.OrdinalIgnoreCase));
+                Mo2ProfileBox.SelectedItem = binding is not null ? selectedProfile :
+                    selectedProfile ?? instance.Profiles.FirstOrDefault(p => p.Equals(instance.PreferredProfile,
+                        StringComparison.OrdinalIgnoreCase));
+                if (binding is not null && selectedProfile is null)
+                    throw new InvalidDataException("The original MO2 profile is unavailable.");
+                UserSettings.WriteMo2Setup(folder, location.InstanceFolder,
+                    Mo2ProfileBox.SelectedItem as string ?? "");
+                if (!instance.Recognized)
+                {
+                    Mo2GameText.Text = "Game: not confirmed";
+                    Mo2StatusText.Text = instance.Detail;
+                    SetStatus(instance.Detail);
+                    return;
+                }
+                if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() ||
+                    !Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")))
+                {
+                    Mo2StatusText.Text = "Click VERIFY";
+                    SetStatus("Click VERIFY before installing profilers.");
+                    return;
+                }
+                var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+                if (!connected.Connected)
+                {
+                    Mo2GameText.Text = "Game: awaiting MO2 companion";
+                    Mo2StatusText.Text = connected.Detail;
+                    SetStatus("Click VERIFY to prepare Mod Organizer 2.");
+                    return;
+                }
+                Mo2GameText.Text = "Game: " + connected.GameDirectory;
+                var reply = await Mo2CompanionCommandClient.ProbeAsync(connected);
+                if (!reply.Ok) throw new InvalidOperationException(reply.Detail);
+                mo2Connected = connected;
+                if (!Mo2CompanionCommandClient.ElevationVerified(connected, reply))
+                {
+                    Mo2StatusText.Text = "Click VERIFY to prepare MO2";
+                    SetStatus("Click VERIFY to start MO2 with the required permissions.");
+                    return;
+                }
+                if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(connected, packageRoot))
+                {
+                    Mo2StatusText.Text = "Click VERIFY to prepare MO2";
+                    SetStatus("Click VERIFY to authorize this GCO package.");
+                    return;
+                }
+                var selected = Mo2ProfileBox.SelectedItem as string;
+                if (string.IsNullOrWhiteSpace(selected))
+                {
+                    Mo2StatusText.Text = "Bridge authenticated. Select a profile.";
+                    SetStatus("MO2 bridge authenticated. Select a profile from the dropdown.");
+                    return;
+                }
+                var result = await Task.Run(() => Mo2ProfileSelectionService.Inspect(folder,
+                    location.InstanceFolder, selected, connected.GameDirectory));
+                var stack = result.CandidateSource;
+                if (result.Recognized && stack is not null)
+                {
+                    if (binding is not null)
+                    {
+                        if (!binding.Matches(result))
+                            throw new InvalidDataException("The original MO2 capture source changed.");
+                        if (mo2Prepared is null)
+                        {
+                            mo2Prepared = await Task.Run(() => Workflow.ResumeMo2CaptureAttempt(result));
+                            mo2LaunchAttempted = mo2Prepared is not null;
+                        }
+                    }
+                    mo2SelectedSource = result;
+                    mo2Framework = await Task.Run(() =>
+                        Workflow.InspectMo2Frameworks(result));
+                    SetFrameworkStatuses(mo2Framework);
+                    if (binding is not null && mo2Prepared is not null &&
+                        mo2LaunchAttempted && !GameRunning())
+                    {
+                        savedCapture = Workflow.ReadCollected(result.GameDirectory, verifyHashes: true);
+                        if (savedCapture?.CollectInvoked != true && savedCapture?.CollectionAttempted != true)
+                        {
+                            try
+                            {
+                                liveState = await Task.Run(() =>
+                                    Workflow.InspectMo2CaptureAsync(result.GameDirectory, result));
+                            }
+                            catch (Exception ex)
+                            {
+                                Trace.TraceWarning("MO2 owner capture inspection: " + ex);
+                            }
+                        }
+                        else if (CaptureAdmissionPolicy.CanContinue(savedCapture,
+                                     PresentMonCaptureController.ReadTrackedCsv(packageRoot) is null) &&
+                                 savedCapture is { } complete)
+                        {
+                            UpdateResultTexts(complete);
+                            if (!HasCompletedProfilerReport(packageRoot, complete.SessionId))
+                                await GenerateCollectedProfilerReportAsync(result.GameDirectory, complete.SessionId);
+                        }
+                    }
+                }
+                Mo2StatusText.Text = result.Recognized && stack is not null
+                    ? $"Bridge OK | {stack.EnabledPackages} enabled mods | {stack.CetModCount} CET mods | {stack.RedscriptModCount} REDscript mods"
+                    : result.Detail;
+                SetStatus(result.Recognized
+                    ? (mo2Framework?.Ready == true ? $"Profile ready: {selected}."
+                        : mo2Framework?.Detail ?? "Framework compatibility unverified.")
+                    : result.Detail);
+            }
+            finally { mo2SelectionUpdating = false; }
+        }
+        catch (Exception ex)
+        {
+            mo2Connected = null;
+            mo2SelectedSource = null;
+            mo2Framework = null;
+            SetFrameworkStatuses(null);
+            Mo2StatusText.Text = "MO2 verification failed";
+            SetStatus("MO2 verification failed: " + ex.Message);
+        }
+        finally
+        {
+            mo2RefreshRunning = false;
+            UpdatePathLock();
+            RefreshMo2WorkflowAdmission();
+        }
+    }
+
+    private void RefreshMo2WorkflowAdmission()
+    {
+        if (!mo2Mode) return;
+        bool running = GameRunning();
+        try
+        {
+            mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+            mo2RecoveryBlocked = Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() ||
+                (Workflow.HasMo2CaptureAttempt && !mo2VerifyRequired);
+        }
+        catch (Exception ex)
+        {
+            mo2RecoveryBlocked = true;
+            mo2VerifyRequired = true;
+            SetStatus("MO2 session journal requires recovery: " + ex.Message);
+        }
+        UpdatePathLock();
+        var restore = UpdateProfilerAction(mo2SelectedSource?.GameDirectory);
+        var processLaunchPending = DateTime.UtcNow < launchProcessGuardUntilUtc;
+        LaunchButton.Content = running ? "GAME RUNNING"
+            : processLaunchPending ? "STARTING CYBERPUNK"
+            : "START CYBERPUNK";
+        InstallButton.IsEnabled = restore ? !busy && !mo2RefreshRunning :
+            !busy && !mo2RefreshRunning && !running && !mo2VerifyRequired && mo2SelectedSource is not null &&
+            mo2Connected is not null && mo2Framework?.Ready == true;
+        LaunchButton.IsEnabled = !busy && !mo2RefreshRunning && !running && !processLaunchPending &&
+            mo2Prepared is { } prepared &&
+            (!mo2LaunchAttempted || Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared)) && !mo2VerifyRequired &&
+            mo2Connected is not null && mo2Framework?.Ready == true;
+        var captureReady = !busy && !mo2RefreshRunning && !running && !processLaunchPending &&
+            !mo2VerifyRequired && mo2SelectedSource is not null && mo2Prepared is not null &&
+            mo2LaunchAttempted && Workflow.HasMo2CaptureAttempt;
+        CollectButton.IsEnabled = captureReady &&
+            CaptureAdmissionPolicy.CanCollect(true, true, liveState, savedCapture);
+        ContinueButton.IsEnabled = captureReady && !profilerReportRunning &&
+            CaptureAdmissionPolicy.CanContinue(savedCapture,
+                PresentMonCaptureController.ReadTrackedCsv(packageRoot) is null) &&
+            savedCapture is not null && HasCompletedProfilerReport(packageRoot, savedCapture.SessionId);
+        if (mo2RecoveryBlocked && mo2Prepared is null)
+            SetStatus("Previous profiling session requires recovery. Click RESTORE.");
+        else if (mo2Prepared is not null && mo2LaunchAttempted &&
+            Workflow.HasMo2CaptureAttempt && mo2SelectedSource is not null && !mo2VerifyRequired)
+        {
+            var collected = savedCapture?.CollectionAttempted == true;
+            SetPortraitStage(collected ? PortraitStage.Collecting :
+                savedCapture?.CollectInvoked == true ? PortraitStage.Installed : PortraitStage.Capturing);
+            if (running)
+            {
+                ClearStatusPin();
+                SetStatus("Cyberpunk running. Record gameplay; F11 START / STOP.");
+            }
+            else if (collected && savedCapture is { } complete)
+            {
+                UpdateResultTexts(complete);
+                if (HasCompletedProfilerReport(packageRoot, complete.SessionId))
+                {
+                    ClearStatusPin();
+                    SetStatus("Combined profiler report ready. Click CONTINUE.");
+                }
+            }
+            else if (LaunchButton.IsEnabled)
+            {
+                ClearStatusPin();
+                SetStatus(savedCapture?.CollectInvoked == true ?
+                    "Collect failed. START again or RESTORE." :
+                    CaptureAdmissionPolicy.PendingCaptureGuidance(
+                        CaptureAdmissionPolicy.AvailableNativeCaptures(liveState, savedCapture)));
+            }
+        }
+    }
+
+    private async Task<Mo2ProfileSelection> InspectMo2SelectionAsync()
+    {
+        if (Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+            throw new InvalidOperationException("Click VERIFY before installing profilers.");
+        var instancePath = Mo2InstanceBox.SelectedItem as string ??
+            throw new InvalidOperationException("Select an MO2 instance.");
+        var profile = Mo2ProfileBox.SelectedItem as string ??
+            throw new InvalidOperationException("Select an MO2 profile.");
+        var folder = Mo2PathBox.Text;
+        if (!Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")))
+            throw new InvalidOperationException("Click VERIFY before installing profilers.");
+        var instance = Mo2SourceInspector.Discover(instancePath);
+        var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+        if (!connected.Connected) throw new InvalidOperationException(connected.Detail);
+        var probe = await Mo2CompanionCommandClient.ProbeAsync(connected);
+        if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
+        if (!Mo2CompanionCommandClient.ElevationVerified(connected, probe))
+            throw new InvalidOperationException("Click VERIFY to start MO2 with the required permissions.");
+        if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(connected, packageRoot))
+            throw new InvalidOperationException("Click VERIFY to authorize this GCO package.");
+        var selection = await Task.Run(() => Mo2ProfileSelectionService.Inspect(
+            folder, instancePath, profile, connected.GameDirectory));
+        if (!selection.Recognized || selection.CandidateSource is null)
+            throw new InvalidOperationException(selection.Detail);
+        mo2Connected = connected;
+        mo2Framework = await Task.Run(() => Workflow.InspectMo2Frameworks(selection));
+        SetFrameworkStatuses(mo2Framework);
+        if (!mo2Framework.Ready) throw new InvalidOperationException(mo2Framework.Detail);
+        return selection;
+    }
+
+    // Deployment-specific work only. The existing INSTALL/START/RESTORE
+    // handlers own activity, busy state, portrait, errors and UI progression.
+    private async Task PrepareMo2DeploymentAsync(Mo2ProfileSelection? selection = null)
+    {
+        selection ??= await InspectMo2SelectionAsync();
+        mo2Prepared = await Mo2ProfilerOverlayBuilder.PrepareFromBundleAsync(
+            packageRoot, selection.GameDirectory, selection.CandidateSource!,
+            Guid.NewGuid().ToString("N"));
+        mo2LaunchAttempted = false;
+    }
+
+    private async Task<Mo2ProfileSelection> PrepareMo2LaunchAsync()
+    {
+        var selection = await InspectMo2SelectionAsync();
+        var prepared = mo2Prepared ??
+            throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        if (Workflow.HasMo2CaptureAttempt)
+        {
+            var binding = Workflow.ReadMo2CaptureIdentity();
+            if (binding is null || binding.SessionId != prepared.SessionId || !binding.Matches(selection))
+                throw new InvalidDataException("The original MO2 capture source changed.");
+            if (mo2LaunchAttempted && Workflow.ResumeMo2CaptureAttempt(selection) is null)
+                throw new InvalidOperationException("Previous capture requires recovery.");
+        }
+        if (mo2LaunchAttempted)
+        {
+            // The MO2 mapper is one-shot. Recreate only its deployment for
+            // another START, with the existing owner-scoped discard policy.
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+            if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
+            Mo2ProfilerOverlayBuilder.RetireCompletedTest(prepared);
+            if (Workflow.HasMo2CaptureAttempt)
+                Workflow.RetireMo2CaptureAttempt(selection.GameDirectory, prepared.SessionId);
+            mo2Prepared = null;
+            mo2LaunchAttempted = false;
+            selection = await InspectMo2SelectionAsync();
+            await PrepareMo2DeploymentAsync(selection);
+            prepared = mo2Prepared!;
+        }
+        Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, selection.CandidateSource!);
+        // A failure before dispatch can leave a provisioned, unlaunched
+        // attempt. Retire only its own index; uncertain dispatch still blocks.
+        if (Workflow.HasMo2CaptureAttempt)
+        {
+            if (!Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared) ||
+                Workflow.ReadRecoverySessionId(selection.GameDirectory) != prepared.SessionId)
+                throw new InvalidOperationException("Previous capture requires recovery.");
+            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+            if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
+            // Reuse the prepared layer but give the next attempt a fresh
+            // one-shot deployment identity, just as on repeated START.
+            Mo2ProfilerOverlayBuilder.RetireUnlaunched(prepared);
+            Workflow.RetireMo2CaptureAttempt(selection.GameDirectory, prepared.SessionId);
+            mo2Prepared = null;
+            await PrepareMo2DeploymentAsync(selection);
+            prepared = mo2Prepared!;
+        }
+        Workflow.BeginMo2CaptureAttempt(selection, prepared);
+        return selection;
+    }
+
+    private async Task<Mo2BridgeReply> DispatchMo2LaunchAsync(Mo2ProfileSelection selection)
+    {
+        var prepared = mo2Prepared ??
+            throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+        mo2LaunchAttempted = true;
+        try
+        {
+            return await Mo2CompanionCommandClient.LaunchPreparedTestAsync(
+                mo2Connected!, selection, prepared, true);
+        }
+        catch
+        {
+            // A timeout or negative acknowledgement is not proof that the
+            // mapper never launched. Only the durable journal decides retry.
+            mo2LaunchAttempted = !Mo2ProfilerOverlayBuilder.IsStillPrepared(prepared);
+            throw;
+        }
+    }
+
+    private async Task<ProfilerWorkflowResult> RestoreMo2DeploymentAsync()
+    {
+        var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot, clearTracking: false);
+        await Task.Run(() => Mo2ProfilerOverlayBuilder.RestoreOutstandingSessions());
+        mo2Prepared = null;
+        mo2LaunchAttempted = false;
+        mo2RecoveryBlocked = false;
+        mo2VerifyRequired = Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore();
+        if (!mo2VerifyRequired && stop.Stopped) RetireMo2CaptureJournal();
+        if (mo2VerifyRequired)
+        {
+            mo2Connected = null;
+            mo2SelectedSource = null;
+            mo2Framework = null;
+            SetFrameworkStatuses(null);
+        }
+        if (!stop.Stopped)
+            return new ProfilerWorkflowResult(false, stop.Error ?? "PresentMon stop pending.");
+        return new ProfilerWorkflowResult(true,
+            mo2VerifyRequired ? "Profilers reset. Click VERIFY." :
+                "Profilers restored. Original files unchanged.",
+            RestoreVerified: !mo2VerifyRequired);
+    }
+
+    private void RetireMo2CaptureJournal()
+    {
+        if (!Workflow.HasMo2CaptureAttempt) return;
+        var game = Workflow.ReadRecoveryGameRoot() ??
+            throw new InvalidDataException("MO2 capture game identity unavailable.");
+        var id = Workflow.ReadRecoverySessionId(game) ??
+            throw new InvalidDataException("MO2 capture session identity unavailable.");
+        Workflow.RetireMo2CaptureAttempt(game, id);
+        PresentMonCaptureController.ClearTrackedCsv(packageRoot);
+    }
+
+    private async void Mo2Bridge_Click(object sender, RoutedEventArgs e)
+    {
+        if (!mo2Mode || !CanSwitchSource() || mo2RefreshRunning) return;
+        ClearStatusPin();
+        bool startupSucceeded = false;
+        try
+        {
+            var folder = Mo2PathBox.Text;
+            var location = Mo2InstallLocator.Inspect(folder, Mo2InstanceBox.SelectedItem as string);
+            if (!location.HasConfiguration || location.InstanceFolder is null)
+                throw new InvalidOperationException(location.Detail);
+            var instance = Mo2SourceInspector.Discover(location.InstanceFolder);
+            if (!instance.Recognized) throw new InvalidOperationException(instance.Detail);
+            var existing = Mo2CompanionDiscovery.Inspect(folder, instance);
+            // Reuse the correctly elevated live instance for the rest of
+            // this session. Never trigger another UAC prompt just to probe.
+            if (!Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore() &&
+                Mo2CompanionInstaller.IsCurrent(folder, Path.Combine(AppContext.BaseDirectory, "mo2", "gco_mo2_bridge.py")) &&
+                existing.Connected && await Mo2CompanionCommandClient.VerifyElevatedAsync(existing) &&
+                await Mo2CompanionCommandClient.VerifyFramePackageAsync(existing, packageRoot))
+            {
+                await RefreshMo2SourceAsync();
+                return;
+            }
+            mo2StartupRunning = true;
+            SetBusy(true);
+            SetStatus("Preparing Mod Organizer 2...");
+            await Mo2StartupController.StartAsync(packageRoot, folder, location.InstanceFolder);
+            // MO2 creates the authenticated companion heartbeat only after
+            // loading its selected instance and plugins.
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                var connected = Mo2CompanionDiscovery.Inspect(folder, instance);
+                if (connected.Connected)
+                    break;
+                await Task.Delay(500);
+            }
+            var verified = Mo2CompanionDiscovery.Inspect(folder, instance);
+            if (!verified.Connected)
+                throw new InvalidOperationException(verified.Detail);
+            var probe = await Mo2CompanionCommandClient.ProbeAsync(verified);
+            if (!probe.Ok) throw new InvalidOperationException(probe.Detail);
+            if (!Mo2CompanionCommandClient.ElevationVerified(verified, probe))
+                throw new InvalidOperationException(Mo2ProcessIdentity.InspectElevation(verified.ProcessId).Detail);
+            if (!await Mo2CompanionCommandClient.VerifyFramePackageAsync(verified, packageRoot))
+                throw new InvalidOperationException("MO2 is not authorized for this GCO package.");
+            if (Workflow.HasMo2CaptureAttempt &&
+                !Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession() &&
+                !Mo2ProfilerOverlayBuilder.RequiresVerificationAfterRestore())
+            {
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot, clearTracking: false);
+                if (!stop.Stopped) throw new InvalidOperationException(stop.Error);
+                RetireMo2CaptureJournal();
+            }
+            startupSucceeded = true;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("MO2 setup: " + ex);
+            PinStatus("MO2 verification failed: " + ex.Message);
+        }
+        finally
+        {
+            if (mo2StartupRunning)
+            {
+                mo2StartupRunning = false;
+                SetBusy(false);
+                if (startupSucceeded) await RefreshMo2SourceAsync();
+                else
+                {
+                    mo2Connected = null;
+                    mo2SelectedSource = null;
+                    mo2Framework = null;
+                    SetFrameworkStatuses(null);
+                    Mo2StatusText.Text = "MO2 setup failed";
+                    RefreshMo2WorkflowAdmission();
+                }
+            }
+        }
+    }
+
     private void UpdatePathLock()
     {
         // A valid journal pins its game; a corrupt journal must not lock out
@@ -1435,7 +2062,14 @@ public partial class MainWindow : Window
         GamePathBox.IsReadOnly = locked;
         GamePathBox.IsEnabled = !busy;
         BrowseButton.IsEnabled = !busy && !locked;
-        RefreshButton.IsEnabled = !busy;
+        RefreshButton.IsEnabled = !busy && !mo2RefreshRunning;
+        var switchAllowed = CanSwitchSource() && !mo2RefreshRunning;
+        DirectSourceButton.IsEnabled = mo2Mode && switchAllowed && !mo2VerifyRequired;
+        Mo2SourceButton.IsEnabled = !mo2Mode && switchAllowed;
+        Mo2BrowseButton.IsEnabled = mo2Mode && switchAllowed;
+        Mo2InstanceBox.IsEnabled = Mo2ProfileBox.IsEnabled = Mo2BrowseButton.IsEnabled;
+        Mo2BridgeButton.IsEnabled = Mo2BrowseButton.IsEnabled;
+        Mo2BridgeButton.Content = "VERIFY";
     }
 
     private void SetBusy(bool isBusy)
@@ -1643,7 +2277,9 @@ public partial class MainWindow : Window
     {
         // RESTORE is available from either GCO's session journal or an
         // authoritative profiler-owned game-side transaction marker.
-        var recovery = Workflow.RestoreActionAvailable(gameRoot);
+        var recovery = mo2Mode
+            ? mo2Prepared is not null || mo2RecoveryBlocked
+            : Workflow.RestoreActionAvailable(gameRoot);
         var label = recovery ? "RESTORE PROFILERS" : "INSTALL PROFILERS";
         var style = (Style)FindResource(
             recovery ? "RestoreStageButton" : "StageActionButton");
@@ -1666,6 +2302,7 @@ public partial class MainWindow : Window
             RefreshResultsPresentationOnly();
             return;
         }
+        if (mo2Mode) { await RefreshMo2SourceAsync(); return; }
         long refreshActivity = BeginConsoleActivity("Checking game and profiler status");
         try
         {
@@ -1751,7 +2388,7 @@ public partial class MainWindow : Window
         try
         {
             var state = await Workflow.InspectAsync(current.GameRoot!, cancel.Token);
-            if (cancel.IsCancellationRequested || !IsLoaded || busy ||
+            if (cancel.IsCancellationRequested || !IsLoaded || busy || mo2Mode ||
                 (captureAndRestoreVerified && ResultsPage.Visibility == Visibility.Visible)) return;
             liveState = state;
             var running = GameRunning();
@@ -1820,7 +2457,7 @@ public partial class MainWindow : Window
                 !profilerReportRunning && !HasCompletedProfilerReport(packageRoot, saved.SessionId))
             {
                 await GenerateCollectedProfilerReportAsync(current.GameRoot!, saved.SessionId);
-                if (cancel.IsCancellationRequested || !IsLoaded || busy) return;
+                if (cancel.IsCancellationRequested || !IsLoaded || busy || mo2Mode) return;
                 ContinueButton.IsEnabled = HasCompletedProfilerReport(packageRoot, saved.SessionId);
             }
             // Adapt the captions to actual verified workflow state. Disabled
@@ -1855,7 +2492,7 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            if (!cancel.IsCancellationRequested && IsLoaded)
+            if (!cancel.IsCancellationRequested && IsLoaded && !mo2Mode)
             {
                 // A failed inspection cannot leave stale actions enabled.
                 // Keep the owner's emergency Restore action available.
@@ -1877,16 +2514,31 @@ public partial class MainWindow : Window
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
         // Only RESTORE and CONTINUE trigger owner-managed restoration.
-        if (Workflow.RestoreActionAvailable(GamePathBox.Text))
+        // A damaged MO2 journal must enter recovery, not throw out of a
+        // WPF event handler or permit a new deployment.
+        if (mo2Mode)
+        {
+            try { mo2RecoveryBlocked |= Mo2ProfilerOverlayBuilder.HasUnresolvedTestSession(); }
+            catch (Exception ex)
+            {
+                mo2RecoveryBlocked = true;
+                Trace.TraceWarning("MO2 recovery journal: " + ex);
+            }
+        }
+        if (mo2Mode ? mo2Prepared is not null || mo2RecoveryBlocked
+            : Workflow.RestoreActionAvailable(GamePathBox.Text))
             await RestoreIncompleteSessionAsync();
         else
             await InstallProfilersAsync();
     }
     private async Task InstallProfilersAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (mo2Mode ? mo2RefreshRunning || mo2SelectedSource is null
+                : !inspection.IsValidGame || inspection.GameRoot is null)) return;
+        if (mo2Mode && GameRunning()) { Warn("Close Cyberpunk before continuing.", "Profiler installation"); return; }
         ClearStatusPin();
-        var frameworks = FrameworkPreflight.Inspect(inspection.GameRoot);
+        var frameworks = mo2Mode ? mo2Framework : FrameworkPreflight.Inspect(inspection.GameRoot!);
+        if (frameworks is null) return;
         if (!frameworks.Ready)
         {
             Trace.TraceWarning("Framework preflight: " + frameworks.Detail);
@@ -1899,7 +2551,13 @@ public partial class MainWindow : Window
         long installActivity = BeginConsoleActivity("Installing profilers");
         try
         {
-            var result = await Workflow.InstallAsync(inspection.GameRoot);
+            ProfilerWorkflowResult result;
+            if (mo2Mode)
+            {
+                await PrepareMo2DeploymentAsync();
+                result = new ProfilerWorkflowResult(true, "Profilers prepared.");
+            }
+            else result = await Workflow.InstallAsync(inspection.GameRoot!);
             if (result.Ok)
             {
                 SetPortraitStage(PortraitStage.Installed);
@@ -1917,7 +2575,13 @@ public partial class MainWindow : Window
             SetPortraitStage(PortraitStage.Black);
             Warn(ex.Message, "Profiler installation");
         }
-        finally { EndConsoleActivity(installActivity); SetBusy(false); await RefreshSourceAsync(); }
+        finally
+        {
+            EndConsoleActivity(installActivity);
+            SetBusy(false);
+            if (mo2Mode) RefreshMo2WorkflowAdmission();
+            else await RefreshSourceAsync();
+        }
     }
 
     // A new GCO or directly observed Cyberpunk launch follows the exact same
@@ -1926,39 +2590,67 @@ public partial class MainWindow : Window
     // native capture state remains untouched, and pre-existing native results
     // are quarantined from this attempt in collection.json.
     private async Task<string?> BeginFreshCaptureAsync(string game,
-        LiveProfilerState state, bool gameAlreadyRunning)
+        LiveProfilerState? state, bool gameAlreadyRunning, Mo2ProfileSelection? mo2Selection = null)
     {
-        if (!Workflow.HasInstalledFrameworkBaseline(game, state))
+        if (mo2Selection is null && (state is null || !Workflow.HasInstalledFrameworkBaseline(game, state)))
             throw new InvalidOperationException(
                 "Verified, game-bound profiler installation is required. RESTORE PROFILERS remains available.");
         if (!ComponentBundleVerifier.Inspect(packageRoot).Ready)
             throw new InvalidOperationException("Bundled profiler provenance changed.");
         // Reset native owners while the game is closed. The old ETW writer is
         // separate and must be gracefully stopped by its existing controller.
-        var reset = await Workflow.ResetNativeOutputAsync(game);
-        if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
-        var clean = await Workflow.InspectAsync(game);
+        LiveProfilerState? clean = null;
+        string preparedId;
+        Func<Task>? authorizedRestart = null;
+        if (mo2Selection is null)
+        {
+            var reset = await Workflow.ResetNativeOutputAsync(game);
+            if (!reset.Ok) throw new InvalidOperationException(reset.Detail);
+            clean = await Workflow.InspectAsync(game);
 
-        // Before changing the authoritative journal, provision the next
-        // destination. The ONE elevated controller then stops any prior
-        // GCO-owned PresentMon (including a surviving forced-close writer)
-        // and launches a fresh session with this distinct output CSV.
-        var preparedId = Guid.NewGuid().ToString("N");
-        CollectedCaptureStore.CreateDatedSessionFolder(
-            packageRoot, preparedId, DateTimeOffset.Now, game,
-            clean.CetCaptureReady, clean.GrspCaptureReady);
+            // Before changing the authoritative journal, provision the next
+            // destination. The ONE elevated controller then stops any prior
+            // GCO-owned PresentMon (including a surviving forced-close writer)
+            // and launches a fresh session with this distinct output CSV.
+            preparedId = Guid.NewGuid().ToString("N");
+            CollectedCaptureStore.CreateDatedSessionFolder(
+                packageRoot, preparedId, DateTimeOffset.Now, game,
+                clean.CetCaptureReady, clean.GrspCaptureReady);
+        }
+        else
+        {
+            var deployment = mo2Prepared ??
+                throw new InvalidOperationException("Install profilers before starting Cyberpunk.");
+            preparedId = deployment.SessionId;
+            if (!Workflow.HasMo2CaptureAttempt || Workflow.ReadRecoverySessionId(game) != preparedId)
+                throw new InvalidOperationException("MO2 frame capture session identity changed.");
+            authorizedRestart = () => Mo2CompanionCommandClient.StartFrameControllerAsync(
+                mo2Connected!, mo2Selection, deployment);
+        }
         var csv = PresentMonLifecyclePolicy.NewSessionCsv(packageRoot, preparedId);
         string? warning = null;
         var monStarted = false;
         try
         {
-            await PresentMonCaptureController.RunAsync(packageRoot, csv,
-                restart: true, captureSessionId: preparedId);
+            if (authorizedRestart is null)
+                await PresentMonCaptureController.RunAsync(packageRoot, csv,
+                    restart: true, captureSessionId: preparedId);
+            else
+                await PresentMonCaptureController.RunAsync(packageRoot, csv,
+                    restart: true, captureSessionId: preparedId, authorizedRestart: authorizedRestart);
             monStarted = true;
         }
         catch (Exception ex)
         {
             warning = ex.Message;
+            // Unlike a settled controller failure, a lost MO2 acknowledgement
+            // may still start a writer. Preserve its journal and block START.
+            if (mo2Selection is not null && mo2Prepared is { } deployment &&
+                !Mo2ProfilerOverlayBuilder.IsStillPrepared(deployment))
+            {
+                mo2LaunchAttempted = true;
+                throw;
+            }
             // Optional startup failure may fall back to CET/GRSP, but only
             // after proving neither an OLD nor a newly-started PresentMon
             // still owns an active CSV. Never delete a running writer's scope.
@@ -1981,17 +2673,18 @@ public partial class MainWindow : Window
         // Retire only uncollected old scratch. A sealed collection stays
         // immutable. On success RunAsync already updated the tracking pointer
         // to the new CSV, so do not clear it while switching journals.
-        Workflow.AbandonCurrentUncollected(game);
+        if (mo2Selection is null) Workflow.AbandonCurrentUncollected(game);
         if (!monStarted) PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-        Workflow.BeginCaptureAttempt(game,
-            observedGameAlreadyRunning: gameAlreadyRunning,
-            ownerBeforeCapture: clean, preparedSessionId: preparedId);
+        if (mo2Selection is null)
+            Workflow.BeginCaptureAttempt(game,
+                observedGameAlreadyRunning: gameAlreadyRunning,
+                ownerBeforeCapture: clean, preparedSessionId: preparedId);
         return warning;
     }
 
     private async Task HandleExternalGameLaunchAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null ||
+        if (mo2Mode || busy || !inspection.IsValidGame || inspection.GameRoot is null ||
             !Workflow.HasSessionForGame(inspection.GameRoot)) return;
         var game = inspection.GameRoot;
         SetBusy(true);
@@ -2023,14 +2716,18 @@ public partial class MainWindow : Window
     private async void Launch_Click(object sender, RoutedEventArgs e) => await LaunchCaptureAsync();
     private async Task LaunchCaptureAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (mo2Mode
+            ? mo2RefreshRunning || mo2Prepared is not { } prepared ||
+                (mo2LaunchAttempted && !Mo2ProfilerOverlayBuilder.CanRestartCompletedTest(prepared))
+            : !inspection.IsValidGame || inspection.GameRoot is null)) return;
         if (GameRunning()) { Warn("Cyberpunk is already running.", "Start"); return; }
         if (DateTime.UtcNow < launchProcessGuardUntilUtc)
         {
             Warn("Cyberpunk startup is still being processed.", "Start");
             return;
         }
-        var game = inspection.GameRoot;
+        var game = mo2Mode ? mo2SelectedSource?.GameDirectory : inspection.GameRoot;
+        if (game is null) return;
         var executable = Path.Combine(game, "bin", "x64", "Cyberpunk2077.exe");
         if (!File.Exists(executable))
         {
@@ -2044,34 +2741,69 @@ public partial class MainWindow : Window
         long launchActivity = BeginConsoleActivity("Preparing profilers and starting Cyberpunk");
         try
         {
-            var state = await Workflow.InspectAsync(game);
-            var warning = await BeginFreshCaptureAsync(game, state,
-                gameAlreadyRunning: false);
+            Mo2ProfileSelection? mo2Selection = null;
+            string? warning = null;
+            if (mo2Mode)
+            {
+                mo2Selection = await PrepareMo2LaunchAsync();
+                warning = await BeginFreshCaptureAsync(game, null,
+                    gameAlreadyRunning: false, mo2Selection: mo2Selection);
+            }
+            else
+            {
+                var state = await Workflow.InspectAsync(game);
+                warning = await BeginFreshCaptureAsync(game, state,
+                    gameAlreadyRunning: false);
+            }
             try
             {
                 // Arm before CreateProcess so a fast WMI start is classified
                 // as this GCO launch rather than an external capture restart.
                 gcoLaunchInProgress = true;
                 ArmProcessStartGuard();
-                using var started = Process.Start(new ProcessStartInfo(executable)
+                if (mo2Selection is not null)
                 {
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(executable)!
-                }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
-                gcoLaunchedGamePid = started.Id;
-                // Only track the real game executable, not a transient launch
-                // delegate. If it has not started yet, wait for WMI/fallback.
-                try
-                {
-                    if (!started.HasExited &&
-                        string.Equals(started.ProcessName, "Cyberpunk2077",
-                            StringComparison.OrdinalIgnoreCase))
-                        GameStarted(started.Id);
+                    var reply = await DispatchMo2LaunchAsync(mo2Selection);
+                    Trace.TraceInformation("MO2 launch acknowledged (PID " + reply.ProcessId + ").");
+                    // A bridge acknowledgement need not identify the actual
+                    // game process. Track only a real Cyberpunk process.
+                    try
+                    {
+                        using var started = Process.GetProcessById(reply.ProcessId);
+                        if (!started.HasExited &&
+                            string.Equals(started.ProcessName, "Cyberpunk2077",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            gcoLaunchedGamePid = started.Id;
+                            GameStarted(started.Id);
+                        }
+                    }
+                    catch (ArgumentException) { }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
                 }
-                catch (InvalidOperationException)
+                else
                 {
-                    // Already exited: a game startup notification may still
-                    // arrive for the actual game PID.
+                    using var started = Process.Start(new ProcessStartInfo(executable)
+                    {
+                        UseShellExecute = true,
+                        WorkingDirectory = Path.GetDirectoryName(executable)!
+                    }) ?? throw new InvalidOperationException("Cyberpunk did not start.");
+                    gcoLaunchedGamePid = started.Id;
+                    // Only track the real game executable, not a transient launch
+                    // delegate. If it has not started yet, wait for WMI/fallback.
+                    try
+                    {
+                        if (!started.HasExited &&
+                            string.Equals(started.ProcessName, "Cyberpunk2077",
+                                StringComparison.OrdinalIgnoreCase))
+                            GameStarted(started.Id);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Already exited: a game startup notification may still
+                        // arrive for the actual game PID.
+                    }
                 }
             }
             catch
@@ -2083,13 +2815,19 @@ public partial class MainWindow : Window
                 // then drop its own uncollected folder without touching CET /
                 // REDscript native files or the recovery journal.
                 var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-                if (stop.Stopped) Workflow.AbandonCurrentUncollected(game);
+                if (!mo2Mode && stop.Stopped) Workflow.AbandonCurrentUncollected(game);
+                // MO2 retains its bound attempt until the deployment journal
+                // proves it is safe to retire or VERIFY resolves dispatch.
                 throw;
             }
             SetPortraitStage(PortraitStage.Capturing);
-            PinStatus(warning is null
-                ? "Cyberpunk started. Use F11 to start/stop profiling."
-                : "Cyberpunk started. F11 ready; PresentMon unavailable.",
+            PinStatus(mo2Mode
+                ? warning is null
+                    ? "Cyberpunk launch requested. Use F11 to start/stop profiling."
+                    : "Cyberpunk launch requested. F11 ready; PresentMon unavailable."
+                : warning is null
+                    ? "Cyberpunk started. Use F11 to start/stop profiling."
+                    : "Cyberpunk started. F11 ready; PresentMon unavailable.",
                 warning);
             launched = true;
         }
@@ -2100,10 +2838,11 @@ public partial class MainWindow : Window
             gcoLaunchedGamePid = null;
             EndConsoleActivity(launchActivity);
             SetBusy(false);
-            if (!launched) SetPortraitStage(PortraitStage.Installed);
-            // Handoff when the launch request succeeds. The native tray and
-            // observer are independent of whether Cyberpunk is observable
-            // yet; the user can reopen GCO after a slow start or crash.
+            if (!launched) SetPortraitStage(mo2Mode && mo2Prepared is null
+                ? PortraitStage.Black : PortraitStage.Installed);
+            // Both sources now have the same package-bound capture identity.
+            // The existing native tray observes the actual game and reopens
+            // this same window; MO2 resumes from its acknowledged journal.
             if (!launched || !ArmNativeGameReopen(game) || !HibernateAfterLaunch())
                 await RefreshSourceAsync();
         }
@@ -2114,14 +2853,18 @@ public partial class MainWindow : Window
     private async void Collect_Click(object sender, RoutedEventArgs e) => await CollectResultsAsync();
     private async Task CollectResultsAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
-        var game = inspection.GameRoot;
+        if (busy || (mo2Mode ? mo2RefreshRunning || mo2SelectedSource is null || mo2Prepared is null ||
+                !mo2LaunchAttempted || !Workflow.HasMo2CaptureAttempt :
+                !inspection.IsValidGame || inspection.GameRoot is null)) return;
+        var mo2Selection = mo2Mode ? mo2SelectedSource : null;
+        var game = mo2Selection?.GameDirectory ?? inspection.GameRoot;
+        if (game is null) return;
         if (GameRunning())
         {
             Warn("Close Cyberpunk before collecting results.", "Collection");
             return;
         }
-        if (!Workflow.HasCaptureAttempt(game))
+        if (mo2Selection is null ? !Workflow.HasCaptureAttempt(game) : !Workflow.HasMo2CaptureAttempt)
         {
             Warn("Start Cyberpunk before collecting results.", "Collection");
             return;
@@ -2145,7 +2888,11 @@ public partial class MainWindow : Window
         // The inner collection verifies owner readiness after the latch.
         // One-shot state is durable BEFORE any native copy, ETW flush or
         // potential exception. Successful saves remain; failed scratch clears.
-        try { Workflow.RecordCollectInvoked(game); }
+        try
+        {
+            if (mo2Selection is null) Workflow.RecordCollectInvoked(game);
+            else Workflow.RecordCollectInvoked(game, mo2Selection);
+        }
         catch (Exception ex) { Warn(ex.Message, "Collection"); return; }
         ClearStatusPin();
         SetBusy(true);
@@ -2158,7 +2905,11 @@ public partial class MainWindow : Window
         {
             var attempt = Workflow.ReadCollected(game) ??
                 throw new InvalidDataException("No matching GCO capture attempt.");
-            var nativeStatus = await Workflow.InspectAsync(game);
+            if (mo2Selection is not null)
+                mo2Selection = await InspectMo2SelectionAsync();
+            var nativeStatus = mo2Selection is null
+                ? await Workflow.InspectAsync(game)
+                : await Task.Run(() => Workflow.InspectMo2CaptureAsync(game, mo2Selection));
             var indexed = Workflow.ReadCollected(game, verifyHashes: true);
             var staged = Workflow.PendingStagedNativeCaptures(game);
             var ready = CaptureAdmissionPolicy.AvailableNativeCaptures(
@@ -2173,7 +2924,9 @@ public partial class MainWindow : Window
             string? frameWarning = stop.Error;
             if (stop.Stopped)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 1, 10, "COLLECT / PRESENTMON STOPPED");
-            var native = await Workflow.CollectResultsAsync(game);
+            var native = mo2Selection is null
+                ? await Workflow.CollectResultsAsync(game)
+                : await Task.Run(() => Workflow.CollectResultsAsync(game, mo2Selection: mo2Selection));
             if (native.Ok)
                 SetWorkProgress(collectProgress, WorkPhase.Collect, 2, 10, "COLLECT / CET + REDSCRIPT");
             if (native.Ok && stop.Stopped && stop.Csv is not null)
@@ -2213,7 +2966,9 @@ public partial class MainWindow : Window
             // archives are durable, hashes verify, and ETW is stopped. If this
             // cleanup fails, do not seal Collect; the same session can retry.
             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
-            var saved = Workflow.RecordCollectionAttempt(game, stop.Stopped);
+            var saved = mo2Selection is null
+                ? Workflow.RecordCollectionAttempt(game, stop.Stopped)
+                : await Task.Run(() => Workflow.RecordCollectionAttempt(game, stop.Stopped, mo2Selection));
             saved = Workflow.ReadCollected(game, verifyHashes: true) ?? saved;
             savedCapture = saved;
             sealedSuccess = true;
@@ -2251,10 +3006,14 @@ public partial class MainWindow : Window
                         packageRoot, clearTracking: false);
                     if (stopped.Stopped)
                     {
-                        var reset = await Workflow.ResetNativeOutputAsync(game);
+                        var reset = mo2Selection is null
+                            ? await Workflow.ResetNativeOutputAsync(game)
+                            : await Task.Run(() => Workflow.ResetNativeOutputAsync(game, mo2Selection: mo2Selection));
                         if (reset.Ok)
                         {
-                            Workflow.AbandonCurrentUncollected(game);
+                            if (mo2Selection is null) Workflow.AbandonCurrentUncollected(game);
+                            // MO2 retains the one-shot latch and temporary
+                            // index until START/RESTORE retires the layer.
                             PresentMonCaptureController.ClearTrackedCsv(packageRoot);
                         }
                         else Trace.TraceWarning("Failed-Collect native cleanup: " + reset.Detail);
@@ -2374,7 +3133,9 @@ public partial class MainWindow : Window
     private async void Continue_Click(object sender, RoutedEventArgs e) => await ContinueToAnalyticsAsync();
     private async Task ContinueToAnalyticsAsync()
     {
-        if (busy || !inspection.IsValidGame || inspection.GameRoot is null) return;
+        if (busy || (!captureAndRestoreVerified && (mo2Mode
+            ? mo2RefreshRunning || mo2SelectedSource is null || !Workflow.HasMo2CaptureAttempt
+            : !inspection.IsValidGame || inspection.GameRoot is null))) return;
         if (captureAndRestoreVerified)
         {
             RefreshCompletedWorkspace();
@@ -2389,7 +3150,9 @@ public partial class MainWindow : Window
             SetActiveTab(true);
             return;
         }
-        var game = inspection.GameRoot;
+        var mo2Selection = mo2Mode ? mo2SelectedSource : null;
+        var game = mo2Selection?.GameDirectory ?? inspection.GameRoot;
+        if (game is null) return;
         if (GameRunning()) { Warn("Close Cyberpunk before restoring.", "Game running"); return; }
         CollectedCaptureIndex? saved;
         try { saved = Workflow.ReadCollected(game, verifyHashes: true); }
@@ -2415,9 +3178,14 @@ public partial class MainWindow : Window
         {
             // Only source-owner restoration can authorize Page 2. Missing
             // intentional domains are explicitly acknowledged above.
-            var result = await Workflow.ContinueAsync(game,
-                skipCet: false, skipRedscript: false,
-                skipFrameTime: saved!.FrameTimeCsv is null);
+            var result = mo2Selection is null
+                ? await Workflow.ContinueAsync(game,
+                    skipCet: false, skipRedscript: false,
+                    skipFrameTime: saved!.FrameTimeCsv is null)
+                : await Task.Run(() => Workflow.ContinueAsync(game,
+                    skipCet: false, skipRedscript: false,
+                    skipFrameTime: saved!.FrameTimeCsv is null,
+                    mo2Selection: mo2Selection));
             if (!result.RestoreVerified)
             {
                 SetStatus(result.Detail);
@@ -2428,6 +3196,15 @@ public partial class MainWindow : Window
                 HotscenesEnglishOnlyCheckBox.IsChecked = false;
             completedSessionId = saved.SessionId;
             completedGameRoot = game;
+            if (mo2Selection is not null)
+            {
+                saved = CollectedCaptureStore.ReadRestored(packageRoot, game, saved.SessionId);
+                mo2Prepared = null;
+                mo2LaunchAttempted = mo2RecoveryBlocked = mo2VerifyRequired = false;
+                GamePathBox.Text = game;
+                UserSettings.WriteGameRoot(game);
+            }
+            completedMo2Source = saved.Mo2Source;
             captureAndRestoreVerified = true;
             refreshCancellation?.Cancel();
             string? workspaceWarning = null;
@@ -2449,7 +3226,17 @@ public partial class MainWindow : Window
             if (workspaceWarning is not null) PinStatus(workspaceWarning);
         }
         catch (Exception ex) { Warn(ex.Message, "Continue failed"); }
-        finally { EndConsoleActivity(continueActivity); SetBusy(false); }
+        finally
+        {
+            EndConsoleActivity(continueActivity);
+            SetBusy(false);
+            // SetBusy(false) disables the action buttons until admission is
+            // recomputed. A failed CONTINUE must immediately retain RESTORE
+            // in either provider, independent of framework/bridge checks.
+            // Do not re-enable START/INSTALL or clear the failure status.
+            if (!captureAndRestoreVerified && CapturePage.Visibility == Visibility.Visible)
+                InstallButton.IsEnabled = UpdateProfilerAction(game);
+        }
     }
 
     private void RefreshCompletedWorkspace()
@@ -2463,6 +3250,9 @@ public partial class MainWindow : Window
             var saved = CollectedCaptureStore.ReadRestored(
                 packageRoot, completedGameRoot, completedSessionId);
             UpdateResultTexts(saved);
+            OptimizationInstallGuidance.Text = saved.Mo2Source is null
+                ? "  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
+                : "  CET + REDscript - one clean ZIP with optimization files.   Install as a separate MO2 mod.";
             RefreshHotscenesOption();
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
                 SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
@@ -2546,8 +3336,10 @@ public partial class MainWindow : Window
         long analyzeProgress = BeginWorkProgress(WorkPhase.Analyze, "ANALYZE / CET SOURCES");
         try
         {
+            using var mo2Source = saved.Mo2Source is null ? null :
+                await Task.Run(() => Mo2AnalysisSource.Create(saved, cancel.Token), cancel.Token);
             var report = await readOnlyAnalyzer.AnalyzeAsync(
-                packageRoot, completedGameRoot, saved.SessionId, cancel.Token);
+                packageRoot, completedGameRoot, saved.SessionId, cancel.Token, mo2Source);
             if (cancel.IsCancellationRequested || !IsLoaded ||
                 completedSessionId != saved.SessionId) return;
             SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 1, 5, "ANALYZE / REDSCRIPT SOURCES");
@@ -2564,7 +3356,7 @@ public partial class MainWindow : Window
             string redPlanStatus;
             try
             {
-                string sourceRoot = completedGameRoot!;
+                string sourceRoot = mo2Source?.Root ?? completedGameRoot!;
                 string sessionRoot = CollectedCaptureStore.SessionFolder(
                     packageRoot, saved.SessionId);
                 string planPath = Path.Combine(sessionRoot,
@@ -2612,7 +3404,7 @@ public partial class MainWindow : Window
                 // Generate-only, as required by the owner's opt-in contract.
                 analyzedAvailability = await combinedPassGenerator.InspectAvailableAsync(
                     packageRoot, completedGameRoot!, saved.SessionId, cancel.Token,
-                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress));
+                    WorkProgressReporter(WorkPhase.Analyze, analyzeProgress), mo2Source);
                 if (cancel.IsCancellationRequested || !IsLoaded ||
                     completedSessionId != saved.SessionId) return;
                 SetWorkProgress(analyzeProgress, WorkPhase.Analyze, 5, 5,
@@ -2742,7 +3534,9 @@ public partial class MainWindow : Window
             }
             if (pass.HotscenesEnglishOnlyRequested &&
                 pass.HotscenesEnglishOnlyEdits == 0 &&
-                !HasCompletedHotscenesEnglishOnly(game))
+                !(completedMo2Source is null
+                    ? HasCompletedHotscenesEnglishOnly(game)
+                    : CurrentMo2HotscenesPath() is { } current && HasCompletedHotscenesEnglishOnlyFile(current)))
                 summary += Environment.NewLine + "Hotscenes ENG-only: not applied.";
             SetResultsConsoleStatus(summary);
             RefreshPlannedWork();
@@ -2802,14 +3596,14 @@ public partial class MainWindow : Window
 
     private async Task RestoreIncompleteSessionAsync()
     {
-        if (busy) return;
+        if (busy || (mo2Mode && mo2RefreshRunning)) return;
         // Prefer the verified journal root. If the journal is absent/corrupt,
         // use the user-selected game only when its owner marker proves a
         // managed installation. Owner managers perform all actual restoration.
         var game = Workflow.ReadRecoveryGameRoot() ??
             (inspection.IsValidGame ? inspection.GameRoot : GamePathBox.Text);
-        if (!Workflow.RestoreActionAvailable(game) ||
-            (Workflow.ReadRecoveryGameRoot() is null && !Workflow.HasOwnerRestoreState(game)))
+        if (!mo2Mode && (!Workflow.RestoreActionAvailable(game) ||
+            (Workflow.ReadRecoveryGameRoot() is null && !Workflow.HasOwnerRestoreState(game))))
         {
             Warn("Select the game with installed profilers to restore.", "Recovery required");
             return;
@@ -2827,15 +3621,31 @@ public partial class MainWindow : Window
         {
             // No capture index/collection attempt is required. Recover even
             // directly after a partial install, including after GCO restarts.
-            var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
-            // Restore original source files even when stopping PresentMon
-            // fails, but keep the durable journal and uncollected results
-            // until the full reset can be verified on a subsequent click.
-            // The owner restores and GCO scratch disposal are completed by
-            // the same workflow, not independently in the UI.
-            var result = await Workflow.RestoreOwnedAsync(game,
-                preserveIncompleteEvidence: false,
-                pendingPresentMonStopped: stop.Stopped);
+            ProfilerWorkflowResult result;
+            if (mo2Mode)
+            {
+                result = await RestoreMo2DeploymentAsync();
+                if (mo2VerifyRequired)
+                {
+                    // A pending MO2 dispatch can only be retired by VERIFY.
+                    // Return to INSTALL without claiming verified restoration.
+                    SetPortraitStage(PortraitStage.Black);
+                    PinStatus(result.Detail);
+                    return;
+                }
+            }
+            else
+            {
+                var stop = await PresentMonCaptureController.StopTrackedAsync(packageRoot);
+                // Restore original source files even when stopping PresentMon
+                // fails, but keep the durable journal and uncollected results
+                // until the full reset can be verified on a subsequent click.
+                // The owner restores and GCO scratch disposal are completed by
+                // the same workflow, not independently in the UI.
+                result = await Workflow.RestoreOwnedAsync(game,
+                    preserveIncompleteEvidence: false,
+                    pendingPresentMonStopped: stop.Stopped);
+            }
             if (!result.RestoreVerified)
             {
                 Warn(result.Detail, "Recovery required");
@@ -2861,8 +3671,24 @@ public partial class MainWindow : Window
                     : "Original files restored. Check saved workspace.",
                 fullDetails);
         }
-        catch (Exception ex) { Warn(ex.Message, "Recovery required"); }
-        finally { EndConsoleActivity(restoreActivity); SetBusy(false); await RefreshSourceAsync(); }
+        catch (Exception ex)
+        {
+            if (mo2Mode)
+            {
+                // Preserve the actionable cause in the existing console.
+                // A generic retry message hides long recovery exceptions.
+                PinStatus("Restore failed: " + ex.Message, "Recovery required: " + ex);
+                Trace.TraceWarning("MO2 restore: " + ex);
+            }
+            else Warn(ex.Message, "Recovery required");
+        }
+        finally
+        {
+            EndConsoleActivity(restoreActivity);
+            SetBusy(false);
+            if (mo2Mode) RefreshMo2WorkflowAdmission();
+            else await RefreshSourceAsync();
+        }
     }
 
     // Reset only the active workflow and resume bookmark, never the
@@ -2877,6 +3703,7 @@ public partial class MainWindow : Window
         analyzedSessionId = null;
         completedSessionId = null;
         completedGameRoot = null;
+        completedMo2Source = null;
         captureAndRestoreVerified = false;
         redscriptPlanReady = false;
         analyzedAvailability = null;

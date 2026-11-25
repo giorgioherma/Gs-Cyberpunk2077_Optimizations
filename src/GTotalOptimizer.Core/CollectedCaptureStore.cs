@@ -17,6 +17,8 @@ public sealed record CollectedCaptureIndex(
     long? PresentMonOverlapEndUnixMs = null,
     int? PresentMonAlignedFrames = null)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Mo2CaptureIdentity? Mo2Source { get; init; }
     public bool HasAny => Cet is not null || Redscript is not null || FrameTimeCsv is not null;
 }
 
@@ -479,14 +481,20 @@ public static class CollectedCaptureStore
     }
 
     public static void MarkRestored(string root, CollectedCaptureIndex state,
-        bool skipCet, bool skipRedscript, bool skipFrameTime)
+        bool skipCet, bool skipRedscript, bool skipFrameTime,
+        Mo2CaptureIdentity? mo2Source = null)
     {
         var skipped = new List<string>();
         if (state.Cet is null && skipCet) skipped.Add("CET");
         if (state.Redscript is null && skipRedscript) skipped.Add("REDscript");
         if (state.FrameTimeCsv is null && skipFrameTime)
             skipped.Add(UsesDatedLayout(root, state.SessionId) ? "PresentMon" : "FrameTime");
-        Write(root, state with { Restored = true, Skipped = skipped });
+        if (mo2Source is not null &&
+            (mo2Source.SessionId != state.SessionId ||
+             !string.Equals(mo2Source.GameRoot, state.GameRoot, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("MO2 workspace identity does not match the collected capture.");
+        Write(root, state with { Restored = true, Skipped = skipped,
+            Mo2Source = mo2Source ?? state.Mo2Source });
     }
     private static void Write(string root, CollectedCaptureIndex item)
     {

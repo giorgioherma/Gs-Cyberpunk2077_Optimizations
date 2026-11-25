@@ -1,0 +1,261 @@
+name: MO2 | Native integration checkpoint
+run-name: MO2 native/bridge checkpoint | ${{ github.ref_name }}
+
+# Isolated, checkpoint-driven MO2 validation. Ordinary commits NEVER trigger.
+# This does not replace full GCO/REDscript checkpoints.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - MO2_integration
+    paths:
+      - '.ci/checkpoints/mo2.txt'
+
+concurrency:
+  group: gco-mo2-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read  # download the already green, source-verified GCO owner-manager artifact
+
+jobs:
+  mo2-real-components:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      MO2_PRIVATE_ZEROENGINE_AVAILABLE: ${{ secrets.GCET_STACK_SOURCES_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Validate companion API and selected-profile source contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m unittest discover -s tests/mo2 -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_MO2_PYTHON_BRIDGE_CONTRACT_FAILED' }
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
+          if ($LASTEXITCODE -ne 0) { throw 'GCO_MO2_CSHARP_PROFILE_CONTRACT_FAILED' }
+
+      - name: Download official MO2 Windows release (no installer execution)
+        id: official
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Reproducible upstream binary fixture. Never substitute other binaries
+          # or a build synthesized from a mocked API for this native checkpoint.
+          $upstream = 'ModOrganizer2/modorganizer'
+          $tag = 'v2.5.2'
+          $archive = 'Mod.Organizer-2.5.2.7z'
+          $release = (& gh api "repos/$upstream/releases/tags/$tag") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $release.tag_name -ne $tag -or $release.draft) {
+            throw 'OFFICIAL_MO2_RELEASE_IDENTITY_NOT_VERIFIED'
+          }
+          $assets = @($release.assets | Where-Object {
+            $_.name -ceq $archive -and $_.size -gt 100MB -and
+            $_.browser_download_url -eq "https://github.com/$upstream/releases/download/$tag/$archive"
+          })
+          if ($assets.Count -ne 1) { throw 'OFFICIAL_MO2_ARCHIVE_IDENTITY_NOT_VERIFIED' }
+          $root = Join-Path $env:RUNNER_TEMP 'gco-official-mo2'
+          $download = Join-Path $root 'download'
+          $unpacked = Join-Path $root 'unpacked'
+          New-Item -ItemType Directory -Path $download, $unpacked -Force | Out-Null
+          & gh release download $tag --repo $upstream --pattern $archive --dir $download --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'OFFICIAL_MO2_ARCHIVE_DOWNLOAD_FAILED' }
+          $file = Join-Path $download $archive
+          if ((Get-Item -LiteralPath $file).Length -ne [long]$assets[0].size) {
+            throw 'OFFICIAL_MO2_ARCHIVE_SIZE_MISMATCH'
+          }
+          $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+          # Integrity pin is for our CI test fixture, never a user-mod source lock.
+          if ($hash -ne 'E6376EFD87FD5DDD95AEE959405E8F067AFA526EA6C2C0C5AA03C5108BF4A815') {
+            throw 'OFFICIAL_MO2_RELEASE_FIXTURE_SHA256_MISMATCH'
+          }
+          Write-Host "Verified upstream tag $tag; archive SHA256 $hash"
+          & 7z x $file "-o$unpacked" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'OFFICIAL_MO2_ARCHIVE_EXTRACT_FAILED' }
+          $exe = @(Get-ChildItem -LiteralPath $unpacked -Filter 'ModOrganizer.exe' -File -Recurse)
+          $native = @(Get-ChildItem -LiteralPath $unpacked -Filter 'usvfs_x64.dll' -File -Recurse)
+          if ($exe.Count -ne 1 -or $native.Count -ne 1) {
+            throw "OFFICIAL_MO2_APP_OR_NATIVE_USVFS_MISSING: EXEs=$($exe.Count) USVFS=$($native.Count)"
+          }
+          Write-Host "Verified official MO2 executable: $($exe[0].FullName)"
+          Write-Host "Verified real USVFS x64 binary: $($native[0].FullName)"
+          "usvfs_dll=$($native[0].FullName)" >> $env:GITHUB_OUTPUT
+          "mo2_version=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Execute native USVFS x64 file-override and output-routing probe
+        shell: pwsh
+        env:
+          NATIVE_USVFS_DLL: ${{ steps.official.outputs.usvfs_dll }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # This is a real USVFS controller and hooked x64 process.
+          # The fake Cyberpunk tree stays inside RUNNER_TEMP.
+          dotnet run --project integrations/mo2/USVFSProbe/USVFSProbe.csproj -c Release -- --probe "$env:NATIVE_USVFS_DLL"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'REAL_USVFS_X64_OVERLAY_OR_OUTPUT_ISOLATION_FAILED'
+          }
+
+      - name: Checkout historical real 0-Engine fixture (private, optional)
+        if: ${{ env.MO2_PRIVATE_ZEROENGINE_AVAILABLE == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .mo2-ci-private-cet
+          sparse-checkout: |
+            GCO-Capture-15112026_021913/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/
+            PHASE1+2FINAL/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/
+            bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/
+          sparse-checkout-cone-mode: false
+
+      - name: Verify real CET and GRSP source-owner overlay generation
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Historical green GCO full artifact is a test fixture, not a user
+          # version lock. It already contains both official owner managers and
+          # the complete manifest of verified native payloads.
+          $bundleRoot = Join-Path $env:RUNNER_TEMP 'gco-mo2-owner-bundle'
+          $cetRoot = Join-Path $env:RUNNER_TEMP 'gco-mo2-cet-official'
+          New-Item -ItemType Directory -Path $bundleRoot, $cetRoot -Force | Out-Null
+          & gh run download 45264102868 --repo giorgioherma/Gs-Cyberpunk2077_Optimizations --name Gs-Cyberpunk2077_Optimizer-v1.2.7-run1125-a1 --dir $bundleRoot
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_VERIFIED_GCO_OWNER_ARTIFACT_DOWNLOAD_FAILED' }
+          $manifests = @(Get-ChildItem -LiteralPath $bundleRoot -Filter manifest.json -File -Recurse |
+            Where-Object { (Split-Path $_.DirectoryName -Leaf) -eq 'components' })
+          if ($manifests.Count -ne 1) { throw 'MO2_OWNER_COMPONENT_MANIFEST_AMBIGUOUS' }
+          $gcoPackage = Split-Path $manifests[0].DirectoryName -Parent
+
+          # Select the official untouched CET baseline required by the
+          # packaged authoritative manager manifest. These are pinned CI
+          # fixture assets, never version locks on user Lua mods.
+          $ownerManifest = Join-Path $gcoPackage 'components/cet/MANIFEST.json'
+          if (!(Test-Path -LiteralPath $ownerManifest)) {
+            throw 'MO2_CET_OWNER_MANIFEST_MISSING'
+          }
+          $owner = Get-Content -LiteralPath $ownerManifest -Raw | ConvertFrom-Json
+          $fixtures = @{
+            '1.37.1' = @{
+              tag = 'v1.37.1'
+              archive = 'cet_1.37.1.zip'
+              size = 35227011
+              hash = '1855017796a27f518199f5b7d7210ef1db7a5c5f0af468c68e04e6e666ad248c'
+            }
+            '1.38.1' = @{
+              tag = 'v1.38.1'
+              archive = 'cet_1_38_1.zip'
+              size = 34868963
+              hash = '2e52be4ed431fad787e64ecbf75db346b4224577d2b89894912bc3f159020e73'
+            }
+          }
+          $sourceVersion = [string]$owner.targetCET.version
+          $chosen = $fixtures[$sourceVersion]
+          if ($null -eq $chosen) {
+            throw "MO2_CET_OWNER_VERSION_LACKS_PINNED_CI_FIXTURE: $sourceVersion"
+          }
+          $repoCet = 'maximegmd/CyberEngineTweaks'
+          $cetRelease = (& gh api "repos/$repoCet/releases/tags/$($chosen.tag)") | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $cetRelease.tag_name -ne $chosen.tag) {
+            throw 'MO2_CET_UPSTREAM_RELEASE_IDENTITY_MISSING'
+          }
+          $asset = @($cetRelease.assets | Where-Object {
+            $_.name -ceq $chosen.archive -and $_.size -eq $chosen.size -and
+            $_.digest -eq "sha256:$($chosen.hash)"
+          })
+          if ($asset.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_FIXTURE_MISMATCH' }
+          & gh release download $chosen.tag --repo $repoCet --pattern $chosen.archive --dir $cetRoot --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_OFFICIAL_CET_ASI_DOWNLOAD_FAILED' }
+          $zip = Join-Path $cetRoot $chosen.archive
+          $sha = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne $chosen.hash) { throw 'MO2_OFFICIAL_CET_ARCHIVE_SHA256_MISMATCH' }
+          $unpacked = Join-Path $cetRoot 'files'
+          New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath $unpacked -Force
+          $candidate = @(Get-ChildItem -LiteralPath $unpacked -Filter 'cyber_engine_tweaks.asi' -File -Recurse)
+          if ($candidate.Count -ne 1) { throw 'MO2_OFFICIAL_CET_ASI_ABSENT_OR_AMBIGUOUS' }
+          $actualAsiSha = (Get-FileHash -LiteralPath $candidate[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualAsiSha -ne [string]$owner.targetCET.officialSha256) {
+            throw "MO2_CET_SOURCE_OWNER_OFFICIAL_BINARY_HASH_MISMATCH: manager=$sourceVersion asset=$actualAsiSha"
+          }
+
+          dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)"
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_SOURCE_OWNER_OVERLAY_GENERATION_FAILED' }
+
+          $privateZero = Join-Path $env:GITHUB_WORKSPACE '.mo2-ci-private-cet/GCO-Capture-15112026_021913/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine'
+          if (Test-Path -LiteralPath (Join-Path $privateZero 'init.lua')) {
+            Write-Host 'Running existing/namespaced 0-Engine REAL source-owner replay (private source never uploaded)'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$privateZero"
+            if ($LASTEXITCODE -ne 0) { throw 'MO2_HISTORICAL_0ENGINE_REAL_SOURCE_OWNER_REPLAY_FAILED' }
+            Write-Host 'Running PARTIAL 0-Engine real-owner replay: missing canonical namespaced scheduler'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$privateZero" namespaced-worker-missing
+            if ($LASTEXITCODE -ne 0) { throw 'MO2_PARTIAL_0ENGINE_MISSING_WORKER_REAL_OWNER_REPLAY_FAILED' }
+            $historical = @(
+              @{ kind = 'original-adaptive'; source = 'bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine' },
+              @{ kind = 'legacy-integrated'; source = 'PHASE1+2FINAL/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine' }
+            )
+            foreach ($case in $historical) {
+              $source = Join-Path $env:GITHUB_WORKSPACE ".mo2-ci-private-cet/$($case.source)"
+              if (!(Test-Path -LiteralPath (Join-Path $source 'init.lua'))) {
+                throw "MO2_PRIVATE_0ENGINE_SOURCE_VARIANT_MISSING: $($case.kind)"
+              }
+              Write-Host "Running REAL source-owner 0-Engine compatibility case: $($case.kind)"
+              dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$source" "$($case.kind)"
+              if ($LASTEXITCODE -ne 0) {
+                throw "MO2_REAL_OWNER_0ENGINE_VARIANT_FAILED: $($case.kind)"
+              }
+            }
+            $legacySource = Join-Path $env:GITHUB_WORKSPACE '.mo2-ci-private-cet/PHASE1+2FINAL/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine'
+            Write-Host 'Running partial legacy integrated case with missing root Scheduler.lua'
+            dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-real-owner-overlay "$gcoPackage" "$($candidate[0].FullName)" "$legacySource" legacy-worker-missing
+            if ($LASTEXITCODE -ne 0) {
+              throw 'MO2_REAL_OWNER_LEGACY_MISSING_SCHEDULER_FAILED'
+            }
+          } else {
+            Write-Host 'NOT TESTED: private historical 0-Engine fixture not available on this runner.'
+          }
+
+      - name: Boot official MO2 Python plugin and authenticate read-only GCO probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Real official MO2 application in RUNNER_TEMP; no Cyberpunk launch.
+          # Strict: this fails if MO2 cannot load the actual GCO plugin or
+          # service a signed probe. A mocked mobase API is not acceptable.
+          & ./integrations/mo2/RealMo2CompanionSmoke.ps1 -ExtractedMo2Root (Join-Path $env:RUNNER_TEMP 'gco-official-mo2/unpacked') -SourcePlugin (Join-Path $env:GITHUB_WORKSPACE 'integrations/mo2/gco_mo2_bridge.py')
+          if ($LASTEXITCODE -ne 0) { throw 'MO2_REAL_APPLICATION_COMPANION_PROBE_FAILED' }
+
+      - name: Preserve truthful MO2 validation boundary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Never grant game or profiler installation based on native fixture success.
+          $gate = Get-Content src/GTotalOptimizer.Core/Mo2FeatureGate.cs -Raw
+          if ($gate -notmatch 'Enabled\s*=\s*false') {
+            throw 'MO2_INSTALLATION_GATE_ENABLED_BEFORE_PROFILE_API_AND_GAMEPLAY_PROOF'
+          }
+          Write-Host 'PASS: Real USVFS native fixture validated.'
+          Write-Host 'NOT PROVEN: noncurrent-profile mod activation in a running MO2 UI.'
+          Write-Host 'NOT PROVEN: Cyberpunk CET ASI/RED4ext DLL load, F11, game capture.'
+          Write-Host 'GCO MO2 install/generate remains feature-gated.'
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mo2-checkpoint-evidence-${{ github.run_id }}
+          path: |
+            .ci/checkpoints/mo2.txt
+          if-no-files-found: error
+          retention-days: 14

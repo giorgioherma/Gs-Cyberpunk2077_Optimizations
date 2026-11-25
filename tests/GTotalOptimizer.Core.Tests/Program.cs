@@ -1,5 +1,39 @@
 using GTotalOptimizer.Core;
 
+// Focused MO2 Stage 1 source/profile contract (no native game or MO2 install claimed).
+if (args.Length > 0 && args[0] == "--mo2-profile-contract")
+{
+    Mo2ProfileSelectionTests.Run();
+    Mo2CompanionInstallerTests.Run();
+    Mo2CompanionDiscoveryTests.Run();
+    Mo2CommandClientTests.Run();
+    await Mo2ProfilerOverlayBuilderTests.RunAsync();
+    await Mo2PhysicalCetDeploymentTests.RunAsync();
+    await Mo2RestoreRuntimeAdditionTests.RunAsync();
+    return;
+}
+
+// Stage 4: running official MO2 application must actually load the Python
+// companion and service a signed read-only request (not a mocked mobase API).
+if (args.Length > 0 && args[0] == "--mo2-real-companion-probe")
+{
+    if (args.Length != 5)
+        throw new ArgumentException("Usage: --mo2-real-companion-probe <MO2 application folder> <MO2 instance> <fake test game> <current profile>");
+    await Mo2RealCompanionProbeTests.RunAsync(args[1], args[2], args[3], args[4]);
+    return;
+}
+
+// Stage 3: real source-owner managers, not simulated output.
+if (args.Length > 0 && args[0] == "--mo2-real-owner-overlay")
+{
+    if (args.Length is not (3 or 4 or 5))
+        throw new ArgumentException("Usage: --mo2-real-owner-overlay <verified GCO package root> <official CET ASI> [historical 0-Engine source directory] [namespaced-complete|namespaced-worker-missing|original-adaptive|legacy-integrated|legacy-worker-missing]");
+    await Mo2RealOwnerOverlayTests.RunAsync(
+        args[1], args[2], args.Length >= 4 ? args[3] : null,
+        args.Length == 5 ? args[4] : "namespaced-complete");
+    return;
+}
+
 // CI: inspect the actual ordered, real-source REDscript output archive through
 // the same final ZIP validator used by GCO, not a separate path heuristic.
 if (args.Length > 0 && args[0] == "--verify-combined-archive")
