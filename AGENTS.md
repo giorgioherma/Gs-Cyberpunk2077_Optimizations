@@ -1,5 +1,9 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## Mandatory cross-provider verification scope (2026-11-25)
+
+Hash verification must prove the specific operation, not freeze unrelated mod runtime data. Ordinary settings/data can be rewritten by merely opening a mod menu, whether stored in the physical game, MO2 Overwrite or an enabled package. Do not use pre-capture hashes of those files as restoration gates. Preserve actual profiler-owned backups and payload verification, executable-source safety, selected-profile identity, current per-operation resolver source consistency and collected-result/output integrity. Do not introduce per-mod configuration exceptions or alter Direct owner-manager behavior without a demonstrated defect.
+
 ## MANDATORY — MO2 integration feature rules (approved 2026-11-23; scope: `MO2_integration`)
 
 **Start here for MO2 agents:** [MO2 architecture and ownership](docs/integration/MO2-INTEGRATION-DESIGN.md) → [MO2 staged progression and evidence ledger](docs/integration/MO2-INTEGRATION-PROGRESS.md), then `docs/HANDOFF/CORE.md` and existing Page 1, owner-manager and source-provider contracts. This approved *future implementation design* supersedes older MO2-deferred notes **on this branch only**; it does not claim any feature is implemented or tested.

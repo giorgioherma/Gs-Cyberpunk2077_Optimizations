@@ -535,6 +535,18 @@ public static partial class Mo2ProfilerOverlayBuilder
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in originals.EnumerateObject())
             {
+                // Ordinary mod data is not an installed profiler component.
+                // Saving can change bytes, create a new winner or remove data;
+                // never make retirement depend on its pre-capture state.
+                if (IsOrdinaryModData(entry.Name, expected))
+                {
+                    if (selected.EffectiveFiles.TryGetValue(entry.Name, out var dataWinner))
+                    {
+                        EnsureNoReparseParents(dataWinner.PhysicalPath);
+                        RequireRegularUnlinkedFile(dataWinner.PhysicalPath);
+                    }
+                    continue;
+                }
                 if (!selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
                     !string.Equals(Path.GetFullPath(winner.PhysicalPath),
                         paths.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
@@ -547,23 +559,14 @@ public static partial class Mo2ProfilerOverlayBuilder
                      entry.Name.Equals(CetAsiRelative, StringComparison.OrdinalIgnoreCase) &&
                      !winner.FromMo2 && current.Equals(physical.InstalledHash, StringComparison.OrdinalIgnoreCase)))
                     continue;
-                // Same original winner, ordinary loose data only. The game
-                // may save settings into an existing Overwrite/physical file.
-                // Never exempt profiler-owned outputs, package files or Lua.
-                if (!IsAllowedOutput(entry.Name) && IsPostCaptureLooseAddition(winner, expected))
-                {
-                    System.Diagnostics.Trace.TraceInformation("Preserved modified MO2 runtime file: " + entry.Name);
-                    continue;
-                }
                 throw new InvalidDataException("Original MO2 profiler bytes changed: " + entry.Name);
             }
-            // Every original input must still have its original winner and
-            // exact bytes except the owned temporary ASI and existing loose
-            // ordinary mod data. Gameplay may also create new loose mod data
-            // or bindings. Preserve these; START's full seal stays strict.
+            // New ordinary data inside an existing mod root is not a new
+            // executable source or a profiler component, regardless of
+            // whether MO2 persisted it in Overwrite or the original package.
             var added = selected.EffectiveFiles.Values.Where(w =>
                 IsRequiredOwnerInput(w.GameRelativePath) && !expected.Contains(w.GameRelativePath)).ToArray();
-            var blocked = added.Where(w => !IsPostCaptureLooseAddition(w, expected)).ToArray();
+            var blocked = added.Where(w => !IsPostCaptureDataAddition(w, expected)).ToArray();
             if (blocked.Length != 0)
                 throw new InvalidDataException("Original MO2 profiler input inventory changed: " +
                     string.Join(", ", blocked.Take(5).Select(w => w.GameRelativePath)) +
@@ -577,17 +580,19 @@ public static partial class Mo2ProfilerOverlayBuilder
         }
     }
 
-    // Only loose runtime data within an existing ordinary CET mod qualifies.
-    // New packages, new mod roots, native libraries and profiler paths
-    // remain blockers. CET owns its user binding state; the owner installer
-    // may seed F11 but never restores or deletes the user's bindings.
-    private static bool IsPostCaptureLooseAddition(Mo2WinningFile winner, HashSet<string> originals)
+    // The profiler-owned binding overlay retains its previous narrow
+    // exception for a newly created loose binding file.
+    private static bool IsPostCaptureDataAddition(Mo2WinningFile winner, HashSet<string> originals) =>
+        IsOrdinaryModData(winner.GameRelativePath, originals) ||
+        ((!winner.FromMo2 || winner.Owner == "(MO2 Overwrite)") &&
+         winner.GameRelativePath.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json",
+             StringComparison.OrdinalIgnoreCase));
+
+    // Classification is by purpose, not mod name, MO2 owner or known hash.
+    // Existing ordinary mod roots only. Profiler-owned output, executable
+    // scripts, native binaries and unknown file types remain protected.
+    private static bool IsOrdinaryModData(string relative, HashSet<string> originals)
     {
-        if (winner.FromMo2 && winner.Owner != "(MO2 Overwrite)") return false;
-        var relative = winner.GameRelativePath;
-        if (relative.Equals("bin/x64/plugins/cyber_engine_tweaks/bindings.json",
-                StringComparison.OrdinalIgnoreCase))
-            return true;
         const string root = "bin/x64/plugins/cyber_engine_tweaks/mods/";
         if (!relative.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
             relative.StartsWith(root + "CETProfilerControls/", StringComparison.OrdinalIgnoreCase) ||
@@ -597,10 +602,10 @@ public static partial class Mo2ProfilerOverlayBuilder
         var separator = tail.IndexOf('/');
         if (separator <= 0 || !originals.Contains(root + tail[..separator] + "/init.lua"))
             return false;
-        // Only configuration/data, not newly introduced executable source.
         return Path.GetExtension(relative).ToLowerInvariant() is
             ".json" or ".ini" or ".toml" or ".yaml" or ".yml" or ".cfg" or ".conf" or
             ".xml" or ".txt" or ".csv" or ".log" or ".db" or ".sqlite" or ".sqlite3" or
+            ".db-wal" or ".db-shm" or ".sqlite-wal" or ".sqlite-shm" or
             ".sqlite3-wal" or ".sqlite3-shm";
     }
 
@@ -696,17 +701,18 @@ public static partial class Mo2ProfilerOverlayBuilder
             throw new InvalidDataException("MO2 prepared session identity changed.");
         var originals = journal.GetProperty("originalSources");
         var paths = journal.GetProperty("originalSourcePaths");
-        var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var expected = originals.EnumerateObject().Select(entry => entry.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in originals.EnumerateObject())
         {
-            expected.Add(entry.Name);
             if (!selected.EffectiveFiles.TryGetValue(entry.Name, out var winner) ||
                 !string.Equals(Path.GetFullPath(winner.PhysicalPath),
                     paths.GetProperty(entry.Name).GetString(), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("MO2 source winner changed: " + entry.Name);
             EnsureNoReparseParents(Path.GetDirectoryName(winner.PhysicalPath)!);
             RequireRegularUnlinkedFile(winner.PhysicalPath);
-            if (!Hash(winner.PhysicalPath).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase))
+            if (!IsOrdinaryModData(entry.Name, expected) &&
+                !Hash(winner.PhysicalPath).Equals(entry.Value.GetString(), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("MO2 source bytes changed: " + entry.Name);
         }
         if (!expected.SetEquals(selected.EffectiveFiles.Keys.Where(IsRequiredOwnerInput)))

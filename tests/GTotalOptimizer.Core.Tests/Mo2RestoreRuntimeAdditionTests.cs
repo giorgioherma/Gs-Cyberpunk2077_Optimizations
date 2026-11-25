@@ -44,9 +44,14 @@ internal static class Mo2RestoreRuntimeAdditionTests
             const string existingConfig = Mods + "Active/settings.json";
             const string existingPhysical = Mods + "Active/physical.ini";
             const string packagedConfig = Mods + "Active/packaged.json";
+            const string redirectedConfig = Mods + "Active/redirected.toml";
+            const string removedConfig = Mods + "Active/temporary.cfg";
+            const string newPackageConfig = Mods + "Active/new-package.ini";
             Put(overwrite, existingConfig, "old gameplay settings");
             Put(game, existingPhysical, "old physical settings");
             Put(mod, packagedConfig, "original packaged settings");
+            Put(mod, redirectedConfig, "original redirected settings");
+            Put(mod, removedConfig, "temporary settings");
             Put(instance, "ModOrganizer.ini", "[Settings]\nbase_directory=.\nselected_profile=Test\n");
             Put(instance, "profiles/Test/modlist.txt", "+Active\n");
             Directory.CreateDirectory(overwrite);
@@ -66,6 +71,10 @@ internal static class Mo2RestoreRuntimeAdditionTests
                     Put(fixture, Binding, "{}");
                     return Task.CompletedTask;
                 }, localAppData: local);
+            // Same-winner data can change between INSTALL and START, but
+            // the sealed staged output and executable source remain strict.
+            Put(mod, packagedConfig, "settings saved before launch");
+            Mo2ProfilerOverlayBuilder.VerifyPrepared(prepared, Resolve());
             workflow.BeginMo2CaptureAttempt(Selection(), prepared);
             Mo2ProfilerOverlayBuilder.ActivatePhysicalCetForLaunch(prepared, Resolve());
             Mo2ProfilerOverlayBuilder.RecordTestLaunchPhase(prepared, "prepared", "test-launch-pending");
@@ -112,12 +121,12 @@ internal static class Mo2RestoreRuntimeAdditionTests
                 File.ReadAllText(At(mod, Mods + "Active/init.lua")) == "changed callback",
                 "existing source drift was accepted");
             Put(mod, Mods + "Active/init.lua", "original callback");
+            // Explicit owner correction: package-owned ordinary settings
+            // are writable during gameplay too. Do not enforce their hashes.
             Put(mod, packagedConfig, "changed package data");
-            var packageDrift = await workflow.ContinueAsync(game, false, false, true, mo2Selection: Selection());
-            Require(!packageDrift.RestoreVerified && packageDrift.Detail.Contains(packagedConfig) &&
-                workflow.HasRecoveryJournal && File.ReadAllText(At(mod, packagedConfig)) == "changed package data",
-                "existing package data drift was accepted");
-            Put(mod, packagedConfig, "original packaged settings");
+            Put(overwrite, redirectedConfig, "redirected settings");
+            File.Delete(At(mod, removedConfig));
+            Put(mod, newPackageConfig, "new package settings");
 
             // Both deployment routes must now continue with all new user
             // data preserved, original CET bytes and no active profiler files.
@@ -128,7 +137,12 @@ internal static class Mo2RestoreRuntimeAdditionTests
             Require(File.ReadAllText(At(game, Asi)) == "physical original" &&
                 (physical || File.ReadAllText(At(mod, Asi)) == "MO2 original"),
                 "original CET ASI not restored");
-            Require(File.ReadAllText(At(overwrite, existingConfig)) == "updated gameplay settings" &&
+            Require(File.ReadAllText(At(mod, packagedConfig)) == "changed package data" &&
+                File.ReadAllText(At(mod, redirectedConfig)) == "original redirected settings" &&
+                File.ReadAllText(At(overwrite, redirectedConfig)) == "redirected settings" &&
+                !File.Exists(At(mod, removedConfig)) &&
+                File.ReadAllText(At(mod, newPackageConfig)) == "new package settings" &&
+                File.ReadAllText(At(overwrite, existingConfig)) == "updated gameplay settings" &&
                 File.ReadAllText(At(game, existingPhysical)) == "updated physical settings" &&
                 File.ReadAllText(At(overwrite, config)) == "new gameplay settings" &&
                 File.ReadAllText(At(game, data)) == "new gameplay data" &&
