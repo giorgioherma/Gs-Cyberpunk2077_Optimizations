@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-25 — Corrected PROFILE B evidence and universal demand-driven contract
+- RESULTS(6).zip corrected original 082646 vs existing optimized 083432: 0-Engine 18.228545 → 13.899913 exclusive ms/s; total CET 26.441238 → 21.414382. Corrected original wrapper 7–14 executes original host; zero scheduled jobs both. These rates include instrumentation; precise overhead split remains unknown. P1 consumer audit next; no new optimization generation or performance promise.
+- Owner requires demand-driven always, earliest safe no-observer/consumer return before native lookups; preserve state getter/internal dependencies, lifecycle/cleanup, and effective activation/removal. Actual source audit began (proxy, frame/subscription handles, state/observer dependencies); see canonical ledger. CET owner documentation b1ddab90. No code/CI/version change.
+
+
 ## 2026-11-25 — CET owner #2618 GREEN; verified pin integrated on CET_profiler_integrity
 - Owner 60c4cd50a0cf14ba8f270053480ed40e87bdd4c1, [CI #2618 SUCCESS](https://github.com/giorgioherma/G-CET_Runtime_Profiler/actions/runs/45559976515), six of six jobs passed including actual generated single-slot Lua execution, private untouched host, existing handoff/lifecycle, original/repeat generation and both packages. Profiler artifact 14997811014; Resolver 14996758877. Pin exact source and verified artifacts in GCO full integration workflow; add branch to checkpoint filter and request existing full checkpoint. GCO runtime version remains 1.2.7; no native rebuild, main/MO2 changes or gameplay claims. P0 gameplay baseline pending.
 
