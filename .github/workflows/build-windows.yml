@@ -138,14 +138,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      # Read-only MO2 companion API contract on its isolated branch.
+      # Read-only MO2 companion API contract on MO2-capable branches.
       # This runs only at a full-gco TXT checkpoint, not every Python change.
       - uses: actions/setup-python@v5
-        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        if: ${{ github.ref == 'refs/heads/MO2_integration' || github.ref == 'refs/heads/main' }}
         with:
           python-version: '3.12'
       - name: Verify MO2 bridge against strict mocked MO2 API
-        if: ${{ github.ref == 'refs/heads/MO2_integration' }}
+        if: ${{ github.ref == 'refs/heads/MO2_integration' || github.ref == 'refs/heads/main' }}
         shell: pwsh
         working-directory: unified
         run: |
@@ -898,9 +898,9 @@ jobs:
           $root=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
           dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- "$root"
           if ($LASTEXITCODE -ne 0) { throw 'Final packaged GCO identity/integrity verification failed' }
-          # MO2 is an isolated feature branch. This focused contract is run only
+          # MO2 is integrated on main. This focused contract is run only
           # at a deliberate full-gco TXT checkpoint, never per source commit.
-          if ('${{ github.ref }}' -eq 'refs/heads/MO2_integration') {
+          if ('${{ github.ref }}' -in @('refs/heads/MO2_integration', 'refs/heads/main')) {
             dotnet run --project tests/GTotalOptimizer.Core.Tests/GTotalOptimizer.Core.Tests.csproj -c Release -- --mo2-profile-contract
             if ($LASTEXITCODE -ne 0) { throw 'MO2 selected-profile and companion identity contract failed' }
             $bridge = Join-Path $root 'app/mo2/gco_mo2_bridge.py'
