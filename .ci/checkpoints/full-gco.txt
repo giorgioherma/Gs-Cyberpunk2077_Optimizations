@@ -1,1 +1,1 @@
-checkpoint=mo2-conditional-physical-cet-native-launch-20261125
+checkpoint=mo2-preserve-verified-cet-framework-baseline-20261125
