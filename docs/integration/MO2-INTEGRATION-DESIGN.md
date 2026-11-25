@@ -16,6 +16,10 @@ One GCO build, one game-relative optimization ZIP, one existing two-page WPF wor
 
 MO2 changes the deployment and effective-file access layer only. The current Direct implementation on `main` is authoritative for user-visible workflow, including fresh START and RESTORE discarding uncollected live native outputs, and COLLECT alone saving completed captures. A normal subsequent START must not require another INSTALL or RESTORE. Never archive uncollected results automatically; preserve already collected results, unrelated MO2 data and necessary recovery journals. The separate uncertainty gate for a pending MO2 launch remains necessary for process safety. No additional UI or behavioral differences are authorized.
 
+## Native CET deployment exception — owner clarification 2026-11-25
+
+Use the selected-profile effective CET ASI winner, not a guessed installation mode. A MO2-managed winner retains the existing temporary virtual ASI mapping. A physical winner uses a narrowly scoped physical ASI replacement immediately before launch, with the exact binary and original backup supplied by the existing CET owner fixture transaction. The durable deployment journal precedes the atomic replacement; the virtual stage maps the physical ASI identity instead of a second copy. RESTORE, repeated START, CONTINUE and deferred recovery restore the original hash; unknown foreign drift fails closed. GRSP, CET Lua integration, bindings and all other files retain their existing virtual mapping. This is the sole authorized physical-game mutation exception to the virtual-only design below. No owner-manager rewrite, profile switch or separate lifecycle is approved.
+
 ## Source/research distinctions
 
 Verified from the GCO `main` source:

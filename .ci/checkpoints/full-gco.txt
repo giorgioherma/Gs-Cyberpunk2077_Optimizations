@@ -1,1 +1,1 @@
-checkpoint=mo2-accept-cet-runtime-sqlite-log-residue-20261125
+checkpoint=mo2-conditional-physical-cet-native-launch-20261125
