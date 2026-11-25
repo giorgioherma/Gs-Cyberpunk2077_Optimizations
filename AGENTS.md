@@ -1,5 +1,10 @@
 # Agent instructions — unified G's Cyberpunk 2077 optimizer
 
+## MANDATORY — CET profiler integrity / demand-driven 0-Engine branch (2026-11-25)
+
+On `CET_profiler_integrity`, read [the active investigation, evidence and gated implementation plan](docs/integration/CET-PROFILER-INTEGRITY-AND-DEMAND-DRIVEN-0ENGINE.md) FIRST, then the listed owner documents. P0 profiling correctness blocks framework optimization. Prove exact deployed native single-slot semantics and adaptive install route; repair the authoritative CET owner bridge, never duplicate it in GCO. Original callback must execute exactly once, scheduler once where applicable, preserving original gameplay and exact restore. Unknown hosts use safe existing core-only path. Existing historical diagnostic captures are not accepted performance baselines until transparency is proven. Demand-driven work applies universally to every collection; only requested services and proven dependencies may execute recurring work, with compatible legacy fallback. Preserve public APIs, direct state references, lifecycle, one scheduler and existing generation order. No framework redesign, unrelated UI/REDscript/MO2 changes, version bumps, new native build for managed/Lua work or changes to existing CI contracts without necessity. Use deliberate checkpoints and actual generated-source execution tests; keep latest-work and gate ledger current. GCO branch is integration/coordination only; CET owner implementation remains in its designated development branch. Do not merge to main or MO2 prematurely.
+
+
 ## MANDATORY — checkpoint-driven CI for parallel REDscript agents (2026-11-21)
 
 **Do not run expensive GitHub Actions on every implementation commit.** Keep mandatory correctness checks, but use coherent validation checkpoints instead of repeated micro-commits/CI cycles. This policy is active on `dev/redscript/resolver_handoff`; do not assume older agent branches have inherited it.
