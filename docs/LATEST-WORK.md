@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-25 — G-REDruntime v0.6.1 dependency-free framework update
+- [Full GCO #1148 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45535565601): official SCC 0.5.31 compiled all 12 packaged framework sources against vanilla alone, zero external script providers. G-REDruntime owner version-only bump and clean archive [framework CI #15 SUCCESS](https://github.com/giorgioherma/G-REDruntime_Framework/actions/runs/45537122020), commit `796ab660dc1b1c395662fc13ee618496a41f89f7`.
+- Both package and optional SCC owner checkouts now pin that exact versioned framework source. Port only the proven vanilla-only SCC gate from MO2 integration; no MO2 code or other feature changes. GCO version stays **1.2.7**, no product version bump or stable/MO2 branch merge. No new GCO checkpoint triggered for the pin alone; subsequent package CI validates the exact pinned version. Local gameplay retest pending.
+
+
 ## 2026-11-23 — Chronological names for published optimization ZIPs
 
 - Preserve the established timestamped `generated_optimizations/pass-YYYYMMDD_HHMMSS/` folder and atomic game-relative ZIP + external ownership sidecar publication. The **actual generated ZIP** now uses `G-Cyberpunk2077_Optimization_Pass_0001.zip`, `_0002.zip`, etc., instead of repeating the same filename in every pass folder. The ownership JSON follows its selected ZIP filename as `*.zip.ownership.json`; Page 2 OPEN FOLDER and success-console paths already consume the exact returned path automatically.

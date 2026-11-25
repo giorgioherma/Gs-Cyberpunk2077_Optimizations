@@ -101,7 +101,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-REDruntime_Framework
-          ref: main
+          ref: 796ab660dc1b1c395662fc13ee618496a41f89f7 # G-REDruntime v0.6.1, verified framework CI #15
           path: unified/vendor-redruntime
           persist-credentials: false
       # CI-only real CET source fixture. Never stage private files into the
@@ -204,7 +204,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-REDruntime_Framework
-          ref: main
+          ref: 796ab660dc1b1c395662fc13ee618496a41f89f7 # G-REDruntime v0.6.1, verified framework CI #15
           persist-credentials: false
           path: unified/.gco-ci-framework
           sparse-checkout: |
@@ -679,6 +679,72 @@ jobs:
         run: |
           & ./integrations/three-profiler-test/Build-Test.ps1 -Integrated
           if ($LASTEXITCODE -ne 0) { throw 'Integrated package assembly failed' }
+      # Compile the exact bundled core with no other mod or plugin sources.
+      # Full-stack SCC alone can hide undeclared dependencies.
+      - name: Checkout private vanilla script cache for standalone runtime compile
+        uses: actions/checkout@v4
+        with:
+          repository: giorgioherma/original_cet_source
+          ref: main
+          token: ${{ secrets.GCET_STACK_SOURCES_TOKEN }}
+          persist-credentials: false
+          path: .gco-ci-vanilla
+          sparse-checkout: |
+            Compiler/finalCLEANbaseline.zip
+          sparse-checkout-cone-mode: false
+      - name: Compile packaged G-REDruntime against vanilla alone
+        shell: pwsh
+        working-directory: unified
+        run: |
+          $ErrorActionPreference='Stop'
+          $package=(Resolve-Path "publish/release/G's Cyberpunk 2077 Optimization").Path
+          $source=Join-Path $package 'components/redruntime/owner/r6/scripts/G-RedRuntime'
+          $resolver=(Resolve-Path 'src/GRedscript.Resolver/bin/Release/net10.0/GRedscript.Resolver.dll').Path
+          $lib=@(Get-ChildItem -LiteralPath $env:GCO_REDSCRIPT_REFERENCE_GAME_ROOT -Recurse -File -Filter 'scc_lib.dll')
+          if ($lib.Count -ne 1 -or !(Test-Path -LiteralPath $source -PathType Container)) {
+            throw 'GCO_RUNTIME_STANDALONE_INPUT_MISSING'
+          }
+          $work=Join-Path $env:RUNNER_TEMP ('gco-runtime-standalone-'+[Guid]::NewGuid().ToString('N'))
+          $root=Join-Path $work 'game'
+          $r6=Join-Path $root 'r6'
+          $scripts=Join-Path $r6 'scripts'
+          $cache=Join-Path $r6 'cache/final.redscripts'
+          try {
+            New-Item -ItemType Directory -Force -Path $scripts,(Split-Path $cache -Parent) | Out-Null
+            Set-Content -LiteralPath (Join-Path $root '.grsp-r6-workspace') -Value 'GRSP_R6_ISOLATED_WORKSPACE' -Encoding ascii
+            Expand-Archive -LiteralPath (Join-Path $env:GITHUB_WORKSPACE '.gco-ci-vanilla/Compiler/finalCLEANbaseline.zip') -DestinationPath (Join-Path $work 'base')
+            $base=@(Get-ChildItem -LiteralPath (Join-Path $work 'base') -Recurse -File -Filter 'final.redscripts')
+            if ($base.Count -ne 1 -or $base[0].Length -lt 1MB) { throw 'GCO_RUNTIME_VANILLA_CACHE_MISSING' }
+            Copy-Item -LiteralPath $base[0].FullName -Destination $cache
+            Copy-Item -LiteralPath $source -Destination $scripts -Recurse
+            $expected=@(Get-ChildItem -LiteralPath $source -Recurse -File -Filter '*.reds')
+            $actual=@(Get-ChildItem -LiteralPath $scripts -Recurse -File)
+            if ($expected.Count -lt 1 -or $actual.Count -ne $expected.Count -or (Test-Path (Join-Path $root 'red4ext'))) {
+              throw 'GCO_RUNTIME_STANDALONE_SOURCE_INVENTORY_INVALID'
+            }
+            foreach ($file in $expected) {
+              $target=Join-Path (Join-Path $scripts 'G-RedRuntime') ([IO.Path]::GetRelativePath($source,$file.FullName))
+              if ((Get-FileHash -LiteralPath $target).Hash -ne (Get-FileHash -LiteralPath $file.FullName).Hash) { throw 'GCO_RUNTIME_STANDALONE_SOURCE_CHANGED' }
+            }
+            $report=Join-Path $work 'result.json'
+            $log=Join-Path $work 'compiler.log'
+            & dotnet $resolver scc-headless --workspace $root --r6 $r6 --cache $cache --compiled ($cache+'.modded') --scc-native $lib[0].FullName --out $report --log $log
+            $exit=$LASTEXITCODE
+            if ($exit -ne 0) {
+              if (Test-Path $log) { Get-Content -LiteralPath $log }
+              throw "GCO_RUNTIME_STANDALONE_SCC_FAILED: exit=$exit"
+            }
+            $proof=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+            if ($proof.success -ne $true -or $proof.externalScriptPaths -ne 0 -or
+                $proof.originalCacheUnchanged -ne $true -or $proof.generatedOutputPresent -ne $true -or
+                $proof.generatedOutputBytes -lt 1MB -or
+                (Get-FileHash -LiteralPath $cache).Hash -ne (Get-FileHash -LiteralPath $base[0].FullName).Hash) {
+              throw 'GCO_RUNTIME_STANDALONE_COMPILE_UNPROVEN'
+            }
+            Write-Host "PASS packaged G-REDruntime: $($expected.Count) sources, vanilla cache, zero external providers"
+          } finally {
+            if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+          }
       - name: Smoke integrated CET/GRSP launchers and GRSP install/restore
         shell: pwsh
         working-directory: unified
