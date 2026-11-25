@@ -18,7 +18,7 @@ on:
   # Milestone only: source/test/packaging commits do not launch full CI.
   # workflow_dispatch above remains available when a user starts a run.
   push:
-    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration ]
+    branches: [ main, feature/presentmon-resolver-integration, feature/redscript-resolver-integration, dev/redscript/resolver_handoff, dev/redscript/integration, CET_profiler_integrity ]
     paths:
       - '.ci/checkpoints/full-gco.txt'
 
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 08a8b5790372fd9ec5893500489d2b5e24eb1f4b
+          ref: 60c4cd50a0cf14ba8f270053480ed40e87bdd4c1
           path: unified/vendor-cet
           persist-credentials: false
       - name: Resolve latest verified GRSP owner-native build
@@ -610,13 +610,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
           # Both owner artifacts and GCO's disposable source checkout are from
           # the same verified CET #2616 commit. Keep original native owner
           # assets and compare the owner CLI with the rebuilt .NET10 Resolver.
-          gh run download 45103360468 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
       - name: Import independently verified GRSP native instrumentation
