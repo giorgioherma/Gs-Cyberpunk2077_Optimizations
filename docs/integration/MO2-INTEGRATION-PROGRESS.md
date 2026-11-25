@@ -23,6 +23,10 @@
 
 
 
+## 2026-11-25 — Standalone G-REDruntime compatibility
+- Local PROFILE B generated one combined pass (31 CET transforms, 215 REDscript edits). Game compiled without pass but failed with it: only two reported UNRESOLVED_FN sites in G-RedRuntime's manual diagnostics (eight LogChannel calls total). Original physical compiler log was stale; after rename, current log appeared in MO2 Overwrite. GCO output reset does not target normal compiler logs.
+- Authoritative G-REDruntime main commit `8620436ebe9c32577520e0c60ae2aeb514c1dba5` removes hidden logging-header dependency. Both manual diagnostic entry points now return the same report as String for caller-owned output; no gameplay, runtime service, third-party declarations or generator changes. GCO packages owner main for both Direct and MO2. Add one real standalone compile gate to the full package checkpoint, using exact packaged sources, clean vanilla cache, official SCC 0.5.31, zero third-party scripts or external providers. Existing full-stack and package contracts retained; actual SCC, new pass and gameplay retest pending. No main GCO branch edit.
+
 ## 2026-11-25 — Sparse valid GRSP capture rejected by Page 2
 
 - [Full GCO #1145 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45523603745) on `146ae35`; user confirmed CONTINUE/restoration and Page 2 admission. Uploaded local restored PROFILE B capture has GOOD frame quality, F11_STOP, 23.694 s, 1,420 frames, 19,700 measured calls, 150 callsite rows, 2,557 mapped functions, and all GRSP indexed bytes/hashes valid. All 295 callback-pressure rows have zero outgoing edges; native `RSP_CallbackTargets.csv` has the exact header and zero rows. The GRSP native writer explicitly filters callsites to recognized callback families; zero matching rows are valid.

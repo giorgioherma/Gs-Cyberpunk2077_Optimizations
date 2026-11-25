@@ -1,1 +1,1 @@
-checkpoint=accept-valid-zero-observed-callback-targets-20261125
+checkpoint=standalone-redruntime-vanilla-compile-20261125
