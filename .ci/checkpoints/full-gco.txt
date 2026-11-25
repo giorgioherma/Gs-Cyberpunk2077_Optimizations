@@ -1,1 +1,1 @@
-checkpoint=mo2-preserve-verified-cet-framework-baseline-20261125
+checkpoint=mo2-restore-runtime-additions-and-shared-continue-recovery-20261125
