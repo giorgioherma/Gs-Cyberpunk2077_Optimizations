@@ -1,5 +1,10 @@
 # Latest work / evidence status
 
+## 2026-11-25 — First scheduler-owned demand slice committed
+- CET owner 967b6db, then 99c83d7: centralized exact-frame producer lanes for Proximity/SpatialHash, shared scheduler identity fallback for mixed overlays. [#2622](https://github.com/giorgioherma/G-CET_Runtime_Profiler/actions/runs/45574431171) first focused Lua/private stock/one-pass/repeat generation and 5/6 jobs passed before successor; [#2623](https://github.com/giorgioherma/G-CET_Runtime_Profiler/actions/runs/45574866697) revalidating. GCO pin unchanged; no native rebuild, product version or release.
+- No full native read gating yet; position cache and original transition history preserved. Continue central producer dependency/freshness and legacy getter/retained-state audit; see canonical investigation.
+
+
 ## Mandatory single controller (owner clarification 2026-11-25)
 Use the existing canonical G-CET Scheduler as the single demand/cadence/dependency controller. No per-mod scheduling implementation, per-function timer, parallel dispatcher or second controller. Service adapters expose producer/dependency contracts once; existing registrations and handles supply consumer requirements. Plan the necessary shared producer work before delivery, preserving exact consumer cadence, phases, clocks, state freshness and ordering. Existing host Scheduler.Update runs after UpdateFrame, so demand planning must be integrated ahead of expensive reads without a second native callback or duplicate clock advancement. Do not implement an unused parallel API or isolated modulo guards as a substitute for central orchestration. First connected source-owner implementation must prove actual lookup reductions and delivery equivalence, including multiple rates, inactive/removal and no demand. Owner contract: 3edbe81da7b488f54a6b66bf6e42aaa56a85551c. Source audit active; no runtime code committed yet.
 
