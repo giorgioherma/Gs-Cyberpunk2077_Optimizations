@@ -19,6 +19,11 @@
 
 
 
+## 2026-11-25 — Sparse valid GRSP capture rejected by Page 2
+
+- [Full GCO #1145 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45523603745) on `146ae35`; user confirmed CONTINUE/restoration and Page 2 admission. Uploaded local restored PROFILE B capture has GOOD frame quality, F11_STOP, 23.694 s, 1,420 frames, 19,700 measured calls, 150 callsite rows, 2,557 mapped functions, and all GRSP indexed bytes/hashes valid. All 295 callback-pressure rows have zero outgoing edges; native `RSP_CallbackTargets.csv` has the exact header and zero rows. The GRSP native writer explicitly filters callsites to recognized callback families; zero matching rows are valid.
+- GCO-local REDscript Resolver previously required nonempty rows in every required table, rejecting this legitimate capture during combined Analyze preview (UI labels the combined error as CET). Accept exactly the present, correctly shaped header-only callback-target table when mandatory callback pressure reports zero edges; retain index/hash, F11, quality, other required tables and reuse cross-validation. No fabricated rows or new optimizations. This shared resolver bug applies equally to Direct and MO2; owner native instrumentation and generators unchanged. Additive CLI regression checks valid indexed sparse evidence, positive-pressure contradiction and malformed header. Existing tests unchanged. Full GCO checkpoint requested for local retest; actual replay against the player's selected live source still pending.
+
 ## 2026-11-25 — User collection/report success; CONTINUE retirement and recovery button
 
 - [Full GCO #1144 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/45518677669) on `dad6f8c`. User verified all four framework gates green, PROFILE B with five enabled MO2 packages, six CET mods and five REDscript mods; COLLECT completed and combined reports were created, no native result leftovers reported in Overwrite. CONTINUE failed with "Original MO2 profiler input inventory changed." This means original sealed winners and hashes passed up to the set-comparison, but extra required-input paths were found; exact extra filenames have not been supplied.

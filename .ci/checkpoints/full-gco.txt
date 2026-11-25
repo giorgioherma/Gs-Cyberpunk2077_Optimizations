@@ -1,1 +1,1 @@
-checkpoint=mo2-restore-runtime-additions-and-shared-continue-recovery-20261125
+checkpoint=accept-valid-zero-observed-callback-targets-20261125

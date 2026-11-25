@@ -242,8 +242,33 @@ public static class Program
                 "Runtime/GRSP_Markers.csv",
                 "Runtime/GRSP_ByMod.csv"
             })
-                if (!tables.ContainsKey(required) || tables[required].Rows.Count == 0)
+                if (!tables.ContainsKey(required) ||
+                    (tables[required].Rows.Count == 0 &&
+                     required != "Developer/RSP_CallbackTargets.csv"))
                     throw new InvalidDataException("Missing/empty required native evidence: " + required);
+
+            // GRSP writes the target header even when no recognized callback
+            // family emits an outgoing call edge. This is observed zero
+            // target rows, not missing evidence or zero total script work.
+            // Preserve mandatory file/index/hash checks and refuse a
+            // truncated or contradictory callback table.
+            var callbackTargets = tables["Developer/RSP_CallbackTargets.csv"];
+            if (callbackTargets.Rows.Count == 0)
+            {
+                string[] targetColumns =
+                [
+                    "capture_id", "stable_callsite_id", "stable_function_id", "owner",
+                    "source_function", "source_path", "source_line", "callback_family",
+                    "target", "target_resolution", "call_kind", "outgoing_edges",
+                    "outgoing_edges_per_sec", "exclusive_instrumented_ms", "active_frame_pct",
+                    "max_outgoing_edges_per_frame", "attribution_note"
+                ];
+                if (!callbackTargets.Header.SequenceEqual(targetColumns) ||
+                    tables["Developer/RSP_CallbackPressure.csv"].Rows.Any(
+                        row => Long(row, "outgoing_call_edges") != 0))
+                    throw new InvalidDataException(
+                        "Empty RSP_CallbackTargets.csv contradicts native callback evidence or schema");
+            }
 
             var markers = tables["Runtime/GRSP_Markers.csv"].Rows;
             if (!markers.Any(x => Field(x, "event") == "START") ||

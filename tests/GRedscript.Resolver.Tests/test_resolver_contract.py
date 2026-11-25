@@ -339,6 +339,51 @@ class GrspResolverContracts(unittest.TestCase):
         self.assertIn("indexed collected file hash/size mismatch", result.stderr)
         self.assertFalse(self.output.exists())
 
+    def test_indexed_capture_without_observed_callback_targets_is_valid(self):
+        # The native writer emits a complete header and zero rows when
+        # observed work comes from non-callback-family functions.
+        dev = self.native / "Data" / "Developer"
+        targets = dev / "RSP_CallbackTargets.csv"
+        columns = (
+            "capture_id,stable_callsite_id,stable_function_id,owner,"
+            "source_function,source_path,source_line,callback_family,target,"
+            "target_resolution,call_kind,outgoing_edges,outgoing_edges_per_sec,"
+            "exclusive_instrumented_ms,active_frame_pct,"
+            "max_outgoing_edges_per_frame,attribution_note"
+        ).split(",")
+        write_csv(targets, columns, [])
+        write_csv(dev / "RSP_CallbackPressure.csv", ["outgoing_call_edges"],
+                  [{"outgoing_call_edges": "0"}])
+        self.write_gco_index()
+        result = self.run_cli()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(self.output.read_text())
+        self.assertEqual("GCO_INDEXED_COLLECTED_BYTES_VERIFIED",
+                         report["capture"]["collectionProvenance"])
+        self.assertEqual([], report["rawTables"]["Developer/RSP_CallbackTargets.csv"]["rows"])
+        self.assertEqual(2, report["counts"]["rawCallsiteRows"])
+        self.assertFalse(report["generationAuthorized"])
+        self.output.unlink()
+
+        # A header-only file with positive callback pressure is inconsistent.
+        write_csv(dev / "RSP_CallbackPressure.csv", ["outgoing_call_edges"],
+                  [{"outgoing_call_edges": "1"}])
+        self.write_gco_index()
+        rejected = self.run_cli()
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn("contradicts native callback evidence", rejected.stderr)
+        self.assertFalse(self.output.exists())
+
+        # Nor can a malformed header masquerade as observed zero targets.
+        write_csv(dev / "RSP_CallbackPressure.csv", ["outgoing_call_edges"],
+                  [{"outgoing_call_edges": "0"}])
+        write_csv(targets, ["id"], [])
+        self.write_gco_index()
+        rejected = self.run_cli()
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn("contradicts native callback evidence", rejected.stderr)
+        self.assertFalse(self.output.exists())
+
     def test_missing_indexed_callback_evidence_refuses(self):
         index = self.write_gco_index()
         index["Redscript"]["Files"] = [
