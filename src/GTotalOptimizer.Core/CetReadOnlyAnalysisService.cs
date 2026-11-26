@@ -472,10 +472,10 @@ public sealed class CetReadOnlyAnalysisService
                 name.Split('/').Any(x => x is "" or "." or "..") ||
                 !(name.StartsWith("bin/x64/plugins/cyber_engine_tweaks/mods/",
                     StringComparison.OrdinalIgnoreCase) ||
-                  name.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
-                    StringComparison.OrdinalIgnoreCase)))
+                  CombinedPassOutputInspector.IsNativeRuntimePath(name)))
                 throw new InvalidDataException("CET generated ZIP contains an invalid game-relative entry.");
         }
+        CombinedPassOutputInspector.VerifyNativePair(seen);
     }
 
     private static string VerifyOwnedResolver(string root)

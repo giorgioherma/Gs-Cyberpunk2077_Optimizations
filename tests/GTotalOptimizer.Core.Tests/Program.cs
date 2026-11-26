@@ -627,8 +627,8 @@ void Require(bool valid, string message)
         const string red = "r6/scripts/G-RedRuntime/";
         const string native = "red4ext/plugins/G-CET-StaticLocations/";
         string[] paths = [cet + "0-Engine/init.lua", cet + "0-Engine/core.lua",
-            red + "Core.reds", red + "Cache.reds", native + "Runtime.dll",
-            native + "Data.locations", cet + "G-GC/init.lua", cet + "SomeMod/init.lua"];
+            red + "Core.reds", red + "Cache.reds", native + "GCETStaticLocations.dll",
+            native + "G-CET.locations", cet + "G-GC/init.lua", cet + "SomeMod/init.lua"];
         var owners = paths.ToDictionary(p => p, p => "owner", StringComparer.OrdinalIgnoreCase);
         string At(string root, string path) => Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
         void Write(string root, string path, string bytes)
@@ -691,9 +691,29 @@ try
     var safePass = CreateGamePassZip("good",
         "bin/x64/plugins/cyber_engine_tweaks/mods/ModA/init.lua",
         "r6/scripts/IndependentOwner/optimized.reds",
-        "red4ext/plugins/G-CET-StaticLocations/G-CET.locations");
-    Require(CombinedPassOutputInspector.Validate(safePass) == 3,
+        "red4ext/plugins/G-CET-StaticLocations/G-CET.locations",
+        "red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll");
+    Require(CombinedPassOutputInspector.Validate(safePass) == 4,
         "one combined game-only ZIP accepts CET Lua, REDscript and native locations");
+    const string modernDll="red4ext/plugins/G-NativeRuntime/G-Engine.dll";
+    const string modernData="red4ext/plugins/G-NativeRuntime/G-Native.locations";
+    const string oldDll="red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll";
+    const string oldData="red4ext/plugins/G-CET-StaticLocations/G-CET.locations";
+    Require(CombinedPassOutputInspector.Validate(CreateGamePassZip("canonical",modernDll,modernData))==2,
+        "canonical native runtime pair accepted");
+    foreach(var (name,entries) in new (string,string[])[]{
+        ("mixed-native-pairs",[modernDll,modernData,oldDll,oldData]),
+        ("mismatched-native-pair",[modernDll,oldData]),
+        ("incomplete-native-pair",[modernDll]),
+        ("foreign-native-dll",[modernDll,modernData,"red4ext/plugins/G-NativeRuntime/unrelated.dll"]),
+        ("native-probe",[modernDll,modernData,"red4ext/plugins/G-NativeRuntime/G-Native.smoke-probe"])
+    })
+    {
+        bool rejected=false;
+        try { CombinedPassOutputInspector.Validate(CreateGamePassZip(name,entries)); }
+        catch(InvalidDataException){rejected=true;}
+        Require(rejected,"native ownership contract refuses "+name);
+    }
     foreach (var (id, path) in new[] {
         ("escape", "r6/scripts/../secrets.reds"),
         ("profiler", "bin/x64/plugins/cyber_engine_tweaks/mods/CETProfilerControls/init.lua"),

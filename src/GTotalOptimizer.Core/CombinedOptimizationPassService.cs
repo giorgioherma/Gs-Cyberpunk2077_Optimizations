@@ -526,8 +526,7 @@ public sealed class CombinedOptimizationPassService
                 StringComparison.OrdinalIgnoreCase)) return "0-Engine";
         if (relative.StartsWith("r6/scripts/G-RedRuntime/",
                 StringComparison.OrdinalIgnoreCase)) return "G-REDruntime";
-        if (relative.StartsWith("red4ext/plugins/G-CET-StaticLocations/",
-                StringComparison.OrdinalIgnoreCase)) return "G-CET native";
+        if (CombinedPassOutputInspector.IsNativeRuntimePath(relative)) return "G-NativeRuntime";
         return null;
     }
 
@@ -616,7 +615,8 @@ public sealed class CombinedOptimizationPassService
             Directory.CreateDirectory(Path.GetDirectoryName(to)!);
             entry.ExtractToFile(to);
             string owner = rel.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)
-                ? rel.Split('/')[5] : "G-CET/native";
+                ? rel.Split('/')[5] : CombinedPassOutputInspector.IsCanonicalNativePath(rel)
+                    ? "G-NativeRuntime" : "G-CET/native";
             owners.Add(rel, owner);
             count++;
         }
