@@ -1,1 +1,1 @@
-checkpoint=v1.2.7-mo2-main-cet-integrity-with-mo2-contracts-20261125
+checkpoint=experimental-cet-project-a-2689-native-105-20261126
