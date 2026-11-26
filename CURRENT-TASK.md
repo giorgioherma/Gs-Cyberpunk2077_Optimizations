@@ -14,6 +14,9 @@ Complete the original six stages in CET, using the existing canonical Scheduler 
 
 For individual candidates use eliminate/consolidate/retain as engineering outcomes, not absolute bans or a project stopping gate. Revisit when a better source-proven solution emerges. Observer suppression/extended dormancy expansion is parked, not a prerequisite. Existing safety and correctness contracts remain applicable. No automatic completion claim from fixtures or CI; loaded-game parity, actual call counts and matched gameplay performance are final acceptance evidence. Continue independent source work without requiring an unnecessary fresh capture.
 
+## Current delivery — combined experimental package
+Owner explicitly requested one combined experimental GCO main package after remaining concrete CET implementation. Use the existing full integration lane, exact successful CET owner artifacts and independently verified native experimental DLL. Production pins and stable releases remain unchanged; opt-in artifact separately identified. Keep GRSP, REDscript generation, MO2, WPF and shared-runtime ownership intact. Package readiness is not gameplay acceptance; compare loaded behavior, acquisition counts and matched performance next. No audit restart or observer expansion.
+
 ## Component routing
 | Component | Branch | Role in this assignment |
 | --- | --- | --- |

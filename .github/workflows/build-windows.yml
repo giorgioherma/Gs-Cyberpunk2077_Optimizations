@@ -1,10 +1,15 @@
 name: GCO | Full integration validation
-run-name: GCO full checkpoint | ${{ github.ref_name }}
+run-name: GCO full checkpoint | ${{ github.ref_name }}${{ ((github.event_name == 'workflow_dispatch' && inputs.experimental_cet) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[gco-experimental]'))) && ' | EXPERIMENTAL CET' || '' }}
 # Product version changes only on an explicit user request; keep fixed otherwise.
 
 on:
   workflow_dispatch:
     inputs:
+      experimental_cet:
+        description: 'Opt-in test package: use verified experimental CET owner artifacts and native service'
+        type: boolean
+        required: false
+        default: false
       full_source_replay:
         description: 'Milestone verification: replay the sealed capture against private CET sources (adds ~10 minutes)'
         type: boolean
@@ -34,14 +39,53 @@ jobs:
   bundle:
     runs-on: windows-latest
     timeout-minutes: 35
+    env:
+      GCO_CET_MODE: ${{ ((github.event_name == 'workflow_dispatch' && inputs.experimental_cet) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[gco-experimental]'))) && 'experimental' || 'production' }}
     steps:
       - uses: actions/checkout@v4
         with:
           path: unified
+      - name: Select and verify exact CET component pins
+        id: cet_pins
+        shell: pwsh
+        working-directory: unified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($env:GCO_CET_MODE -eq 'experimental' -and $env:GITHUB_REF -ne 'refs/heads/main') {
+            throw 'Experimental integrated package is main-only'
+          }
+          $pins=Import-PowerShellDataFile 'integrations/three-profiler-test/Cet-PackagePins.psd1'
+          $pin=$pins[$env:GCO_CET_MODE]
+          if (!$pin) { throw 'Unknown CET package mode' }
+          $repo='giorgioherma/G-CET_Runtime_Profiler'
+          function VerifyOwnerRun($id,$sha,$branch) {
+            $run=(& gh api "repos/$repo/actions/runs/$id") | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $run.status -ne 'completed' -or $run.conclusion -ne 'success' -or
+                $run.head_sha -ne $sha -or $run.head_branch -ne $branch) {
+              throw "Unverified CET owner run $id"
+            }
+          }
+          function VerifyArtifact($id,$run,$name) {
+            $artifact=(& gh api "repos/$repo/actions/artifacts/$id") | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $artifact.expired -ne $false -or $artifact.name -ne $name -or
+                $artifact.workflow_run.id -ne $run) { throw "CET owner artifact mismatch $id" }
+          }
+          VerifyOwnerRun $pin.RunId $pin.SourceCommit 'dev/resolver-profiler-handoff'
+          VerifyArtifact $pin.ProfilerArtifactId $pin.RunId 'G-CET-Runtime-Profiler-v1.3.4'
+          VerifyArtifact $pin.ResolverArtifactId $pin.RunId 'G-CET-Resolver-v1.3.4'
+          if ($env:GCO_CET_MODE -eq 'experimental') {
+            VerifyOwnerRun $pin.NativeRunId $pin.NativeSourceCommit 'dev/native-fixed-cache-player-state'
+            VerifyArtifact $pin.NativeArtifactId $pin.NativeRunId 'gcet-static-native-experimental'
+          }
+          "sha=$($pin.SourceCommit)" >> $env:GITHUB_OUTPUT
+          "run_id=$($pin.RunId)" >> $env:GITHUB_OUTPUT
+          Write-Host "PASS exact $env:GCO_CET_MODE CET owner CI $($pin.RunId), source $($pin.SourceCommit)"
       - uses: actions/checkout@v4
         with:
           repository: giorgioherma/G-CET_Runtime_Profiler
-          ref: 60c4cd50a0cf14ba8f270053480ed40e87bdd4c1
+          ref: ${{ steps.cet_pins.outputs.sha }}
           path: unified/vendor-cet
           persist-credentials: false
       - name: Resolve latest verified GRSP owner-native build
@@ -616,22 +660,31 @@ jobs:
             Write-Host "PASS official redscript 0.5.31 $file fingerprint: $hash"
           }
           "GCO_REDSCRIPT_REFERENCE_GAME_ROOT=$folder" >> $env:GITHUB_ENV
-      - name: Download pinned CI-green CET V12 developer profiler and Resolver artifacts
+      - name: Download selected verified CET profiler and Resolver artifacts
         shell: pwsh
         working-directory: unified
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference='Stop'
-          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
+          $pins=Import-PowerShellDataFile 'integrations/three-profiler-test/Cet-PackagePins.psd1'
+          $pin=$pins[$env:GCO_CET_MODE]
+          gh run download $pin.RunId --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Runtime-Profiler-v1.3.4 --dir downloaded-cet
           if ($LASTEXITCODE -ne 0) { throw 'Unable to authenticate verified CET dev artifact download; do not substitute old release.' }
           Write-Host 'CET dev artifact download succeeded.'
-          # Both owner artifacts and GCO's disposable source checkout are from
-          # the same verified CET #2616 commit. Keep original native owner
-          # assets and compare the owner CLI with the rebuilt .NET10 Resolver.
-          gh run download 45559976515 --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
+          # Both owner artifacts and the disposable source checkout are
+          # from the same independently verified CET commit.
+          gh run download $pin.RunId --repo giorgioherma/G-CET_Runtime_Profiler --name G-CET-Resolver-v1.3.4 --dir downloaded-cet-resolver
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CET Resolver reference artifact download failed.' }
           Write-Host 'CET Resolver owner reference artifact downloaded from exact pinned CI.'
+          if ($env:GCO_CET_MODE -eq 'experimental') {
+            gh run download $pin.NativeRunId --repo giorgioherma/G-CET_Runtime_Profiler --name gcet-static-native-experimental --dir downloaded-cet-experimental-native
+            if ($LASTEXITCODE -ne 0) { throw 'Experimental CET native artifact download failed' }
+            $dll='downloaded-cet-experimental-native/red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+            if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash -ne $pin.NativeSha256) {
+              throw 'Experimental CET native artifact hash mismatch'
+            }
+          }
       - name: Import independently verified GRSP native instrumentation
         shell: pwsh
         working-directory: unified
@@ -1223,6 +1276,6 @@ jobs:
         with:
           # GitHub's downloaded ZIP inherits this artifact name. No nested ZIPs.
           # Run/attempt distinguishes rebuilt archives without bumping GCO.
-          name: Gs-Cyberpunk2077_Optimizer-v${{ steps.verify_package.outputs.version }}-run${{ github.run_number }}-a${{ github.run_attempt }}
+          name: Gs-Cyberpunk2077_Optimizer${{ env.GCO_CET_MODE == 'experimental' && '-EXPERIMENTAL-CET' || '' }}-v${{ steps.verify_package.outputs.version }}-run${{ github.run_number }}-a${{ github.run_attempt }}
           path: unified/publish/release/
           if-no-files-found: error

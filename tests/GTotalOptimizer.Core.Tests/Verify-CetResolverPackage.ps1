@@ -6,17 +6,29 @@ $ErrorActionPreference='Stop'
 $PSNativeCommandUseErrorActionPreference=$false
 $PackageRoot=(Resolve-Path -LiteralPath $PackageRoot).Path
 $OwnerArtifactRoot=(Resolve-Path -LiteralPath $OwnerArtifactRoot).Path
+$mode=if ($env:GCO_CET_MODE) { $env:GCO_CET_MODE } else { 'production' }
+$pins=Import-PowerShellDataFile (Join-Path $PSScriptRoot '../../integrations/three-profiler-test/Cet-PackagePins.psd1')
+$pin=$pins[$mode]
+if (!$pin) { throw 'Unknown CET package mode' }
 $manifest=Get-Content -LiteralPath (Join-Path $PackageRoot 'components/manifest.json') -Raw | ConvertFrom-Json
 $tools=@($manifest.analysisTools)
 if ($tools.Count -ne 1 -or $tools[0].id -ne 'cet-resolver' -or
-    $tools[0].sourceCommit -ne '08a8b5790372fd9ec5893500489d2b5e24eb1f4b' -or
-    $tools[0].ownerReferenceSourceCommit -ne '08a8b5790372fd9ec5893500489d2b5e24eb1f4b' -or
-    $tools[0].ownerCiRun -ne 45103360468 -or
-    $tools[0].ownerArtifactId -ne 14787010559 -or
+    $tools[0].sourceCommit -ne $pin.SourceCommit -or
+    $tools[0].ownerReferenceSourceCommit -ne $pin.SourceCommit -or
+    $tools[0].ownerCiRun -ne $pin.RunId -or
+    $tools[0].ownerArtifactId -ne $pin.ResolverArtifactId -or
     $tools[0].framework -ne 'net10.0-windows') {
     throw 'CET Resolver source/provenance manifest is not exact.'
 }
 $tool=$tools[0]
+if ($tool.nativeSha256 -ne $pin.NativeSha256) { throw 'Resolver native hash differs from selected pin' }
+if ($mode -eq 'experimental' -and ($tool.experimentalNative -ne $true -or
+    $tool.nativeSourceCommit -ne $pin.NativeSourceCommit -or
+    $tool.nativeOwnerCiRun -ne $pin.NativeRunId -or
+    $tool.nativeOwnerArtifactId -ne $pin.NativeArtifactId -or
+    $tool.ownerNativeSha256 -ne $pin.OwnerNativeSha256)) {
+    throw 'Experimental native owner provenance missing or incorrect'
+}
 $rootPrefix=$PackageRoot.TrimEnd('\') + '\'
 $files=@($tool.files)
 if ($files.Count -lt 12) { throw 'Complete CET Resolver file/hash inventory missing.' }
@@ -59,6 +71,23 @@ if ($refs.Count -eq 0) {
 if ($refs.Count -ne 1) { throw 'Pinned CET Resolver reference missing or ambiguous.' }
 $ownerExe=$refs[0].FullName
 $ownerRoot=$refs[0].DirectoryName
+if ((Get-FileHash (Join-Path $ownerRoot 'runtime/native/GCETStaticLocations.dll') -Algorithm SHA256).Hash -ne $pin.OwnerNativeSha256) {
+    throw 'Original reference native owner hash mismatch'
+}
+if ($mode -eq 'experimental') {
+    $originalRoot=$ownerRoot
+    $ownerRoot=Join-Path $env:RUNNER_TEMP 'GTriple/ResolverExperimental'
+    $ownerExe=Join-Path $ownerRoot 'G-CET-Resolver.exe'
+    foreach ($asset in @('G-CET-Resolver.exe','G-CET-Resolver.dll','G.CETProfiler.Core.dll')) {
+        if ((Get-FileHash (Join-Path $ownerRoot $asset)).Hash -ne
+            (Get-FileHash (Join-Path $originalRoot $asset)).Hash) {
+            throw "Experimental reference changed owner managed executable: $asset"
+        }
+    }
+    if ((Get-FileHash (Join-Path $ownerRoot 'runtime/native/GCETStaticLocations.dll')).Hash -ne $pin.NativeSha256) {
+        throw 'Experimental reference native hash mismatch'
+    }
+}
 foreach ($asset in @(
     'knowledge/semantic-library.json',
     'runtime/0-Engine/fixed-init.lua.gz.b64',

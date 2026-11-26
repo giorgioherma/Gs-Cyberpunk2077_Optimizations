@@ -4,6 +4,15 @@ $ErrorActionPreference = 'Stop'
 # its independent F11 capture handler have been permanently retired.
 if (!$Integrated) { throw 'Standalone triple-test retired; use the integrated GCO build.' }
 Set-StrictMode -Version Latest
+$mode=if ($env:GCO_CET_MODE) { $env:GCO_CET_MODE } else { 'production' }
+$pins=Import-PowerShellDataFile (Join-Path $PSScriptRoot 'Cet-PackagePins.psd1')
+$cetPin=$pins[$mode]
+if (!$cetPin) { throw 'Unknown CET package mode' }
+$experimental=$mode -eq 'experimental'
+$checkedOutCet=(git -C vendor-cet rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $checkedOutCet -ne $cetPin.SourceCommit) {
+  throw 'CET source checkout does not match selected owner pin'
+}
 $version=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:Version).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid unified app version from MSBuild: $version" }
 $useWpf=(dotnet msbuild src/GTotalOptimizer.App/GTotalOptimizer.App.csproj -getProperty:UseWPF).Trim()
@@ -51,9 +60,9 @@ if ($gm.version -ne '1.0.0') { throw 'GRSP release version drift' }
 if (-not (Test-Path (Join-Path $grSource 'payload/G-REDscript-Profiler.dll'))) { throw 'GRSP native payload missing' }
 Write-Host 'PASS official GRSP v1.0.0 release ZIP integrity and payload'
 
-# CET #2616 shipped Profiler and Resolver from the same pinned V12 G-GC source.
-# We rebuild Resolver managed code below; these original artifact bytes serve
-# only as a native-service provenance anchor and baseline behavior oracle.
+# The selected CET owner run ships both Profiler and Resolver. Rebuild
+# managed code from that exact source; owner bytes are the provenance and
+# baseline behavior oracle. The experimental native owner is separate.
 $resolverArchive=Join-Path (Get-Location) 'downloaded-cet-resolver'
 foreach ($z in @(Get-ChildItem $resolverArchive -Filter '*.zip' -File -Recurse)) {
   Expand-Archive -LiteralPath $z.FullName -DestinationPath (Join-Path $temp 'Resolver') -Force
@@ -68,9 +77,22 @@ $resolverReference=$resolverCandidates[0].DirectoryName
 $nativeResolverDll=Join-Path $resolverReference 'runtime/native/GCETStaticLocations.dll'
 # The owner-built static-location runtime is independently pinned and must
 # never come from the user's live game or from an unverified historical ZIP.
-$nativeResolverHash='737bcdd9d6cbfedd9b238d16ae49c9fa0b52497e4e1e14cb606e826dd56c1496'
+VerifyFile $nativeResolverDll $cetPin.OwnerNativeSha256
+$nativeResolverHash=$cetPin.NativeSha256
+if ($experimental) {
+  $nativeSource=Join-Path (Get-Location) 'downloaded-cet-experimental-native/red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+  VerifyFile $nativeSource $nativeResolverHash
+  # Both executable references use the same experimental capability set.
+  # Never alter the original downloaded owner artifact.
+  $experimentalReference=Join-Path $temp 'ResolverExperimental'
+  if (Test-Path -LiteralPath $experimentalReference) { throw 'Experimental reference already exists' }
+  Copy-Item -LiteralPath $resolverReference -Destination $experimentalReference -Recurse
+  $resolverReference=$experimentalReference
+  $nativeResolverDll=Join-Path $resolverReference 'runtime/native/GCETStaticLocations.dll'
+  Copy-Item -LiteralPath $nativeSource -Destination $nativeResolverDll -Force
+}
 VerifyFile $nativeResolverDll $nativeResolverHash
-Write-Host 'PASS original CET Resolver artifact and independent native service provenance'
+Write-Host "PASS $mode CET Resolver owner source and independent native service provenance"
 
 $components=Join-Path $root 'components'
 $cet=Join-Path $components 'cet'
@@ -428,15 +450,22 @@ if ($env:GCO_GRSP_NATIVE_ARTIFACT_ROOT -and
 $nativeMode='GRSP_CI_AUTOMATIC_GCO_STRICT_F11'
 $provenance=@{
   testOnly=$true
-  cet=@{ sourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; referenceSourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; runId=45103360468; artifactId=14786511383; nativeSha256=$cm.targetCET.profilerSha256 }
+  cet=@{ sourceSha=$cetPin.SourceCommit; referenceSourceSha=$cetPin.SourceCommit; runId=$cetPin.RunId; artifactId=$cetPin.ProfilerArtifactId; nativeSha256=$cm.targetCET.profilerSha256 }
   grsp=@{ releaseTag='v1.0.0'; releaseZipSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606'; sourceSha=$grSourceCommit; gcoNativeVariant=$Integrated; nativeBuildMode=$nativeMode; nativeOwnerRunId=$nativeOwnerRun; nativeSha256=(Get-FileHash (Join-Path $gr 'payload/G-REDscript-Profiler.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
   presentMon=@{ releaseTag='v2.6.0'; executableSha256='b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af' }
-  cetResolver=@{ sourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ownerReferenceSourceSha='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ownerCiRun=45103360468; ownerArtifactId=14787010559; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+  cetResolver=@{ sourceSha=$cetPin.SourceCommit; ownerReferenceSourceSha=$cetPin.SourceCommit; ownerCiRun=$cetPin.RunId; ownerArtifactId=$cetPin.ResolverArtifactId; targetFramework='net10.0-windows'; nativeSha256=$nativeResolverHash; assemblySha256=(Get-FileHash (Join-Path $cetResolverApp 'G.CETProfiler.Core.dll') -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
+if ($experimental) {
+  $provenance.cetResolver.experimentalNative=$true
+  $provenance.cetResolver.nativeSourceSha=$cetPin.NativeSourceCommit
+  $provenance.cetResolver.nativeOwnerRunId=$cetPin.NativeRunId
+  $provenance.cetResolver.nativeOwnerArtifactId=$cetPin.NativeArtifactId
+  $provenance.cetResolver.ownerNativeSha256=$cetPin.OwnerNativeSha256
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
   $entries=@(
-    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; referenceSourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'; ciRun=45103360468; artifactId=14786511383 },
+    @{ id='cet'; executable='components/cet/G-CET-Runtime-Profiler.exe'; sourceCommit=$cetPin.SourceCommit; referenceSourceCommit=$cetPin.SourceCommit; ciRun=$cetPin.RunId; artifactId=$cetPin.ProfilerArtifactId },
     @{ id='grsp'; executable='components/grsp/G-REDscript-Profiler.exe'; sourceCommit='c6871e21d3d3ece8e36d3ea47d45e18d0d7acead'; releaseSha256='15b62ff6df95fa54f6a4fb6eb992e7aa07afe69c752922db34fdbe11b615e606' }
   )
   foreach ($entry in $entries) {
@@ -460,13 +489,20 @@ if ($Integrated) {
   $resolverEntry=@{
     id='cet-resolver'
     executable='components/cet-resolver/app/G-CET-Resolver.exe'
-    sourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'
-    ownerReferenceSourceCommit='08a8b5790372fd9ec5893500489d2b5e24eb1f4b'
-    ownerCiRun=45103360468
-    ownerArtifactId=14787010559
+    sourceCommit=$cetPin.SourceCommit
+    ownerReferenceSourceCommit=$cetPin.SourceCommit
+    ownerCiRun=$cetPin.RunId
+    ownerArtifactId=$cetPin.ResolverArtifactId
     framework='net10.0-windows'
     nativeSha256=$nativeResolverHash
     files=$resolverAssetEntries
+  }
+  if ($experimental) {
+    $resolverEntry.experimentalNative=$true
+    $resolverEntry.nativeSourceCommit=$cetPin.NativeSourceCommit
+    $resolverEntry.nativeOwnerCiRun=$cetPin.NativeRunId
+    $resolverEntry.nativeOwnerArtifactId=$cetPin.NativeArtifactId
+    $resolverEntry.ownerNativeSha256=$cetPin.OwnerNativeSha256
   }
   $resolverEntry.sha256=(Get-FileHash (Join-Path $cetResolverApp 'G-CET-Resolver.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
   $payloads=@($payloadPaths | ForEach-Object {
@@ -518,6 +554,15 @@ IMPORTANT
 
 VERSION $version (portable build). No system .NET installation required.
 "@ | Set-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8
+  if ($experimental) {
+    Add-Content -LiteralPath (Join-Path $releaseRoot 'START-HERE.txt') -Encoding UTF8 -Value @"
+
+EXPERIMENTAL CET TEST BUILD
+CET owner run: $($cetPin.RunId), native owner run: $($cetPin.NativeRunId).
+Use a separate extraction and reversible optimization overlay. Not a stable
+release or gameplay/performance acceptance. Production builds are unchanged.
+"@
+  }
   # Per-build provenance: same version can have multiple CI attempts with
   # different ZIP SHA-256 hashes. Do not infer a unique hash from a version.
   [ordered]@{
@@ -526,6 +571,7 @@ VERSION $version (portable build). No system .NET installation required.
     sourceCommit=[string]$env:GITHUB_SHA
     githubRunId=[string]$env:GITHUB_RUN_ID
     githubRunAttempt=[string]$env:GITHUB_RUN_ATTEMPT
+    cetPackageMode=$mode
   } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'BUILD-INFO.json') -Encoding UTF8
   Write-Host 'PASS portable release layout: Gs launcher folder + sibling START-HERE.txt'
   Write-Host 'PASS integrated GCO: .NET10 CET+GRSP managers, pinned complete CET Resolver, source-owned native DLLs, PresentMon and verified payload manifest'
