@@ -1,5 +1,7 @@
 # G-CET + G-RED — unified two-page application (target product contract)
 
+> Technical design reference: [current approved architecture](../ARCHITECTURE.md) governs the present Direct/MO2 workflow. Historical implementation milestones and research proposals below are not active assignments.
+
 **Status:** accepted target UX/architecture, not implemented in the current two-app release. **Decision date:** 2026-10-16. Keep current development, CI, profiler native and Resolver stable until this workflow passes end-to-end tests. The present static-location RED4ext experiment stays isolated but must be designed for later integration.
 
 ## One application, one game-root selection
@@ -7,7 +9,7 @@
 The packaged application contains **both CET and REDscript profiling capabilities and the Resolver**. There is no separate Resolver launcher, no extra mod-path field, no separate static-location service UI, and no requirement for the player to understand native build artifacts. The UI has **two pages, three primary actions**:
 
 1. **Page 1 — Profiler:** `Install Profilers`; `Create Game Capture`; `Continue to Analytics & Pass Generation` (disabled until a complete capture is verified).
-2. **Page 2 — Analytics & Pass Generation:** automatic evidence collection, Resolver analysis and concise optimization report; `Generate Optimization ZIP` after analysis is complete.
+2. **Page 2 — Analytics & Pass Generation:** verified collected/restored session, explicit Analyze, concise optimization report; `Generate Optimization ZIP` after analysis is complete.
 
 The only ordinary path input is the **Cyberpunk 2077 game root**, selected once. Derive the source of currently installed CET mods from exactly
 `<gameRoot>/bin/x64/plugins/cyber_engine_tweaks/mods`.
@@ -23,7 +25,7 @@ Inspect REDscript sources under the current effective game installation and any 
 
 ### Page 2: analyze and package
 
-- On arrival, start the Resolver automatically; no extra `Analyze` button. Use collected real captures together with **read-only inspection of installed, effective mod sources**. Derive generic and source-proven semantic optimizations, including eligible native static-location/extended-dormancy substitutions.
+- On arrival, wait for the user to click `Analyze`. Use collected real captures together with **read-only inspection of installed, effective mod sources**. Derive generic and source-proven semantic optimizations, including eligible native static-location/extended-dormancy substitutions.
 - Display a compact report: detected CET/RED mods, optimizations accepted, already satisfied, skipped/unsupported and the reasons that matter; native service workload cost vs retired mod CPU/allocation/native boundary work when actually measured. Do not invent performance gains. Advanced per-mod diagnostics can be expanded/exported separately, **not packed into the game-install ZIP**.
 - Enable `Generate Optimization ZIP` only after source proof, dependencies, compose/idempotence contracts and packaging validation succeed; when none qualify, explain why rather than generating a misleading artifact.
 - Produce **one self-contained game-root-relative ZIP**, with only files that install into the game. Examples: `bin/x64/plugins/cyber_engine_tweaks/mods/<owner>/...`, `r6/scripts/...`, `red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll`, `red4ext/plugins/G-CET-StaticLocations/G-CET.locations`; include other game-root paths only when genuinely required by a proven transform. ZIP must **not** contain a wrapping directory, instructions/readmes/docs, profiler controls/binaries/PDBs, captured data, or internal analysis JSON. Keep hashes, validation logs, test fixtures and human reports in the application workspace.
@@ -36,14 +38,14 @@ Inspect REDscript sources under the current effective game installation and any 
 - Integrating the DLL into the **G-RED Runtime Framework distribution** is an optional future deployment refactor, **not an assumption** that a REDscript-only package can load arbitrary DLLs. Maintain one native owner, one ABI/API version, no duplicate static-location DLL and no dependence on native Profiler capture to run optimized mods.
 - The Profiler will eventually collect native static-location counters at bounded cadence, with accurate per-consumer lost/resync counts and measured native service overhead. Analyze saved native-to-Lua calls, actual retired author scheduler jobs, allocations and frametime before assigning ROI. Never call an early Lua return a native dispatch elimination.
 
-## MO2 compatibility: explicitly unresolved
+## MO2 compatibility: historical design and current provider
 
 The chosen game directory is the game's installation root, but **Mod Organizer 2 may present a different effective mod tree at runtime through its virtual filesystem**. Do not merely scan physical `bin/.../mods` and assume the visible MO2 profile matches it. Design a future `source provider` abstraction:
 
 - Direct-install provider: game-root filesystem, current behavior.
 - MO2 provider: selected profile, ordered/effective VFS file precedence, source provenance, and generated-overlay deployment target, with read/patch equivalence and conflict proof.
 
-Do not silently read/write unselected profiles. Until verified, show MO2 compatibility as unsupported/pending and avoid issuing a pass that targets the wrong mods. This is an implementation dependency, not a reason to complicate the visible two-page interface prematurely.
+Do not silently read/write unselected profiles. MO2 has since been integrated into main. Preserve the current selected-profile provider and verified deployment/restore contract; actual local gameplay/restore acceptance is separate. Never issue a pass against the wrong effective source.
 
 ## Internal state machine (no third UI page)
 
@@ -97,6 +99,6 @@ The user is **not currently committed to a broad REDscript-specific semantic lib
 2. Both profilers install/restore atomically, including interrupted session, crash, mismatch, absent game, disabled extension and missing native dependencies.
 3. The continuation button stays disabled for an incomplete/stale/wrong capture, is enabled only for a verified finished capture, and restores temporary game files before entering normal analytics.
 4. Optional CapFrameX launch and retrieval are explicit; no phantom frame timings when unavailable.
-5. Automatic analysis produces a meaningful report, performs a source-proven one-pass composition of installed mods, and does not require the player to understand ModPass rules or edit YAML.
+5. Explicit user-triggered analysis produces a meaningful report, performs a source-proven one-pass composition of installed mods, and does not require the player to understand ModPass rules or edit YAML.
 6. Generated ZIP contains **only game-relative runtime files**, has correct root topology, and has no docs, controls, tool binaries, PDBs, diagnostics or stale mods.
 7. Existing Profiler/Resolver continue shipping unchanged until coordinated integration is authorized. Product version changes require a separate explicit release decision.

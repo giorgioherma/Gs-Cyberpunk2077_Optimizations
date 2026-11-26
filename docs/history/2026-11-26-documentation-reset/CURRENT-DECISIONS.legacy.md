@@ -1,0 +1,812 @@
+# Product decisions and explicit delta to the October 16 design
+
+## 2026-11-23 — MO2 integration architecture approved for isolated development
+
+The owner approved a new GCO `MO2_integration` branch from `main` for planning/full staged implementation. **This supersedes older "MO2 deferred" product-scope decisions for work on that branch only**; shipped Direct mode remains unchanged and MO2 stays feature-gated until proven. Detailed [architecture](../integration/MO2-INTEGRATION-DESIGN.md) and [progression plan](../integration/MO2-INTEGRATION-PROGRESS.md) are authoritative.
+
+Approved UX: Direct/MO2 tabs inside existing Page 1 source section; MO2 folder chosen once, game root auto-detected, enumerate selected instance's profiles into a dropdown. GCO/API must automatically activate **that selected profile**, never expect the player to synchronize MO2 manually. Use one temporary MO2 mod to override CET profiler ASI and necessary 0-Engine scheduler/controls plus GRSP DLL/data, then launch selected profile, collect native F11 evidence from actual MO2 destinations, safely remove only owned temporary files, and proceed to unchanged Page 2 appearance. Effective CET Lua and `r6/scripts` sources on Page 2 are the selected profile's current effective winners, including physical game baseline. One GCO app, existing owned optimizers, same game-relative ZIP, no duplicate 0-Engine injection generator.
+
+Not yet proved: target-profile activation/priority when MO2 currently displays a different profile; actual USVFS native DLL/ASI loading; capture outputs in physical/Overwrite/custom destinations; crash-safe cleanup; legacy RootBuilder configurations. Do not claim implementation, full compatibility or gameplay proof before Stage 7 acceptance.
+
+
+## 2026-11-22 — Exact framework omission in combined ZIP
+
+After full source-owner generation, omit only complete required framework groups whose installed files match the final required bytes by SHA-256. For G-REDruntime also require the verified bundled source hashes, not just copied installed custom bytes. No version-string inference, dependency shortcuts, or removal of differing/missing framework files. Preserve G-GC learning/calibration delivery. Recheck skipped dependencies before publication; record omission in external ownership report. This is a ZIP packaging policy only, not a semantic source-recognition hash lock. Unified app v1.2.6; owner versions remain independent.
+
+## 2026-11-21 — Quickslots D-pad cache automatic; no extra GCO checkbox
+
+**Supersedes the short-lived Nov 20 manual Quickslots checkbox design.** The owner does **not** want another setting/check on the Analyze page; the CET Hotscenes ENG-only option required for Lua-local capacity remains untouched. Keep controller/gamepad functionality enabled. The REDscript `CUSTOM_QUICKSLOTS_DPAD_STATE_CACHE_V1` generator applies automatically after InputHub #16 to compatible already-generic Quickslots source, with no UI option, persisted preference or extra CLI flag. Incompatible Quickslots source refuses only stage #17. At runtime the cache follows the **existing last-used input-state signals and original `PlayerLastUsedPad()` predicate**, not physical controller connection. A permanently plugged-in controller does not force pad mode when KBM is used. Preserve source-owned modifier hold/release, configuration changes, event order and fallback, without replacing game state or introducing a fixed polling interval. No controller input is disabled.
+
+Acceptance: one Generate on post-generic stock; partial/complete/custom source; actual SCC compilation, independent staged source equivalence, UI/package CI and gameplay testing. The original handheld pass-8 ZIP is behavioral evidence only, not a source file to copy.
+
+
+## 2026-11-20 — Dark Future 400 ms visual cadence: shared tagged effects approved
+
+**Latest owner clarification overrides the earlier four-needs-only restriction.** The current 400 ms visual update cadence is acceptable for **all Dark Future status effects carrying the existing `DarkFutureCanHideOnBuffBar` gameplay tag**, including other Dark Future effects such as addiction/injury icons. Do **not** replace the shared-tag predicate with an allowlist of only Nerve, Hydration, Nutrition and Energy. Keep the implemented source-owned broad-tag rule `DARK_FUTURE_STATUS_ICON_400MS_V1` and current gameplay/update behavior; normal Cyberpunk status effects lacking that tag retain their original cadence. This is **visual refresh only**, never a change to needs, penalties, effect timing, registration/removal, gameplay callbacks, animation or cooldown behavior.
+
+The previous short-lived four-needs narrowing was explicitly rolled back in the same branch before release. No additional source-variation expansion is required to move to the next owner; the mandatory version-fluid structural/partial/complete acceptance rules remain in force.
+
+
+## 2026-11-20 — Owner approves 400 ms Dark Future status icon visual cadence
+
+The four persistent Dark Future status icons the owner showed are **On Edge, Dehydrated, Hungry and Tired**. Their conditions evolve slowly enough that **routine icon data drawing may run at 2.5 Hz (one visual update every 400 ms)**. This is explicitly a visual cadence choice, not a permission to throttle needs/nerve gameplay, penalties, status-effect registration/removal or other Cyberpunk status icons.
+
+Dark Future's actual TweakXL needs penalty definitions use the author-owned `DarkFutureCanHideOnBuffBar` gameplay tag. Restrict the reduction to routine `buffListItemLogicController.SetData` calls on records with that tag. The first render or a changed record is immediate; all other records render at the original cadence. Preserve the source's per-callback record identity, visibility, removal, stack/time source values, cooldown wheel methods and animation lifecycle. Use a monotonic timestamp with a reset/unknown-time fallback, no new callback timer, and no player-side compiler.
+
+The new source-aware operation `DARK_FUTURE_STATUS_ICON_400MS_V1` follows the current ten generics, DVCore Footsteps and DF immutable tag cache in the single GCO Generate. Partially optimized/current/custom versions must converge in one generation; stock, partial, complete and incompatible paths require tests, official SCC CI and actual combined ZIP parity. This does not claim measured FPS improvements; require matched gameplay A/B before reporting savings.
+
+## 2026-11-20 — Dark Future semantic optimization: safe classification only
+
+Approved source-scoped operation 2: `DARK_FUTURE_INFINITE_TAG_CACHE_V1` in the unified GCO
+REDscript Resolver. Cache the `DarkFutureInfiniteDurationEffect` membership on each
+`SingleCooldownManager.ActivateCooldown` after its original tag assignment; invalidate
+before calling the wrapped activation, and retain a live fallback if `Update` runs
+before initialization. Recognize post-generic stock, partial, markerless complete,
+compatible relocated/modified sources and safe read-only tag access. Unknown tag-array
+writes or escapes refuse only this operation. Original timers, root visibility,
+stack, icon, `SetTimeRemaining`, `FillOutroAnimationStart`, status effect identity
+and every original Update invocation remain unchanged.
+
+Do **not** port historical Dark Future 6/10-frame UI cadence or skip repeated
+outro animations until their lifecycle/side effects can be proven safe. Do not
+claim measured CPU/FPS improvement: the previous GRSP capture did not separately
+measure this membership operation. The source-level cache is a safe narrow
+preliminary optimization, not the complete historical Dark Future speedup.
+
+[Fast Phase 2 checkpoint #31 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791869848):
+21 semantic tests, full 2,331-source post-generic stack plus both source-owned
+semantic overlays compiled with official SCC 0.5.31, original private source untouched.
+One GCO Generate stages generic first, then Footsteps, then Dark Future; still
+one game-relative CET+REDscript ZIP. [Full GCO CI #1009 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44791102613): 80 actual generated REDscript files (ten generics + both semantic rules), independent source composition, official SCC, combined ZIP topology, full app/owner integration and packaging passed. No gameplay/FPS benefit is inferred. Later relocated-owner/alias source-state additions are verified by focused #31.
+
+
+## 2026-11-20 — Phase 2 first accepted source-aware semantic pass (DigitalVixenCore Footsteps)
+
+The owner-approved first semantic operation is `DVCORE_FOOTSTEPS_REFLECTION_SUCCESS_CACHE_V1` in GCO REDscript development. Recognize the current installed `DVFootstepsService.FindAudioClass` RTTI lookup structurally (no source version/hash/line-number lock) and cache **only successful** resolution of `EquipNewFootwearByPlayer`; preserve misses, footwear change behavior, carrier/state lifecycle and unrelated source. Complete partially applied field/guard/store work without duplicating, accept equivalent historical and newer/custom/direct-return forms, return zero changes on complete source, and narrowly refuse truly incompatible lookup flow. The ten generic rules execute first; the semantic pass is generated once from the resulting **effective** source inside the original GCO combined one-ZIP flow. SCC stays **CI-only**.
+
+**Validation:** [fast semantic CI #19 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44785775165), 10 source-state tests and actual 2,331-post-generic-source + semantic-output SCC 0.5.31; [full GCO CI #1006 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/44784617357), 10 generic rules, 173 eligible generic edits and 1 semantic operation, 79 combined source files, actual ZIP topology, official SCC, CET/GRSP provenance, app build/package. No measured performance or in-game parity claimed; development PR #2 conflicts still prevent wholesale main merge.
+
+
+
+## 2026-11-20 — Mandatory REDscript Phase 2 semantic source compatibility (owner decision)
+
+[Authoritative agent rules](../integration/IMPORTANT-FOR-AGENTS-RED-OPTIMIZATIONS.md): Recognize and complete **partial** implementations without duplicates; produce the entire compatible semantic result in **one Generate from post-generic stock**; treat compatible newer, older and custom-modified source as eligible by **actual required structure and behavior**, preserving unrelated code and prior generic work. No fixed version gates, historical whole-file hashes, mandatory separate-pass ordering or broad refusals solely due to user edits. Skip only an actually incompatible/missing optimization target or an unprovable critical safety property, **as narrowly as possible**, with a clear reason and other safe operations proceeding. Keep full source and gameplay safety, idempotence, CI SCC (not bundled), ownership and rollback contracts. These are required implementation properties, not an approval to copy legacy optimized ZIP files or change gameplay behavior.
+
+
+## 2026-11-20 — Analyze console and completion controls (current UI correction)
+
+Use plain user-facing Analyze text: "GENERATE creates one ZIP containing all optimizations" (the newly generated pass, **not** a cumulative historical package). Keep console output concise: after success only CET transform count and REDscript edit count, plus brief skip/failure notice when required. Do not print the ownership JSON name, output paths or report storage metadata in ordinary success messages. The actual ownership sidecar must still be written and verified.
+
+At the bottom of Page 2, the console is left and CLOSE right **on the same row**, vertically centered; hidden CLOSE must not reserve width and must not push console upward. `OPEN FOLDER` opens the GCO application root at any time on Page 2, rather than `RESULTS` or the current pass specifically. After successfully generating a ZIP, disable GENERATE and label it GENERATED until the user resets the workflow; keep failure retries available. Preserve profiler, source admission, ZIP publication and navigation safety.
+
+
+## 2026-11-20 — Collect must finish combined reporting before CONTINUE
+
+After COLLECT verifies and seals the CET and GRSP captures, GCO must finish source-owned reporting and publish the session-matching combined HTML/JSON before enabling CONTINUE. No background fire-and-forget reporting after the UI becomes navigable. A failed report keeps captured evidence and RESTORE available, leaves CONTINUE disabled, and reports a retryable failure; REFRESH/reopen may retry from the sealed capture. This corrects the early-Continue skip observed by the owner. The separate Page 2 ANALYZE button still triggers Resolver analysis only on explicit click.
+
+
+## 2026-11-20 — Page 2 compact visual layout (current)
+
+Keep the original Analyze heading and portrait position. Show BACK in the header immediately to the left of REFRESH with the same compact button style; keep the existing Yes/No reset confirmation. Do not display CLOSE at all until a combined optimization ZIP is successfully published; CLOSE then stays at the bottom-right and resets before exiting. The Analyze runtime console is the fixed bottom status strip, not a second cyan box inside the scrolling content or the stale Capture message. Place CET + REDscript ZIP guidance and Vortex guidance together on the first footer row, with manual backup guidance below. At regular 1280×760, the initial Analyze state should fit without scrolling; longer analysis text may scroll inside its respective report/console region. No changes to heading placement, capture/profiler logic or generator.
+
+
+## 2026-11-20 — generated optimization folder and Capture return
+
+The app root has `generated_optimizations/pass-YYYYMMDD_HHMMSS/` for each completed pass (ZIP and external ownership JSON). Profiler `RESULTS` remains separate. Publish the directory only after its safe generation completes; no partial or overwritten pass. Page 2 BACK prompts Yes/No: "Return to page one. This will reset your captures and return you to the first page. Do you want to continue?" Yes discards the active capture/analysis navigation state and returns to Capture; No is inert. After a successful ZIP, show CLOSE at the bottom-right Continue-equivalent position. CLOSE clears that same active state and navigation bookmark and exits, so reopening starts on Page 1. Preserve every sealed prior capture and generated pass on disk; resets cannot interrupt active work or bypass owner journals.
+
+
+
+## 2026-11-20 — personal Hotscenes English-only checkbox (CET, opt-in)
+
+Add one **default-unchecked** checkbox under CET mod Optimizations: `Hotscenes ENG only`, explaining that it is for players using English and that it removes Hotscenes localization from the **generated ZIP** to make room for optimizations. The switch must not silently infer English from OS/game locale, mutate installed Hotscenes, or affect Analyze. Do not add an alternative localization rewriter; use CET's existing author-owned `--hotscenes-english-only` pass flag, applied before generic generation with line-map and local-budget checks. Keep original CET skip outcomes and source-drift refusal. Report whether checked and whether the CET-owned pass really applied it; unchecked default leaves all languages intact. One clean game-relative ZIP with external ownership audit, no extra tool or compiler binaries.
+
+## 2026-11-20 — console-only runtime status and real-operation loading dots
+
+The combined source optimizer's per-owner outcomes are **not** "TEST PASS" and GCO must never print a GitHub CI/compilation claim to the player after Generate. A generated ZIP may contain safe modifications while one or more source-specific candidates are deferred; retain the external detailed ownership report and accurately label counts as **not applied / needs review**. Defer investigation into the current single CET skipped item until user requests it. Do not remove source-owned skip auditing or CI source/ZIP correctness checks.
+
+Page 2's top area is exclusively restored-files verification and CET / REDscript / PresentMon capture status. Display *all* analysis, generation, error and skipped-entry messages in the existing WPF status control, placed in a **scrollable console below the action buttons**; no separate blue diagnostic lines at the top. Use the same activity tick for genuine pending work on either page: `.`, `..`, `...` at 350 ms per step, stop on completion/failure/close. Include profiling installation, source refresh, capture preparation, collection, native report generation, restoration, explicit Analyze and combined Generate; preserve final readable messages without inventing progress or changing underlying workflow.
+
+## 2026-11-20 — Page 2 visual approval (current)
+
+Retain the Page 1 owner-approved artwork and fixed layout. Page 2 must reuse the **existing** cyan skyline that is already under both pages, rather than cover it with a black panel or duplicate/change artwork. Shift only the Page 2 results surface to the right to expose the original portrait/ink fade; keep bottom/right frame and scrolling valid at normal/minimum/maximized sizes. Restoration and CET/REDscript/PresentMon labels use yellow; **only verified `OK`** words are green. Panel headings are `CET mod Optimizations:` and `REDscript mod Optimizations:`. Keep pre-analysis explanations.
+
+The three-line footer reads `CET + REDscript  One clean zip with optimized files.`, `Use Vortex for easy file management`, and `For manual install BACKUP YOUR "\\Cyberpunk 2077\\bin\\x64\\plugins\\cyber_engine_tweaks\\mods" and "\\Cyberpunk 2077\\r6\\scripts"`. Preserve source-authority, backup/reversible overlay guidance, explicit ANALYZE click, and one clean game-relative ZIP. No new player-side compiler dependency.
+
+## 2026-11-20 — CONTINUE restores; ANALYZE requires its own click; source-local skips must be visible
+
+Owner explicitly wants no automatic Analyze on CONTINUE, Page 2 refresh or reopen. The second page immediately states restoration verified and displays CET, REDscript and PresentMon capture health independently **above/outside** both optimizer panels. A verified restored collection enables an explicit `ANALYZE` button. Its CET summary must distinguish material unresolved callback registrations from non-material unmatched callbacks (the latter are not unresolved mods). The REDscript panel should use a brief user-facing optimization summary, not generator order, internal JSON paths, developer research counts or compiler claims.
+
+GENERATE should publish safe independently applicable CET/REDscript output even when a narrowly proven source-specific rewrite must be deferred. The underlying CET owner is responsible for per-mod skip outcomes, surfaced from its authoritative companion manifest. REDscript may skip a source-refused **whole rule family** pending source-owner per-file refinement, but never swallow general source/capture drift, tamper, unexpected exceptions or generator postcondition defects. The clean game-relative ZIP contains **only** accepted files; the external `*.ownership.json` sidecar records skipped counts, source-local reasons and changed-file hashes. A total absence of safe output is reported truthfully rather than publishing an empty ZIP. No automatic game installation, runtime SCC invocation or third-party compiler redistribution.
+
+## 2026-11-20 — SCC belongs to CI; no third-party runtime compiler redistribution
+
+User explicitly rejected an SCC compiler requirement or staging emulation as a **player-side Generate blocker**. The application must generate one safe game-relative CET + REDscript optimization ZIP from the currently installed source after read-only Analyze and source-drift/ownership checks. Official SCC 0.5.31 compilation remains a high-value **GitHub CI/development acceptance gate**, not a runtime prerequisite or a claim of game behavior equivalence. Do not bundle `scc_lib.dll` in the downloadable GCO app; redistribution authorization has not been established. Do not replace official SCC with a custom compiler or silently declare generated files compiler-verified. The runtime output sidecar must truthfully state CI-only SCC status.
+
+The original CET+REDscript native capture remains authoritative. GCO report publication must not duplicate byte-identical sealed profiler CSVs under `Reports`; preserve complete readable owner HTML/JSON and redirect download links to sealed originals. Graph zoom may visually connect across missing observations only using a clearly marked **unobserved** style; never substitute zero or fabricate interpolated values. These changes do not modify a captured session or source-owner profiler behavior.
+
+## 2026-11-20 — source-aware stable array-length generic before semantics
+
+- User approved implementing `STABLE_ARRAY_BOUND_V1` as a genuinely mod-independent structural REDscript optimization, with no change to the existing two blackboard-definition rules. The source-only generator runs after the existing nine R5 generic families within GCO's one canonical order, before any future R7 semantic work. Earlier CET generation order remains unchanged.
+- Current installed, locally customized source is authoritative. Typed local/parameter array scope, whole-loop no-call/no-array-mutation closure and exact marker/body verification gate admission. Preserve all original loop-body statements, branch/return behavior and earlier generated effective-source edits. Refuse structural ambiguity or source drift; do not introduce fixed mod lists, source hashes or version locks.
+- The seven approved R7 semantic owners are excluded from generic **performance ranking only**, not from generic generator admission. Generated source compiles with the installed stack via GCO's official SCC and remains subject to runtime A/B before any FPS claim. This is one generic rule, not another mod-specific semantic catalog or runtime observer.
+
+
+
+## 2026-11-20 — one combined optimization ZIP in GCO's existing Page 2
+
+- User explicitly requests GCO itself to generate both CET and REDscript optimization output for in-game testing, as **one ZIP**, after the established combined capture, collect, restore and Analyze workflow. The former temporary CET-only Generate button is replaced by `GENERATE OPTIMIZATION ZIP`.
+- Keep the authoritative CET Lua/native generator and original fixed order unchanged. GCO owns REDscript source-rule execution, official SCC 0.5.31 isolation/compilation, merged game-relative ZIP, per-mod ownership/exclusion sidecar, and source-drift checks. No second resolver UI, no direct modification of installed mods, and no documentation or profiler binaries inside output ZIP.
+- The resulting output is a **test pass**, not a gameplay-certified or performance-proven release. Vortex installation above original mods is recommended and can be reversed. Exact standalone owner versions and app version remain unchanged. Development CI and in-game validation are separate gates.
+
+
+**Authority model.** The original [UNIFIED-TWO-PAGE-WORKFLOW](UNIFIED-TWO-PAGE-WORKFLOW.md) is copied **unchanged** from the accepted 2026-10-16 user/agent design. This file records **later explicit user decisions and implementation interpretation only**. If a suggestion here conflicts with original behavior without a direct user authorization, the original wins; ask the user before changing it.
+
+## Latest explicit decision — 2026-11-16 (supersedes older REDscript managed ownership)
+
+- **Develop the REDscript Resolver/Generator in GCO** on `dev/redscript/resolver_handoff` as a distinct internal `.NET 10` source-aware component. GRSP stays the authority for native profiling, F11 instrumentation and measurement evidence only. CET retains its Lua Resolver/Generator; G-REDruntime owns optional common runtime services.
+- Maintain one existing two-page application and one user-facing workflow, joint CET/GRSP/PresentMon evidence, one ZIP and one canonical CI; no second form, competing generator or managed runtime.
+- [GCO-local handoff](../integration/REDSCRIPT-RESOLVER-LOCAL-HANDOFF.md) supersedes older contradictory managed ownership text below. The tested GRSP managed code and its source/CLI contracts have now been copied into GCO `src/GRedscript.Resolver` and `tests/GRedscript.Resolver.Tests` (GCO `f291b0f`), with the original GCO Windows CI switched to local managed source at `6b498bed`. Native GRSP profiler and CET owner remain separate. [GCO CI #483 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43798781332) proved 41 local tests, private 2,319-file source/capture and full SCC, plus 323 GCO package contracts. The redundant GRSP managed source/tests/CI were subsequently retired from GRSP development branch `a2fe918`; GRSP native profiling and CET generation are unchanged. GCO stable `main` remains untouched.
+
+## Earlier decisions below (superseded where inconsistent)
+
+## Explicitly approved since the original specification
+
+1. **New repository, `main`.** User created [Gs-Cyberpunk2077_total_optimization_generator_v2.31](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations) on 2026-11-04 and explicitly rejected using its temporary `dev/resolver-profiler-handoff` as the development branch. Keep this product on `main`. This does not change existing CET/GRSP branch choices.
+2. **Current components, not old TOTAL.** The historical TOTAL application was based on completely different, obsolete CET profiler code. It is only a reference for interface and correlation concepts. New product integrates current CET, GRSP and REDscript framework components.
+3. **REDscript generic-first.** The user explicitly **does not intend a large REDscript semantic library**; apply generally safe/reusable generic rules, with rare optional stack-specific semantics only when the user decides. This tightens the October 16 provisional REDscript scope without prohibiting agreed exceptions.
+4. **One combined optimization plan with clear ownership.** GCO owns the single user-facing analysis and cross-domain coordination, while **CET retains its existing Lua Resolver/Generator** and GCO develops the **new REDscript Resolver/Generator**. Select compatible work using both profilers' evidence and current live sources. Preserve CET's complete generation order, authority and existing work, plus REDscript compilation/source-safety. Do not duplicate generators or create a second ordinary Resolver UI.
+5. **GRSP can evolve.** Extend existing GRSP native instrumentation/reporting when the REDscript generic backend needs new, provable measurements. Changes stay in the GRSP repository, and standalone GRSP remains functional.
+6. **Documentation first, then app.** User asked to locate and preserve the original design and prepare a complete handoff before writing the unified GUI. Documentation alone does not satisfy app milestones.
+
+7. **Shared managed runtime / CapFrameX:** user wants one bundled .NET runtime for all normal users. New app targets **.NET 10**, retains current CapFrameX 1.9.1.2 Beta (requires .NET 10 Desktop), and plans verified framework-dependent CET/GRSP manager builds with a private Desktop Runtime. No downgrade to earlier CapFrameX; private-runtime compatibility is not yet proven. See [runtime contract](../technical/SHARED-NET-RUNTIME.md).
+
+## Existing original decisions retained
+
+- **Two pages / three page-1 actions, one game-folder input.** Normal users are not confronted with profiler internals, extra path fields or an extra analysis button. Analysis starts automatically upon entry to page 2.
+- The suggested **~5-minute gameplay capture** samples idle, running, jumping, driving and combat. It is **not** an enforced duration. Avoid menus, shops and vendors for representative gameplay.
+- Both profilers' temporary native changes are reversibly installed and **restored before normal optimization generation**. Recovery is explicit and cannot be bypassed by a stale capture.
+- **Vortex-managed one-ZIP overlay** is recommended, installed **after** original mods via user-defined conflict rules. Original mods remain installed. A manual install requires full backups before applying the ZIP. Owner exclusion/regeneration is an advanced safety feature.
+- User's deep research stack demonstrates capability; other stacks should get **high-return-first**, generic-first best-effort optimizations. No universal performance/coverage claims or mandatory new semantic rules for modest mods.
+- REDscript and CET inputs come from the current *effective* installed sources, not captures or past author ZIPs. Unsupported MO2 virtual source resolution must be identified instead of guessing.
+- Package only game-root-relative runtime files; keep reports, source proofs, origin hashes and restore plans in the app workspace.
+
+## Open / not user-approved implementation choices
+
+- **UI toolkit**: .NET 10 Windows desktop is the selected target; CET and GRSP standalone managers still currently target .NET 8. WinForms is a likely low-risk default, but final UI visual design can evolve **without changing the two-page UX contract**.
+- **Component binary delivery**: verified current standalone GitHub Actions artifacts or locally built, checksum-verified identical sources. No blind pin of stale TOTAL binaries. Prove legal and technical availability of optional CapFrameX bundling; linking existing copy remains supported.
+- **REDscript optimizer algorithm**: rule families are hypotheses until source- and compile-proven. Do not claim a general generic rule works merely because GRSP flags a candidate.
+- **Capture orchestration**: coordinate existing CET F10 (120s benchmark), user-defined F11, GRSP F11 and optional CapFrameX, but no verified one-key three-way session yet. Never overwrite bindings broadly to pretend synchronization.
+- **MO2 and other virtual installs**, and every dependency-dependent native optimization path, remain unsupported until positively proven.
+- **Gameplay validation**: none for the new unified app at documentation stage. CI, source validation, REDscript compile and in-game results are different evidence levels.
+
+## Precedence / historical documentation caveat
+
+The 2026-11-04 CET `docs/integration/UNIFIED-OPTIMIZER-MIGRATION.md` was drafted **before rediscovering** the October 16 original UX document. It documents useful component boundaries but its broader "Setup → Measure → Optimize → Results" concept must **not replace** the original accepted two-page workflow. This repo's unchanged original contract plus explicit decisions above are the correct product authority. The original document's wording about an established CET semantic library describes CET, **not a mandate to build a comparable REDscript library**.
+
+
+## 2026-11-04 — explicitly approved CET-style UI refinement (implementation target)
+
+The user explicitly selected the current **CET Runtime Profiler v1.3.4** look: nearly black (#080D12), dark blue panels, cyan (#36F4F4), green verified statuses, magenta accent, and compact source/capture sections. This replaces the initial light UI shell; it does not authorize copying component-owned installer or generator logic.
+
+- **Two pages, no visible tabs.** Page 1 has source selection, brief capture/keybind instructions and buttons: **Install Profilers**, **Start Cyberpunk and Record**, **Collect Results and Restore**, then a **Continue** gate. Page 2 shows **Analyze**, **Generate Optimization Pass**, **Open Results Folder**, with separate scrollable CET and REDscript findings. Page 2 Analyze is now **explicitly user-approved instead of auto-analyze on arrival**.
+- The main source chooser accepts a physical game root or **direct live CET \`mods\` directory**; installed CET owner identity requires immediate \`<mod>/init.lua\`. Direct physical CET path may infer game root only through exact known game-relative parent chain and executable proof. An external/MO2 mods folder may be inspected but must not be misrepresented as the effective game tree or a valid target for profiler install, REDscript scan or pass generation until its VFS precedence and game association are proven.
+- Key status is **read-only evidence**, not static green checkboxes: CET \`CETProfilerControls/CETProfiler_Toggle\` F11 or existing custom, GRSP's native F11 start/stop, and CapFrameX \`CaptureHotKey\` from its actual portable/config settings. Preserve custom CET/user CapFrameX controls; do not silently rewrite them. CET's component-owned installer seeds missing F11; bundled CapFrameX with an approved F11 preset still requires exact package and distribution validation.
+- The capture instructions specify 5+ minutes as **guidance**, stress idle, movement, driving, heavy combat; avoid menus, map, inventory, CET UI and missions, remain in-world. After STOP, **close game, collect verified current evidence and restore both profiler layers before Continue**.
+- The combined ZIP is named \`G-Cyberpunk2077-{timestamp}_Optimization_Pass.zip\`. Display a Vortex-winning overlay instruction. Owner exclusions must be **dependency-aware**: removing one owner's files is not guaranteed safe if remaining generated owners depend on its scheduler/runtime or cross-owner glue. Required 0-Engine/G-REdruntime files remain only when corresponding accepted optimizations require them.
+- CapFrameX is an optional frame-time companion, **not a game profiler installed into red4ext/CET**; new app can launch its approved portable deployment once provenance/private .NET compatibility is proven, otherwise link the existing copy.
+
+
+## 2026-11-04 — CET-style Page 1 source picker and capture instructions
+
+- **Game folder / Cyberpunk 2077** is the ordinary mandatory picker; inside that same box Normal/MO2 toggles source mode. MO2 mode adds instance directory and profile selection and inspects the enabled physical mod files from its configured locations. It does not require copying the MO2 stack.
+- Show source presence for **0-Engine, r6/scripts, red4ext/plugins** across known physical and selected MO2 sources, with a direct public link if 0-Engine is missing. A source-path existence check is **not** proof of 0-Engine runtime compatibility.
+- The large capture instruction panel uses cyan heading, yellow operational instructions and green 5–10-minute gameplay stress emphasis; F11 checks must reflect real provenance. Shorter completed captures are permissible; do not reject solely by duration. Avoid menus/UI and loading screens. The capture collection/restore remains evidence-gated.
+- Display readable disabled workflow buttons and an enabled pink Continue button only after verified current-session capture archive **and both owner restores**. No premature enablement.
+- **CapFrameX:** explicitly bundled, no ordinary path selector; only exact verified upstream artifact, runtime/rights and reversible config checks authorize packaging. Current development shell has no CapFrameX binary and reports that honestly.
+
+
+## 2026-11-04 — refined Page 1 and MO2 mode
+- Normal setup shows only Game folder /Cyberpunk2077; the Normal/MO2 selector is inside the game source box, not a new page.
+- MO2 additionally selects instance and actual profile; read-only physical source map tracks game files, enabled mod packages, Overwrite and loose-file precedence. Never infer runtime VFS equivalence, RootBuilder behavior or verified game launch from files alone.
+- Show 0-Engine path/mandatory Nexus link when missing, r6/scripts and red4ext/plugins statuses. Preserve owner/dependency evidence; no source copying.
+- Use CET dark/cyan colors, larger yellow/green instructions, legible gray disabled controls, and magenta Continue only after verified capture plus restore.
+- CapFrameX will be bundled, so remove ordinary external executable path chooser. Do not claim binary staged before actual vendor provenance, licensing, F11 settings and .NET 10 compatibility checks.
+
+
+## 2026-11-04 — final CET-style first-page layout correction
+
+- User rejected the narrow inline Normal/MO2 radio pair and the tall scrollable first page shown in the v1.1.0 build. **Normal and MO2 are now equal-width full tabs inside the Game folder box**; selecting MO2 replaces the normal game-root input with the MO2 instance/profile controls. They are views of one source-selection step, not additional pages.
+- **Page 1 must not scroll at the reference 1010 × 790 client size**. Compact the path field back to CET-like height, remove excess space/margins, and allocate three fixed screen sections above the workflow buttons. Page 2 keeps its scrollable reports.
+- Keep 0-Engine, r6/scripts and red4ext checks beneath the active tab; keep mandatory missing 0-Engine link, F11 source-status truthfulness and the existing read-only safety gates. No cosmetic change authorizes installing or modifying user mods.
+- Preserve version **v1.1.0**; this is a design correction, not a new product version.
+
+
+## 2026-11-05 — CET-path cleanup, source counts and MO2 arbitrary storage
+
+- Match the CET Setup path control exactly in scale: compact 26px textbox and separate 92x30 flat Browse button with an intact outline; avoid nested TableLayoutPanel clipping.
+- Make setup text white except the green REC0RD 5–10 MINUTES and IDLE–HEAVY COMBAT emphasis. Keep the AVOID MENUS warning uppercase but white; make F11 key rows informational without unavailable/warning badges. Do not misstate bundled presets as verified actual installations.
+- Rename the first workflow status to **PROFILER NOT INSTALLED**, while keeping actual installation and capture actions gated until component provenance and lifecycle tests are complete.
+- Show **Game found · N CET mods · M REDscript mods** in Normal and MO2 source views. CET counts installed immediate owners with init.lua. REDscript counts are *estimated source-owner groups*, not .reds file counts: physical top-level r6/scripts owner directories and standalone root .reds sources; in MO2, winning enabled package owners plus physical owner groups. No claim of authoritative author identity when files have been flattened in a manual install.
+- With no valid path, say only **Select the Cyberpunk 2077 Game root - /Cyberpunk2077** in source status. Keep the 0-Engine, r6/scripts and red4ext/plugins check lines plain white even when missing; keep the dedicated 0-Engine dependency link.
+- MO2's **game executable path must be visible inside MO2 mode as an independent first input**; no user should need to return to Normal mode to set it. MO2 instance and its configured Mods/Profiles/Overwrite directories may be entirely unrelated paths/drives to each other and to the game. Read arbitrary configured paths from ModOrganizer.ini and profile modlist.txt. A physical game without installed mods is valid when the selected MO2 profile supplies them. Do not presume successful runtime USVFS/RootBuilder integration.
+
+
+## 2026-11-05 — MO2 source folders by content, not fixed layout
+- Explicit user correction: replace MO2 instance/profile setup fields with **up to four arbitrary physical folder selectors** and four read-only checkboxes: CET ASI (`cyber_engine_tweaks.asi` / `CET.asi`), CET Lua mods (`mods/<owner>/init.lua`), REDscript (`r6/scripts/*.reds`), and RED4ext native plugins (`red4ext/plugins/*.dll`).
+- One selected folder may satisfy all four; if two satisfy all, hide slots 3–4; similarly 3/4. Expose the next slot only while something is missing; no fixed requirement to split components into four directories or place them under the game root.
+- Detection is based on bounded physical file walking (no modification, no copying). Read-only checkboxes reflect discovered content, **not** that the files belong to MO2's enabled profile or that RootBuilder and VFS inject them at runtime. This provenance remains unverified and generation stays gated.
+- Existing MO2 INI/modlist-based source reader remains available as a separate code service but is not silently substituted for arbitrary-folder discovery. Game root is still a future prerequisite for profiler launch/install; four source fields are not redefined as a game-executable selector.
+- Normal mode and Page 2 stay unchanged; Page 1 stays non-scrollable; v1.1.0 remains the requested display version.
+
+
+## 2026-11-05 — MO2 configuration and profile replace arbitrary-folder check workflow
+- User superseded the standalone 1–4 folder-only checks. Require MO2 application folder first. Portable uses ModOrganizer.ini in that folder. Global instance config uses %LOCALAPPDATA%/ModOrganizer/<instance>/ModOrganizer.ini. Multiple instances require explicit selection; manually selected custom instance paths are supported.
+- Read configured Mods, Profiles and Overwrite paths from the chosen INI regardless of drive. Show actual game root separately, auto-resolved Mods folder with an explicit Browse recovery override, and selected active profile dropdown. Only honor selected_profile if that profile exists.
+- Do NOT check CET ASI, CET mods, REDscript or RED4ext from loose files/init.lua alone. Require selected MO2 instance and profile, modlist enabled list, all enabled packages, and the winning game-relative file map first. MO2 profile is a fifth prerequisite check.
+- Current MO2 loose-file evidence is not proof that Cyberpunk launched through MO2 or of RootBuilder/USVFS, archive precedence and file exceptions. No profiler install or optimization generation enabled until source equivalence and restore are verified.
+- Removed superseded independent folder-only scanner to avoid parallel source inventories. The active profile resolver is authoritative for the UI. Normal mode and two-page layout retained; version stays v1.1.0.
+
+
+## 2026-11-05 — Page 1 status colors and capture instructions refinement
+- Normal and MO2 paths use a distinct magenta outline when the selected location is missing or invalid. Confirmed paths revert to CET's subdued outline; no source is admitted based on cosmetics.
+- Source-selection prompt directly under the path is amber/yellow until a valid source is selected. Normal component paths and 'NOT FOUND' text stay white; only independent X / check glyphs are red / green. Five MO2 component checks are owner-drawn with the same glyph colors rather than native OS black-gray checkboxes.
+- Page 1 instructions remove the redundant CET, REDscript and CapFrameX F11 status rows entirely; retain the human-readable F11 start/stop instruction. Start with 'Provide the path to the live Cyberpunk 2077 game files', then start game, unbind F11 collisions, and confirm Cyberpunk is the only process selected in CapFrameX.
+- Keep 'RECORD 5–10 MINUTES IN THE CITY' green; idle/movement/driving/heavy-combat line becomes yellow; the uppercase avoid-menus instruction and all remaining explanatory text stay white. Increase instruction section to display all three bottom lines without clipping.
+- The profiler status remains 'PROFILER NOT INSTALLED'. Step two explains recording with all profilers; step three reads 'COLLECT RESULTS / RESTORE — Close game, collect results and continue'.
+- MO2's missing 0-Engine notice appears above the five source checks, not below them. Page 1 stays non-scrollable at the reference 1010×790 client size, while Page 2 remains scrollable. Version 1.1.0 retained; no backend authorization implied.
+
+
+## 2026-11-05 — Page 1 post-v1.1.1 visual corrections
+- The unresolved Normal/MO2 path outline must be a genuine **one-pixel** magenta border, not a four-pixel magenta-filled panel. Confirmed source paths use CET's subdued border.
+- A valid game root with missing 0-Engine must display `Game found; 0-ENGINE MISSING!!` in amber next to the 0-Engine Nexus link. The normal game status changes to white with mod counts only after 0-Engine is present; a missing game root remains amber and has no 0-Engine link.
+- Normal path checks for 0-Engine, r6/scripts and red4ext/plugins must show their path/missing text **white** and the actual status glyph **red X** or **green tick**. Render the full mixed-color result together to prevent hidden glyphs or clipping.
+- The first line of the instructions receives a green tick whenever a physical Cyberpunk game root is verified. This indicates the game path only, not profiler or MO2 VFS runtime validation.
+- Add a **REFRESH** button at the top right of Page 1 to reread physical paths and MO2 configuration/profile, with no writes to game files.
+- Complete step 3 wording with explicit restoration before continuation. Keep v1.1.1 and component boundaries; do not unlock profiler install/capture/restore/generation from these visual changes.
+
+
+## 2026-11-05 — physical baseline, MO2 absence and portable distribution
+
+- **Every MO2 source projection includes the live physical game as lowest precedence**, whether MO2 is empty or enabled. Enabled MO2 package files override same game-relative paths based on profile priority; preserve winning owner and file path for source drift/optimizer protection. Disabled MO2 packages never enter.
+- **Missing `modlist.txt` is not proof of active MO2 packages**: exclude all MO2 packages and MO2 Overwrite; physical game remains analyzable as its own source. An existing readable list with zero enabled packages is a valid 0-enabled profile. Corrupt/unreadable/incomplete enabled lists also exclude all MO2 layers (no guessing); show missing verification separately from directly found game files. MO2 VFS/runtime winner proof is still pending before MO2 optimization.
+- Package unified `v1.1.1` as one clean folder like the CET profiler: root native launcher plus Windows shortcut, managed application and exactly one private .NET 10 runtime under `app/`, `RESULTS/` folder and `VERSION.txt`. The root launcher is a source-built small Windows executable, not another profiler or managed runtime. Never ship third-party binaries before approval/provenance. No new release tag or change to CET/GRSP component versions.
+
+
+## 2026-11-05 — superseding MO2 launch decision: defer actual integration
+
+- The first usable unified optimizer **supports directly installed game sources first**. Disable the MO2 tab in the shipped shell, with "COMING LATER" status; do not create an independent MO2 profiler/Resolver workflow before direct-install integration is complete.
+- Preserve only **passive read-only MO2 directory discovery** for future work: user-selected game folder + MO2 application folder; auto-locate portable or LocalAppData instance `ModOrganizer.ini`; offer instance/profile dropdowns only when MO2 mode is eventually enabled. INI supplies Mods/Profiles/Overwrite, profile supplies `modlist.txt`; no ordinary manual path for either INI, modlist or Mods folder.
+- The current MO2 code can still prepare a candidate file-winner map for tests, but **that is not a supported installed-source provider in the initial app**. Keep profiling, restore, Resolver and ZIP generation limited to physically installed game sources until MO2 injection/runtime equivalence has explicit tests and approval.
+- This supersedes earlier November 5 UI plans for active MO2 checks and manual Mods-directory override. No version bump for the shell; v1.1.1 remains the current development version.
+
+
+## 2026-11-05 — Page 1 final copy and verified profiler status rows
+
+- Instruction copy: “Make sure Cyberpunk 2077 is detected in CapX and is the ONLY process.” Use **heavy combat**, with fighting police as a fallback when longer combat captures are difficult; “If you die, stop recording with F11”; “return to this screen.”
+- Last box heading is **PROFILERS NOT INSTALLED** until authoritatively verified and **PROFILERS INSTALLED** when the two required native profilers (CET+GRSP) are installed; CapX is optional and has its own independent verification state. Remove scheduler/install/restore workflow prose from this box. Rows only **CET**, **REDscript**, **CapX** and their detected/preset hotkeys. No green tick for mere filesystem presence, game executable, settings, or unverified backend response; a tick requires verified installed payload.
+- Existing GRSP fixed F11, CET stored capture binding, CapFrameX portable/configured CaptureHotKey are independent key sources. The initial portable shell lacks staged profiler/CapFrameX binaries, so key display may show the expected F11 preset *without claiming detection*. When CET or CapX has a verified non-F11 setting, show a **yellow advisory** that REDscript currently hardcodes F11. **Do not block install/capture/gameplay or controlled CET F10 tests for a key mismatch** and never overwrite user keybinds.
+
+
+## 2026-11-05 — explicit correction of Page 1 changes
+
+- **Do not replace the three original cyan/gray install, start and collect workflow descriptions.** Keep them on the **left** of the third box. Place the already-approved three CET/REDscript/CapX installation checks and capture keys on the **right**. Leave status heading and keybind-warning semantics intact.
+- Add one line to the existing F11 instruction: **“You will hear Start/Stop in CapX and RED. CET Start displays a UI timer in the upper left corner.”** Enlarge the second box by one text row instead of shrinking its contents. Restore **“Shorter captures also work.”** No other capture copy changes.
+- MO2 remains disabled and will need a separate fit review before reactivation; do not adjust its backend/source handling as part of this UI correction.
+
+## 2026-11-05 — one root launcher; artifact-based integration
+
+- Portable root contains only the `G-Total-Optimizer.exe` launcher, not an additional `.lnk` file. The shortcut was redundant and may contain the Actions runner absolute target. Existing user's local shortcut may be deleted manually; future packages must not stage it.
+- CET and CapFrameX reported ready; GRSP remains paused by user. Prefer reproducible GitHub Actions import/verification of each component's own exact upstream artifact, manifest, hashes and payload, not manually copied build outputs. Only the unified orchestrator coordinates lifecycle. Do not claim components integrated until verified end-to-end.
+
+
+## 2026-11-05 — one-runtime CapFrameX test explicitly authorized
+
+- User rejected any default system-wide .NET or VC++ installation and requested a runnable CapFrameX test linked to the unified application's **private .NET10 runtime**. Preserve one shared runtime design and a portable ZIP. No switch to system-only framework-dependent release.
+- Build source-owned CapFrameX dependency-check assembly against exact pinned vendor 1.9.1.2 beta source, preserving vendor original `CapFrameX.exe` and all native capture binaries; recognize private framework tree and app-local CRT, preserve original behavior without the unified private-runtime environment. Use separate test-only CI, not the ordinary shell release workflow. CapFrameX already requires UAC; use an elevated native CapFrameX launcher before setting the private process environment.
+- Accept test only after genuine Windows launch/capture and restored source safety, not from compile or file topology alone. CET/GRSP integration and MO2 still deferred or independently staged.
+
+
+## 2026-11-05 — PresentMon compact default, all-three test
+
+- User explicitly requests **CET + GRSP + PresentMon in the same first gameplay test**; no CET-only/PresentMon-only validation as evidence of integrated readiness. CapFrameX full suite is not required in the normal ZIP when PresentMon yields sufficient frametime data. CapFrameX can remain an optional external comparison/advanced provider.
+- Continue targeting **one private .NET 10 Windows Desktop Runtime** (no mandatory system .NET or Visual C++ install). In a disposable CI test workspace the original CET and GRSP managers can be source-retargeted and rebuilt against net10.0-windows, sharing the runtime with the unified app. Native CET ASI and GRSP RED4ext DLL remain intact. Do not claim standalone product repos have been retargeted or change their release policy without independent evidence.
+- PresentMon CLI 2.6.0 is pinned by release SHA and packaged unmodified. User F11 remains authoritative and unchanged. Before normal UI install is enabled, verify the interaction of PresentMon's `RegisterHotKey`, CET's game keybind and GRSP's `GetAsyncKeyState`; run real simultaneous capture and recovery. Generate graphs from collected per-frame CSV in the unified reporting layer only after validated process/time alignment.
+- Test-only workflow and developer script are **not** a substitute for the original two-page UI nor proof of game/profile/restore correctness. Ordinary UI remains fail-closed pending actual capture/restore, current-session evidence, and cross-profiler contracts.
+
+## 2026-11-05 — unified app test-bundle version v1.1.2
+
+- User explicitly chose **v1.1.2** after confirming the main unified application was already v1.1.1. Apply version to the unified shell and triple-profiler test, including embedded executable metadata and CI artifact names; retain CET v1.3.4 and GRSP v1.0.0 independently. No gameplay/restore acceptance is implied by the packaging version bump.
+
+## 2026-11-05 — stop standalone harness loop, implement real app
+
+- User explicitly ordered integration of **both CET and GRSP now** into the unified application's existing two-page workflow; PresentMon is the initial lightweight frame provider and may be replaced if it fails real-game validation. No separate test-only GUI. Rebuild managed CET/GRSP managers for **.NET 10** using authoritative source in disposable CI; retain original native binary identity and owner-managed install/restore. Existing CapFrameX-heavy Page 1 wording can be updated later, after the core lifecycle is functional.
+- Real GUI installation, launch and collection are authorized, with strict hash/owner-status preflight, session journal and owner-controlled restore. **Only** completed CET+GRSP captures with confirmed restoration unlock Page 2. No optimization ZIP button until CET Resolver and REDscript source generator, compilation, dependencies and actual output have been validated. No MO2 until its separate integration milestone.
+
+## 2026-11-05 — explicit-only GCO version policy
+
+- The user explicitly authorized GCO v1.1.5. **Never increment the GCO version again unless the user explicitly orders it.** Bug fixes, CI runs, packaging corrections and ordinary development retain their current version. Do not alter CET, GRSP or PresentMon versions implicitly.
+
+
+## 2026-11-05 — explicit PresentMon collection boundary
+
+User clarified the first-page three-button workflow: bundled optional PresentMon starts on button 2 without its own F11 hotkey, continuously records Cyberpunk, and stops/collects on button 3 COLLECT RESULTS. It requires no separate config or setup step. CET/GRSP remain instrumented after collection until CONTINUE, which invokes their authoritative original-file restore. A missing PresentMon CSV is explicitly skippable and never silently treated as successful frametime analysis. Do not make native profiler restoration responsible for PresentMon shutdown. Keep one game root, two pages, no unrequested version bump or unmeasured performance claims.
+
+
+## 2026-11-06 — GCO identity, first-run simplification and design resources
+
+- User approved a branded ZIP artifact named `Gs-Cyberpunk2077_Optimizer.zip` with one adjacent `START-HERE.txt` and an app folder named `G's Cyberpunk 2077 Optimization`, whose root executable is `Gs-Cyberpunk2077_Optimizer.exe`. Retain exactly one private shared .NET 10 Desktop runtime and existing internal owner managers. Existing GCO product version remains 1.1.5 until explicitly bumped. The GitHub repository was **renamed by the owner**, verified at `giorgioherma/Gs-Cyberpunk2077_Optimizations` on 2026-11-06. Public exe/ZIP continue using the previously approved `Gs-Cyberpunk2077_Optimizer` filenames; no duplicate repo.
+- Approved visual direction: yellow (#FFF000) primary, near-black (#070B0D) content, cyan (#00E2F2) limited to outlines/technical accents, official user's hybrid GOT LAG ICO for public app icon, Night City header and V sidebar where space allows. Less instructional text in the application: compact task-oriented captions, explicit current action, truthful native/tool status, full instructions in the outer artifact guide and optional Help. No fake metrics, functionality claims or nonworking art-button images.
+- Keep WinForms for incremental refresh as a risk-minimizing UI choice; evaluate WPF only if an actual measured/implemented WinForms design requirement cannot be achieved. Preserve one source path, two pages, source-owner CET/GRSP transactions, optional automatic PresentMon, Collect before Continue, and current-source optimizers.
+
+
+## 2026-11-06 — Completed capture navigation is one-way until deliberate new-session UX
+
+- Once Continue has verified source-owned CET/GRSP restoration and committed a `Restored=true` collection index, Page 2 is the active workspace. Remove the misleading Back-to-Setup control that loses the owner journal and strands the user after refresh. Refresh completed evidence from its verified session ID, not the deleted owner install journal. Original owner restoration and evidence integrity checks remain mandatory.
+- Do **not** add a speculative, dangerous reset-stack button as a quick workaround. A user-facing new-session/reset control will be designed separately with explicit scope and source-owner recovery checks. Do not claim the CET Resolver or REDscript generic generator are integrated merely because Page 2 now reliably displays collected archives. GCO version remains v1.1.5.
+
+## 2026-11-06 — approved Page 1 and independent CET/GRSP profiling (supersedes earlier both-required gating)
+
+[Full implementation contract](../design/PAGE1-APPROVED-IMPLEMENTATION-PLAN.md). **DECIDED, NOT IMPLEMENTED.**
+
+- Use taller selected Page 1 concept with full original V long ink trail and **keep BLUE skyline** upper-right (do not replace with yellow). Original aligned hand-edited black/full-color 743×2117 pair, no regeneration; real three capture-stage buttons. Add small cyan Refresh in Game Root and **global** CET/REDscript owner counts for Direct and MO2, never claim exhaustive detection.
+- V black before Start; after Start irregular bursts, occasional **30ms microflashes**, longer forced black pauses; keep flashing and increase intensity throughout actual Collect; full color permanently when CET-or-GRSP verified capture is collected and Continue available. No fake loading percentage or timer-driven success.
+- CET and GRSP admitted **independently**. GCO CET route requires actual 0-Engine validation (standalone CET core-only is optional); GRSP-only requires RED4ext/REDscript-side environment but not CET/0-Engine. Both supported; neither blocked. No other framework or mod count universally required. PresentMon optional and frame-only capture cannot unlock Continue.
+- Continue available after at least one verified current-session CET **or** GRSP result. Missing **expected** domains are listed in **Return / Continue popup only on Continue click**, not immediately on collection. Return stays Page 1 with valid proof and Continue for safe retry. Continue accepts partial domain results but must verify all installed profiler original-file restoration before Page 2.
+- MO2 integration **deferred**. Standard future UI needs game root + one MO2 app path; discover portable/LocalAppData INI, profile `modlist.txt`, arbitrary configured Mods/Profiles/Overwrite. If extra external categorized folders exist, offer separate **Custom/Advanced source-path repair window**, prove active profile/priority and show incomplete inventory rather than assuming it sees all user mods. Runtime capture location/USVFS/restore must be proven. Preserve MO2 feature gate disabled.
+- Source work pending: `UnifiedProfilerWorkflow` both-owner assumptions, `CollectedCaptureStore.HasAny` including PresentMon, conditional per-domain prerequisites/partial-retry UI, animation and tests. Keep GCO v1.1.5, sole integrated workflow and owner logic.
+
+
+## 2026-11-06 — User-edited project Rule 4: authoritative component ownership
+
+The user explicitly confirmed the following final ownership wording, including the `0-Engine v0.17.2+` prerequisite and that G-REDruntime's shared services are **for REDscript**. This supersedes any earlier suggestion that the REDscript generator should move into GRSP.
+
+4. **Respect component ownership.**
+
+- **CET:** Owns its profiler, existing Lua Resolver/Generator, native optimizations and G-GC. Preserve all existing work. CET profiling requires 0-Engine v0.17.2+.
+- **GRSP:** Owns REDscript profiling and instrumentation.
+- **GCO:** Owns unified analysis, cross-domain coordination, new REDscript Resolver/Generator, UI, reporting and final optimization ZIP.
+- **G-REDruntime:** Owns shared framework services for REDscript, included only when required.
+- **One combined optimization plan**, using CET and GRSP evidence and live sources. Preserve CET's authoritative generation pipeline and REDscript compilation/source-safety checks. Never duplicate implementations.
+
+**Implementation interpretation:** GCO is the central **cross-domain decision and plan coordinator**, not a replacement CET Resolver. CET continues its source-owned candidate selection and code generation; any additional CET integration interface must be added at CET's source, not recreated or patched downstream in GCO. GCO owns the NEW REDscript optimizer and full REDscript source safety, optional G-REDruntime dependencies and final package compatibility. Independent CET-only and GRSP-only captures remain valid; PresentMon-only remains insufficient. The supported GCO CET route checks the required 0-Engine version; standalone CET core-only operation without 0-Engine is a separate capability and does not weaken this user-approved GCO requirement. No code changes in this documentation update.
+
+## 2026-11-06 — WPF selected for GCO interface (explicitly supersedes WinForms preference)
+
+- The user elected to **replace GCO's WinForms UI with .NET 10 WPF now**, rather than styling a frontend that would later be migrated. The old artifact need not be preserved in full; reuse the **same existing** `main` Windows workflow and bundled .NET 10 Desktop Runtime. CET/GRSP standalone managers, native payloads, GCO Core, PresentMon and all source-owner boundaries stay intact.
+- WPF provides native layout, real controls, original layered V black/color glitch and BLUE skyline. No fabricated progress or results. The old `MainForm.cs` is excluded from build; WPF window is authoritative. `UseWindowsForms` remains only for the built-in folder picker during transition, without shipping a second runtime.
+- A passing [CI #42277190679](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42277190679) verifies app compilation, original owner managers, 179 contract tests and packaged CLI, **not** WPF gameplay/visual acceptance. Original user images are still not source-committed. Existing CET-only/GRSP-only backend changes and MO2 remain pending. No version bump; GCO v1.1.5.
+
+## 2026-11-07 — Compact Capture Page sizing and type policy (first test baseline)
+
+- **WPF normal window 1220×680 DIPs; minimum 1040×600 DIPs.** Smaller usable content scrolls; keep console/Continue visible, full portrait width and aligned original color/black V images. Final size may be refined following actual screenshots.
+- **Rajdhani** body/instructions/status, **Oxanium** title/tabs/buttons, both OFL-licensed and embedded into GCO without a second runtime; original full blue-to-dark skyline retained and lowered below reserved main logo title band.
+- Section order: center sloped tabs → GOT LAG? headline/subtitle → Game Root/readiness/counts → CAPTURE WORKFLOW label → three tall image/title/instruction/interactive-button cards → concise bottom console and distinctive cut-corner yellow Continue. Remove duplicate instructions/status boxes; WPF Path + gradient brushes provide irregular cut-corner borders and three cyan slashes (no PNG border requirement). No non-visual backend behavior changed by this decision.
+
+## 2026-11-07 — Current WPF sizing and typography status (supersedes prototype sizes)
+
+- User selected **1280×760 DIPs normal**, **1080×640 DIPs minimum** for enough room; replaces 1220×680 and 1040×600 historical design/prototype values.
+- Source fix: explicitly bound Game Root to its contents (108 DIPs; decorative Path must not expand the StackPanel); separate larger WHITE `/// GAME ROOT / CYBERPUNK 2077` above border; align frame with end of blue header. Bigger yellow **GOT LAG?**, more spacing, remove tab 1/2, steep angled tabs, center all three workflow icons, tighten cyan ///, dark background/yellow-line scrollbar. Buttons remain inside their cards, Continue remains distinct. GCO frontend only; no source-owner backend workflow changes.
+- Font experiment continues: Rajdhani body and Oxanium headings/buttons stay temporarily; the user has **not finalized typography**.
+
+## 2026-11-07 — Neon frame direction, first implementation
+
+- User requested a **thicker glowing outer frame** at the client edge, a tight 2nd border inset with #060D0F gap joined visually to the under-logo rule, accented/pimped corners, and an original V image inset slightly into its own cut frame. All major page boxes use the same **crisp 45°** corner cut, scaled consistently with window resizing rather than being skewed by a stretched WPF Path.
+- Current chosen first pass: shared actual-size StreamGeometry, **14-DIP base corner cut**, ~3.6-DIP outer stroke plus static translucent glow/corner fins, ~1.8-DIP inner stroke inset 10 DIP, ~2-DIP individual box strokes. Standardized rendering for cards, Game Root, console, Continue, Page 2 and action buttons; original image pair remains unchanged. Final glow/art intensity awaits actual screenshot.
+- Capture/Analyze tabs **equal size** and labeled only **CAPTURE / ANALYZE**; preserve existing evidence-locked navigation. This is a WPF presentation change, not an authorization or owner restore change; independent CET/GRSP backend and 0-Engine version checks are still pending.
+
+## 2026-11-07 — Explicit unified GCO package version v1.1.6
+
+- The owner explicitly ordered **one version increment for the whole unified GCO package**: `1.1.5 → 1.1.6`. This supersedes the older `Keep v1.1.5` historical statements, without changing the explicit-only version policy.
+- Synchronize `Directory.Build.props` product/assembly/file/informational versions, WPF window title and header, source-owned integrated builder/version-check, `VERSION.txt`, `START-HERE.txt`, native launcher Windows resources (generated from the unified version), and the single canonical Windows workflow contract. Preserve the branded artifact/executable names, app folder structure, all existing user PNGs and the original two-page workflow.
+- **CET v1.3.4, GRSP v1.0.0 and PresentMon v2.6.0** remain independently versioned and are not promoted or modified. The version bump does **not** certify gameplay, profiler capture/restore, border visual acceptance or optimizer generation. Do not bump GCO again without another explicit owner request.
+
+## 2026-11-07 — Single border canvas / no resize flicker
+
+Owner selected the Regular 1280×760 PNG as the only full-window master at all sizes, continuing to use `assets/ui/elements/GCO_Border_Regular_1280x760_FINAL.png`. The owner will replace this file with corrected art and remove Small. The app must not switch raster sources while resizing; use the single image loaded at startup with high-quality `Stretch=Fill`, accepting the negligible aspect ratio difference. The Small PNG is not packaged. Preserve app v1.1.6 and all other visuals/native functionality.
+
+## 2026-11-07 — Explicit unified package v1.1.7
+
+The owner explicitly ordered **rebuild + one version increment**, `v1.1.6 → v1.1.7`; no unrelated fixes or design changes authorized. Maintain single .NET10 runtime, current V geometry, sole Regular PNG, independent CET/GRSP version ownership and one Windows CI workflow. A browser malware warning on the ZIP prompted the request, but bumping the version alone cannot prove the binary safe or clear a security detection.
+
+## 2026-11-08 — Explicit unified package v1.1.8
+
+- Owner ordered one version increment `v1.1.7 → v1.1.8`. This authorizes a GCO product/package metadata change only; it does not authorize image/layout or profiler behavior changes.
+- Keep product, assembly, file and informational versions, WPF title and header, Windows CI checks, builder and generated `VERSION.txt` / `START-HERE.txt` aligned. Preserve `Gs-Cyberpunk2077_Optimizer` package and launcher filenames, one .NET10 runtime and one canonical Windows workflow. CET v1.3.4, GRSP v1.0.0 and PresentMon v2.6.0 are independently owned and unchanged.
+- Pre-bump v1.1.7 CI [#42438748376](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42438748376) SUCCESS; new v1.1.8 CI must be checked independently. Do not bump again without the next explicit request.
+
+## 2026-11-09 — Pure black and owner-painted V transition (explicit user decision)
+
+- The page, Game Root background and skyline fade endpoint are pure #000000. The owner replaced assets/ui/images/TrueHeader_GCO_page1.png in place; it is now 1870x652 RGB and keeps the 174-DIP skyline slot.
+- New owner V pair: V_background_1_color.png and V_background_1_black.png, both 482x928 RGBA. Retain the old left/top anchor and six-DIP bottom overlap. Reserve the same old narrow sidebar width at 743:2117; independently scale the new full pair by height at 482:928 so the painted transition extends rightward instead of moving controls or cropping the source. Preserve source registration and capture-stage black/color animations.
+- Remove the former generated alpha mask, six-layer Round-6 WPF halo/arch/skirt/fade and old right-edge portrait outline; the PNG pair now owns the transition. Keep single Regular outer border, crisp inner chassis, branding/ICO, same one-runtime/two-page UI, source-owned profilers and GCO v1.1.8. Verify integrated Windows WPF render; no gameplay or screenshot acceptance is implied.
+
+## 2026-11-09 — Owner-approved freer Page 1 composition
+
+- Owner approved the new true-black/color V art and blue skyline after native Windows screenshot. Keep those bitmap bytes and their current height/left registrations.
+- Allow the original full-width portrait/puddle to visually **cover only the thinner inner-chassis frame**, never the single outer border artwork; the right-side UI still paints on top of V's wider fade. The application and profiler workflow remain unchanged.
+- Float the two equal-width CAPTURE/ANALYZE state tabs in the clear header band **above the inner chassis**, with a modest steeper slant, preserving their state cues and Page 2 gate. Move GOT LAG to the first content row at the top of the inner area. Slightly move the Game Root heading/field panel left toward the buildings in V rather than starting every section at one vertical line.
+- Eliminate the console's decorative box and second vector slash; place its status text on the transparent background aligned near the slash painted in the V image, while retaining the hidden-until-needed RESTORE control and Continue separately. Preserve focus/hit-test and minimum/responsive layout. No version bump or native profiler/installer edits.
+
+## 2026-11-09 — Owner bottom puddle-only overflow, correcting full-V overpaint
+
+- User supplied exact owner image `assets/ui/images/The overflow.png` (**365×49, RGBA**) containing the bottom transparent/black puddle with some yellow highlights. Preserve it unchanged and package at the same path.
+- Move the full V by **+2 DIPs** horizontally (from x=26 to x=28 at default drawing size) to expose the thin inner border at x=27, leaving 1 DIP clearance. Preserve V top, height, 482×928 art, two-stage black/color animation, skyline, right content and the entire outer border. Do **not** duplicate or algorithmically recolor V.
+- Put **complete V underneath** the thin inner chassis so its yellow lines continue uninterrupted, then overlay only the owner 365×49 puddle strip **above** the thin chassis and **beneath** the outer frame. Align strip to the same left and bottom and scale by V height/928: width=365×scale, height=49×scale. Root z-order: ContentRegion 12 (skyline behind V, controls above V inside it), inner frame 13, puddle 14, upper tabs 22, outer raster 30. No hit testing on strip. Supersedes the previous decision allowing the complete V to paint over the inner line; the owner now explicitly wants only the puddle crossing.
+- Preserve product **v1.1.8**, canonical Windows CI, one .NET10 runtime and current CET/GRSP/PresentMon payloads. The user's later Windows screenshot will decide pixel alignment acceptance independently of passing CI.
+
+## 2026-11-09 — Cleaner Page 1 headline, game path and header controls
+
+- Owner requests the **GOT LAG? heading offset right**, with the **Game Root heading and box returned to original right-content X alignment** (undo the earlier -11-DIP left shift). Maintain the V, owner puddle strip, outer/inner border, skyline, tab positions, console and titlebar as in verified build 177.
+- The actual game-path input is a **normal rectangular WPF TextBox**, not a chamfer. Inset it to start past the 14-DIP corner cut, and trim its right edge so the separate OPEN button has more breathing room. Set Game Root interior side margins 22 DIPs and OPEN gap 16 DIPs, preserving input caret/focus, path change, browse/refresh logic and status rows.
+- Move REFRESH out of Game Root to the **top-right header band**, retain the v1.1.8 version label, and remove the Reduce flashing checkbox and its event handler. Keep the existing V animation/state behavior (only remove the user switch). Remove both visible **MO2 LATER** / **MO2 deferred** placeholders, without removing future MO2 architecture or dynamic game inspection support.
+- User queried artwork policy for the existing three cyan step icons and proposed yellow folder/path/button graphics. Recommended native WPF vectors (sharp at all sizes, state tinting) for simple icons, PNG only for bespoke detailed game art. No unapproved icon redesign or PNG modification this pass. GCO v1.1.8, owner profilers, runtime and single Windows CI unchanged.
+
+## 2026-11-09 — Owner's latest header/hero/card/spatial-neon adjustments
+
+- Keep owner art files, V/puddle z-order, logo reservation and all profiler code unchanged. The header's temporary `GCO` logo lettering is removed; the blank left slot remains for owner's real logo. PresentMon is removed from **header tagline only**, which now reads **CET and REDscript Optimization** in cyan. Align header title and subtitle together, adjust REFRESH + v1.1.8 side by side in upper-right space.
+- GOT LAG heading **and its description** are an indivisible section, inset together +62 DIPs from right-panel content X (previously heading only +22, so +40 additional). Center Game Root's real content vertically without changing its frame/height or its original X. Path becomes legible via smaller font, less padding, 32-DIP edit height and restoring visible root prefix after focus lost (no input edits or forced caret reset while typing). Prerequisite yellow must match `#FFF000`.
+- Workflow card step numbers remain LEFT, but icon, title and body text are CENTER. Reposition Continue +25 up / +10 left with existing workflow safety. For neon **box/frame strokes**, use single scene-position-aware V yellow → skyline cyan field, weighted lower-left yellow vs upper-right cyan, not identical local 50/50 gradient stops on each box. Outer owner border stays original. No version bump; no new icons until further owner decision.
+
+
+## 2026-11-10 — Owner-approved GCO v1.1.9; central version authority
+
+- Explicitly bump **unified GCO v1.1.8 → v1.1.9**. Centralize the product version in `Directory.Build.props` and derive assembly/file metadata, the WPF window/header, package checks and GitHub artifact naming from the same source. No duplicate hardcoded product-version expectations in CI or the build script. Do not bump component-owned CET/GRSP or PresentMon versions, nor change unrelated behavior or styling.
+
+## 2026-11-10 — Final owner Capture page design refinement
+
+- Retain official owner logo placement and existing metallic buttons/tabs. Raise GOT LAG headline+subtitle together about 14 DIP without shifting downstream vertical positions. Move Game Root x+30 DIP and shorten its available width, aligning Capture Workflow to the same region **once**, not double translating individual cards. Narrow each card by 12 DIP total (6 per side) and retain the original card spacing or greater.
+- Game Root has no folder symbol. Three workflow cards use a single-color face instead of metallic shading, simple bold cyan-glowing WPF vectors (download tray, gamepad, layers), and yellow page-style 1/2/3 numeral markers. Start instructions explicitly avoid menus/inventory/pauses; Collect copy references continuing to Analyze. All original capture actions, owner assets, two-page system and v1.1.9 remain unchanged.
+
+
+## 2026-11-10 — Explicit unified app v1.2.0 version bump
+
+- Owner explicitly requested **GCO v1.1.9 → v1.2.0**. Change only the canonical `VersionPrefix` in `Directory.Build.props`; retain derived assembly/file/WPF/package/CI identity without redundant version literals. No component-owner version or app UI/backend change authorized.
+
+
+## 2026-11-10 — Capture screenshot refinement after v1.2.0
+
+- User requested three workflow cards **20 DIP narrower each (10 per side), 24 DIP taller**, still centered beneath Game Root, with title **immediately above** its corresponding description and a deliberate gap **below the icon**. Raise the Game Root/workflow content about 10–20 DIP to make room, while leaving sufficient console space for two rows of notifications and a clear margin near Continue. Retry the Start Cyberpunk WPF game controller as a readable bold cyan outline; preserve the accepted download/data icons. No user logo, theme, external binary, profile or version change.
+
+
+## 2026-11-10 — Owner screenshot revision: outer chamfer bleed and gamepad shape
+
+- Remove the rectangular dark backing exposed outside the Game Root chamfer; retain the established actual outline and editable path field. The Start Cyberpunk gamepad must have a **broad, soft-rounded PlayStation-style body and handles** with four distinct face buttons; keep the download/data symbols and all other approved layout, profiler integration and product version unchanged.
+
+
+## 2026-11-10 — Correct Start controller shape at its actual WPF render size
+
+- The middle workflow icon must match the supplied reference's recognizable broad **PlayStation-style rounded controller** with deep curved grips and **four clearly separate buttons**. Correct the icon's Viewbox/element aspect sizing together with vector geometry; retain the other two accepted icons, cyan glow, page layout, current Game Root corner fix and v1.2.0. Visual acceptance is from the real Windows app.
+
+
+## 2026-11-10 — Lock GCO normal workflow to Cyberpunk 2077 2.31 framework stack
+
+- **Owner decision:** GCO's current normal Capture/Analyze product is **Cyberpunk 2077 patch 2.31 only**. Game patch 2.5 is not yet supported; never silently attempt its instrumentation.
+- Require **exact** supported framework versions **Cyber Engine Tweaks (CET) 1.37.1**, **RED4ext 1.30.0** and **redscript 0.5.31**. **Exception: 0-Engine accepts v0.18.0 or newer automatically by version**, including future releases; do not maintain a release whitelist or freeze it to 0.18.6. Detect the installed version and validate the source structure/injection entrypoints the owner profiler actually uses; if a newer release changes those interfaces, refuse unsafe instrumentation with clear diagnostics rather than blocking the version preemptively. The minimum deliberately excludes problematic 0.17.x variants. This later owner choice supersedes the prior CET-only/GRSP-only *normal UI admission* requirement, but never imposes a mod inventory, fixed source hash or arbitrary mod-version lock.
+- A valid 2.31 installation with **zero additional CET mods and/or zero additional REDscript mods** may still profile; mod count must never be a prerequisite. 0-Engine is mandatory profiling infrastructure, although it appears in a CET mod directory.
+- User installs/maintains the game frameworks; GCO **detects actual versions from trustworthy evidence**, checks exact pins except the open-ended 0-Engine minimum, fails closed on missing/unverifiable versions or required injection contracts, and explains the required release with official links. Do **not** silently overwrite, update, download or replace any user's framework files. Existing authoritative CET and GRSP owner-managed profiler install/restore transactions remain unchanged.
+- **PresentMon** remains bundled, starts automatically when possible, and is non-blocking; PresentMon-only data cannot authorize Continue. **G-REDruntime** remains conditional: profiler-side only if proved necessary for measurement, otherwise include in generated optimization overlay only when a proven accepted transform requires it. Neither is a universal game-framework prerequisite.
+- Always install/restore both managed profilers in the standard supported stack, but retain safe missing-capture diagnostics, retry/session identity and recovery of *all actually modified originals*. A failed/partial profiling result is not a reason to bypass cleanup. Do not reinterpret the support restriction as permission to invent profiler binaries or alter their owner code.
+- Implementation remains **pending**: current `GameInspector` checks file/folder presence and `UnifiedProfilerWorkflow` does not verify the game patch or CET/0-Engine/RED4ext/redscript version compatibility. Implement genuine source-of-truth version checks and meaningful mismatch/refusal contracts before gating Install. Do not label this documentation decision as a tested installer capability. GCO app version remains **v1.2.0**.
+
+
+## 2026-11-10 — Two-stage admission: framework preflight then verified profiler install
+
+- **INSTALL PROFILERS gate:** require verified Cyberpunk 2077 **2.31**, CET **1.37.1**, RED4ext **1.30.0**, redscript **0.5.31**, and 0-Engine **>=0.18.0** with compatible required injection points. The presence of 0-Engine is **mandatory** for the normal GCO profiler workflow; no CET-only fallback without 0-Engine. Zero *additional* CET or REDscript mods is still a valid source state. Game must be closed and no recovery-required owner session may be overwritten.
+- **Consistent missing/incompatible prerequisites:** run all framework/version checks and list every failing requirement in the yellow Game Root status and console. Any missing, unsupported or unverifiable prerequisite **disables INSTALL PROFILERS** and neither owner installer may run. Exact user-facing missing messages:
+  - `Cyberpunk 2077 2.31 is required` (when the selected game is missing or its version is not 2.31; include detected version when known).
+  - `CET 1.37.1 is missing`.
+  - `0-Engine 0.18.0 or greater is missing`.
+  - `RED4ext 1.30.0 is missing`.
+  - `redscript 0.5.31 is missing`.
+  When a component is present but is an unsupported version, report `<component> requires <version>; found <detected version>` rather than falsely calling it missing. When files exist but version/required interfaces cannot be established, report `<component> compatibility could not be verified` and keep installation blocked. **0-Engine accepts future >=0.18.0 versions** without a whitelist, subject to structural injection contracts. Do not auto-install, upgrade, overwrite or modify any of these game frameworks; user corrects the setup, then Refresh rechecks. Mod counts remain informational, never a blocker.
+- **INSTALL PROFILERS action:** invoke existing source-owner CET and GRSP installation transactions, preserving current authoritative journaling and rollback/recovery. After install, **reinspect both owner-managed installations independently** and verify the same GCO session/recovery journal. An install command's exit code alone does not grant readiness. A failure or partial install keeps START CYBERPUNK disabled, provides actionable console diagnostics and retains recovery.
+- **START CYBERPUNK gate:** enable only after both G-CET and G-REDscript profiler installations are positively verified, alongside valid preflight and no unresolved recovery conflict. Status text under Game Root: `G-CET Profiler · INSTALLED | G-REDscript Profiler · INSTALLED | PresentMon · AUTOMATIC`. Console: `G-CET and G-REDscript profilers successfully installed. Ready to start Cyberpunk 2077.`. Preserve actual game path text and allow subsequent reinspection to revoke readiness if files drift or recovery becomes necessary.
+- **CONTINUE remains separate:** do not confuse profiler installation with captured evidence. Require current-session native capture proof and safe owner-manager restoration; PresentMon-only never unlocks it. PresentMon remains automatic but non-blocking.
+- **Status:** owner-approved behavior specification, **not yet implemented**. Source-code readiness logic and live 2.31 framework checks must be validated in functional CI and real-game tests before claiming enforcement. GCO version **v1.2.0** unchanged.
+
+
+## 2026-11-10 — Collect click owns PresentMon stop and three-domain evidence check
+
+- **Capture start:** after verified installation of both native profilers, START CYBERPUNK launches GCO-owned PresentMon *without any F11 binding* and then the game. Game F11 toggles CET/GRSP profiling; PresentMon records continuously as a frame-time reference, including before/after the native capture windows. Preserve the tested owner timestamps and verify alignment when using actual CSV; do not claim simply overlapping raw CET/GRSP CPU equals total CPU.
+- **Next action:** as soon as a launch attempt is recorded, COLLECT RESULTS is visibly available **regardless of CET/GRSP capture-ready flags, PresentMon process state, or already-validated results**. Its enabled/availability status must not wait for PresentMon to stop independently, or for any of the three profilers to have produced a capture. If Cyberpunk is still running, clicking COLLECT RESULTS reports exactly `Close Cyberpunk before collecting results.` and makes no collection/PresentMon shutdown changes; the button stays available for another click after the game closes.
+- **Collection button owns shutdown:** when Cyberpunk is closed and the user **clicks COLLECT RESULTS**, GCO first gracefully stops any **GCO-owned** PresentMon session and waits for writer flush/exit (never kills an unrelated process), then gathers current-session CET and GRSP owner captures and validates the current attempt's PresentMon CSV. A missing PresentMon process, missing tracking record, missing capture, or failed F11 does not preemptively prevent the user from pressing Collect. Any PresentMon stop/flush error must be surfaced and recovered safely; it cannot silently be treated as success.
+- **Post-click diagnosis and Continue:** after the collection attempt, report each missing/unusable domain separately in the yellow status/console: `G-CET Profiler results missing`, `G-REDscript Profiler results missing`, and/or `PresentMon results missing`. Distinguish failed stop or invalid/corrupt capture from absent evidence with specific diagnostics. **CONTINUE is enabled only if CET and GRSP current-attempt native captures are BOTH verified**, the user has clicked COLLECT RESULTS, and any GCO-owned PresentMon recording has been safely stopped/verified absent; **PresentMon CSV is optional**. Missing or unusable PresentMon frames still produce a separate warning but do not block Continue or source-proven optimization. Missing CET or GRSP native evidence blocks Continue; no skip/acknowledgment bypass for either. This supersedes the earlier all-three-mandatory policy and former native partial-results Continue behavior. Never claim frame-time correlation or FPS/frame-time improvement from absent PresentMon evidence. CONTINUE still performs authoritative source-owned restoration of **both actually installed profilers** before entering Page 2. Keep separate explicit recovery/restore safe for failed captures; users must not be trapped with modified game files.
+- **Repeated START CYBERPUNK / rapid clicks:** a second legitimate launch after the game closes must gracefully stop any previous **GCO-owned** PresentMon instance, verify exit/flush, then start **exactly one** fresh PresentMon instance and launch the game; each recording attempt uses a new unique identity/CSV so old evidence is retained but never mixed into a new attempt. Protect concurrent/double-clicks with the existing single-controller gate and busy state. If Cyberpunk is currently running, do not spawn a duplicate game or collector; report the active game. Do not touch unrelated PresentMon processes.
+- **Implementation status:** approved target behavior **not yet implemented**. Current WPF `readyToCollect` waits on native readiness/PM tracking, `ContinueButton` uses `HasNative`, and the old partial-results dialog permits skip; these must be changed at their source alongside current-attempt proof and tests. Current PresentMon controller already has GCO-only graceful restart and no hotkey; preserve that implementation rather than duplicate it. Existing GCO v1.2.0 and bundled source-owner binaries unchanged.
+
+
+## 2026-11-10 — Frame-time capture non-blocking for Continue (latest owner correction)
+
+- **Confirmed final capture admission:** both **G-CET and G-REDscript** profiling captures must be verified from the *same current attempt* after **COLLECT RESULTS**. PresentMon is automatic but **optional for Continue**, because CET + GRSP profiling can still inform a combined optimization pass without frame-time correlation. Do not treat it as a prerequisite and do not offer a bypass for missing native captures.
+- The **COLLECT RESULTS click** remains responsible for stopping any GCO-owned PresentMon process first and for collecting/verifying all three domains with explicit status for each (`RESULTS VERIFIED`, `RESULTS MISSING`, or a specific failure). A missing/nonfunctional CSV by itself does not block Continue, but a **still-active or unverified-stop GCO-owned PresentMon session is a cleanup blocker** that must be resolved before advancing. The game must be closed.
+- When CET+GRSP are valid but PresentMon CSV is absent, display `PresentMon: RESULTS MISSING` and `Frame-time correlation unavailable. Native profiling complete; CONTINUE enabled.` Continue still invokes source-owner verified original-file restoration before Page 2. With no PresentMon, reports must avoid unsupported frame-time/FPS/hitch-causality claims; CET and GRSP measurements remain separately attributed.
+- **Status:** owner decision only. GCO runtime admission logic and safety tests are not yet implemented. No code or packaging changes; v1.2.0 remains.
+
+
+## 2026-11-10 — Console-first capture warnings and independent RESTORE PROFILERS
+
+- **PresentMon remains automatic in normal copy** (`PresentMon · AUTOMATIC`), with **no optional setting, checkbox, skip prompt or "optional" label**. The automatic collector is attempted on Start and stopped on **COLLECT RESULTS**. Its CSV is not required to unlock Continue when both native CET and GRSP captures from the current attempt are verified and the collector has been safely stopped. Only after collection, if missing, report `PresentMon: RESULTS MISSING` and `Frame-time data unavailable. CONTINUE enabled.` in the console; don't conceal the missing evidence or claim FPS/hitch correlation.
+- **Use the console for operational feedback, not modal popups.** After Collect, report all three capture domains as VERIFIED/MISSING, plus precise errors for missing/invalid or failed-to-stop cases, and maintain diagnostic visibility instead of overwriting it immediately during automatic refresh. No incomplete-capture popup or Continue-bypass dialog: CET and GRSP are both mandatory for Continue; PresentMon is non-blocking only when safe collector shutdown is established. On attempted collection while game is running, console says `Close Cyberpunk before collecting results.` and Collect remains available.
+- **Independent RESTORE PROFILERS:** preserve the existing RESTORE action but make it clear and accessible whenever a GCO-owned profiler transaction/journal requires cleanup, **including when Continue is locked or all three captures are missing**. It is an explicit user-triggered recovery action, never an automatic consequence of failed results. If the game is running, report `Close Cyberpunk before restoring profilers.` in the console and change nothing. Otherwise gracefully stop/reconcile any **GCO-owned** PresentMon first (do not touch unrelated processes), preserve copied capture files and crash diagnostics, invoke the original CET/GRSP owner-managed restoration/verification, and report success or recovery-required detail in the console. No generic confirmation `MessageBox` on the normal recovery path; the deliberate RESTORE PROFILERS click is the action. Safely refuse or warn on ambiguous ownership and never claim restoration after a failed verification. Keep the journal/recovery path when restoration fails.
+- **Restoration does not equal Continue.** Manual RESTORE PROFILERS ends/cleans up the instrumented game session without unlocking ANALYZE; to retry the normal workflow, users reinstall profilers through the approved preflight and create a fresh capture attempt. Continue still invokes owner restoration itself after a valid dual-native capture, then unlocks Page 2. The restore action must never make stale or incomplete data look complete.
+- **Implementation state:** owner-approved UX/behavior, **source still pending**. Currently `MainWindow.Warn()`, `ConfirmPartialResults()` and the RESTORE confirmation use modal dialogs; `RestoreIncompleteSessionAsync` currently stops PresentMon after owner restore. The WPF status, recovery order and state gates must be fixed at source with integrated functional tests and real-game recovery validation. Preserve the existing source-owned owner managers, single Windows CI, two pages, approved visuals and GCO **v1.2.0**.
+
+
+## 2026-11-10 — Actual redscript compiler location (corrected implementation)
+
+- Source of truth: redscript 0.5.31 ships standalone under `engine/tools/scc.exe`, `engine/tools/scc_lib.dll` and `engine/config/base/scripts.ini`, **not** under `red4ext/plugins/redscript`. `engine/tools/scc.dll` on its own is merely partial/alternate evidence and cannot satisfy the official compiler contract. This later discovery supersedes any hardcoded assumption that redscript is a RED4ext native plugin. Do not confuse redscript *scripts* in `r6/scripts` with the compiler framework installation.
+- GCO `FrameworkPreflight.InspectRedscript` is read-only and reports absent vs incomplete vs version-unverifiable compiler. The exact **0.5.31** requirement remains, and only trustworthy version evidence can enable installation. Existing PE file version metadata is consulted but may be unavailable for Rust-built binaries; never infer 0.5.31 from the name or mere presence of `scc.exe`, nor invoke a compiler against live game files simply to check its version.
+- Implemented and integration-tested through [Windows CI #242](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42853637516) **SUCCESS 205/205**, code `816730fc`. Product stays v1.2.0. Genuine user-install binary version identification, game-start/capture alignment and safe end-to-end restore still need live testing; green CI does not certify those behaviors.
+
+
+## 2026-11-10 — GCO does not assess 0-Engine injection compatibility (owner correction)
+
+- GCO's **INSTALL PROFILERS** gate checks that 0-Engine is installed with an identifiable version **>=0.18.0**. It does **not** inspect scheduler/module/injection entrypoint shapes, demand a `modules/` directory or predict whether an optimization can be generated. It leaves any valid-version 0-Engine through the preflight. Unknown version and versions below 0.18.0 remain rejected with version-specific diagnostics.
+- **CET Resolver/Generator owns** live source recognition, current-version variations, partial source compatibility, generation decisions and safe refusal when injection is not supportable. GCO must not duplicate that work or make the initial install a speculative optimizer compatibility gate. This explicitly **supersedes** the structural-preflight language in the earlier 2026-11-10 framework decisions.
+- Implemented in `FrameworkPreflight` with a version-only 0-Engine admission path. End-to-end installed-game verification remains pending; no product version change, owner manager modification or new pipeline.
+
+
+## 2026-11-10 — redscript fixed-release identity (owner approved)
+
+- GCO supports **one redscript compiler release, 0.5.31**. Admit only the upstream Windows v0.5.31 executable/library pair with SHA-256 `scc.exe: DA2C0DE580173010C907A05FDD2F3CD2430D6E62BF748339D65060118AE32EDD`, `scc_lib.dll: 49EB60A3613C990CD13B6136E827A74F9F64AD68E2F911D8C93E4E3D3F53C100`. Both were verified against the official release ZIP whose published checksum was validated in GCO Windows CI #244, and against the owner's uploaded/installed samples. This narrowly scoped framework binary identity is an intentional exception to the prohibition on fixed **mod-source** hashes, not a REDscript optimizer-version catalog.
+- No redscript version fallback from PE metadata or a user-provided version label; require the documented upstream compiler files and config. Reject unknown/mixed binaries safely. Do not compile on live user files for detection. **0-Engine remains >=0.18.0, version-only admission; CET Resolver owns optimization source decisions.** No change to pinned CET, RED4ext or game versions.
+
+
+## 2026-11-10 — Owner-approved diagnostic-only redscript hash labels
+
+- Exact **0.5.31** admission remains unchanged and requires the verified upstream executable+library pair. An additional **small read-only version-label map for known `scc.exe` binaries** (0.5.28, 0.5.30 and 0.5.32) is permitted solely for actionable console reporting: GCO explains the rejected version instead of showing only `compatibility could not be verified`. Unknown builds and self-compiled binaries remain unverified. Never treat a label as permission to load another REDscript Resolver version. Companion DLL mismatch for 0.5.31 must fail explicitly. No new settings, UI, gameplay modifications, or expansion of 0-Engine/GCO version rules.
+
+
+## 2026-11-10 — Final 0-Engine preflight correction: presence only
+
+- **Supersedes** all earlier 0-Engine minimum-version (`>=0.18.0`), recognizable-version, and source-shape preflight requirements. GCO checks **only** that `<gameRoot>/bin/x64/plugins/cyber_engine_tweaks/mods/0-Engine/` is a directory containing a file named `init.lua`. Any version, unknown version and any source layout pass. A missing folder or `init.lua` fails with the expected path; the check does not read `init.lua`, demand `modules/` or inspect versions/APIs.
+- **Ownership stays with CET:** the source-aware CET Resolver/Generator determines later whether its modules can safely be injected, whether already installed work is compatible, and whether generation must refuse. GCO profiler setup must not block capture merely because optimizations might be unavailable. The owner's `0-Engine.zip` contains `0-Engine/init.lua` and `engineVersion = "0.18.6"` (a layout the previous version parser failed to recognize); parsing was removed rather than expanded.
+- The fixed game/CET/RED4ext/redscript versions, two-page layout, .NET 10, authoritative install/restore, and GCO v1.2.0 remain unchanged.
+
+## 2026-11-10 — Owner-approved GCO v1.2.1 version assignment
+
+- Owner explicitly requested promoting the **unified GCO application** from **v1.2.0 to v1.2.1**, using successful integrated Windows CI **#249** as the functional baseline. Change only `Directory.Build.props` (`VersionPrefix`), which drives assembly/file metadata, `VERSION.txt`, the guide and artifact naming; no duplicate version constants.
+- This is a **version-only source change**: no optimizer logic, 0-Engine admission, installed frameworks, CET/GRSP native or managed component versions, PresentMon, or CI workflow changes. Completed CI #249 and its v1.2.0 artifact remain historical and are not retroactively relabeled. New v1.2.1 CI/package verification is required before declaring a downloadable v1.2.1 build verified; no release tag or gameplay acceptance is implied.
+- **CI completed:** [Windows CI #250](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42889417236), source `4db2607b711b67679e2d447ef2a3d26346593cb4`, **SUCCESS 231/231**, artifact `Gs-Cyberpunk2077_Optimizer-v1.2.1-run250-a1` (ID **13796858579**); versioned executable/package identity passed. This satisfies the new-build verification requirement but not in-game gameplay/restore or optimization ZIP acceptance.
+
+## 2026-11-11 — Owner-approved capture folder readability
+
+- New GCO capture folders use local `YYYYMMDD-HHmmss` plus the existing immutable 32-hex session ID. Child evidence directories are named `PresentMon/`, `G-CET/` and `G-RED/` as the corresponding artifacts are collected. Saved capture schema/provenance, owner install/restore and current-session gating are unchanged. Preserve legacy ID-only layouts without reorganization or data loss; do not merge captures from different attempts. The date/time is a human-readable label, not identity or proof of a valid capture. PresentMon native CSV path length safety and verified output remain required. Unified GCO remains v1.2.1.
+- **CI verification:** [Windows CI #257](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42924716336), **SUCCESS 252/252**, source `04f5eae69580835db4081d74040fb25aac087b44`, integrated ZIP artifact **13812514859**. Folder-layout regression contracts cover new and legacy evidence retrieval, verified owner archives and PresentMon, refusal of ambiguous session IDs, and unchanged restore validity. Windows gameplay capture acceptance is still pending.
+
+## 2026-11-11 — Explicit user lifecycle and results folder simplification
+
+- **Never discard upon COLLECT RESULTS.** After game closes, Collect stops GCO-owned PresentMon, collects whatever CET/GRSP/PresentMon evidence exists and reports the precise result; missing/zero native results do not cause a fake completed capture or unlock Continue.
+- **Implicitly abandon only if Collect was never used:** starting Cyberpunk again while GCO is running, either by GCO or a detected external game launch, gracefully stops previously owned PresentMon, discards only uncollected GCO temporary output and opens a new session. A collected index is immutable. Normal GCO exit uses the same cleanup, but may not act if the process crashes. CET/GRSP native game files and source-owner results are never deleted directly by GCO; stale native output cannot be treated as new-session proof without source-owner confirmation. GRSP currently has no source-owner reset CLI, therefore conservative native attribution refusal may be necessary.
+- GCO Restore must remain usable even if PresentMon cannot stop; native restoration uses original authoritative owner managers. Console messages only, no new recovery dialogs. One game-root lock, two pages and unchanged version.
+- New capture directory format `GCO-Capture-DDMMYYYY_HHMMSS` (no hash suffix). `collection.json` internally maps to immutable session ID/game root. Direct children `PresentMon/PresentMon.csv` + controller JSON, `G-CET/`, `G-REDscript/`. Colliding timestamps refuse safely; no overwrite. Previous captures stay readable unmodified. Crash/incomplete diagnostic snapshots belong under `RESULTS/Diagnostics`, never impersonate valid capture.
+- **Verified source/build:** [Windows CI #258](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42929600948), source `2e3b1d82502430eaca97e83d1d3f9743e6e232c8`, **SUCCESS 261/261**, integrated v1.2.1 artifact **13815448253**. Capture storage, legacy lookup and safe GCO-only temporary discard contracts passed. Interactive game-transition handling and native-owner cleanup limitations still need live acceptance.
+
+## 2026-11-11 — Automatic PresentMon flush at game exit, manual collection retained
+
+- GCO must **stop and flush its own PresentMon immediately after Cyberpunk terminates normally or crashes**, using an event-driven process-exit notification rather than a continuous 2-second process scan. The tracked CSV must remain available, uncollected and unmodified until user **Collect** (permanent preservation), launches Cyberpunk again (discard uncollected), closes GCO (discard uncollected) or restores native profiler files without collecting (discard uncollected). Stopping PresentMon alone is not collection and must never authorize Continue.
+- Prefer Windows process-start event monitoring for external game launches and `Process.Exited` for actual termination; retain a slower fallback if Windows notifications are unavailable. A late exit from an old PID cannot stop the next attempt. No extra UI controls, version bump or new CI workflow. Native CET/GRSP interrupted-F11 recovery remains separately owner-controlled and is not implied by PresentMon auto-flush.
+- Verification: integrated Windows CI #259 SUCCESS, 261/261 contracts and real OS Process.Exited / WMI StartTrace event test PASS. https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42936857477 ; downloaded GCO v1.2.1 build https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42936857477/artifacts/13819171987 . No version bump; live Cyberpunk crash/relaunch and interrupted native F11 recovery are still pending verification.
+
+## 2026-11-11 — Latest owner correction: window close is not capture abandonment
+
+- **Supersedes the earlier instruction that GCO exit deletes the active uncollected capture.** Exit GCO and reopen the *same* package: current GCO ownership journal, game root, profiler install/restore state, pending capture ID and available COLLECT RESULTS action must survive unchanged. Native CET and GRSP live owner files remain source-owned and untouched. Do not reset profilers, mark capture collected or discard the pending capture on window close.
+- **Only uncollected PresentMon data is disposable on GCO exit.** Stop the GCO-owned ETW session gracefully, delete only the indexed/current-session temporary `PresentMon.csv` and controller output (subject to provenance and no-link checks), clear PresentMon tracking, and retain the capture index/journal. While GCO stays open, a game exit still stops/flushed PresentMon and keeps its CSV only until explicit Collect, app close, new game or Restore. Explicitly collected data is permanent even if other domains are missing.
+- **Reset/abandon triggers:** verified *new Cyberpunk launch* (start fresh), explicit source-owner RESTORE without prior collection (restore originals), or an explicit user-triggered fresh install/session transition; **closing GCO is not a trigger**. A successfully completed/restored Analyze workspace also resumes across GCO restart using a verified game-bound last-workspace index. No `CaptureCache`, no native CET checkpoint/crash recovery, no speculative partial CET optimization input.
+
+- **Implemented/CI verified:** unified Windows [CI #260](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42941321082) SUCCESS, **267/267 contracts**, source [8ce2298](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/8ce229813f943ee338fc4e3ad4ee93b77fd19a30), packaged [GCO v1.2.1 artifact #13820658189](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42941321082/artifacts/13820658189). Actual game-close / app-close / reopen and source-owner F11 collection are not yet user-verified.
+
+## 2026-11-11 — Owner-approved v1.2.2 promotion and unified results destination direction
+
+- **Version authorization:** Promote GCO from **v1.2.1** to **v1.2.2** based on last verified integrated capture-lifecycle CI #260, version-only change in `Directory.Build.props`; the source-owner CET/GRSP versions and GCO capture logic are unchanged. **[Integrated Windows CI #261](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42947295136) SUCCESS, 267/267 contracts**, [download GCO v1.2.2 artifact #13823073993](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42947295136/artifacts/13823073993). This is a CI build, not unverified gameplay acceptance or a release tag.
+- **Future results organization (not part of this version-only change):** GCO is the single user-facing lifecycle/storage authority. Source-native CET/GRSP measurements in game folders are temporary, and only explicit Collect should preserve full verified results under the GCO root's `RESULTS`. Owner-managed collectors may still perform safe transformations/reports; do not create additional separate permanent component archives or duplicate copies. Non-collected outputs remain temporary and should be reset only by GCO's approved triggers (new game or Restore), never simply by closing GCO. Direct-destination support and atomic verification/cleanup still require implementation and actual output tests.
+
+## 2026-11-11 — Short publication-ready user-facing Capture console
+
+- The footer console is a **short status/control instruction**, not a technical report. After verified Restore show `Restore successful. Original game files restored.` (brief warning only when necessary). Remove long source-owner manager text and paths from success messages. Also shorten installation, game exit, collection, missing capture, failed startup and recovery errors. Keep accurate missing-domain and safety messages, particularly when Restore did not verify original files.
+- Preserve complete backend details through hover/tooltips and diagnostic tracing. Unexpected technical messages may be shortened on screen, but **never** reinterpret shortened text as success, change safety gates, or lose evidence. Keep screenshot-art/layout unchanged and GCO version **v1.2.2**.
+
+- **Implementation verification:** [GCO Windows CI #262](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42950860568) **SUCCESS 272/272**, tested source [6e8eaa0](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/commit/6e8eaa0ffa4a9d40da1263208a40660ac69f50b1). Verified v1.2.2 package [artifact 13825510033](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42950860568/artifacts/13825510033). Gameplay screenshot confirmation outstanding.
+
+## 2026-11-11 — Owner override: no hovering in Capture
+
+- **Supersedes** the earlier Capture console policy that exposed full manager diagnostics on hover. The Capture footer is a short, non-hoverable status indicator. Remove its tooltip and related UI plumbing; the Game Root input and dependency row must also have no hover tooltips. Optional technical traces may retain original error details without creating a hidden interaction requirement.
+- Preserve brief, accurate visible Restore/Collect/error instructions and all existing safety gates. Resolver/Analyze owns the substantive performance explanations and optimization reports. Product stays **v1.2.2**; do not disturb UI art or native components.
+
+- **Implemented and verified:** [Windows CI #263](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42952158232) SUCCESS, 272/272 contracts plus real packaged WPF no-tooltip assertion on Capture status, game path and dependency text. [v1.2.2 artifact #13825601726](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/42952158232/artifacts/13825601726). No new version, UI geometry changes or native component changes.
+
+## 2026-11-13 — locked Normal UI and isolated Maximized-only existing-property layout
+
+- Owner approved a separate maximized presentation mode after repeated default-size regressions. Original 1280×760 XAML, original four Capture elements and parent structure, shared scene-neon, graphics, 49-DIP Continue, native icon/text/button dimensions and application behavior are locked. Maximized may modify only saved and restored margins, existing card-container height and fullscreen console clearance. No injected UI spacer controls, Grid reparenting, Viewbox scaling, duplicate controls, new workflow or version bump.
+- Implemented at source `15562eee`; canonical [Windows CI #291](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43333049012) **SUCCESS, 278/278 contracts**, native shown WPF Normal→Maximized→Normal pixel-identical at runner DPI, packaged artifact ID **13996520838**, v1.2.4. Real Windows owner screenshot confirmation, alternate DPI and gameplay remain unverified.
+## 2026-11-13 — maximized-only proportions after owner screenshot
+
+- In Maximized, owner requests significantly smaller and narrower step cards, wider inter-card gaps, more vertical space between major sections, a modestly taller Game Root **heading-and-box group**, a tighter workflow heading/card relationship and a slight console shift left. Normal layout remains **untouchable**, and original properties must restore exactly. Implemented only in original `MainWindow.xaml.cs` on `main`, code SHA `046e519`, v1.2.4.
+- Canonical [Windows CI #292](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43335794567) SUCCESS: 278/278 tests and real shown WPF Normal→Maximized→Normal byte-identical pixels at runner DPI; downloadable artifact ID 13997008356. User screenshot approval still pending.
+
+## 2026-11-13 — framework status indicators and card state visuals (CI #298)
+
+- Framework checks below Game Root display the **owner's original** `GcoStatusSuccessIcon` green check or `GcoStatusFailureIcon` red X as explicit 16×16 WPF `Image Source="{StaticResource ...}"` elements; both hidden while preflight is unknown. Existing framework-readiness result is the single authority. Avoid new icon generators and separate state logic.
+- Two original owner PNG backgrounds from `b565031` must reflect the original button state: active yellow vs inactive cyan; Restore Profilers uses cyan. Render proportional center crop with original card chamfer clip; hover outline follows the centered SVG shell, not fullscreen button-row width. The original Normal and maximizing layout must remain stable.
+- Canonical [CI #298](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43352879881) **SUCCESS** on `5713b2b`: 278/278 contracts, native WPF Normal→Maximized→Normal pixel identity, owner CET/GRSP smoke and one private .NET 10.0.15 runtime. Artifact ID 14004921634. User screenshot and gameplay remain pending.
+
+## 2026-11-13 — framework-by-framework readiness and exact-bound card artwork
+
+- Display **four independently sourced icon/label pairs** under the Game Root framework line, with existing owner-supplied 16×16 WPF green check/red X resources: CET, 0-Engine, RED4ext and redscript. Their verdicts must originate from `FrameworkPreflight.Evaluate`'s one authoritative component checks; game version stays an independent prerequisite. Show detected versions/required version or MISSING/UNVERIFIED; never infer permission from icon state. Keep 0-Engine version-unlocked.
+- The two owner card PNGs fill the **exact** original card bounds, center-cropped proportionally in their own `Rectangle` `ImageBrush` surfaces, clipped to the original 45° chamfer geometry. Existing stage button state drives active/inactive and blue Restore; never use `Image` UniformToFill if it can arrange outside card bounds. The console text uses all available horizontal space up to Continue and WPF wraps verified preflight blockers naturally. Do not alter the stable 1280×760 Normal geometry, fullscreen-only margins, or source owner profiler behavior.
+- Implemented with [Windows CI #303](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43357652326) **SUCCESS**, **282/282** tests, WPF native Normal→Maximized→Normal pixel proof, CET+GRSP owner integration and one .NET 10.0.15 runtime. Source `6606d7d`, artifact **14006752092**, v1.2.4. Owner screenshots and game behavior require separate approval.
+
+## 2026-11-13 — v1.2.5 promotion approved
+
+- Explicit owner version-only promotion on unified `main`; `Directory.Build.props` is the sole product version source. **[Integrated Windows CI #304](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43486488225) SUCCESS, 282/282**, exact source `492477541db6490b39f2598bb0513e7c09967dd7`; artifact **14067103464**, `Gs-Cyberpunk2077_Optimizer-v1.2.5-run304-a1`. UI and CET/GRSP source components unchanged; no release tag or new workflow. User visual/gameplay acceptance still pending.
+
+## 2026-11-13 — stage hover expansion limited strictly to Maximized
+
+- Owner explicitly clarified the stage-button cyan hover outline needs a modest enlargement **only in fullscreen/maximized mode**. The approved Normal window hover, 760×112 native owner SVGs, actual button size and all card/section layout properties remain locked. Width is still constrained by the real button slot to prevent the earlier full-row overflow.
+- Implemented in source `f96ecea` with the original shared hover converter receiving `Window.WindowState`; Windows [CI #305](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43491019935) **SUCCESS**, 282/282 contracts and the native WPF normal/maximized/normal pixel-identity smoke. The adjusted fullscreen visual itself remains subject to owner screenshot approval. v1.2.5 unchanged.
+
+## 2026-11-13 — fullscreen stage-hover must surround SVG shell on *all* sides
+
+- The owner clarified the maximized stage hover stroke must be **outside**, not on top of the button. Preserve the previously approved Normal hover pixel footprint, original active/inactive/Restore SVGs, card backgrounds and the app's full normal/maximized layout. Source `ed0ff2d` retains the +18-DIP maximized width allowance and adds +12 total height, centered, through the same WPF stage hover converter. No duplicated control or corrective post-render pass.
+- [Windows CI #306](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43494292319) **SUCCESS**, 282/282 contracts, real packaged WPF tests for maximized external hover and normal restores, artifact **14071651109**, v1.2.5. Final visual acceptance on the owner's desktop still pending.
+
+## 2026-11-13 — dynamic stage hover must use original SVG shell, not per-size chamfer estimates
+
+- Supersedes the previously tried width-only #305 and width-plus-height #306 fullscreen adjustments. Owner confirms the problem also occurs at the Normal size and intermediate widths. The single approved path is `StageShellHover` deriving the exact shared shell + viewBox from the three installed original stage-button SVG resources. Render at the same centered uniform scale as the SVG, and paint a narrow band **strictly outside** the source shell. No new versions of the artwork, hardcoded size breakpoints, duplicate chamfer coordinates or per-state geometry.
+- Preserve everything else: original 1280×760 Normal and maximized-only card/section layout, active/inactive/Restore button behavior, source-neon, stage artwork, 16×16 individual framework checks, full-width console, owner components and one bundled .NET 10 runtime. Keep checks that exercise actual source geometry across intermediate sizes and real native window resize/restore.
+- Implemented as source `374bb46`; [canonical Windows CI #309](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43497924234) **SUCCESS, 282/282**, native WPF geometry and pixel contracts, CET+GRSP and package contracts passed. Artifact **14072406949** (GCO **v1.2.5**). Visual approval and gameplay still need owner validation.
+
+## 2026-11-13 — wide-window stage buttons grow proportionally; default/small locked
+
+- After CI #309, owner confirmed default and smaller hover behavior was fixed but buttons at widths above the 1280-DIP baseline still displayed a short hover outline. Preserve the default 1280×760 and smaller native geometry **exactly**; preserve all three card boxes and their placement in large windows. Do not return to fullscreen-only hover rectangle allowances or distort the original SVGs.
+- Resize only the **actual stage button bottom row** at wider viewport sizes, proportional to the owner-authored `760:112` vector aspect ratio so the native button and its source-derived hover remain coextensive. Keep the bottom anchoring in the already-positioned cards. Constrain both together at extreme widths to preserve card instructions. No new asset, duplicated hover, altered card position or profilers.
+- **[Integrated Windows CI #311](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43503473702) SUCCESS**, commit `afe114b9e2f96e21c932d2d399b1f5a55e0e1120`, **282/282** package/integration contracts, Windows WPF wide/normal/small geometry checks and strict maximize/restore pixel comparison. Artifact **14075781102**; product remains **v1.2.5**. Actual owner desktop appearance is not yet visually approved.
+
+
+## 2026-11-13 — final GCO capture ownership; supersedes all earlier close/discard instructions
+
+- **Close/reopen:** unload the complete WPF/.NET GUI while a tiny native launcher remains in the tray. Preserve the active journal, owner native output, indexed/unindexed PresentMon CSV and any unfinished collection. Reopening resumes the exact session. **Supersedes the 2026-11-11 decision that closing GCO deletes PresentMon.**
+- **Collect:** only deliberate COLLECT RESULTS seals the current attempt; it must contain at least one completed F11 native capture (CET or GRSP). PresentMon alone or a game/crash exit without F11 STOP does not qualify. Archive verified results solely in the GCO package root's RESULTS and reset live CET/GRSP scratch. Separate standalone manager RESULTS must not accumulate a second permanent copy.
+- **Capture Again:** after gracefully stopping owned PresentMon, discard *all* uncollected/current-attempt scratch in GCO and both owner native result scopes, including partially indexed-but-unsealed evidence. Verify both managed owner resets and no stale-ready results **before** launching Cyberpunk. Never delete a sealed previous capture or foreign/manual files; fail closed with the recovery journal intact.
+- **Restore:** discard uncollected scratch, invoke both authoritative owner restores, verify original game files, remove active ownership journal and stale Analyze navigation pointer, and show INSTALL PROFILERS. Preserve previous explicit-Collect archives.
+- **Standalone boundary:** CET and GRSP source repositories/releases retain all original behavior. Only the GCO portable bundle is adapted from exact pinned source in its disposable integrated CI checkout: CET F11 remains unchanged; GRSP implicit native shutdown export is disabled only in GCO, with explicit successful F11 marker required. GCO-specific owner manager commands remain source-built rather than binary patched or duplicated in GCO Core. Source/report ownership and one shared .NET 10 runtime remain unchanged.
+- **Validation:** bundled native+manager source build and true Windows CLI completion/discard/restore passed [GCO CI #318](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43516665150). Additional restart/staging/tray contracts and real gameplay acceptance require final CI and Windows capture testing. Product stays v1.2.5; no WPF layout changes.
+
+## 2026-11-13 — one PresentMon approval, independent Restore, concise Capture console
+
+- User explicitly requires a **single elevated permission at the start of each PresentMon/game capture**, not another UAC at game exit, Collect, Capture Again or Restore. Bundled PresentMon 2.6.0 gets source-supported `--terminate_on_proc_exit`, while native tray and WPF only verify completion of the originally launched writer PID; no new daemon, helper service, app page or permission flow.
+- **RESTORE PROFILERS must always attempt both source-owner restores**, even if one errors or its initial status cannot be read. Verify the final game-original state after both have been tried. If restoration is incomplete, keep the journal for retry and show a short message; do not falsely report success. PresentMon output cleanup must never suppress native file restoration.
+- **Capture Again** explicitly forfeits uncollected output and resets owner live states before a fresh launch. **Collect** explicitly saves verified current-session F11 captures and optional PresentMon CSV under root `RESULTS`. Do not re-collect stale artifacts. Closing/reopening WPF through the tray preserves the pending session.
+- The Capture console uses short action/status text with CET/GRSP/PresentMon saved/missing verdicts; technical diagnostics go to Trace, not hover or console essays. Preserve approved 1280×760 and fullscreen WPF design, one shared .NET 10 runtime, standalone owner repositories, product v1.2.5, and established build CI.
+- Implemented on GCO `main` through `5dd72445`; verification by canonical integrated Windows CI #350 was pending when documented, plus real-game crash and UAC acceptance remains required.
+
+## 2026-11-14 — capture reset is not profiler restore; RESTORE is recovery
+
+- **Capture Again** resets ONLY uncollected measurements from the current GCO attempt and managed CET/GRSP native-results scopes, plus the owned PresentMon recording after its writer stops. It must preserve the installed CET profiler ASI, 0-Engine integration, scheduler, controls, GRSP profiler DLL, and both owners' installation journals, original backups and ownership markers. It creates a distinct capture identity and never touches an explicitly collected archive.
+- **Collect** verifies and saves current-session captures under GCO root `RESULTS`. Both profilers remain installed for subsequent captures. **Continue** unlocks only when BOTH current-attempt CET and GRSP native archives were explicitly collected and hash-verified; the PresentMon CSV is optional once its owned writer is verified stopped.
+- **RESTORE PROFILERS is the only recovery action**, whether clicked manually or invoked by Continue. Both source-owner restores must be attempted independently; original files are verified before success. Manual Restore returns to Install; Continue restores first and enters Analyze only with verified dual-native collection. No additional user-facing emergency/recovery mode.
+- GCO's disposable GRSP-manager variant retains source-owner restoration authority based on the existence of its managed state marker, even if the marker's JSON is malformed. Capture Again's stricter `--discard-live` state parsing must not run inside GRSP Restore. Managed-tree junction/reparse checks still precede destructive cleanup. Standalone owner repositories remain unchanged.
+
+## 2026-11-14 — RESTORE triggers the source-owner managers regardless of GCO journal
+
+- The two existing user triggers remain **RESTORE PROFILERS** and **CONTINUE**. Both use the same `UnifiedProfilerWorkflow.RestoreOwnedAsync`; no third action, separate recovery mode, or new manager is added.
+- GCO's journal remains mandatory for capture identity/Collect/Continue, but is **not a prerequisite for manually restoring profiler-managed files**. When a valid GCO journal exists, its game root remains authoritative. Otherwise the selected game root may expose RESTORE if CET's `bin/x64/plugins/.cet_runtime_profiler` transaction directory or GRSP's `red4ext/plugins/G-REDscript-Profiler/.manager_state.json` ownership marker exists. GCO only uses these markers to offer the button; the actual owner executables make the file-level restoration decisions.
+- RESTORE attempts both owner commands even if one owner reports unmanaged/invalid status or the other fails. Post-restore `CleanForInstall` is required before claiming completion. Unknown/unindexed GCO scratch is preserved rather than deleting it under a missing/corrupt journal. A corrupt GCO journal does not lock game-path editing; valid journals still pin their game root.
+- No standalone profiler changes, new component binaries, new UI controls, or version bump. Original collected capture archives are never removed by Restore.
+
+## 2026-11-14 — GCO native readiness on reopen; one-shot COLLECT
+
+- Keep the approved WPF unload/native tray launcher, durable current attempt, owner F11 captures, and PresentMon exit behavior. When the player opens GCO from tray or EXE, inspect fresh CET + GRSP completion and hash-verified current-attempt staged/indexed data. **Only BOTH** completed native domains unlock COLLECT RESULTS; a launched/closed game or PresentMon-only CSV does not. Show `CET READY/MISSING | REDscript READY/MISSING`, and keep START CYBERPUNK + RESTORE available if either is missing. A running game reports gameplay recording rather than a stale pinned “Game closed” message.
+- Clicking COLLECT persists one-shot `CollectInvoked` before touching native output, disables the button permanently for that attempt whether successful or not, and retains Continue only after both archives are collected and verified. Successful owner archives remain in GCO root `RESULTS`. On failure, after verified PresentMon shutdown, invoke existing source-owner live resets and delete only unsealed current-attempt scratch. If the writer/reset cannot safely stop, retain source-owned cleanup for the subsequent START/RESTORE; never force-delete it. No extra buttons or tray changes.
+
+## 2026-11-14 — Reuse unchanged expensive native GRSP Rust compilation
+
+- To reduce repeated GCO-only CI builds without weakening integration tests, the existing canonical workflow caches only the source-locked, GCO-adapted native GRSP DLL. Cache key covers exact GRSP source commit, Rust compiler and the GCO owner adaptation/build scripts; cached DLL SHA256 is independently verified. Misses rebuild the original native Rust source. CET native is already a prebuilt verified artifact; .NET10 runtime is copied and validated rather than compiled. Keep manager retarget/publish and all install/restore, native F11, one-runtime, tray and final package verification on every run. No new workflow, separate binary release or product version change.
+
+## 2026-11-14 — X means full exit; capture hibernation alone retains tray
+
+- X/Alt+F4 terminates both the WPF managed GUI and the lightweight native launcher. Only a successful START CYBERPUNK calls the explicit WPF unload that retains a native tray during profiling. Neither close clears pending CET/GRSP output, collected RESULTS, GCO journal, owner restore markers, nor PresentMon; opening the EXE again recovers the durable phase. Keep in-progress owner transaction safety, the existing tray menu and exactly two pages.
+
+## 2026-11-14 — await actual game process before hibernating WPF
+
+- GCO START may return before `Cyberpunk2077.exe` is visible: do not permanently skip the tray handoff after a single immediate `GameRunning` check or classify GCO's delayed game-start WMI event as an external capture restart. Arm a pending hibernation for START, consume it when the actual game is observed running, and retain the window if the game dies before handoff. Preserve direct X full exit and existing source-owned capture/PresentMon lifecycles.
+
+## 2026-11-14 — source-owned PresentMon restart and common F11 capture interval
+
+- On each explicit START CYBERPUNK, allocate a new capture output and use the ONE existing elevated controller to gracefully stop any prior GCO PresentMon session and start a new session, then retire only old uncollected scratch and commit the new capture journal. Refuse to remove old CSVs if any writer remains. Prior completed captures/restore records are untouched. PresentMon can fail without blocking native-only profiling only when prior ETW is positively stopped; no extra consent prompts or native profiler changes.
+- At COLLECT, the shared frame-time output must correspond to the intersection of source-owner CET/REDscript F11 START/STOP windows, not all Cyberpunk gameplay time. Both archived native F11 marker files provide absolute clock proof; align PresentMon CPUStartDateTime rows and atomically retain only matching frames, recording exact bounds/count and a hash. Missing/uncertain clocks imply PresentMon unaligned/missing, not fabricated measurements; dual-native Continue remains available.
+
+## 2026-11-14 — Single elevated GCO observer owns PresentMon stop
+
+- Retain one UAC before Cyberpunk starts. The original elevated controller launches the official PresentMon process and one tiny native GCO observer with inherited authorization. A session-specific named event grants the non-elevated GCO user the ability to request graceful ETW stop; no second UAC on Collect, Restore or failed game launch. The observer also stops PresentMon automatically after the last verified Cyberpunk exit, without .NET continuing in the tray.
+- Remove the competing PresentMon --terminate_on_proc_exit option while retaining continuous automatic capture and official session termination. A never-started game must not be mistaken for a completed recording; next START must stop/reset the old owned writer and provision a new attempt. Completed archives and owner restore authorities remain untouched.
+- START double-click safeguard applies only until process creation (12-second maximum with a final running-process recheck). The existing actual-running-process check takes over immediately when the game starts. Do not tie the timer to menu/gameplay loading.
+
+## 2026-11-14 — Native observer exclusively controls PresentMon game-exit stop
+
+- Real #372 diagnostic showed `reason=gco-stop-request`, writer exit 0, no native-observed game-process exit and one explicit stop request as Cyberpunk started. The redundant WPF `GameExited -> StopPresentMonAfterGameExitAsync -> StopOwnedPresentMonAsync` path could send that stop on a transient startup process. Owner approved removal without launch-order changes.
+- Remove the WPF automatic stop callback and per-session exit-stop queue. Retain a queued game-exit UI refresh across busy operations. Native elevated observer alone automatically flushes PresentMon on verified game exit; explicit GCO stops for failed launch, Collect/failed Collect, Restore and next START remain. Preserve single UAC, console and one-shot native exit diagnostic, v1.2.5, owner managers, UI and final results.
+
+## 2026-11-14 — Retire dead WinForms/triple-test and redundant focus refresh
+
+- The owner explicitly approved removing the excluded legacy WinForms form and standalone triple-profiler F11 script, not changing unrelated CapFrameX experiments. Preserve the live integrated Build-Test.ps1 -Integrated, disposable CET/GRSP source adaptation, original WPF/native tray and single canonical Windows CI. The non-integrated build mode refuses up front rather than recreating the retired test harness.
+- Remove write-only WPF fields `captureLaunched` and `stoppedPresentMonCsv`. Window activation no longer triggers full package-hash and both owner CLI status inspections; initial-load, explicit Refresh, game-process-change and action-specific validations remain authoritative. Preserve one-UAC PresentMon observer, visible PresentMon console, optional F11-aligned frame-time evidence, restoration safety and v1.2.5.
+
+## 2026-11-14 — Align frame-time data with actual owner F11 marker vocabulary
+
+- Verified source format: CET's F11 STOP action calls CETProfilerPause followed by CETProfilerDump, emits `CAPTURE_START` then `PAUSE`; its own manager accepts both for a completed capture. GRSP emits `START` and `STOP_REQUEST`. GCO's frame-time parser had mistakenly required an alternative CET `STOP` label. Recognize the exact CET `PAUSE` terminal event only for CET; preserve native clock intersection, nonempty Cyberpunk-frame requirement, verified hashes and safe refusal on time drift or missing markers. The integrated regression now uses actual native headers/events rather than fabricated CET `CAPTURE_STOP`. No change to owner generators, optionality or existing one-shot Collect rules.
+- Verified fully integrated Windows CI #375 (run 43649941391, source `b1d3c4bf31c491fa85d84f389381853b6beccb0d`) **SUCCESS**, 306/306 contracts. Gameplay revalidation pending; historic collected captures are preserved unchanged.
+
+## 2026-11-15 — Use monotonic PresentMon QPC timestamps for timezone-free correlation
+
+- User rejected country-specific offsets and unnecessary new per-profiler session markers. Current GRSP already provides Windows QueryPerformanceCounter (QPC) and Unix milliseconds on its real F11 START/STOP_REQUEST records, while CET also provides Unix milliseconds. PresentMon 2.6.0 supports `--qpc_time`, avoiding its double-local-date conversion on some real-time recordings. GCO starts new owned PresentMon captures in QPC mode and maps their frames through the GRSP QPC-to-Unix anchors before intersecting with CET/GRSP F11 windows. Never hardcode user timezone, force system timezone, patch bundled PresentMon executable, or loosen nonempty overlap proof. Existing date-time CSVs remain readable under the prior expected local-time format.
+- Maintain verified writer shutdown, atomic frame-trim-and-hash, correct session folder, single-UAC launch, visible console, native game-exit observer, owner-managed CET/GRSP install/restore, original UI and product v1.2.5. Actual Windows CI and user gameplay validation pending.
+
+- **Verified:** full canonical integrated Windows CI #377 on source `8958812b6acb69333aae5d9970c0d3a513876cde` passed **308/308** contracts; artifact ID `14137864472` (v1.2.5). The first #376 run failed on a legacy test passing the wrong package root; fixed the test, preserved the strict ownership guard. A real fresh gameplay capture remains necessary to verify correct frame alignment and crop; do not claim gameplay success from CI alone.
+
+## 2026-11-15 — PresentMon absent means stopped; Restore cannot be held by stale controller state
+
+- If Windows shows **no active PresentMon writer**, a stale controller JSON, missing native observer event or old GCO CSV tracking pointer cannot block Restore/collect cleanup. The preexisting CSV must remain available for Collect, and cleaning recovery must not delete immutable saved native results. Consolidate the PresentMon stop policy into its original controller rather than maintaining a second WPF implementation; preserve native observer authority if the recorded writer is still running. Both CET and REDscript managers always get independent Restore attempts, and only their verified clean post-state removes the journal. Do not assume game exit alone proves native restores.
+
+- **Verification:** canonical Windows CI #379 on source `26926102bcbd8af0567ba25433ec1c0870ebe71e` **SUCCESS**, 308/308 core contracts plus live Windows no-Process PresentMon recovery fixture, installation/restore, tray/reopen, final package. The earlier CI #378 outdated WPF-wrapper assertion was updated to verify single owner controller, not reintroduce duplicate functionality. Source-owner original files must be verified independently even when PresentMon is absent. Live game/user Restore acceptance pending.
+
+## 2026-11-15 — Immediate native-tray handoff after successful GCO START
+
+- Owner's live #379 capture/restore verified CET, REDscript and cropped PresentMon on ANALYZE. Remaining START problem: WPF retained the full window until `GameRunning()` was true, and rechecked that before unloading; slow process startup or a crash could strand the visible interface and require a manual Refresh on game exit.
+- Supersede 2026-11-14's "wait for observed game startup" handoff only. After GCO's existing verified capture preparation, one elevated PresentMon authorization and successful `Process.Start(Cyberpunk2077.exe)`, unload the WPF child immediately, retaining the existing native tray. Do not wait for WMI, polling, main menu, mod loading or a second running-process check. Failed `Process.Start` must retain WPF and perform its existing owner-safe cleanup. Reopening from tray creates fresh WPF state and runs its original source-owner inspection, whether the game is still running or crashed. Process notifications still distinguish an observed GCO launch from external launches and refresh a reopened WPF after game exit. No change to native observer, UAC, PresentMon QPC recording, F11 collection, restore, visual layout or version.
+
+- **Verification:** Windows integrated CI #381 (`ca21550c202e50babafe48c0b995a4421fec2d05`) passed 308/308 contracts plus packaged GUI handoff-without-game, native tray reopen/X, source-owner install/restore and final single .NET10 ZIP checks. #380 uncovered use of sticky WPF `IsLoaded` after `Close()`; corrected to `IsVisible` and reran without removing the regression. Artifact ID `14139848445`. A real START-to-tray launch and early crash/reopen test is still required; do not claim gameplay acceptance from Windows CI alone.
+
+
+## 2026-11-15 — Automatic GCO return after final Cyberpunk exit
+
+- Increase the existing elevated PresentMon observer's transient game-exit/relaunch grace from 3 to **10 seconds**. After successful START, arm one package-bound native tray watcher with the existing capture identity before WPF unload. It waits on actual game process handles and gives initial launch/relaunch a full 10-second window, without keeping .NET resident.
+- When Cyberpunk remains absent past the grace, use the original **single-UAC observer stop event** to request graceful PresentMon shutdown. If the package's own PresentMon writer is running, wait for it to stop before reopening WPF; if PresentMon is absent/already stopped, immediately reopen at the end of the game grace. PresentMon exit alone never causes an early UI return.
+- Manual tray reopening cancels automatic reopening; X still exits the tray. Do not auto-collect, restore, discard native captures, change profiler ownership, add setup UI or bump v1.2.5.
+- **Verification:** canonical Windows CI #382 (https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43665223701) **SUCCESS**, tested source 54ab118336630e76d83a0893a867a910864b6f23, 308/308 core/package contracts, automatic real native-tray WPF reopening with no PresentMon, manual reopen/X and owner install/restore. Packaged artifact 14142231031. Actual game shutdown and elevated PresentMon flush remain unverified by gameplay testing.
+
+## 2026-11-15 — Normal foreground activation on GCO WPF reopen
+
+- Native-tray automatic return after game exit should show the WPF child as an active ordinary window. Request WPF Activate()/Focus() once after Loaded; never use Topmost, force z-order, native foreground-attach workarounds or change layout. The 10-second game grace and PresentMon writer stop remain authoritative.
+
+## 2026-11-15 — CET + PresentMon development branch and REDscript scope boundary
+
+- The existing successful GCO v1.2.5 `main` / CI #383 is protected. Authorize development on `feature/presentmon-resolver-integration`, starting from the latest `main`. Do not change the functioning Capture/reopen/Collect/Restore implementation as a side effect of Resolver development.
+- Follow the **four stages** in [CET+PresentMon GCO plan](../integration/CET-PRESENTMON-GCO-PLAN.md) and maintain the [live progress ledger](../integration/CET-PRESENTMON-GCO-PROGRESS.md): 1) bundle verified original CET Resolver under the single .NET10 runtime, 2) migrate GCO frame evidence to native PresentMon input without breaking standalone CapFrameX, 3) connect sealed Page 2 CET analysis, 4) validate CET generator/overlay and hand off to REDscript. Each gate requires actual source/output evidence.
+- **REDscript optimizer is a separate future project; stop this map at its handoff.** The overall original goal of one CET+REDscript ZIP remains but is not delivered by these four stages. Preserve original CET generator ownership, one canonical full Windows CI (manual branch dispatch), no new workflow, no unproven binary freezing/caching and no version changes without explicit approval.
+
+## 2026-11-15 — Correct CET Resolver/Capture/ANALYZE responsibilities (explicit owner correction)
+
+- **COLLECT validates and stores capture evidence. CONTINUE invokes the existing profiler owners' uninstall/restore and advances to the existing ANALYZE page.** This does not give ANALYZE a second restoration responsibility; it **must not recheck** the profiler journal, owner markers, process-running/Restore state, or add new lifecycle locks.
+- **ANALYZE** uses the collected data and current actual CET mod sources through the **already-developed CET Resolver** to identify what the established generator should produce. Reporting polish is postponed and must not block this path; GCO does not recreate CET's source resolver.
+- **GENERATE CET PASS** calls the existing owner `--generate-pass` stage order (generic 0-Engine → native integration → generic finalization → source-aware semantics) and emits one clean game-root-relative **CET-only overlay ZIP**, not game-file mutations or a second generator. No silent overwrites or duplicated source handling. Full CET+REDscript combined ZIP and new REDscript optimizer remain future work.
+- **Verification:** [GCO CI #416](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43694811877) PASS, 323 original package/core contracts plus real private CET source snapshot; pristine first pass (396 files, 394 Lua), partial-source remaining transforms and second-pass zero new transforms. Source unchanged (5,459 original files), .NET10+PresentMon preserved. Gameplay **NOT TESTED**, user installation not touched. Stable `main`, v1.2.5 and native Capture lifecycle unchanged.
+
+## 2026-11-15 — GCO profiler reporting: genuine PresentMon everywhere, unified CET+REDscript view
+
+- **Only in GCO:** Use genuine verified PresentMon 2.6.0 frame chronology for all GCO profiler reports and CET Resolver inputs. No fabricated CapFrameX output, renamed CapFrameX data or fallback to a legacy `FrameTime` export. Missing frame data means `NOT_CAPTURED`; preserve source-owned CET standalone and GRSP standalone CapFrameX support unchanged.
+- CET and GRSP **own their instrumentation and native report generators**. GCO owns one consolidated profiler report (three synchronized tracks from real PresentMon intervals, CET observed Lua/native work and GRSP instrumented call-edge activity), presentation and final cross-domain reporting. Include links into the extensive native CET/GRSP reports, not a replacement reimplementation of their analytical algorithms.
+- Profiler reporting runs from hash-verified **collected evidence**, independently of ANALYZE and source-owner RESTORE. It does not gate CONTINUE or new optimization pass generation; report writing never mutates the sealed archive, original installed mods or clean pass ZIP. Avoid adding overlapping CET + GRSP CPU, inventing frame-level causality, or assuming PresentMon provides PC latency/FG evidence.
+- Verified in feature [GCO CI #426](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43700402243) from the actual 14,573-frame collected capture. Live game visual/behavior verification remains pending. Full reporting contract: [GCO PresentMon reporting](../integration/GCO-PRESENTMON-PROFILER-REPORTING.md).
+
+## 2026-11-15 — Approved new GRSP REDscript optimizer ownership and development branch (LATEST)
+
+- **Supersedes the 2026-11-04/06 GCO-owned REDscript Resolver/Generator decision only.** GRSP on `dev/resolver-profiler-handoff` now owns the full REDscript measurement, source-aware Resolver, generic-first optimization Generator and full effective REDscript compilation validation. Source-owner GRSP handoff commit `b82e73cfe1bf43389cbc35cf9c65bd7a312ab5f0`. GCO still owns unified capture, genuine PresentMon-backed consolidated profiler reporting, cross-domain planning, invoking both source-owned CET and GRSP backends, dependency/collision validation and the final single clean ZIP. Optional reusable services remain G-REDruntime-owned. Do not duplicate a REDscript rewrite implementation in GCO.
+- **Branch authorization:** `feature/redscript-resolver-integration` is created from completed CET/PresentMon feature `3caccafbdf39ec2b6474b69ed8f34c9392e2ff20`, not old GCO `main`; stable `main` and completed CET feature remain untouched until separately accepted. No version bump or release.
+- **Definitive design:** [complete approved blueprint](../integration/GRSP_REDscript_Resolver_Blueprint.md) and [live stage ledger](../integration/REDSCRIPT-RESOLVER-PROGRESS.md). Use only fresh measured CET/GRSP/PresentMon captures to prioritize passes. The user-supplied 61-file hand-optimized partial overlay is the finite **approved semantic reference**, not a hardcoded mod inventory or universal source patch; use current installed sources and structural/compile proof. Build generic-first transforms; GRSP instrumentation and G-REDruntime can expand *only* for demonstrably useful, validated generic opportunities.
+- **No regression to mature baselines:** Preserve CET source-owned generator stage order and source-state safety (GCO full CI #416) and real PresentMon GCO report plus no CapFrameX fallback (CI #426). COLLECT and reporting are independent of ANALYZE/restoration; CONTINUE alone invokes source-owner restore; ANALYZE/GENERATE must not add restoration gates. Single shared .NET10 runtime, two-page UI and existing canonical CI remain. No player gameplay gain claims from offline CI.
+- **Mandatory agent continuity:** Promptly update `docs/integration/REDSCRIPT-RESOLVER-PROGRESS.md` and `docs/LATEST-WORK.md` after meaningful changes and exact CI results; GRSP `docs/RESOLVER_PROGRESS.md` and `docs/LATEST-WORK.md` for owner work. Include decisions, code/output status, pass/fail/skipped tests, unresolved defects and next milestone; update handoffs/decisions whenever interfaces change.
+
+## 2026-11-15 — REDscript generic-first execution order explicitly locked (LATEST)
+
+- **Owner-approved correction:** The 61-file hand-optimized archive is an approved *finite semantic reference*, **not** the first pass-generation target. R1 only indexes it privately. Rank the **entire currently installed REDscript stack** from **fresh** CET+GRSP+real PresentMon and verified source. Discover, source-prove, implement, compile and validate worthwhile broadly reusable **generic passes first**. Broaden GRSP instrumentation or G-REDruntime services at source where they unlock a demonstrable generic opportunity and preserve lifecycle/overhead.
+- **Only after generic output is established**, analyze the 61-file portfolio per behavioral transformation: `GENERIC_COVERED`, `ALREADY_PRESENT`, `SEMANTIC_REMAINDER`, `UNPROVEN_OR_DRIFTED`, `NOT_APPLICABLE`. Port only structurally proven, still-uncovered `SEMANTIC_REMAINDER` patterns, with compiler/gameplay equivalence checks; **zero semantic work is acceptable**. Do not create 61 semantic recipes first or duplicate an existing generic/previously installed optimization.
+- This is the active decision for GCO `feature/redscript-resolver-integration` and GRSP `dev/resolver-profiler-handoff`, superseding any prior phrasing that suggests full portfolio migration before generic development. CET pipeline, GCO reports, branch ownership and captured-source boundaries stay unchanged. Update both progress ledgers immediately for future decision/results changes.
+
+### 2026-11-15 — R3 authentic PresentMon chronology exported and verified (GCO CI #443)
+
+- **[GCO Windows CI #443 SUCCESS](https://github.com/giorgioherma/Gs-Cyberpunk2077_Optimizations/actions/runs/43743202960)**, source commit `11459bb2a80e1cc81e1edb21f6d783d5e1c35da1`, retaining the feature-branch-only GRSP owner source pin `26b63c85266997091b4004b3b13c14330232faf4` ([GRSP owner CI #12 SUCCESS, 14/14](https://github.com/giorgioherma/GRSP-G-REDscript-Profiler/actions/runs/43742425477)). Existing 323 GCO package/CLI/install/RESTORE contracts, genuine three-profiler report replay and GCO private 2,319/2,319-file source audit all passed. Artifact `Gs-Cyberpunk2077_Optimizer-v1.2.5-run443-a1` ID `14173387823`; no version bump.
+- **New GCO profiler report sidecar:** `RESULTS/<capture>/Reports/GCO-PresentMon-Frames.v1.json` contains the **exact** previously hash-sealed and time-aligned `gco.presentmon.chronology.v1` generated for CET. The consolidated `GCO_Profiler_Report.json` now carries `frameEvidence.chronologyFile` (or null when PresentMon is not captured). This is a byte-identical copy of the same staged CET chronology, not a second parser, timestamp conversion, CapFrameX fallback, new capture hook or synthetic frame list.
+- **Real-capture regression proof:** validates both CET/GCO chronology files have identical SHA256, actual original PresentMon CSV hash and source path agree with the captured index, frame count equals independently sealed overlap count, QPC ordering and nonzero intervals, and no original source-owner capture bytes were altered. Report file is outside the final game-relative optimization ZIP. No private source included in CI artifacts.
+- **Boundary:** This makes a genuine R3 handoff **available in GCO collected reports**, but does NOT mean GRSP `analyze` has replayed the newest 15:51 user capture with it; no R4 receiver proof, source-state idempotence, compiled generic pass or game validation. The GRSP owner CLI remains CI-only, not yet integrated into the player-facing app.
+- **Next:** GRSP R3 full native evidence + real per-frame chronology replay; then structural receiver/dependency and pass-specific source-state checks for the first reusable measured generic REDscript pass.

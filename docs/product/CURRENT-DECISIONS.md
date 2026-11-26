@@ -1,5 +1,7 @@
 # Product decisions and explicit delta to the October 16 design
 
+> **Detailed owner-decision history, not an agent task queue.** [CURRENT-TASK](../../CURRENT-TASK.md) is the only active assignment; [approved architecture](../ARCHITECTURE.md) consolidates the latest workflow and ownership. Preserve specific approved technical and visual requirements where applicable; dated branch restrictions, superseded designs, CI states and historical milestones below do not override current instructions. The original decision ledger is preserved byte-for-byte in [history](../history/2026-11-26-documentation-reset/CURRENT-DECISIONS.legacy.md).
+
 ## 2026-11-23 — MO2 integration architecture approved for isolated development
 
 The owner approved a new GCO `MO2_integration` branch from `main` for planning/full staged implementation. **This supersedes older "MO2 deferred" product-scope decisions for work on that branch only**; shipped Direct mode remains unchanged and MO2 stays feature-gated until proven. Detailed [architecture](../integration/MO2-INTEGRATION-DESIGN.md) and [progression plan](../integration/MO2-INTEGRATION-PROGRESS.md) are authoritative.
