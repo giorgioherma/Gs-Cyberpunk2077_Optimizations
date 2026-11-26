@@ -680,7 +680,7 @@ jobs:
           if ($env:GCO_CET_MODE -eq 'experimental') {
             gh run download $pin.NativeRunId --repo giorgioherma/G-CET_Runtime_Profiler --name gcet-static-native-experimental --dir downloaded-cet-experimental-native
             if ($LASTEXITCODE -ne 0) { throw 'Experimental CET native artifact download failed' }
-            $dll='downloaded-cet-experimental-native/red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+            $dll=Join-Path 'downloaded-cet-experimental-native' $pin.NativeGamePath
             if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash -ne $pin.NativeSha256) {
               throw 'Experimental CET native artifact hash mismatch'
             }

@@ -55,7 +55,10 @@ if ($runtimeConfig -notmatch 'net10\.0' -or
     @(Get-ChildItem $PackageRoot -Filter coreclr.dll -File -Recurse).Count -ne 1) {
     throw 'CET Resolver did not use the one shared framework-dependent .NET10 runtime.'
 }
-$native=Join-Path $bin 'runtime/native/GCETStaticLocations.dll'
+$nativeAsset='runtime/native/'+$pin.NativeFileName
+$native=Join-Path $bin $nativeAsset
+$nativeFiles=@(Get-ChildItem (Join-Path $bin 'runtime/native') -File -Filter '*.dll')
+if ($nativeFiles.Count -ne 1 -or $nativeFiles[0].Name -ne $pin.NativeFileName) { throw 'Multiple or mismatched packaged native DLLs' }
 if ((Get-FileHash $native -Algorithm SHA256).Hash -ne $tool.nativeSha256) {
     throw 'Pinned CET native service differs from owner CI.'
 }
@@ -84,7 +87,7 @@ if ($mode -eq 'experimental') {
             throw "Experimental reference changed owner managed executable: $asset"
         }
     }
-    if ((Get-FileHash (Join-Path $ownerRoot 'runtime/native/GCETStaticLocations.dll')).Hash -ne $pin.NativeSha256) {
+    if ((Get-FileHash (Join-Path $ownerRoot $nativeAsset)).Hash -ne $pin.NativeSha256) {
         throw 'Experimental reference native hash mismatch'
     }
 }
@@ -93,7 +96,7 @@ foreach ($asset in @(
     'runtime/0-Engine/fixed-init.lua.gz.b64',
     'runtime/0-Engine/modules/ActionRouter.lua.b64',
     'runtime/0-Engine/modules/GCETNativeLocationHost.lua',
-    'runtime/native/GCETStaticLocations.dll'
+    $nativeAsset
 )) {
     if ((Get-FileHash (Join-Path $bin $asset) -Algorithm SHA256).Hash -ne
         (Get-FileHash (Join-Path $ownerRoot $asset) -Algorithm SHA256).Hash) {
@@ -213,8 +216,13 @@ return readPose
         }
         $overlay=Join-Path $scratch 'overlay'
         Expand-Archive -LiteralPath $zip -DestinationPath $overlay
-        $emitted=Join-Path $overlay 'red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
-        if ((Get-FileHash -LiteralPath $emitted).Hash -ne $pin.NativeSha256) { throw 'Generated overlay used wrong native service' }
+        $emitted=Join-Path $overlay $pin.NativeGamePath
+        if ((Get-FileHash -LiteralPath $emitted).Hash -ne $pin.NativeSha256 -or
+            !(Test-Path -LiteralPath (Join-Path $overlay $pin.NativeManifestPath) -PathType Leaf)) { throw 'Generated overlay used wrong native service or companion manifest' }
+        if ($pin.NativeFileName -eq 'G-Engine.dll' -and
+            (Test-Path (Join-Path $overlay 'red4ext/plugins/G-CET-StaticLocations'))) {
+            throw 'Canonical pass emitted legacy runtime paths'
+        }
         $generatedPose=Get-Content -Raw -LiteralPath (Join-Path $overlay 'bin/x64/plugins/cyber_engine_tweaks/mods/FixtureExactPose/init.lua')
         if (!$generatedPose.Contains('Game.GCETReadPlayerPositionEulerV1') -or
             !$generatedPose.Contains('__gcetReadExactPositionEuler(player, false)') -or

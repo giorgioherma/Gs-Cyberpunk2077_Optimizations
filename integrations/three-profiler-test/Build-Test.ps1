@@ -80,7 +80,7 @@ $nativeResolverDll=Join-Path $resolverReference 'runtime/native/GCETStaticLocati
 VerifyFile $nativeResolverDll $cetPin.OwnerNativeSha256
 $nativeResolverHash=$cetPin.NativeSha256
 if ($experimental) {
-  $nativeSource=Join-Path (Get-Location) 'downloaded-cet-experimental-native/red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+  $nativeSource=Join-Path (Get-Location) ('downloaded-cet-experimental-native/'+$cetPin.NativeGamePath)
   VerifyFile $nativeSource $nativeResolverHash
   # Both executable references use the same experimental capability set.
   # Never alter the original downloaded owner artifact.
@@ -88,7 +88,9 @@ if ($experimental) {
   if (Test-Path -LiteralPath $experimentalReference) { throw 'Experimental reference already exists' }
   Copy-Item -LiteralPath $resolverReference -Destination $experimentalReference -Recurse
   $resolverReference=$experimentalReference
-  $nativeResolverDll=Join-Path $resolverReference 'runtime/native/GCETStaticLocations.dll'
+  $oldReferenceNative=Join-Path $resolverReference 'runtime/native/GCETStaticLocations.dll'
+  $nativeResolverDll=Join-Path $resolverReference ('runtime/native/'+$cetPin.NativeFileName)
+  if ($oldReferenceNative -ne $nativeResolverDll) { Remove-Item -LiteralPath $oldReferenceNative -Force }
   Copy-Item -LiteralPath $nativeSource -Destination $nativeResolverDll -Force
 }
 VerifyFile $nativeResolverDll $nativeResolverHash
@@ -202,8 +204,11 @@ foreach ($asset in $resolverAssetPaths) {
 }
 $nativeResolverTarget=Join-Path $cetResolverApp 'runtime/native'
 New-Item -ItemType Directory -Force $nativeResolverTarget | Out-Null
-Copy-Item -LiteralPath $nativeResolverDll -Destination (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll')
-VerifyFile (Join-Path $nativeResolverTarget 'GCETStaticLocations.dll') $nativeResolverHash
+$nativePublished=Join-Path $nativeResolverTarget $cetPin.NativeFileName
+Copy-Item -LiteralPath $nativeResolverDll -Destination $nativePublished -Force
+VerifyFile $nativePublished $nativeResolverHash
+$nativeFiles=@(Get-ChildItem -LiteralPath $nativeResolverTarget -File -Filter '*.dll')
+if ($nativeFiles.Count -ne 1 -or $nativeFiles[0].Name -ne $cetPin.NativeFileName) { throw 'Ambiguous bundled native runtime naming' }
 Write-Host 'PASS pinned CET Resolver recompiled for one shared .NET10 runtime with unmodified owner assets'
 
 # Official SCC is checked only in the existing GitHub CI lanes.
@@ -461,6 +466,8 @@ if ($experimental) {
   $provenance.cetResolver.nativeOwnerRunId=$cetPin.NativeRunId
   $provenance.cetResolver.nativeOwnerArtifactId=$cetPin.NativeArtifactId
   $provenance.cetResolver.ownerNativeSha256=$cetPin.OwnerNativeSha256
+  $provenance.cetResolver.nativeDeploymentPath=$cetPin.NativeGamePath
+  $provenance.cetResolver.nativeManifestPath=$cetPin.NativeManifestPath
 }
 $provenance | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $components $(if ($Integrated) {'COMPONENT-PROVENANCE.json'} else {'TEST-PROVENANCE.json'})) -Encoding UTF8
 if ($Integrated) {
@@ -503,6 +510,8 @@ if ($Integrated) {
     $resolverEntry.nativeOwnerCiRun=$cetPin.NativeRunId
     $resolverEntry.nativeOwnerArtifactId=$cetPin.NativeArtifactId
     $resolverEntry.ownerNativeSha256=$cetPin.OwnerNativeSha256
+    $resolverEntry.nativeDeploymentPath=$cetPin.NativeGamePath
+    $resolverEntry.nativeManifestPath=$cetPin.NativeManifestPath
   }
   $resolverEntry.sha256=(Get-FileHash (Join-Path $cetResolverApp 'G-CET-Resolver.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
   $payloads=@($payloadPaths | ForEach-Object {
@@ -561,6 +570,8 @@ EXPERIMENTAL CET TEST BUILD
 CET owner run: $($cetPin.RunId), native owner run: $($cetPin.NativeRunId).
 Use a separate extraction and reversible optimization overlay. Not a stable
 release or gameplay/performance acceptance. Production builds are unchanged.
+When switching native runtime names, disable/remove the previous optimization
+overlay before enabling the replacement. Never load both native DLLs.
 "@
   }
   # Per-build provenance: same version can have multiple CI attempts with
