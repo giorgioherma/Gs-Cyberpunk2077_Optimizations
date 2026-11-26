@@ -664,6 +664,25 @@ void Require(bool valid, string message)
             "a newly optimized framework file keeps the framework group");
         Require(File.ReadAllText(At(game, paths[2])) == "exact payload",
             "framework comparison never modifies live files");
+        // Same existing atomic omission rule for the renamed owner pair.
+        var canonical = new[] {
+            "red4ext/plugins/G-NativeRuntime/G-Engine.dll",
+            "red4ext/plugins/G-NativeRuntime/G-Native.locations"
+        };
+        foreach (string path in canonical)
+        {
+            Write(game, path, "canonical payload");
+            Write(overlay, path, "canonical payload");
+        }
+        var canonicalOwners = canonical.ToDictionary(path => path, path => "G-NativeRuntime",
+            StringComparer.OrdinalIgnoreCase);
+        string[] CanonicalOmitted() => (string[])find.Invoke(null,
+            [overlay, game, owner, canonicalOwners, CancellationToken.None])!;
+        Require(CanonicalOmitted().ToHashSet().SetEquals(canonical),
+            "renamed native owner pair omitted together only when both match");
+        File.Delete(At(game, canonical[1]));
+        Require(CanonicalOmitted().Length == 0,
+            "missing renamed native companion retains complete owner pair");
     }
     finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
 }
