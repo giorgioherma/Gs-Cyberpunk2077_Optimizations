@@ -185,6 +185,44 @@ end)
         (Get-FileHash (Join-Path $owner 'init.lua') -Algorithm SHA256).Hash -ne $sourceHash) {
         throw 'Resolver changed source evidence or current installed-mod fixture.'
     }
+    if ($mode -eq 'experimental') {
+        # Exercise capability-aware generation through the ACTUAL shipped
+        # .NET10 Resolver, not merely the owner artifact or copied DLL.
+        # Keep the measured fixture unchanged; this unmeasured mod also
+        # proves source-first generic adoption.
+        $poseDir=Join-Path $mods 'FixtureExactPose'
+        New-Item -ItemType Directory -Force $poseDir | Out-Null
+        $posePath=Join-Path $poseDir 'init.lua'
+        [IO.File]::WriteAllText($posePath,@'
+local function readPose()
+    local player = Game.GetPlayer()
+    local pos = player:GetWorldPosition()
+    local angles = player:GetWorldOrientation():ToEulerAngles()
+    return pos, angles
+end
+return readPose
+'@,[Text.UTF8Encoding]::new($false))
+        $poseHash=(Get-FileHash -LiteralPath $posePath).Hash
+        $zip=Join-Path $scratch 'experimental-pass.zip'
+        $result=(& $exe --capture $captures.gco --mods $mods --generate-pass --pass-output $zip --json | ConvertFrom-Json)
+        if ($LASTEXITCODE -ne 0 -or !$result.ok -or !$result.pass) { throw 'Packaged experimental CET generation failed' }
+        $generated=Get-Content -LiteralPath $result.pass.ManifestPath -Raw | ConvertFrom-Json
+        $pairs=@($generated.transforms | Where-Object { $_.type -eq 'NATIVE_EXACT_POSITION_EULER' -and $_.file -eq 'FixtureExactPose/init.lua' })
+        if ($pairs.Count -ne 1 -or [int]$pairs[0].exactPairs -ne 1 -or !$pairs[0].sourceProof) {
+            throw 'Packaged experimental CET Resolver did not adopt exact pose source'
+        }
+        $overlay=Join-Path $scratch 'overlay'
+        Expand-Archive -LiteralPath $zip -DestinationPath $overlay
+        $emitted=Join-Path $overlay 'red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+        if ((Get-FileHash -LiteralPath $emitted).Hash -ne $pin.NativeSha256) { throw 'Generated overlay used wrong native service' }
+        $generatedPose=Get-Content -Raw -LiteralPath (Join-Path $overlay 'bin/x64/plugins/cyber_engine_tweaks/mods/FixtureExactPose/init.lua')
+        if (!$generatedPose.Contains('Game.GCETReadPlayerPositionEulerV1') -or
+            !$generatedPose.Contains('__gcetReadExactPositionEuler(player, false)') -or
+            (Get-FileHash -LiteralPath $posePath).Hash -ne $poseHash) {
+            throw 'Packaged experimental pose output or source preservation failed'
+        }
+        Write-Host 'PASS actual packaged .NET10 experimental Resolver emits verified native DLL and ordered pose on untouched new owner'
+    }
     $bad=@(& $exe --capture (Join-Path $scratch 'missing-capture') --game $game --json 2>&1)
     if ($LASTEXITCODE -eq 0 -or ($bad -join ' ') -notmatch '"ok":false') {
         throw 'Resolver must reject missing capture with nonzero exit and JSON error.'
