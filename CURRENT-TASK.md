@@ -17,6 +17,9 @@ For individual candidates use eliminate/consolidate/retain as engineering outcom
 ## Current delivery — combined experimental package
 Owner explicitly requested one combined experimental GCO main package after remaining concrete CET implementation. Use the existing full integration lane, exact successful CET owner artifacts and independently verified native experimental DLL. Production pins and stable releases remain unchanged; opt-in artifact separately identified. Keep GRSP, REDscript generation, MO2, WPF and shared-runtime ownership intact. Package readiness is not gameplay acceptance; compare loaded behavior, acquisition counts and matched performance next. No audit restart or observer expansion.
 
+## Native runtime naming (owner request)
+The canonical new runtime layout is `red4ext/plugins/G-NativeRuntime/G-Engine.dll` with `G-Native.locations` in the same directory. Preserve the GCET RTTI ABI, compiled GCAS data format, source ownership and existing Scheduler. Native build, Resolver generation, GCO packaging/validation, ownership and duplicate-owner protection must agree. The old verified production artifacts keep their original lookup/layout until separately authorized for replacement; new experimental packaging uses the renamed compiled artifact. Do not silently delete or rename live mod files. Users must disable the old overlay before enabling the replacement.
+
 ## Component routing
 | Component | Branch | Role in this assignment |
 | --- | --- | --- |
