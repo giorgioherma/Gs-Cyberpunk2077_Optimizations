@@ -229,6 +229,22 @@ return readPose
             (Get-FileHash -LiteralPath $posePath).Hash -ne $poseHash) {
             throw 'Packaged experimental pose output or source preservation failed'
         }
+        if ($pin.NativeFileName -eq 'G-Engine.dll') {
+            $legacy=Join-Path $game 'red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll'
+            New-Item -ItemType Directory -Force (Split-Path $legacy -Parent) | Out-Null
+            [IO.File]::WriteAllText($legacy,'legacy owner marker')
+            $legacyHash=(Get-FileHash -LiteralPath $legacy).Hash
+            $blockedZip=Join-Path $scratch 'must-not-generate.zip'
+            try {
+                $blocked=@(& $exe --capture $captures.gco --mods $mods --generate-pass --pass-output $blockedZip --json 2>&1)
+                if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $blockedZip) -or
+                    ($blocked -join ' ') -notmatch 'Conflicting native runtime is enabled' -or
+                    (Get-FileHash -LiteralPath $legacy).Hash -ne $legacyHash) {
+                    throw 'Packaged Resolver must refuse legacy/renamed coexistence without mutating installed source'
+                }
+            } finally { Remove-Item -LiteralPath $legacy -Force }
+            Write-Host 'PASS packaged canonical Resolver refuses an enabled legacy native owner without modifying it'
+        }
         Write-Host 'PASS actual packaged .NET10 experimental Resolver emits verified native DLL and ordered pose on untouched new owner'
     }
     $bad=@(& $exe --capture (Join-Path $scratch 'missing-capture') --game $game --json 2>&1)
