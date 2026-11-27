@@ -134,7 +134,7 @@ public sealed class CetReadOnlyAnalysisService
                     sessionFolder, saved, overlap, stagedCapture);
             }
 
-            using (var reportResult = await RunOwnerAsync(bundle.CetExecutable,
+            using (var reportResult = await RunOwnerAsync("CET reporter", bundle.CetExecutable,
                 ["--report", "--capture", stagedCapture, "--json"],
                 packageRoot, cancellationToken))
             {
@@ -150,7 +150,7 @@ public sealed class CetReadOnlyAnalysisService
                  Text(frame, "correlation") != "QPC_F11_CET_WINDOW_CORRELATION_ONLY"))
                 throw new InvalidDataException("CET reporting did not consume the verified PresentMon F11 frame evidence.");
 
-            using var resolved = await RunOwnerAsync(executable,
+            using var resolved = await RunOwnerAsync("CET Resolver", executable,
                 ["--capture", stagedCapture, "--game", effectiveGame, "--json"],
                 packageRoot, cancellationToken);
             var cli = resolved.RootElement;
@@ -194,7 +194,7 @@ public sealed class CetReadOnlyAnalysisService
                 var temporaryZip = Path.Combine(disposable, "G-CET_PASS.zip");
                 // CET owns the source rewrite; only opt-in forwarding is
                 // performed here. The flag is never sent during ANALYZE.
-                using var generation = await RunOwnerAsync(executable,
+                using var generation = await RunOwnerAsync("CET pass generator", executable,
                     BuildGenerateOwnerArguments(stagedCapture, effectiveGame,
                         temporaryZip, hotscenesEnglishOnly),
                     packageRoot, cancellationToken).ConfigureAwait(false);
@@ -568,7 +568,7 @@ public sealed class CetReadOnlyAnalysisService
     }
 
     private static async Task<JsonDocument> RunOwnerAsync(
-        string executable, IReadOnlyList<string> args, string packageRoot,
+        string stage, string executable, IReadOnlyList<string> args, string packageRoot,
         CancellationToken token)
     {
         using var process = new Process
@@ -598,11 +598,8 @@ public sealed class CetReadOnlyAnalysisService
             var diagnostic = await stderr.ConfigureAwait(false);
             if (process.ExitCode != 0)
             {
-                // stderr can contain live local mod paths. Put private details
-                // only in developer Trace; normal UI stays concise.
-                Trace.TraceWarning("CET analysis owner refusal: " + diagnostic);
-                throw new InvalidDataException("CET source-owned analysis refused the capture (exit " +
-                    process.ExitCode + "). Original evidence and game files are unchanged.");
+                throw new InvalidDataException(OwnerFailureMessage(stage, executable, args,
+                    process.ExitCode, diagnostic, output));
             }
             try { return JsonDocument.Parse(output); }
             catch (JsonException e)
@@ -616,6 +613,63 @@ public sealed class CetReadOnlyAnalysisService
                 throw new TimeoutException("CET source-owned analysis exceeded its time limit.");
             throw;
         }
+    }
+
+    // The owner emits JSON errors on stderr. Preserve the exact diagnostic
+    // locally before the disposable source/capture workspace is removed.
+    // Never add this file to collected evidence or upload it automatically.
+    private static string OwnerFailureMessage(string stage, string executable,
+        IReadOnlyList<string> args, int exitCode, string stderr, string stdout)
+    {
+        string detail = ExtractOwnerError(stderr, stdout);
+        string heading = $"{stage} ({Path.GetFileName(executable)}) failed (exit {exitCode})";
+        string log = heading + Environment.NewLine +
+            "Executable: " + executable + Environment.NewLine +
+            "Arguments:" + Environment.NewLine + string.Join(Environment.NewLine, args) +
+            Environment.NewLine + "stderr:" + Environment.NewLine + stderr +
+            Environment.NewLine + "stdout:" + Environment.NewLine + stdout;
+        Trace.TraceWarning(log);
+        string location = "";
+        try
+        {
+            string directory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GCO", "Diagnostics");
+            Directory.CreateDirectory(directory);
+            string file = Path.Combine(directory, "CET-analysis-" +
+                Guid.NewGuid().ToString("N") + ".txt");
+            File.WriteAllText(file, log);
+            location = " Full error: " + file;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning("CET error log unavailable: " + ex.Message);
+        }
+        string brief = detail.Replace('\r', ' ').Replace('\n', ' ');
+        if (location.Length > 0 && brief.Length > 240) brief = brief[..240] + "...";
+        return heading + ": " + brief + "." + location +
+            " Original evidence and game files are unchanged.";
+    }
+
+    private static string ExtractOwnerError(string stderr, string stdout)
+    {
+        foreach (string value in new[] { stderr, stdout })
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            try
+            {
+                using var json = JsonDocument.Parse(value);
+                if (json.RootElement.ValueKind == JsonValueKind.Object &&
+                    json.RootElement.TryGetProperty("error", out var error) &&
+                    error.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(error.GetString()))
+                    return error.GetString()!;
+            }
+            catch (JsonException) { }
+        }
+        return !string.IsNullOrWhiteSpace(stderr) ? stderr.Trim() :
+            !string.IsNullOrWhiteSpace(stdout) ? stdout.Trim() :
+            "Owner returned no diagnostic output";
     }
 
     private static void RequireOk(JsonElement element, string component)

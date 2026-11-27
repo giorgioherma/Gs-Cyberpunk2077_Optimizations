@@ -2,7 +2,10 @@
 
 **Authority:** GCO is the single cross-repository plan owner. Latest explicit user direction controls the assignment. Component CURRENT-TASK files route here and describe only their own contribution. Do not treat old work logs or research as new assignments.
 
-## Active: Project A — demand-driven CET 0-Engine
+## Active diagnostic — fully virtual MO2 CET analysis
+Owner requests exact CET owner failure reporting and reproduction in existing selected MO2 profile, without moving mods or repeating capture. Keep owner validation, original evidence, source projection, pins and UI workflow unchanged. Record stage, executable, exit code and full local diagnostic. Native optimization implementation remains paused during diagnosis. Approved follow-up: conditional supplementary direct ZIP for physical mod owners, existing framework installation origin wins; new frameworks default to MO2 in mixed or virtual installs, direct in purely physical installs. Do not implement routing as part of this diagnostic checkpoint.
+
+## Parked: Project A — demand-driven CET 0-Engine
 Complete the original six stages in CET, using the existing canonical Scheduler and native producer. Produce shared equivalent state on actual consumer demand; preserve gameplay, callbacks, freshness, ordering, internal dependencies and synchronous access. No duplicate schedulers or native service. Preserve current production pins until intentionally validated and approved for adoption.
 
 - [ ] 1. Position, orientation and Euler: share equivalent acquisitions; separate field requirements when safe.

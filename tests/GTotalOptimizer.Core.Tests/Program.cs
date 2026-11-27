@@ -306,6 +306,22 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
             "CET_HOTSCENES_ENG_ONLY_MUST_BE_EXPLICIT_GENERATION_OPT_IN");
 }
 
+// The owner failure must retain the actual cause, not just an exit code.
+{
+    var extract = typeof(CetReadOnlyAnalysisService).GetMethod(
+        "ExtractOwnerError", System.Reflection.BindingFlags.Static |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidDataException("CET owner diagnostic parser missing");
+    string Read(string stderr, string stdout) =>
+        (string)extract.Invoke(null, [stderr, stdout])!;
+    if (Read("{\"ok\":false,\"error\":\"missing framework module\"}", "") != "missing framework module" ||
+        Read("", "{\"ok\":false,\"error\":\"source path missing\"}") != "source path missing" ||
+        Read("native host error", "") != "native host error" ||
+        Read("", "") != "Owner returned no diagnostic output")
+        throw new InvalidDataException("CET_OWNER_DIAGNOSTIC_LOST");
+    Console.WriteLine("PASS CET owner failure preserves structured and plain diagnostic causes");
+}
+
 // The shipping generator's actual output path is outside profiler RESULTS.
 {
     var method = typeof(CombinedOptimizationPassService).GetMethod(
