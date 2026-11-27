@@ -11,12 +11,13 @@ namespace GTotalOptimizer.Core;
 /// One GCO Generate action. CET's authoritative Resolver supplies Lua/native
 /// output, the GCO-local ordered Resolver supplies REDscript sources, and
 /// CI validates official SCC 0.5.31 separately; runtime generation never invokes it.
-/// All work is isolated. The only published game payload is one ZIP.
+/// All work is isolated. One combined pass; mixed MO2 deployment can require two ZIPs.
 /// </summary>
 public sealed record CombinedPassOutcome(
     string ZipPath, int CetFiles, int RedscriptFiles, int GeneratedFiles,
     int CetTransforms, int RedscriptEdits)
 {
+    public string? DirectZipPath { get; init; }
     public int AppliedRedscriptRules { get; init; }
     // Source-owned applied outputs may span several files per rule. Count
     // distinct rule IDs, not completed-file rows or refused operations.
@@ -86,6 +87,8 @@ public sealed class CombinedOptimizationPassService
                          SearchOption.TopDirectoryOnly))
             {
                 string name = Path.GetFileName(zip);
+                if (name.EndsWith("_DIRECT.zip", StringComparison.OrdinalIgnoreCase))
+                    name = name[..^11] + ".zip";
                 int number = 0;
                 if (!name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase))
                 {
@@ -343,8 +346,8 @@ public sealed class CombinedOptimizationPassService
                 ".pass-pending-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(stagedFolder);
             string zipName = NextGeneratedPassZipName(outputRoot);
-            string pending = Path.Combine(stagedFolder, zipName);
             string final = Path.Combine(finalFolder, zipName);
+            string? directFinal = null;
             try
             {
                 var allOutput = CollectOutput(overlay, owners, effectiveGame, token);
@@ -357,31 +360,51 @@ public sealed class CombinedOptimizationPassService
                 redFiles -= omitted.Count(e => e.Owner.StartsWith("REDscript/", StringComparison.OrdinalIgnoreCase));
                 if (indexed.Count == 0)
                     throw new NoNewOptimizationsException();
-                using (var archive = ZipFile.Open(pending, ZipArchiveMode.Create))
+                var direct = mo2Source is null
+                    ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    : Mo2PassDeployment.DirectPaths(indexed.Select(e => e.Path),
+                        mo2Source.DeploymentOrigins());
+                var mainEntries = indexed.Where(e => !direct.Contains(e.Path)).ToArray();
+                var directEntries = indexed.Where(e => direct.Contains(e.Path)).ToArray();
+                string directName = Path.GetFileNameWithoutExtension(zipName) + "_DIRECT.zip";
+                var archives = new List<(string Name, string Target, IndexedFile[] Entries)>();
+                if (mainEntries.Length > 0)
+                    archives.Add((zipName, mo2Source is null ? "DIRECT_OR_VORTEX" : "MO2", mainEntries));
+                if (directEntries.Length > 0)
                 {
-                    int written = 0;
-                    foreach (var entry in indexed)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        var zip = archive.CreateEntry(entry.Path,
-                            CompressionLevel.Optimal);
-                        using var input = File.OpenRead(entry.FullName);
-                        using var target = zip.Open();
-                        input.CopyTo(target);
-                        written++;
-                        // Only count completed ZIP entries, not estimated duration.
-                        progress?.Report(new(4 * indexed.Count + written,
-                            6 * indexed.Count, "GENERATE / WRITING ZIP"));
-                    }
+                    archives.Add((directName, "DIRECT", directEntries));
+                    directFinal = Path.Combine(finalFolder, directName);
+                    if (mainEntries.Length == 0) final = directFinal;
                 }
-                token.ThrowIfCancellationRequested();
-                if (CombinedPassOutputInspector.Validate(pending) != indexed.Count)
-                    throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
-                progress?.Report(new(5, 6, "GENERATE / ZIP VERIFIED"));
-                // All sidecars, source hashes and exclusions stay outside the
-                // game-only ZIP. Record original hashes for Vortex rollback.
-                string manifest = pending + ".ownership.json";
-                File.WriteAllText(manifest, JsonSerializer.Serialize(new {
+                // The union is the original validated staged output; never
+                // split the native DLL/data pair or publish overlapping paths.
+                CombinedPassOutputInspector.VerifyNativePair(indexed.Select(e => e.Path)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase));
+                int written = 0;
+                foreach (var publication in archives)
+                {
+                    string pending = Path.Combine(stagedFolder, publication.Name);
+                    using (var archive = ZipFile.Open(pending, ZipArchiveMode.Create))
+                    {
+                        foreach (var entry in publication.Entries)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            var zip = archive.CreateEntry(entry.Path, CompressionLevel.Optimal);
+                            using var input = File.OpenRead(entry.FullName);
+                            using var target = zip.Open();
+                            input.CopyTo(target);
+                            written++;
+                            progress?.Report(new(4 * indexed.Count + written,
+                                6 * indexed.Count, "GENERATE / WRITING ZIP"));
+                        }
+                    }
+                    token.ThrowIfCancellationRequested();
+                    if (CombinedPassOutputInspector.Validate(pending) != publication.Entries.Length)
+                        throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
+                    // All sidecars stay outside the game-only archives. Both
+                    // destinations share one capture, generation and atomic publication.
+                    string manifest = pending + ".ownership.json";
+                    File.WriteAllText(manifest, JsonSerializer.Serialize(new {
                         schemaVersion = "gco.combined-pass.v1",
                         captureSession = sessionId,
                         redscriptSourceStackSha256 = red.SourceStackSha256,
@@ -415,9 +438,14 @@ public sealed class CombinedOptimizationPassService
                         officialScc031Validation = "CI_ONLY_NOT_RUN_IN_APP",
                         originalFilesUntouched = true,
                         runtimeGameplayValidated = false,
-                        installRecommendation = mo2Source is null
-                            ? "Vortex overlay after originals; manually back up before direct installation"
-                            : "MO2 separate enabled mod after original source packages; verify winning priority",
+                        deploymentTarget = publication.Target,
+                        companionArchives = archives.Where(other => other.Name != publication.Name)
+                            .Select(other => other.Name).ToArray(),
+                        installRecommendation = publication.Target == "MO2"
+                            ? "MO2 separate enabled mod after original source packages; verify winning priority"
+                            : publication.Target == "DIRECT"
+                                ? "Back up originals; extract this archive directly to the Cyberpunk game folder, not MO2"
+                                : "Vortex overlay after originals; manually back up before direct installation",
                         identicalFrameworkFilesOmitted = omitted.Select(e => new {
                             path = e.Path, owner = e.Owner, sha256 = Sha(e.FullName)
                         }).ToArray(),
@@ -428,7 +456,7 @@ public sealed class CombinedOptimizationPassService
                             .Distinct(StringComparer.OrdinalIgnoreCase)
                             .OrderBy(owner => owner, StringComparer.OrdinalIgnoreCase)
                             .ToArray(),
-                        files = indexed.Select(e => new {
+                        files = publication.Entries.Select(e => new {
                             path = e.Path, owner = e.Owner,
                             optimizedSha256 = Sha(e.FullName),
                             originalSha256 = File.Exists(e.LivePath)
@@ -436,6 +464,10 @@ public sealed class CombinedOptimizationPassService
                         }).ToArray()
                     }, new JsonSerializerOptions { WriteIndented = true }),
                     new UTF8Encoding(false));
+                }
+                if (written != indexed.Count)
+                    throw new InvalidDataException("GCO_PASS_ARCHIVE_INVENTORY_MISMATCH");
+                progress?.Report(new(5, 6, "GENERATE / ZIP VERIFIED"));
                 token.ThrowIfCancellationRequested();
                 // An omitted dependency must still be identical at publication.
                 // Source drift must not leave a ZIP with a missing framework.
@@ -451,6 +483,7 @@ public sealed class CombinedOptimizationPassService
                 return new(final, cetFiles, redFiles, indexed.Count,
                     cetResult.OptimizationTransformCount, red.AppliedEdits)
                 {
+                    DirectZipPath = directFinal,
                     AppliedRedscriptRules = red.Completed
                         .Select(item => item.Id).Distinct(StringComparer.Ordinal).Count(),
                     GenericRedscriptRules = red.Completed

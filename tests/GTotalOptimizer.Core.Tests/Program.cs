@@ -322,6 +322,50 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
     Console.WriteLine("PASS CET owner failure preserves structured and plain diagnostic causes");
 }
 
+// Route only emitted output; physical unrelated mods must not cause a DIRECT ZIP.
+{
+    const string cet = "bin/x64/plugins/cyber_engine_tweaks/mods/";
+    const string red = "r6/scripts/";
+    var origins = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+    {
+        [cet + "Physical/init.lua"] = false,
+        [cet + "Virtual/init.lua"] = true,
+        [cet + "Unoptimized/init.lua"] = false,
+        [cet + "0-Engine/init.lua"] = false,
+        [red + "Virtual/A.reds"] = true,
+        [red + "Physical/A.reds"] = false,
+        ["red4ext/plugins/G-CET-StaticLocations/GCETStaticLocations.dll"] = false,
+        ["red4ext/plugins/G-CET-StaticLocations/G-CET.locations"] = false
+    };
+    var method = typeof(CombinedOptimizationPassService).Assembly
+        .GetType("GTotalOptimizer.Core.Mo2PassDeployment")!
+        .GetMethod("DirectPaths", System.Reflection.BindingFlags.Static |
+            System.Reflection.BindingFlags.NonPublic)!;
+    HashSet<string> Route(params string[] output) =>
+        (HashSet<string>)method.Invoke(null, [output, origins])!;
+    if (Route(cet + "Virtual/init.lua", red + "Virtual/A.reds",
+            red + "G-RedRuntime/New.reds").Count != 0)
+        throw new InvalidDataException("MO2_UNOPTIMIZED_PHYSICAL_OWNER_TRIGGERED_DIRECT");
+    string[] expected = [cet + "Physical/init.lua", cet + "Physical/new.lua",
+        cet + "0-Engine/modules/new.lua", red + "Physical/A.reds",
+        "red4ext/plugins/G-NativeRuntime/G-Engine.dll",
+        "red4ext/plugins/G-NativeRuntime/G-Native.locations"];
+    if (!Route(expected.Concat([cet + "Virtual/init.lua", red + "Virtual/A.reds"]).ToArray())
+            .SetEquals(expected) || !Route(expected).SetEquals(expected))
+        throw new InvalidDataException("MO2_OWNER_OR_FRAMEWORK_DEPLOYMENT_INCORRECT");
+    origins[cet + "Physical/other.lua"] = true;
+    if (Route(cet + "Virtual/init.lua").Count != 0)
+        throw new InvalidDataException("MO2_UNRELATED_MIXED_OWNER_BLOCKED");
+    try
+    {
+        Route(cet + "Physical/init.lua");
+        throw new Exception("MO2_AMBIGUOUS_OWNER_ACCEPTED");
+    }
+    catch (System.Reflection.TargetInvocationException ex) when
+        (ex.InnerException is InvalidDataException) { }
+    Console.WriteLine("PASS MO2 output-only routing: physical/virtual owners, new helpers, framework pairs, unrelated and ambiguous owners");
+}
+
 // The shipping generator's actual output path is outside profiler RESULTS.
 {
     var method = typeof(CombinedOptimizationPassService).GetMethod(
@@ -377,7 +421,9 @@ if (args.Length > 0 && args[0] == "--stage-presentmon")
         if (NextName() != zipStem + "_0003.zip")
             throw new InvalidDataException("GCO_PENDING_OR_INCOMPLETE_PASS_COUNTED");
         Publish("pass-20261123_100000", zipStem + "_0007.zip", true);
-        if (NextName() != zipStem + "_0008.zip" ||
+        Publish("pass-20261123_100000", zipStem + "_0007_DIRECT.zip", true);
+        Publish("pass-20261124_100000", zipStem + "_0008_DIRECT.zip", true);
+        if (NextName() != zipStem + "_0009.zip" ||
             !File.Exists(Path.Combine(namingRoot,
                 "pass-20261120_100000", zipStem + ".zip")))
             throw new InvalidDataException("GCO_PASS_ZIP_SEQUENCE_REUSED_OR_OVERWROTE");

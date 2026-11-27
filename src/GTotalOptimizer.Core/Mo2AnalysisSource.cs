@@ -8,7 +8,7 @@ namespace GTotalOptimizer.Core;
 public sealed class Mo2AnalysisSource : IDisposable
 {
     private readonly Mo2CaptureIdentity identity;
-    private readonly Dictionary<string, (string Path, string Owner, string Hash)> files =
+    private readonly Dictionary<string, (string Path, string Owner, string Hash, bool FromMo2)> files =
         new(StringComparer.OrdinalIgnoreCase);
     public string Root { get; }
     private bool disposed;
@@ -67,7 +67,7 @@ public sealed class Mo2AnalysisSource : IDisposable
                 File.Copy(source, target, overwrite: false);
                 if (Hash(target) != hash || Hash(source) != hash)
                     throw new InvalidDataException("MO2 source changed while copying: " + relative);
-                result.files.Add(relative, (source, winner.Owner, hash));
+                result.files.Add(relative, (source, winner.Owner, hash, winner.FromMo2));
             }
             // Only a presence marker for the existing read-only source
             // inspectors. Never copy or execute the actual game executable.
@@ -109,7 +109,8 @@ public sealed class Mo2AnalysisSource : IDisposable
             token.ThrowIfCancellationRequested();
             if (!current.TryGetValue(relative, out var winner) ||
                 !string.Equals(Path.GetFullPath(winner.PhysicalPath), original.Path, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(winner.Owner, original.Owner, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(winner.Owner, original.Owner, StringComparison.OrdinalIgnoreCase) ||
+                winner.FromMo2 != original.FromMo2)
                 throw new InvalidDataException("MO2 source winner changed: " + relative);
             CheckRegular(original.Path);
             var projected = Target(relative);
@@ -118,6 +119,10 @@ public sealed class Mo2AnalysisSource : IDisposable
                 throw new InvalidDataException("MO2 source bytes changed: " + relative);
         }
     }
+
+    internal IReadOnlyDictionary<string, bool> DeploymentOrigins() =>
+        files.ToDictionary(pair => pair.Key, pair => pair.Value.FromMo2,
+            StringComparer.OrdinalIgnoreCase);
 
     // The authoritative source inspector already indexes all CET/REDscript
     // source and native dependencies. Exclude runtime-only capture/log output,

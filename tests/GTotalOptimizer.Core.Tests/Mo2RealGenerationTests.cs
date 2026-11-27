@@ -36,6 +36,11 @@ internal static class Mo2RealGenerationTests
         Directory.CreateDirectory(Path.GetDirectoryName(winner)!);
         File.WriteAllText(physical, "module Shadowed\npublic class Shadowed extends IScriptable {}");
         File.WriteAllText(winner, original);
+        const string directRelative = "r6/scripts/PhysicalAuthor/Original.reds";
+        var directSource = Path.Combine(game, directRelative);
+        Directory.CreateDirectory(Path.GetDirectoryName(directSource)!);
+        File.WriteAllText(directSource, original.Replace("AuthorA", "PhysicalAuthor"));
+        var directBefore = Hash(directSource);
         // MO2's current UI profile can be Other: the saved Heavy source
         // remains the exclusive optimization input.
         var ini = Path.Combine(instance, "ModOrganizer.ini");
@@ -66,7 +71,9 @@ internal static class Mo2RealGenerationTests
             var pass = await combined.GenerateAsync(package, game, id);
             generatedFolder = Path.GetDirectoryName(pass.ZipPath);
             if (pass.RedscriptEdits < 1 || pass.RedscriptFiles < 1 ||
-                CombinedPassOutputInspector.Validate(pass.ZipPath) != pass.GeneratedFiles)
+                pass.DirectZipPath is null || pass.DirectZipPath == pass.ZipPath ||
+                CombinedPassOutputInspector.Validate(pass.ZipPath) +
+                    CombinedPassOutputInspector.Validate(pass.DirectZipPath) != pass.GeneratedFiles)
                 throw new InvalidDataException("MO2_REAL_GENERATION_ZIP_INVALID");
             using (var zip = ZipFile.OpenRead(pass.ZipPath))
             {
@@ -78,6 +85,27 @@ internal static class Mo2RealGenerationTests
                     !optimized.Contains("while i < __gcoArrBoundL", StringComparison.Ordinal))
                     throw new InvalidDataException("MO2_REAL_GENERATION_EXPECTED_TRANSFORM_MISSING");
             }
+            using (var mainZip = ZipFile.OpenRead(pass.ZipPath))
+            using (var directZip = ZipFile.OpenRead(pass.DirectZipPath!))
+            {
+                if (mainZip.GetEntry(directRelative) is not null ||
+                    directZip.GetEntry(relative) is not null ||
+                    directZip.GetEntry(directRelative) is not { } directEntry ||
+                    mainZip.Entries.Select(e => e.FullName).Intersect(
+                        directZip.Entries.Select(e => e.FullName), StringComparer.OrdinalIgnoreCase).Any())
+                    throw new InvalidDataException("MO2_REAL_GENERATION_DESTINATION_OR_DUPLICATE");
+                using var reader = new StreamReader(directEntry.Open());
+                if (!reader.ReadToEnd().Contains("GCO-GENERIC:STABLE_ARRAY_BOUND_V1", StringComparison.Ordinal))
+                    throw new InvalidDataException("MO2_REAL_DIRECT_TRANSFORM_MISSING");
+            }
+            using (var directSidecar = JsonDocument.Parse(File.ReadAllText(pass.DirectZipPath + ".ownership.json")))
+            {
+                var entry = directSidecar.RootElement.GetProperty("files").EnumerateArray()
+                    .Single(item => item.GetProperty("path").GetString() == directRelative);
+                if (entry.GetProperty("originalSha256").GetString() != directBefore ||
+                    directSidecar.RootElement.GetProperty("deploymentTarget").GetString() != "DIRECT")
+                    throw new InvalidDataException("MO2_REAL_DIRECT_ROLLBACK_OR_TARGET_INVALID");
+            }
             using (var sidecar = JsonDocument.Parse(File.ReadAllText(pass.ZipPath + ".ownership.json")))
             {
                 var entry = sidecar.RootElement.GetProperty("files").EnumerateArray()
@@ -88,7 +116,7 @@ internal static class Mo2RealGenerationTests
             }
             _ = CollectedCaptureStore.ReadRestored(package, game, id);
             if (Hash(indexPath) != indexBefore || Hash(winner) != initialWinner ||
-                Hash(physical) != physicalBefore)
+                Hash(physical) != physicalBefore || Hash(directSource) != directBefore)
                 throw new InvalidDataException("MO2_REAL_GENERATION_CHANGED_ORIGINALS_OR_CAPTURE");
             Console.WriteLine("PASS MO2 actual combined ZIP through existing Page 2 services: CET transforms=" +
                 pass.CetTransforms + ", REDscript edits=" + pass.RedscriptEdits +

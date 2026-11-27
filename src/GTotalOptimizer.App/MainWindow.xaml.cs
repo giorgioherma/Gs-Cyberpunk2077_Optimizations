@@ -3252,7 +3252,7 @@ public partial class MainWindow : Window
             UpdateResultTexts(saved);
             OptimizationInstallGuidance.Text = saved.Mo2Source is null
                 ? "  CET + REDscript - one clean ZIP with optimization files.   Use Vortex for easy file management"
-                : "  CET + REDscript - one clean ZIP with optimization files.   Install as a separate MO2 mod.";
+                : "  CET + REDscript - install the main ZIP as a separate MO2 mod. A DIRECT ZIP is included only for optimized physical owners.";
             RefreshHotscenesOption();
             if (analyzedSessionId != saved.SessionId && !analysisRunning)
                 SetResultsConsoleStatus("Capture verified. Click ANALYZE to find optimizations.");
@@ -3516,13 +3516,26 @@ public partial class MainWindow : Window
                 .Select(item => item.Id)
                 .Distinct(StringComparer.Ordinal).Count();
 
-            string summary = "ZIP generated. CET: " + pass.CetTransforms +
+            bool mixed = pass.DirectZipPath is not null &&
+                !string.Equals(pass.ZipPath, pass.DirectZipPath, StringComparison.OrdinalIgnoreCase);
+            string summary = (mixed ? "ZIPs generated. CET: " : "ZIP generated. CET: ") + pass.CetTransforms +
                 " transforms | REDscript: " + pass.RedscriptEdits + " edits.";
             // Publish access only after the combined owner returns a real ZIP.
             generatedPassZipPath = File.Exists(pass.ZipPath) ? pass.ZipPath : null;
             if (generatedPassZipPath is not null)
                 summary += Environment.NewLine + "in GCO folder /" +
                     Path.GetRelativePath(packageRoot, generatedPassZipPath).Replace('\\', '/');
+            if (pass.DirectZipPath is not null)
+            {
+                if (mixed)
+                    summary += Environment.NewLine + "MO2: install the main ZIP as a separate mod.";
+                summary += Environment.NewLine + "DIRECT: " +
+                    Path.GetFileName(pass.DirectZipPath) +
+                    " — BACK UP first, then extract to the game folder, not MO2.";
+                OptimizationInstallGuidance.Text = mixed
+                    ? "  Install the main ZIP in MO2. Back up originals and extract the DIRECT ZIP into the game folder."
+                    : "  Back up originals and extract the DIRECT ZIP into the game folder, not MO2.";
+            }
             if (pass.CetSkipped > 0 || pass.RedscriptSkipped.Length > 0)
             {
                 summary += Environment.NewLine + "Unavailable: CET " +
